@@ -496,7 +496,7 @@ html.go .hero-stats{opacity:1;transform:none;transition-delay:.85s}
   <div class="intro-wm"><b>Eagle &amp; Palm</b><span>by Johnny Paesch</span></div>
 </div></div>
 <script>
-try{ if(sessionStorage.getItem('epIntro') || matchMedia('(prefers-reduced-motion: reduce)').matches){
+try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches){
   document.getElementById('intro').style.display='none'; document.documentElement.classList.add('go');
 }}catch(e){ document.documentElement.classList.add('go'); }
 </script>
@@ -949,9 +949,8 @@ const EP = {
     /* intro */
     const intro = document.getElementById('intro');
     if(intro && intro.style.display !== 'none'){
-      try{ sessionStorage.setItem('epIntro','1'); }catch(e){}
       setTimeout(() => { intro.classList.add('done'); document.documentElement.classList.add('go');
-        setTimeout(() => intro.remove(), 600); }, 1350);
+        setTimeout(() => intro.remove(), 600); }, 1300);
     } else if(!document.documentElement.classList.contains('go')){
       document.documentElement.classList.add('go');
     }
