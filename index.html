@@ -9,6 +9,11 @@
 <!-- DEMO ONLY — delete this line when the real content is in, so the site can be indexed -->
 <meta name="robots" content="noindex, nofollow">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://victorfromaruba-stack.github.io/BY-JOHNNY-PAESCH/">
+<meta property="og:image" content="https://victorfromaruba-stack.github.io/BY-JOHNNY-PAESCH/og-image.jpg">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="9" fill="%2310312D"/><g stroke="%23F7F3EC" stroke-width="1.7" stroke-linecap="round" fill="none"><path d="M20 30V12.5"/><path d="M20 14.2c-3-2.6-6-3.1-8.6-2.2"/><path d="M20 14.2c3-2.6 6-3.1 8.6-2.2"/><path d="M20 19c-2.7-2.3-5.3-2.8-7.5-2"/><path d="M20 19c2.7-2.3 5.3-2.8 7.5-2"/><path d="M20 23.7c-2.3-2-4.5-2.4-6.4-1.7"/><path d="M20 23.7c2.3-2 4.5-2.4 6.4-1.7"/></g></svg>'>
 <meta property="og:title" content="Eagle &amp; Palm by Johnny Paesch — Aruba timeshare resale &amp; property">
 <meta property="og:description" content="List your Aruba week or property with no upfront fee. You pay only when it sells.">
 <style>
@@ -90,7 +95,7 @@ nav.main a:hover{background:var(--sand);color:var(--coral)}
 .burger{display:none;background:transparent;border:1px solid var(--line);border-radius:9px;padding:10px;cursor:pointer;
   min-height:44px;min-width:44px;align-items:center;justify-content:center}
 .burger svg{width:20px;height:20px;color:var(--ink)}
-.wa-head{display:none;width:44px;height:44px;border-radius:9px;background:#25D366;color:#fff;place-items:center;flex:none}
+.wa-head{display:none;width:44px;height:44px;border-radius:9px;background:var(--ink);color:#fff;place-items:center;flex:none}
 .wa-head svg{width:21px;height:21px}
 @media(max-width:1060px){
   nav.main,.bar-r .btn-desk{display:none}
@@ -128,6 +133,7 @@ nav.main a:hover{background:var(--sand);color:var(--coral)}
 /* ---------- promise bar ---------- */
 .promise{background:var(--sand);border-bottom:1px solid var(--line)}
 .promise .wrap{display:flex;flex-wrap:wrap;gap:14px 30px;justify-content:center;padding-block:20px}
+@media(max-width:640px){.promise .wrap{display:grid;grid-template-columns:auto;justify-content:center;gap:11px}}
 .promise div{display:flex;align-items:center;gap:9px;font-size:.88rem;font-weight:600;color:var(--ink)}
 .promise svg{width:16px;height:16px;color:var(--sea);flex:none}
 
@@ -148,6 +154,7 @@ nav.main a:hover{background:var(--sand);color:var(--coral)}
 .card h3{font-size:1.24rem;margin-bottom:4px}
 .card .loc{font-size:.85rem;color:var(--muted);margin-bottom:14px}
 .card .specs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
+@media(min-width:620px){.card .specs{min-height:74px;align-content:flex-start}}
 .card .specs span{font-size:.76rem;font-weight:600;color:var(--ink-3);background:var(--sand);border:1px solid var(--line);
   border-radius:20px;padding:5px 11px}
 .card .foot{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;
@@ -169,9 +176,7 @@ nav.main a:hover{background:var(--sand);color:var(--coral)}
 @media(max-width:900px){.steps{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.steps{grid-template-columns:1fr}}
 .step{border-top:2px solid var(--line);padding-top:22px;position:relative}
-.step:first-child{border-color:var(--coral)}
 .step .n{font-family:'Newsreader',serif;font-size:1.1rem;color:var(--faint);display:block;margin-bottom:8px}
-.step:first-child .n{color:var(--coral)}
 .step h3{font-size:1.12rem;margin-bottom:8px}
 .step p{font-size:.92rem;color:var(--muted)}
 
@@ -182,7 +187,7 @@ nav.main a:hover{background:var(--sand);color:var(--coral)}
 #fees .wrap{position:relative;z-index:1}
 #fees h2{color:#fff}
 #fees .lede{color:rgba(255,255,255,.7)}
-.fee-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(20px,3vw,36px);margin-top:clamp(28px,4vw,44px)}
+.fee-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(20px,3vw,36px);margin-top:clamp(28px,4vw,44px);align-items:start}
 @media(max-width:860px){.fee-grid{grid-template-columns:1fr}}
 .fee-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:var(--r-lg);padding:clamp(24px,3vw,34px)}
 .fee-card.hi{background:var(--paper);color:var(--body);border-color:transparent;box-shadow:var(--sh-lg)}
@@ -213,7 +218,7 @@ nav.main a:hover{background:var(--sand);color:var(--coral)}
 .owner-photo .cap{font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
   color:rgba(255,255,255,.5)}
 .owner-name{font-size:clamp(1.9rem,4vw,2.7rem);margin:12px 0 4px}
-.owner-role{font-size:.78rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--coral)}
+.owner-role{font-size:.74rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
 .owner-body{margin-top:18px;font-size:clamp(1rem,1.5vw,1.1rem);color:var(--body);max-width:56ch;text-wrap:pretty}
 .owner-facts{display:grid;gap:11px;margin-top:24px;max-width:520px}
 .owner-facts div{display:flex;gap:11px;align-items:flex-start;font-size:.94rem}
@@ -224,13 +229,14 @@ nav.main a:hover{background:var(--sand);color:var(--coral)}
 .resorts{display:flex;flex-wrap:wrap;gap:9px}
 .resorts span{font-size:.88rem;font-weight:600;color:var(--ink-3);background:var(--paper);border:1px solid var(--line);
   border-radius:24px;padding:10px 17px}
+@media(max-width:640px){.resorts{gap:7px}.resorts span{font-size:.76rem;padding:8px 12px}}
 
 /* ---------- band ---------- */
 .band{position:relative;overflow:hidden;background:var(--ink);color:#fff}
 .band img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 1s var(--ease)}
-.band img.loaded{opacity:.6}
+.band img.loaded{opacity:.72}
 .band::after{content:"";position:absolute;inset:0;background:
-  linear-gradient(100deg,rgba(16,49,45,.96) 0%,rgba(16,49,45,.88) 36%,rgba(16,49,45,.5) 68%,rgba(16,49,45,.3) 100%)}
+  linear-gradient(100deg,rgba(16,49,45,.96) 0%,rgba(16,49,45,.86) 38%,rgba(16,49,45,.4) 70%,rgba(16,49,45,.16) 100%)}
 .band .wrap{position:relative;z-index:2;padding-block:clamp(60px,8vw,110px)}
 .band h2{color:#fff;font-size:clamp(1.85rem,4.2vw,2.9rem);max-width:20ch}
 .band p{color:rgba(255,255,255,.76);max-width:54ch;margin-top:16px}
@@ -289,8 +295,148 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
 .foot-grid ul a:hover{color:#E9A78F}
 .foot-bot{border-top:1px solid rgba(255,255,255,.1);padding-top:22px;display:flex;justify-content:space-between;
   gap:14px;flex-wrap:wrap;font-size:.8rem}
-.credit{color:rgba(255,255,255,.34);font-size:.74rem}
+.credit{color:rgba(255,255,255,.56);font-size:.74rem}
 .credit a{text-decoration:underline}
+
+
+/* ---------- intro seal ---------- */
+#intro{position:fixed;inset:0;z-index:200;background:var(--sand);display:grid;place-items:center;
+  transition:opacity .5s ease,visibility .5s}
+#intro.done{opacity:0;visibility:hidden}
+.intro-box{display:grid;justify-items:center;gap:18px}
+.intro-box svg{width:74px;height:74px;color:var(--ink)}
+.intro-box svg *{stroke-dasharray:120;stroke-dashoffset:120;animation:draw 1.1s var(--ease) forwards}
+.intro-box svg circle{animation-delay:.05s}
+@keyframes draw{to{stroke-dashoffset:0}}
+.intro-wm{text-align:center;opacity:0;animation:ifade .6s ease .55s forwards}
+.intro-wm b{font-family:'Newsreader',serif;font-size:1.6rem;font-weight:500;color:var(--ink);letter-spacing:.01em}
+.intro-wm span{display:block;font-size:.6rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--faint);margin-top:6px}
+@keyframes ifade{to{opacity:1}}
+@media(prefers-reduced-motion:reduce){#intro{display:none}}
+
+/* ---------- scroll progress + header ---------- */
+.progress{position:fixed;top:0;left:0;right:0;height:2.5px;background:linear-gradient(90deg,var(--sea),var(--coral));
+  transform:scaleX(0);transform-origin:left;z-index:120;pointer-events:none}
+header{transition:box-shadow .3s}
+header.stuck{box-shadow:0 1px 0 var(--line),0 8px 26px rgba(16,49,45,.08)}
+header.stuck .bar{height:64px}
+.bar{transition:height .3s var(--ease)}
+
+/* ---------- hero motion ---------- */
+.hero-bg img{animation:kb 22s ease-in-out infinite alternate}
+@keyframes kb{from{transform:scale(1)}to{transform:scale(1.07)}}
+.hl{display:block;overflow:hidden;padding-bottom:.08em;margin-bottom:-.08em}
+.hl-in{display:block;transform:translateY(112%);transition:transform 1s var(--ease)}
+.hl:nth-child(2) .hl-in{transition-delay:.12s}
+.hl:nth-child(3) .hl-in{transition-delay:.24s}
+html.go .hl-in{transform:none}
+.hero .eyebrow,.hero .sub,.hero .paths,.hero-stats{opacity:0;transform:translateY(14px);
+  transition:opacity .7s var(--ease),transform .7s var(--ease)}
+html.go .hero .eyebrow{opacity:1;transform:none;transition-delay:.4s}
+html.go .hero .sub{opacity:1;transform:none;transition-delay:.55s}
+html.go .hero .paths{opacity:1;transform:none;transition-delay:.7s}
+html.go .hero-stats{opacity:1;transform:none;transition-delay:.85s}
+@media(prefers-reduced-motion:reduce){
+  .hero-bg img{animation:none}
+  .hl-in,.hero .eyebrow,.hero .sub,.hero .paths,.hero-stats{opacity:1;transform:none}
+}
+.hero-stats{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px 24px;margin-top:clamp(28px,4vw,40px);
+  padding-top:22px;border-top:1px solid rgba(255,255,255,.16);max-width:940px}
+.hero-stats div b{display:block;font-family:'Newsreader',serif;font-size:1.7rem;font-weight:500;color:#fff;
+  line-height:1.1;font-variant-numeric:tabular-nums}
+.hero-stats div span{font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:rgba(255,255,255,.55)}
+
+/* ---------- ghost words ---------- */
+.has-ghost{position:relative;overflow:hidden}
+@media(max-width:640px){.ghost-word{font-size:4rem!important;right:12px!important}}
+.ghost-word{position:absolute;top:clamp(10px,3vw,30px);right:-.05em;font-family:'Newsreader',serif;
+  font-style:italic;font-weight:400;font-size:clamp(5rem,15vw,12rem);line-height:.8;color:rgba(16,49,45,.045);
+  pointer-events:none;user-select:none;white-space:nowrap;z-index:0}
+#fees .ghost-word{color:rgba(255,255,255,.035)}
+.has-ghost>.wrap{position:relative;z-index:1}
+
+/* ---------- accent rule ---------- */
+.rule-acc{width:44px;height:3px;border-radius:2px;background:linear-gradient(90deg,var(--sea),var(--coral));
+  margin-top:14px}
+
+/* ---------- fee slider ---------- */
+.fee-sim{margin-top:0;padding-top:0;border-top:0}
+.sim-band{padding:clamp(22px,3vw,30px) clamp(24px,3vw,34px)}
+@media(min-width:861px){
+  .sim-band .fee-sim{display:grid;grid-template-columns:auto 1fr auto;gap:8px clamp(24px,4vw,48px);align-items:center}
+  .sim-band .k{grid-column:1;grid-row:1}
+  .sim-band .price-line{grid-column:1;grid-row:2;margin-top:2px}
+  .sim-band input[type=range]{grid-column:2;grid-row:1/3;margin:0}
+  .sim-band .fee-rows{grid-column:3;grid-row:1/3;min-width:250px}
+}
+.fee-sim .k{font-size:.72rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
+.fee-sim .price-line{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:10px}
+.fee-sim .price-line b{font-family:'Newsreader',serif;font-size:1.9rem;font-weight:500;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.fee-sim input[type=range]{width:100%;margin:16px 0 18px;-webkit-appearance:none;appearance:none;height:6px;
+  border-radius:4px;background:var(--sand-2);outline:none;cursor:pointer}
+.fee-sim input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:26px;height:26px;
+  border-radius:50%;background:var(--ink);border:4px solid var(--paper);box-shadow:var(--sh-md);cursor:grab}
+.fee-sim input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--ink);
+  border:4px solid var(--paper);box-shadow:var(--sh-md);cursor:grab}
+.fee-rows{display:grid;gap:9px}
+.fee-rows>div{display:flex;justify-content:space-between;gap:12px;font-size:.94rem}
+.fee-rows span{color:var(--muted)}
+.fee-rows b{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:650}
+.fee-rows .you b{font-family:'Newsreader',serif;font-size:1.3rem;color:var(--sea)}
+
+/* ---------- aruba map ---------- */
+.resort-grid{display:grid;grid-template-columns:1fr .8fr;gap:clamp(26px,4vw,56px);align-items:center}
+@media(max-width:860px){.resort-grid{grid-template-columns:1fr}}
+.map-wrap{position:relative;max-width:360px;margin-inline:auto}
+.map-wrap svg{width:100%;height:auto}
+.map-note{text-align:center;font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);margin-top:10px}
+.pin-dot{animation:pulse 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes pulse{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:1;transform:scale(1.5)}}
+@media(prefers-reduced-motion:reduce){.pin-dot{animation:none;opacity:.7}}
+
+/* ---------- listing sheet ---------- */
+.sheet-veil{position:fixed;inset:0;z-index:150;background:rgba(16,49,45,.55);backdrop-filter:blur(6px);
+  display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .3s ease}
+@media(min-width:700px){.sheet-veil{align-items:center;padding:24px}}
+.sheet-veil.on{opacity:1;pointer-events:auto}
+.sheet{background:var(--paper);width:100%;max-width:660px;max-height:92vh;overflow-y:auto;
+  border-radius:var(--r-lg) var(--r-lg) 0 0;transform:translateY(40px);transition:transform .35s var(--ease)}
+@media(min-width:700px){.sheet{border-radius:var(--r-lg)}}
+.sheet-veil.on .sheet{transform:none}
+.sheet .ph{aspect-ratio:16/10;overflow:hidden;position:relative}
+.sheet .ph img{width:100%;height:100%;object-fit:cover}
+.sheet .ph .tag{position:absolute;top:14px;left:14px;background:rgba(16,49,45,.88);color:#fff;font-size:.66rem;
+  font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:6px 11px;border-radius:20px}
+.sheet-x{position:absolute;top:14px;right:14px;width:42px;height:42px;border-radius:50%;
+  background:rgba(255,255,255,.92);border:0;display:grid;place-items:center;cursor:pointer;color:var(--ink);
+  box-shadow:var(--sh-md)}
+.sheet-x svg{width:17px;height:17px}
+.sheet .body{padding:clamp(22px,3.5vw,32px)}
+.sheet h3{font-size:1.7rem}
+.sheet .loc{color:var(--muted);font-size:.95rem;margin:4px 0 16px}
+.sheet .specs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:20px}
+.sheet .specs span{font-size:.78rem;font-weight:600;color:var(--ink-3);background:var(--sand);
+  border:1px solid var(--line);border-radius:20px;padding:6px 12px}
+.sheet .price-row{display:flex;align-items:baseline;justify-content:space-between;gap:14px;
+  padding:16px 0;border-block:1px solid var(--line-soft);margin-bottom:20px}
+.sheet .price-row small{display:block;font-size:.68rem;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--faint)}
+.sheet .price-row b{font-family:'Newsreader',serif;font-size:2rem;font-weight:500;color:var(--ink)}
+.sheet .nxt{font-size:.88rem;color:var(--muted);margin-bottom:20px}
+.sheet .cta-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:520px){.sheet .cta-row{grid-template-columns:1fr}}
+
+/* ---------- mobile action bar ---------- */
+.mab{position:fixed;left:0;right:0;bottom:0;z-index:100;background:var(--sand);
+  border-top:1px solid var(--line);padding:10px clamp(14px,4vw,20px) calc(10px + env(safe-area-inset-bottom));
+  display:none;grid-template-columns:1fr 1fr;gap:10px;transform:translateY(110%);transition:transform .4s var(--ease)}
+.mab.on{transform:none}
+@media(max-width:860px){.mab{display:grid}body{padding-bottom:0}}
+.mab .btn{min-height:46px;padding:10px 14px;font-size:.88rem}
 
 .rv{opacity:0;transform:translateY(16px);transition:opacity .6s var(--ease),transform .6s var(--ease)}
 .rv.in{opacity:1;transform:none}
@@ -341,6 +487,21 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
 <!-- DEMO BANNER — delete this element before the site goes live -->
 <div class="demo-bar"><b>Demonstration</b> &nbsp;· Sample listings and placeholder details, prepared for Johnny Paesch.</div>
 
+<div id="intro" aria-hidden="true"><div class="intro-box">
+  <svg viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18.4" stroke="currentColor" stroke-width="1.8"/>
+    <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+      <path d="M20 30.5V13"/><path d="M20 14.6c-3-2.6-6.1-3.1-8.7-2.2"/><path d="M20 14.6c3-2.6 6.1-3.1 8.7-2.2"/>
+      <path d="M20 19.4c-2.7-2.3-5.4-2.8-7.6-2"/><path d="M20 19.4c2.7-2.3 5.4-2.8 7.6-2"/>
+      <path d="M20 24.1c-2.3-2-4.6-2.4-6.5-1.7"/><path d="M20 24.1c2.3-2 4.6-2.4 6.5-1.7"/></g></svg>
+  <div class="intro-wm"><b>Eagle &amp; Palm</b><span>by Johnny Paesch</span></div>
+</div></div>
+<script>
+try{ if(sessionStorage.getItem('epIntro') || matchMedia('(prefers-reduced-motion: reduce)').matches){
+  document.getElementById('intro').style.display='none'; document.documentElement.classList.add('go');
+}}catch(e){ document.documentElement.classList.add('go'); }
+</script>
+<div class="progress" aria-hidden="true"></div>
+
 <a class="skip" href="#main">Skip to content</a>
 
 <header>
@@ -389,7 +550,11 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
   <div class="hero-veil" aria-hidden="true"></div>
   <div class="wrap">
     <p class="eyebrow light">Aruba · Eagle Beach &amp; Palm Beach</p>
-    <h1 style="margin-top:14px">The island's own market for <em>resale</em> weeks and property.</h1>
+    <h1 style="margin-top:14px">
+      <span class="hl"><span class="hl-in">The island's own</span></span>
+      <span class="hl"><span class="hl-in">market for <em>resale</em></span></span>
+      <span class="hl"><span class="hl-in">weeks and property.</span></span>
+    </h1>
     <p class="sub">Aruba has thousands of timeshare owners and no local place to sell. Eagle &amp; Palm is that place —
       run from the island, with the fee written plainly and nothing to pay until your sale completes.</p>
     <div class="paths">
@@ -406,6 +571,12 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
         <span class="go">See what's available <svg><use href="#i-arrow"/></svg></span>
       </a>
     </div>
+    <div class="hero-stats">
+      <div><b data-count="14">14</b><span>Resorts covered</span></div>
+      <div><b>ƒ0</b><span>To list your week</span></div>
+      <div><b data-count="4">4</b><span>Languages spoken</span></div>
+      <div><b>1</b><span>Name on every file</span></div>
+    </div>
   </div>
 </section>
 
@@ -418,7 +589,7 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
   </div>
 </div>
 
-<section class="sec" id="listings">
+<section class="sec has-ghost" id="listings"><span class="ghost-word" aria-hidden="true">Market</span>
   <div class="wrap">
     <div class="sec-head">
       <p class="eyebrow">Available now</p>
@@ -469,7 +640,7 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
   </div>
 </section>
 
-<section class="sec" id="fees">
+<section class="sec has-ghost" id="fees"><span class="ghost-word" aria-hidden="true">Zero</span>
   <div class="wrap">
     <div class="sec-head">
       <p class="eyebrow light">Our fee</p>
@@ -480,7 +651,7 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
     <div class="fee-grid">
       <div class="fee-card hi">
         <h3>What you pay to list</h3>
-        <div class="amt">ƒ 0</div>
+        <div class="amt">ƒ0</div>
         <p class="note">Nothing to advertise your week or property. No listing fee, no photography fee, no
           "marketing package", no appraisal charge.</p>
         <ul class="fee-list" style="margin-top:22px">
@@ -489,6 +660,7 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
           <li class="yes"><svg><use href="#i-check"/></svg><span>Taken out of the sale proceeds at the notary</span></li>
           <li class="yes"><svg><use href="#i-check"/></svg><span>Walk away any time at no cost</span></li>
         </ul>
+        
       </div>
       <div class="fee-card">
         <h3>What we will never do</h3>
@@ -502,11 +674,24 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
           <li class="no"><svg><use href="#i-x"/></svg><span>Charge you to "release" or "exit" your ownership</span></li>
         </ul>
       </div>
+      <div class="fee-card hi sim-band" style="grid-column:1/-1">
+        <div class="fee-sim">
+          <span class="k">Try it — if your sale closes at</span>
+          <div class="price-line"><b id="sim-price">US$ 25,000</b></div>
+          <input type="range" id="sim-range" min="5000" max="500000" step="1000" value="25000"
+                 aria-label="Example sale price" oninput="EP.sim()">
+          <div class="fee-rows">
+            <div><span>Commission (example 5%)</span><b id="sim-fee">US$ 1,250</b></div>
+            <div class="you"><span>You receive</span><b id="sim-you">US$ 23,750</b></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<section class="band">
+<section class="band has-ghost">
+  <span class="ghost-word" style="color:rgba(255,255,255,.05)" aria-hidden="true">Local</span>
   <img src="band-sea.jpg" alt="Aruba's west coast" loading="lazy" decoding="async" onload="this.classList.add('loaded')">
   <div class="wrap">
     <p class="eyebrow light">Why this did not exist before</p>
@@ -544,7 +729,7 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
   </div>
 </section>
 
-<section class="sec" id="resorts">
+<section class="sec has-ghost" id="resorts"><span class="ghost-word" aria-hidden="true">Aruba</span>
   <div class="wrap">
     <div class="sec-head">
       <p class="eyebrow">Where the inventory is</p>
@@ -552,12 +737,30 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
       <p class="lede">Almost all of Aruba's timeshare sits along two stretches of sand. We cover both, plus
         residential property elsewhere on the island.</p>
     </div>
+    <div class="resort-grid">
     <div class="resorts rv">
       <span>Playa Linda Beach Resort</span><span>La Cabana Beach Resort</span><span>Costa Linda Beach Resort</span>
       <span>Divi Aruba Phoenix</span><span>Divi Village Golf &amp; Beach</span><span>Aruba Beach Club</span>
       <span>Casa del Mar Beach Resort</span><span>Paradise Beach Villas</span><span>Marriott's Aruba Ocean Club</span>
       <span>Marriott's Aruba Surf Club</span><span>La Quinta Beach Resort</span><span>Amsterdam Manor</span>
       <span>Tropicana Aruba</span><span>Eagle Aruba Resort</span>
+    </div>
+    <div class="map-wrap rv">
+      <svg viewBox="0 0 300 470" role="img" aria-label="Stylised map of Aruba with Palm Beach, Eagle Beach and Oranjestad marked">
+        <path d="M248.9 366.2 L257.7 372.5 L260.6 381.3 L262.0 377.9 L271.8 380.5 L282.1 377.1 L284.0 372.6 L274.9 345.8 L271.7 344.0 L273.4 337.9 L253.3 283.0 L243.0 280.4 L227.5 259.6 L213.5 251.8 L211.4 245.7 L200.4 236.8 L196.9 228.9 L199.0 225.1 L184.0 217.4 L174.4 203.8 L161.2 206.9 L159.5 197.4 L140.8 189.9 L128.1 179.3 L118.5 177.4 L109.9 164.5 L98.7 157.3 L84.4 141.2 L71.2 117.9 L60.4 113.6 L38.8 92.7 L26.0 88.7 L21.4 97.1 L29.7 106.2 L41.5 149.6 L36.5 164.9 L27.6 174.4 L27.3 184.4 L16.0 201.2 L16.8 205.4 L48.1 235.5 L48.0 231.8 L52.4 238.8 L57.1 239.3 L63.2 254.4 L77.7 260.0 L89.3 269.5 L88.6 273.3 L84.1 269.1 L88.9 275.2 L101.2 280.3 L102.6 286.0 L109.2 288.4 L109.5 285.0 L114.4 285.7 L124.7 292.1 L164.1 327.8 L184.5 339.9 L203.1 342.9 L202.9 348.3 L191.5 344.4 L208.5 354.4 L224.5 353.8 L236.3 362.3 L231.9 363.6 L245.8 368.0 L248.9 366.2 Z" fill="var(--sand)" stroke="var(--line)" stroke-width="2" stroke-linejoin="round"/>
+        <g font-family="Manrope,sans-serif" font-size="13" font-weight="700" fill="var(--ink-3)">
+          <circle class="pin-dot" cx="42" cy="157" r="9" fill="var(--coral)" opacity=".3"/>
+          <circle cx="42" cy="157" r="4.5" fill="var(--coral)"/>
+          <text x="60" y="162">Palm Beach</text>
+          <circle class="pin-dot" cx="34" cy="183" r="9" fill="var(--coral)" opacity=".3" style="animation-delay:.8s"/>
+          <circle cx="34" cy="183" r="4.5" fill="var(--coral)"/>
+          <text x="52" y="188">Eagle Beach</text>
+          <circle cx="54" cy="233" r="4" fill="var(--sea)"/>
+          <text x="70" y="238" fill="var(--muted)" font-weight="600">Oranjestad</text>
+        </g>
+      </svg>
+      <p class="map-note">Coastline traced from OpenStreetMap data</p>
+    </div>
     </div>
   </div>
 </section>
@@ -609,7 +812,7 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
     <div class="contact-grid">
       <div>
         <div class="deets">
-          <a class="deet" id="d-wa" href="#"><span class="ic"><svg style="color:#25D366"><use href="#i-wa"/></svg></span>
+          <a class="deet" id="d-wa" href="#"><span class="ic"><svg><use href="#i-wa"/></svg></span>
             <span><span class="k">WhatsApp</span><span class="v" id="v-wa">—</span></span></a>
           <a class="deet" id="d-mail" href="#"><span class="ic"><svg><use href="#i-mail"/></svg></span>
             <span><span class="k">Email</span><span class="v" id="v-mail">—</span></span></a>
@@ -638,7 +841,7 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
           <div class="field"><label for="f-msg">Anything else we should know?</label>
             <textarea id="f-msg" rows="3"></textarea></div>
           <button type="submit" class="btn btn-coral btn-block"><svg><use href="#i-send"/></svg>Send</button>
-          <p class="form-note">No cost, no obligation, and we will not add you to a call list.</p>
+          <p class="form-note">No cost, no obligation — and no call list.</p>
         </form>
       </div>
     </div>
@@ -664,10 +867,35 @@ footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding
     </div>
     <div class="foot-bot">
       <p>© <span id="yr">2026</span> Eagle &amp; Palm</p>
-      <p class="credit">Demo imagery: Aruba coastline by Coolcaesar (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>); listing photographs public domain. All to be replaced with Johnny&rsquo;s own photography.</p>
+      <p class="credit">Demo imagery: coastline by Coolcaesar (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>); Malmok by joskrum (<a href="https://creativecommons.org/licenses/by/2.0/" target="_blank" rel="noopener">CC BY 2.0</a>); Eagle Beach palapas by EgorovaSvetlana (<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>); other photographs public domain; map coastline © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. All imagery to be replaced with Johnny&rsquo;s own photography.</p>
     </div>
   </div>
 </footer>
+
+<div class="sheet-veil" id="sheet" role="dialog" aria-modal="true" aria-label="Listing details">
+  <div class="sheet">
+    <div class="ph"><img id="sh-img" src="" alt=""><span class="tag" id="sh-tag">Timeshare</span>
+      <button class="sheet-x" onclick="EP.closeSheet()" aria-label="Close"><svg><use href="#i-x"/></svg></button></div>
+    <div class="body">
+      <h3 id="sh-title">—</h3>
+      <p class="loc" id="sh-loc">—</p>
+      <div class="specs" id="sh-specs"></div>
+      <div class="price-row"><span><small>Asking price</small><b id="sh-price">—</b></span>
+        <span style="text-align:right"><small>To list yours</small><b style="font-size:1.4rem;color:var(--sea)">ƒ0</b></span></div>
+      <p class="nxt">Ask a question, arrange a viewing, or make an offer — Johnny replies personally.
+        If you are not on the island, he will video-call you from the unit.</p>
+      <div class="cta-row">
+        <a class="btn btn-coral" id="sh-wa" href="#" target="_blank" rel="noopener"><svg><use href="#i-wa"/></svg>WhatsApp Johnny</a>
+        <a class="btn btn-line" href="#contact" onclick="EP.closeSheet()">Use the form</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mab" id="mab">
+  <a class="btn btn-coral" href="https://wa.me/2976301307" target="_blank" rel="noopener"><svg><use href="#i-wa"/></svg>WhatsApp</a>
+  <a class="btn btn-ink" href="#listings">See listings</a>
+</div>
 
 <script>
 /* ─────────────────────────────────────────────────────────────
@@ -687,7 +915,7 @@ const CONTACT = {
 const LISTINGS = [
   {
     title: "Two-bedroom, week 7",
-    resort: "Playa Linda Beach Resort",
+    resort: "High-rise resort strip",
     area: "Palm Beach",
     kind: "Timeshare",
     specs: ["2 bed", "Sleeps 6", "High season", "Ocean view"],
@@ -696,7 +924,7 @@ const LISTINGS = [
   },
   {
     title: "Studio, weeks 24 & 25",
-    resort: "Casa del Mar Beach Resort",
+    resort: "Low-rise resort",
     area: "Eagle Beach",
     kind: "Timeshare",
     specs: ["Studio", "Sleeps 4", "Two weeks", "Fees current"],
@@ -704,11 +932,11 @@ const LISTINGS = [
     photo: "listing-2.jpg"
   },
   {
-    title: "Three-bedroom condo",
+    title: "Three-bedroom villa",
     resort: "Private residence",
     area: "Malmok",
     kind: "Property",
-    specs: ["3 bed", "2 bath", "Pool", "Freehold"],
+    specs: ["3 bed", "2 bath", "Pool", "Freehold", "Near Boca Catalina"],
     price: "US$ 485,000",
     photo: "listing-3.jpg"
   },
@@ -717,9 +945,45 @@ const LISTINGS = [
 const EP = {
   init(){
     document.getElementById('yr').textContent = new Date().getFullYear();
+
+    /* intro */
+    const intro = document.getElementById('intro');
+    if(intro && intro.style.display !== 'none'){
+      try{ sessionStorage.setItem('epIntro','1'); }catch(e){}
+      setTimeout(() => { intro.classList.add('done'); document.documentElement.classList.add('go');
+        setTimeout(() => intro.remove(), 600); }, 1350);
+    } else if(!document.documentElement.classList.contains('go')){
+      document.documentElement.classList.add('go');
+    }
+
+    /* scroll: progress, header, mobile bar */
+    const prog = document.querySelector('.progress'), hd = document.querySelector('header'),
+          mab = document.getElementById('mab');
+    const onScroll = () => {
+      const max = document.documentElement.scrollHeight - innerHeight;
+      if(prog) prog.style.transform = 'scaleX(' + (max > 0 ? scrollY/max : 0) + ')';
+      if(hd) hd.classList.toggle('stuck', scrollY > 16);
+      if(mab) mab.classList.toggle('on', scrollY > 560 && max - scrollY > 420);
+    };
+    addEventListener('scroll', onScroll, { passive:true }); onScroll();
+
+    this.sim();
+    document.addEventListener('keydown', e => { if(e.key === 'Escape') this.closeSheet(); });
+    document.getElementById('sheet').addEventListener('mousedown', e => {
+      if(e.target === e.currentTarget) this.closeSheet(); });
     this.contact();
     this.render();
     this.intent();
+    if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+      document.querySelectorAll('[data-count]').forEach(el => {
+        const n = +el.dataset.count; let t0 = null;
+        const step = ts => { if(!t0) t0 = ts;
+          const p = Math.min(1, (ts - t0)/1300);
+          el.textContent = Math.round(n * (1 - Math.pow(1 - p, 3)));
+          if(p < 1) requestAnimationFrame(step); };
+        setTimeout(() => requestAnimationFrame(step), 900);
+      });
+    }
     if(!matchMedia('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window){
       const io = new IntersectionObserver(es => es.forEach(e => {
         if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
@@ -745,8 +1009,9 @@ const EP = {
     const g = document.getElementById('listing-grid'), empty = document.getElementById('listing-empty');
     if(!LISTINGS.length){ g.classList.add('hidden'); empty.classList.remove('hidden'); return; }
     g.classList.remove('hidden'); empty.classList.add('hidden');
-    g.innerHTML = LISTINGS.map(l => `
-      <article class="card rv">
+    g.innerHTML = LISTINGS.map((l, i) => `
+      <article class="card rv" role="button" tabindex="0" onclick="EP.openSheet(${i})"
+        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();EP.openSheet(${i})}" style="cursor:pointer">
         <div class="ph">${l.photo ? `<img src="${l.photo}" alt="${this.esc(l.title)} at ${this.esc(l.resort)}" loading="lazy">` : ''}
           <span class="tag">${this.esc(l.kind || 'Timeshare')}</span></div>
         <div class="body">
@@ -755,7 +1020,7 @@ const EP = {
           <div class="specs">${(l.specs||[]).map(s => `<span>${this.esc(s)}</span>`).join('')}</div>
           <div class="foot">
             <span class="price"><small>Asking</small>${this.esc(l.price)}</span>
-            <a class="btn btn-sm btn-line" href="#contact">Enquire</a>
+            <button class="btn btn-sm btn-line" onclick="event.stopPropagation();EP.openSheet(${i})">View</button>
           </div>
         </div>
       </article>`).join('');
@@ -775,6 +1040,34 @@ const EP = {
   },
 
   menu(){ document.getElementById('mmenu').classList.toggle('hidden'); },
+
+  usd(n){ return 'US$ ' + Math.round(n).toLocaleString('en-US'); },
+  sim(){
+    const r = document.getElementById('sim-range'); if(!r) return;
+    const v = +r.value;
+    document.getElementById('sim-price').textContent = this.usd(v);
+    document.getElementById('sim-fee').textContent = this.usd(v * 0.05);
+    document.getElementById('sim-you').textContent = this.usd(v * 0.95);
+  },
+
+  openSheet(i){
+    const l = LISTINGS[i]; if(!l) return;
+    document.getElementById('sh-img').src = l.photo || '';
+    document.getElementById('sh-img').alt = l.title + ' at ' + l.resort;
+    document.getElementById('sh-tag').textContent = l.kind || 'Timeshare';
+    document.getElementById('sh-title').textContent = l.title;
+    document.getElementById('sh-loc').textContent = l.resort + (l.area ? ' · ' + l.area : '');
+    document.getElementById('sh-specs').innerHTML = (l.specs||[]).map(x => '<span>' + this.esc(x) + '</span>').join('');
+    document.getElementById('sh-price').textContent = l.price;
+    const msg = "Hi Johnny, I saw the \"" + l.title + "\" at " + l.resort + " on Eagle & Palm and I'd like to know more.";
+    document.getElementById('sh-wa').href = 'https://wa.me/2976301307?text=' + encodeURIComponent(msg);
+    document.getElementById('sheet').classList.add('on');
+    document.body.style.overflow = 'hidden';
+  },
+  closeSheet(){
+    document.getElementById('sheet').classList.remove('on');
+    document.body.style.overflow = '';
+  },
   esc(s){ const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; },
 
   submit(e){
