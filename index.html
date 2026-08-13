@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Eagle &amp; Palm by Johnny Paesch — Aruba timeshare resale &amp; property</title>
+<meta name="description" content="Aruba's own resale marketplace for timeshare weeks and property, run by Johnny Paesch. List with no upfront fee — you pay only when it sells. Based on the island, transfers handled through an Aruban notary.">
+<meta name="theme-color" content="#10312D">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Eagle &amp; Palm by Johnny Paesch — Aruba timeshare resale &amp; property">
+<meta property="og:description" content="List your Aruba week or property with no upfront fee. You pay only when it sells.">
+<style>
+@font-face{font-family:'Newsreader';font-style:normal;font-weight:200 800;font-display:swap;src:url(fonts/newsreader.woff2) format('woff2')}
+@font-face{font-family:'Manrope';font-style:normal;font-weight:200 800;font-display:swap;src:url(fonts/manrope.woff2) format('woff2')}
+
+:root{
+  /* Deep marine ink, warm bone paper, sunset coral. */
+  --ink:#10312D; --ink-2:#1B453F; --ink-3:#2B564F;
+  --paper:#FFFFFF; --sand:#F7F3EC; --sand-2:#EFE7DA;
+  --coral:#C4573C; --coral-lift:#D66A4D; --sea:#2C7A78;
+  --body:#4A544F; --muted:#6E7A74; --faint:#93A09A;
+  --line:#E4DCD0; --line-soft:#EFE9DF;
+  --ease:cubic-bezier(.16,1,.3,1);
+  --sh-sm:0 1px 2px rgba(16,49,45,.06),0 1px 3px rgba(16,49,45,.05);
+  --sh-md:0 4px 14px rgba(16,49,45,.08),0 2px 4px rgba(16,49,45,.04);
+  --sh-lg:0 20px 48px rgba(16,49,45,.14),0 6px 14px rgba(16,49,45,.06);
+  --r:12px; --r-lg:20px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;scroll-padding-top:92px}
+section[id]{scroll-margin-top:92px}
+body{background:var(--paper);color:var(--body);font-family:'Manrope',system-ui,sans-serif;font-size:16px;
+  line-height:1.65;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+h1,h2,h3{font-family:'Newsreader',Georgia,serif;color:var(--ink);font-weight:500;line-height:1.1;
+  letter-spacing:-.012em;text-wrap:balance}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font:inherit;color:inherit}
+img,svg{display:block;max-width:100%}
+:focus-visible{outline:2px solid var(--sea);outline-offset:2px;border-radius:4px}
+::selection{background:rgba(196,87,60,.18)}
+.hidden{display:none!important}
+.wrap{max-width:1200px;margin:0 auto;padding-inline:clamp(18px,4vw,40px)}
+.skip{position:absolute;left:-9999px;background:var(--ink);color:#fff;padding:10px 18px;z-index:200}
+.skip:focus{left:8px;top:8px}
+/* DEMO BANNER — delete the .demo-bar rule and its element to go live */
+.demo-bar{background:#2B564F;color:#fff;font-size:.8rem;text-align:center;padding:9px 16px;line-height:1.5}
+.demo-bar b{color:#F0B49C;font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:.72rem}
+.eyebrow{font-size:.72rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--coral)}
+.eyebrow.light{color:#E9A78F}
+.lede{font-size:clamp(1.02rem,1.5vw,1.15rem);color:var(--muted);text-wrap:pretty}
+.sec{padding-block:clamp(56px,7.5vw,96px)}
+.sec-head{max-width:740px;margin-bottom:clamp(28px,4vw,48px)}
+.sec-head h2{font-size:clamp(1.9rem,4.4vw,3rem);margin-top:12px}
+.sec-head p{margin-top:14px}
+
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;font-weight:600;font-size:.94rem;
+  padding:14px 24px;border-radius:10px;border:1px solid transparent;cursor:pointer;transition:.2s var(--ease);
+  text-align:center;min-height:48px}
+.btn svg{width:17px;height:17px;flex:none}
+.btn-ink{background:var(--ink);color:#fff;box-shadow:var(--sh-sm)}
+.btn-ink:hover{background:var(--ink-2);transform:translateY(-1px);box-shadow:var(--sh-md)}
+.btn-coral{background:var(--coral);color:#fff;box-shadow:var(--sh-sm)}
+.btn-coral:hover{background:var(--coral-lift);transform:translateY(-1px);box-shadow:var(--sh-md)}
+.btn-line{background:var(--paper);color:var(--ink);border-color:var(--line)}
+.btn-line:hover{border-color:var(--ink);background:var(--sand)}
+.btn-onink{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.28)}
+.btn-onink:hover{background:rgba(255,255,255,.18)}
+.btn-sm{padding:9px 16px;font-size:.86rem;min-height:42px;border-radius:9px}
+.btn-block{width:100%}
+
+/* ---------- header ---------- */
+header{position:sticky;top:0;z-index:90;background:var(--paper);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:18px;height:76px}
+.brand{display:flex;align-items:center;gap:11px;min-height:44px}
+.brand .mk{width:38px;height:38px;flex:none}
+.brand .wm{display:flex;flex-direction:column;line-height:1.05}
+.brand b{font-family:'Newsreader',serif;font-size:1.24rem;font-weight:500;color:var(--ink);letter-spacing:.005em;
+  white-space:nowrap}
+.brand .by{font-size:.58rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+  white-space:nowrap;margin-top:3px}
+.foot-grid .brand .by{color:rgba(255,255,255,.5)}
+@media(max-width:420px){.brand b{font-size:1.08rem}.brand .by{font-size:.52rem;letter-spacing:.13em}}
+nav.main{display:flex;gap:2px}
+nav.main a{font-size:.92rem;font-weight:500;color:var(--ink);padding:9px 13px;border-radius:8px;transition:.18s}
+nav.main a:hover{background:var(--sand);color:var(--coral)}
+.bar-r{display:flex;align-items:center;gap:10px}
+.burger{display:none;background:transparent;border:1px solid var(--line);border-radius:9px;padding:10px;cursor:pointer;
+  min-height:44px;min-width:44px;align-items:center;justify-content:center}
+.burger svg{width:20px;height:20px;color:var(--ink)}
+.wa-head{display:none;width:44px;height:44px;border-radius:9px;background:#25D366;color:#fff;place-items:center;flex:none}
+.wa-head svg{width:21px;height:21px}
+@media(max-width:1060px){
+  nav.main,.bar-r .btn-desk{display:none}
+  .burger{display:flex}.wa-head{display:grid}
+}
+#mmenu{border-top:1px solid var(--line);padding:16px clamp(18px,4vw,40px) 24px;display:flex;flex-direction:column;gap:2px}
+#mmenu a{font-size:1.02rem;font-weight:600;color:var(--ink);padding:13px 0;border-bottom:1px solid var(--line-soft)}
+#mmenu .mcta{display:grid;gap:10px;margin-top:16px}
+
+/* ---------- hero ---------- */
+.hero{position:relative;background:var(--ink);color:#fff;overflow:hidden;isolation:isolate}
+.hero-bg{position:absolute;inset:0;z-index:-2}
+.hero-bg img{width:100%;height:100%;object-fit:cover}
+.hero-veil{position:absolute;inset:0;z-index:-1;background:
+  linear-gradient(90deg,rgba(16,49,45,.9) 0%,rgba(16,49,45,.66) 42%,rgba(16,49,45,.24) 100%),
+  linear-gradient(180deg,rgba(16,49,45,.62) 0%,rgba(16,49,45,.3) 38%,rgba(16,49,45,.8) 100%)}
+.hero .wrap{padding-block:clamp(52px,7vw,88px) clamp(44px,5.5vw,68px)}
+.hero h1{color:#fff;font-size:clamp(2.3rem,5.6vw,4.1rem);max-width:16ch}
+.hero h1 em{font-style:italic;color:#F0B49C}
+.hero .sub{margin-top:20px;max-width:56ch;font-size:clamp(1.02rem,1.6vw,1.18rem);color:rgba(255,255,255,.78);text-wrap:pretty}
+.paths{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:clamp(30px,4vw,44px);max-width:940px}
+@media(max-width:760px){.paths{grid-template-columns:1fr}}
+.path{display:block;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);border-radius:var(--r-lg);
+  padding:26px 24px;transition:.25s var(--ease);text-align:left}
+.path:hover{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.34);transform:translateY(-2px)}
+.path .k{display:flex;align-items:center;gap:10px;font-size:.72rem;font-weight:700;letter-spacing:.13em;
+  text-transform:uppercase;color:#E9A78F}
+.path .k svg{width:16px;height:16px}
+.path h2{color:#fff;font-size:1.5rem;margin:12px 0 8px}
+.path p{font-size:.94rem;color:rgba(255,255,255,.72);margin-bottom:16px}
+.path .go{display:inline-flex;align-items:center;gap:8px;font-size:.86rem;font-weight:700;color:#fff}
+.path .go svg{width:15px;height:15px;transition:transform .25s var(--ease)}
+.path:hover .go svg{transform:translateX(4px)}
+
+/* ---------- promise bar ---------- */
+.promise{background:var(--sand);border-bottom:1px solid var(--line)}
+.promise .wrap{display:flex;flex-wrap:wrap;gap:14px 30px;justify-content:center;padding-block:20px}
+.promise div{display:flex;align-items:center;gap:9px;font-size:.88rem;font-weight:600;color:var(--ink)}
+.promise svg{width:16px;height:16px;color:var(--sea);flex:none}
+
+/* ---------- listings ---------- */
+#listings{background:var(--sand)}
+.grid-l{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(16px,2vw,24px)}
+@media(max-width:940px){.grid-l{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.grid-l{grid-template-columns:1fr}}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;
+  transition:.28s var(--ease);display:flex;flex-direction:column}
+.card:hover{transform:translateY(-3px);box-shadow:var(--sh-lg);border-color:transparent}
+.card .ph{aspect-ratio:4/3;background:var(--sand-2);position:relative;overflow:hidden}
+.card .ph img{width:100%;height:100%;object-fit:cover;transition:transform .6s var(--ease)}
+.card:hover .ph img{transform:scale(1.04)}
+.card .tag{position:absolute;top:12px;left:12px;background:rgba(16,49,45,.88);color:#fff;font-size:.66rem;
+  font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:6px 11px;border-radius:20px;backdrop-filter:blur(6px)}
+.card .body{padding:20px;display:flex;flex-direction:column;flex-grow:1}
+.card h3{font-size:1.24rem;margin-bottom:4px}
+.card .loc{font-size:.85rem;color:var(--muted);margin-bottom:14px}
+.card .specs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
+.card .specs span{font-size:.76rem;font-weight:600;color:var(--ink-3);background:var(--sand);border:1px solid var(--line);
+  border-radius:20px;padding:5px 11px}
+.card .foot{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;
+  padding-top:14px;border-top:1px solid var(--line-soft)}
+.card .price{font-family:'Newsreader',serif;font-size:1.5rem;font-weight:500;color:var(--ink);line-height:1.1}
+.card .price small{display:block;font-family:'Manrope';font-size:.68rem;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:3px}
+.empty-l{background:var(--paper);border:1px dashed var(--line);border-radius:var(--r-lg);padding:clamp(34px,5vw,56px);
+  text-align:center;max-width:640px;margin-inline:auto}
+.empty-l h3{font-size:1.5rem;margin-bottom:10px}
+.empty-l p{color:var(--muted);margin-bottom:22px;max-width:44ch;margin-inline:auto}
+
+/* ---------- how it works ---------- */
+.tabs{display:flex;gap:4px;background:var(--sand-2);padding:4px;border-radius:12px;width:fit-content;margin-bottom:32px}
+.tabs button{border:0;background:transparent;padding:11px 22px;border-radius:9px;font-size:.9rem;font-weight:650;
+  color:var(--muted);cursor:pointer;transition:.18s;min-height:44px}
+.tabs button.on{background:var(--paper);color:var(--ink);box-shadow:var(--sh-sm)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(16px,2.4vw,28px)}
+@media(max-width:900px){.steps{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.steps{grid-template-columns:1fr}}
+.step{border-top:2px solid var(--line);padding-top:22px;position:relative}
+.step:first-child{border-color:var(--coral)}
+.step .n{font-family:'Newsreader',serif;font-size:1.1rem;color:var(--faint);display:block;margin-bottom:8px}
+.step:first-child .n{color:var(--coral)}
+.step h3{font-size:1.12rem;margin-bottom:8px}
+.step p{font-size:.92rem;color:var(--muted)}
+
+/* ---------- fees ---------- */
+#fees{padding-bottom:clamp(48px,6vw,76px);background:var(--ink);color:rgba(255,255,255,.8);position:relative;overflow:hidden}
+#fees::before{content:"";position:absolute;top:-180px;right:-120px;width:540px;height:540px;border-radius:50%;
+  background:radial-gradient(circle,rgba(196,87,60,.26),transparent 68%)}
+#fees .wrap{position:relative;z-index:1}
+#fees h2{color:#fff}
+#fees .lede{color:rgba(255,255,255,.7)}
+.fee-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(20px,3vw,36px);margin-top:clamp(28px,4vw,44px)}
+@media(max-width:860px){.fee-grid{grid-template-columns:1fr}}
+.fee-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:var(--r-lg);padding:clamp(24px,3vw,34px)}
+.fee-card.hi{background:var(--paper);color:var(--body);border-color:transparent;box-shadow:var(--sh-lg)}
+.fee-card h3{font-size:1.3rem;margin-bottom:6px;color:#fff}
+.fee-card.hi h3{color:var(--ink)}
+.fee-card .amt{font-family:'Newsreader',serif;font-size:clamp(2.6rem,6vw,3.6rem);font-weight:500;color:var(--ink);line-height:1;margin:16px 0 6px}
+.fee-card .note{font-size:.88rem;color:var(--muted)}
+.fee-list{list-style:none;display:grid;gap:13px;margin-top:18px}
+.fee-list li{display:flex;gap:11px;font-size:.94rem;align-items:flex-start}
+.fee-list li svg{width:17px;height:17px;flex:none;margin-top:4px}
+.fee-list .no svg{color:#E9A78F}
+.fee-list .yes svg{color:var(--sea)}
+.tbc{display:inline-block;background:rgba(196,87,60,.14);color:#E9A78F;border:1px dashed rgba(233,167,143,.5);
+  border-radius:7px;padding:2px 9px;font-size:.8rem;font-weight:700;letter-spacing:.04em}
+.fee-card.hi .tbc{background:rgba(196,87,60,.1);color:var(--coral);border-color:rgba(196,87,60,.4)}
+
+/* ---------- who you're dealing with ---------- */
+#owner{background:var(--sand)}
+.owner-grid{display:grid;grid-template-columns:.85fr 1.15fr;gap:clamp(26px,4.5vw,60px);align-items:center}
+@media(max-width:820px){.owner-grid{grid-template-columns:1fr;gap:28px}}
+.owner-photo{position:relative;border-radius:var(--r-lg);overflow:hidden;background:var(--sand-2);
+  aspect-ratio:4/5;max-width:400px;box-shadow:var(--sh-lg)}
+.owner-photo img{width:100%;height:100%;object-fit:cover}
+.owner-photo .slot{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:14px;background:linear-gradient(160deg,var(--ink-3),var(--ink))}
+.owner-photo .initials{font-family:'Newsreader',serif;font-size:4.4rem;font-weight:400;color:#fff;
+  letter-spacing:.04em;line-height:1;opacity:.92}
+.owner-photo .cap{font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:rgba(255,255,255,.5)}
+.owner-name{font-size:clamp(1.9rem,4vw,2.7rem);margin:12px 0 4px}
+.owner-role{font-size:.78rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--coral)}
+.owner-body{margin-top:18px;font-size:clamp(1rem,1.5vw,1.1rem);color:var(--body);max-width:56ch;text-wrap:pretty}
+.owner-facts{display:grid;gap:11px;margin-top:24px;max-width:520px}
+.owner-facts div{display:flex;gap:11px;align-items:flex-start;font-size:.94rem}
+.owner-facts svg{width:17px;height:17px;color:var(--sea);flex:none;margin-top:5px}
+.owner-cta{display:flex;gap:11px;flex-wrap:wrap;margin-top:26px}
+
+/* ---------- resorts ---------- */
+.resorts{display:flex;flex-wrap:wrap;gap:9px}
+.resorts span{font-size:.88rem;font-weight:600;color:var(--ink-3);background:var(--paper);border:1px solid var(--line);
+  border-radius:24px;padding:10px 17px}
+
+/* ---------- band ---------- */
+.band{position:relative;overflow:hidden;background:var(--ink);color:#fff}
+.band img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 1s var(--ease)}
+.band img.loaded{opacity:.6}
+.band::after{content:"";position:absolute;inset:0;background:
+  linear-gradient(100deg,rgba(16,49,45,.96) 0%,rgba(16,49,45,.88) 36%,rgba(16,49,45,.5) 68%,rgba(16,49,45,.3) 100%)}
+.band .wrap{position:relative;z-index:2;padding-block:clamp(60px,8vw,110px)}
+.band h2{color:#fff;font-size:clamp(1.85rem,4.2vw,2.9rem);max-width:20ch}
+.band p{color:rgba(255,255,255,.76);max-width:54ch;margin-top:16px}
+
+/* ---------- faq ---------- */
+#faq{background:var(--sand)}
+.faq-list{display:grid;gap:10px;max-width:860px}
+details.faq{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+details.faq summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 22px;
+  cursor:pointer;font-weight:650;color:var(--ink);list-style:none;min-height:56px}
+details.faq summary::-webkit-details-marker{display:none}
+details.faq summary svg{width:17px;height:17px;color:var(--coral);flex:none;transition:transform .3s var(--ease)}
+details.faq[open] summary svg{transform:rotate(180deg)}
+details.faq .a{padding:0 22px 20px;font-size:.94rem;color:var(--muted);max-width:70ch}
+details.faq .a p+p{margin-top:10px}
+
+/* ---------- contact ---------- */
+.contact-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:clamp(26px,4vw,52px);align-items:start}
+@media(max-width:900px){.contact-grid{grid-template-columns:1fr}}
+.deets{display:grid;gap:11px}
+.deet{display:flex;align-items:center;gap:14px;background:var(--sand);border:1px solid var(--line);
+  border-radius:var(--r);padding:15px 17px;transition:.2s}
+.deet:hover{border-color:var(--ink)}
+.deet .ic{width:42px;height:42px;border-radius:10px;background:var(--paper);border:1px solid var(--line);
+  display:grid;place-items:center;flex:none}
+.deet .ic svg{width:18px;height:18px;color:var(--sea)}
+.deet .k{display:block;font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.deet .v{display:block;font-weight:650;color:var(--ink);margin-top:2px;word-break:break-word}
+.form-card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);padding:clamp(24px,3vw,36px);
+  box-shadow:var(--sh-md)}
+.form-card h3{font-size:1.34rem;margin-bottom:6px}
+.form-card>p{font-size:.9rem;color:var(--muted);margin-bottom:20px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:.74rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--ink);margin-bottom:7px}
+.field input,.field select,.field textarea{width:100%;min-width:0;max-width:100%;padding:13px 15px;
+  background:var(--sand);border:1.5px solid var(--line);border-radius:10px;outline:0;transition:.2s;
+  font-size:.95rem;color:var(--ink);font-family:inherit}
+.field input[type="date"]{-webkit-appearance:none;appearance:none;display:block}
+.field input[type="date"]::-webkit-date-and-time-value{text-align:left;margin:0;min-width:0}
+@media(max-width:768px){.field input,.field select,.field textarea{font-size:16px}}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--sea);background:var(--paper);
+  box-shadow:0 0 0 4px rgba(44,122,120,.12)}
+.form-note{font-size:.78rem;color:var(--faint);margin-top:14px;text-align:center;max-width:36ch;margin-inline:auto}
+
+/* ---------- footer ---------- */
+footer{background:var(--ink);color:rgba(255,255,255,.62);font-size:.9rem;padding-block:clamp(40px,5vw,60px) 26px}
+.foot-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:clamp(24px,4vw,48px);padding-bottom:34px}
+@media(max-width:820px){.foot-grid{grid-template-columns:1fr;gap:28px}}
+.foot-grid .brand b{color:#fff}
+.foot-grid p{margin-top:14px;max-width:40ch}
+.foot-grid h4{color:#fff;font-family:'Manrope';font-size:.72rem;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;margin-bottom:12px}
+.foot-grid ul{list-style:none;display:grid;gap:2px}
+.foot-grid ul a{display:inline-block;padding-block:9px;min-height:40px}
+.foot-grid ul a:hover{color:#E9A78F}
+.foot-bot{border-top:1px solid rgba(255,255,255,.1);padding-top:22px;display:flex;justify-content:space-between;
+  gap:14px;flex-wrap:wrap;font-size:.8rem}
+.credit{color:rgba(255,255,255,.34);font-size:.74rem}
+.credit a{text-decoration:underline}
+
+.rv{opacity:0;transform:translateY(16px);transition:opacity .6s var(--ease),transform .6s var(--ease)}
+.rv.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .rv{opacity:1;transform:none}
+}
+</style>
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org","@type":"RealEstateAgent",
+  "name":"Eagle & Palm","alternateName":"Eagle & Palm by Johnny Paesch",
+  "description":"Aruba resale marketplace for timeshare weeks and property. No upfront listing fee.",
+  "founder":{"@type":"Person","name":"Johnny Paesch"},
+  "areaServed":{"@type":"Country","name":"Aruba"},
+  "knowsLanguage":["en","nl","es","pap"]
+}
+</script>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+<symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
+<symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.5"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4Z"/></symbol>
+<symbol id="i-wa" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2Zm5.6 14.2c-.2.6-1.2 1.2-1.7 1.2-.5.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.5-2.6-1.1-4.3-3.7-4.4-3.9-.1-.2-1-1.4-1-2.6s.6-1.8.9-2.1c.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.1.1.3 0 .5l-.3.4-.4.4c-.1.1-.3.3-.1.5.1.3.6 1.1 1.4 1.7 1 .8 1.7 1.1 2 1.2.2.1.4.1.5-.1l.7-.9c.2-.2.3-.2.6-.1l1.8.9c.3.1.4.2.5.3.1.2.1.6-.1 1.1Z"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 8.6-8.6M17 6l3 3M14 9l3 3"/></symbol>
+<symbol id="i-cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+<symbol id="i-mark" viewBox="0 0 40 40">
+  <circle cx="20" cy="20" r="18.4" fill="none" stroke="currentColor" stroke-width="1.8"/>
+  <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none">
+    <path d="M20 30.5V13"/>
+    <path d="M20 14.6c-3-2.6-6.1-3.1-8.7-2.2"/><path d="M20 14.6c3-2.6 6.1-3.1 8.7-2.2"/>
+    <path d="M20 19.4c-2.7-2.3-5.4-2.8-7.6-2"/><path d="M20 19.4c2.7-2.3 5.4-2.8 7.6-2"/>
+    <path d="M20 24.1c-2.3-2-4.6-2.4-6.5-1.7"/><path d="M20 24.1c2.3-2 4.6-2.4 6.5-1.7"/>
+  </g>
+</symbol>
+</defs></svg>
+
+<!-- DEMO BANNER — delete this element before the site goes live -->
+<div class="demo-bar"><b>Demonstration</b> &nbsp;· Sample listings and placeholder details, prepared for Johnny Paesch.</div>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header>
+  <div class="wrap bar">
+    <a href="#top" class="brand" aria-label="Eagle &amp; Palm home">
+      <svg class="mk" style="color:var(--ink)"><use href="#i-mark"/></svg>
+      <span class="wm"><b>Eagle &amp; Palm</b><span class="by">by Johnny Paesch</span></span>
+    </a>
+    <nav class="main" aria-label="Main">
+      <a href="#listings">Listings</a>
+      <a href="#how">How it works</a>
+      <a href="#fees">Our fee</a>
+      <a href="#resorts">Resorts</a>
+      <a href="#owner">Who we are</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="bar-r">
+      <a class="btn btn-sm btn-line btn-desk" href="#buy">Browse</a>
+      <a class="btn btn-sm btn-ink btn-desk" href="#sell">List your property</a>
+      <a class="wa-head" id="wa-head" href="#contact" aria-label="WhatsApp"><svg><use href="#i-wa"/></svg></a>
+      <button class="burger" onclick="EP.menu()" aria-label="Menu"><svg><use href="#i-menu"/></svg></button>
+    </div>
+  </div>
+  <div id="mmenu" class="hidden">
+    <a href="#listings" onclick="EP.menu()">Listings</a>
+    <a href="#how" onclick="EP.menu()">How it works</a>
+    <a href="#fees" onclick="EP.menu()">Our fee</a>
+    <a href="#resorts" onclick="EP.menu()">Resorts</a>
+    <a href="#owner" onclick="EP.menu()">Who we are</a>
+    <a href="#faq" onclick="EP.menu()">FAQ</a>
+    <div class="mcta">
+      <a class="btn btn-ink btn-block" href="#sell" onclick="EP.menu()">List your property</a>
+      <a class="btn btn-line btn-block" href="#buy" onclick="EP.menu()">Browse listings</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<section class="hero" id="top">
+  <div class="hero-bg">
+    <picture>
+      <source media="(max-width:700px)" srcset="hero-tall.jpg">
+      <img src="hero-wide.jpg" alt="The turquoise shallows off Aruba's west coast" fetchpriority="high">
+    </picture>
+  </div>
+  <div class="hero-veil" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="eyebrow light">Aruba · Eagle Beach &amp; Palm Beach</p>
+    <h1 style="margin-top:14px">The island's own market for <em>resale</em> weeks and property.</h1>
+    <p class="sub">Aruba has thousands of timeshare owners and no local place to sell. Eagle &amp; Palm is that place —
+      run from the island, with the fee written plainly and nothing to pay until your sale completes.</p>
+    <div class="paths">
+      <a class="path" href="#sell">
+        <span class="k"><svg><use href="#i-tag"/></svg>I want to sell</span>
+        <h2>Get out of your week</h2>
+        <p>Tell us what you own. We value it against what has actually sold on the island, list it, and handle the buyer.</p>
+        <span class="go">Start a free valuation <svg><use href="#i-arrow"/></svg></span>
+      </a>
+      <a class="path" href="#buy">
+        <span class="k"><svg><use href="#i-search"/></svg>I want to buy</span>
+        <h2>Buy in at resale price</h2>
+        <p>Weeks and property on Eagle Beach, Palm Beach and across Aruba — at a fraction of what the resorts charge.</p>
+        <span class="go">See what's available <svg><use href="#i-arrow"/></svg></span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<div class="promise">
+  <div class="wrap">
+    <div><svg><use href="#i-check"/></svg>No upfront listing fee</div>
+    <div><svg><use href="#i-check"/></svg>You pay only when it sells</div>
+    <div><svg><use href="#i-check"/></svg>Based on Aruba, not offshore</div>
+    <div><svg><use href="#i-check"/></svg>Transfer through an Aruban notary</div>
+  </div>
+</div>
+
+<section class="sec" id="listings">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Available now</p>
+      <h2 id="buy">On the market</h2>
+      <p class="lede">Every listing is a real week or property with a named owner behind it. No stock photos, no
+        placeholder inventory.</p>
+    </div>
+    <div id="listing-grid" class="grid-l"></div>
+    <div id="listing-empty" class="empty-l hidden">
+      <h3>The first listings go live shortly</h3>
+      <p>We are valuing the first properties now. Leave your details and we will send you the opening list before
+        it goes public.</p>
+      <a class="btn btn-ink" href="#contact">Join the buyer list</a>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="how">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">How it works</p>
+      <h2>Two sides, one straight process</h2>
+    </div>
+    <div class="tabs" role="tablist">
+      <button id="tab-sell" class="on" onclick="EP.tab('sell')" role="tab">I'm selling</button>
+      <button id="tab-buy" onclick="EP.tab('buy')" role="tab">I'm buying</button>
+    </div>
+    <div id="panel-sell" class="steps">
+      <div class="step rv"><span class="n">01</span><h3>Tell us what you own</h3>
+        <p>Resort, week number, unit size, and whether the maintenance fees are current. A photo of your ownership certificate helps.</p></div>
+      <div class="step rv"><span class="n">02</span><h3>We value it honestly</h3>
+        <p>Priced against what comparable Aruba weeks have actually sold for — not what you were told it was worth when you bought it.</p></div>
+      <div class="step rv"><span class="n">03</span><h3>We list and find the buyer</h3>
+        <p>Your week goes on the site and in front of our buyer list. We handle the enquiries, the viewings and the negotiation.</p></div>
+      <div class="step rv"><span class="n">04</span><h3>Notary transfers it</h3>
+        <p>An Aruban notary handles the transfer and the funds. Our commission comes out of the sale — never before it.</p></div>
+    </div>
+    <div id="panel-buy" class="steps hidden">
+      <div class="step rv"><span class="n">01</span><h3>Find what fits</h3>
+        <p>Browse by resort, season and size. Ask us anything — we would rather talk you out of a bad fit than sell you one.</p></div>
+      <div class="step rv"><span class="n">02</span><h3>See it for real</h3>
+        <p>On the island already? We will walk you through the resort. If not, we will video-call you from the unit.</p></div>
+      <div class="step rv"><span class="n">03</span><h3>Make an offer</h3>
+        <p>We put your offer to the owner and come back with a straight answer. No invented rival bidders.</p></div>
+      <div class="step rv"><span class="n">04</span><h3>Notary completes it</h3>
+        <p>Funds go through the notary, the ownership is registered in your name, and the resort updates its records.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="fees">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow light">Our fee</p>
+      <h2>The whole cost, on one screen</h2>
+      <p class="lede">Timeshare resale has a bad name because of upfront fees taken for sales that never happen.
+        So here is our entire commercial model, in public.</p>
+    </div>
+    <div class="fee-grid">
+      <div class="fee-card hi">
+        <h3>What you pay to list</h3>
+        <div class="amt">ƒ 0</div>
+        <p class="note">Nothing to advertise your week or property. No listing fee, no photography fee, no
+          "marketing package", no appraisal charge.</p>
+        <ul class="fee-list" style="margin-top:22px">
+          <li class="yes"><svg><use href="#i-check"/></svg><span>Valuation, listing and photography included</span></li>
+          <li class="yes"><svg><use href="#i-check"/></svg><span>Commission only on a completed sale — <b style="color:var(--ink)">5% of the sale price</b></span></li>
+          <li class="yes"><svg><use href="#i-check"/></svg><span>Taken out of the sale proceeds at the notary</span></li>
+          <li class="yes"><svg><use href="#i-check"/></svg><span>Walk away any time at no cost</span></li>
+        </ul>
+      </div>
+      <div class="fee-card">
+        <h3>What we will never do</h3>
+        <p style="color:rgba(255,255,255,.7);margin-top:8px">The practices that gave this industry its reputation.
+          If anyone claiming to represent us does any of these, it is not us.</p>
+        <ul class="fee-list" style="margin-top:22px">
+          <li class="no"><svg><use href="#i-x"/></svg><span>Ask you to pay a fee before your property sells</span></li>
+          <li class="no"><svg><use href="#i-x"/></svg><span>Cold-call you claiming a buyer is already waiting</span></li>
+          <li class="no"><svg><use href="#i-x"/></svg><span>Guarantee a sale, a price, or a timeframe</span></li>
+          <li class="no"><svg><use href="#i-x"/></svg><span>Ask you to wire money to a personal account</span></li>
+          <li class="no"><svg><use href="#i-x"/></svg><span>Charge you to "release" or "exit" your ownership</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <img src="band-sea.jpg" alt="Aruba's west coast" loading="lazy" decoding="async" onload="this.classList.add('loaded')">
+  <div class="wrap">
+    <p class="eyebrow light">Why this did not exist before</p>
+    <h2 style="margin-top:12px">Owners have been selling Aruba through people who have never seen it</h2>
+    <p>Until now, an owner wanting out listed with a broker in Florida or a classifieds site, and a buyer had no
+      way to check anything on the ground. We are on the island. We can stand in the unit, read the resort's
+      records, and walk the paperwork to the notary ourselves.</p>
+  </div>
+</section>
+
+
+<section class="sec" id="owner">
+  <div class="wrap owner-grid">
+    <div class="owner-photo rv">
+      <!-- Replace with: <img src="johnny.jpg" alt="Johnny Paesch"> -->
+      <div class="slot"><span class="initials">JP</span><span class="cap">Portrait to be added</span></div>
+    </div>
+    <div>
+      <p class="eyebrow">Who you are dealing with</p>
+      <h2 class="owner-name">Johnny Paesch</h2>
+      <p class="owner-role">Owner</p>
+      <p class="owner-body">Eagle &amp; Palm is not a call centre and not a website with nobody behind it. It is Johnny's business, run from Aruba, and he is the person who values your week, meets your buyer,
+        and walks the file to the notary.</p>
+      <div class="owner-facts rv">
+        <div><svg><use href="#i-check"/></svg><span>Speak to him directly — not to a sales floor</span></div>
+        <div><svg><use href="#i-check"/></svg><span>Based on the island, with an address you can visit</span></div>
+        <div><svg><use href="#i-check"/></svg><span>Working in Aruban property and resort resale</span></div>
+        <div><svg><use href="#i-check"/></svg><span>Handles every valuation, viewing and file personally</span></div>
+      </div>
+      <div class="owner-cta">
+        <a class="btn btn-ink" href="#contact">Ask Johnny a question</a>
+        <a class="btn btn-line" href="#fees">See the fee first</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="resorts">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Where the inventory is</p>
+      <h2>Resorts across the island</h2>
+      <p class="lede">Almost all of Aruba's timeshare sits along two stretches of sand. We cover both, plus
+        residential property elsewhere on the island.</p>
+    </div>
+    <div class="resorts rv">
+      <span>Playa Linda Beach Resort</span><span>La Cabana Beach Resort</span><span>Costa Linda Beach Resort</span>
+      <span>Divi Aruba Phoenix</span><span>Divi Village Golf &amp; Beach</span><span>Aruba Beach Club</span>
+      <span>Casa del Mar Beach Resort</span><span>Paradise Beach Villas</span><span>Marriott's Aruba Ocean Club</span>
+      <span>Marriott's Aruba Surf Club</span><span>La Quinta Beach Resort</span><span>Amsterdam Manor</span>
+      <span>Tropicana Aruba</span><span>Eagle Aruba Resort</span>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="faq">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Straight answers</p>
+      <h2>The questions everybody asks first</h2>
+    </div>
+    <div class="faq-list">
+      <details class="faq"><summary><span>Is this another timeshare resale scam?</span><svg><use href="#i-chev"/></svg></summary>
+        <div class="a"><p>A fair question, and the reason this page exists. The scam pattern is always the same: someone
+          contacts you, says a buyer is ready, and asks for a fee upfront. The sale never happens and the fee is gone.</p>
+          <p>We take nothing until your property actually sells, and the money moves through an Aruban notary rather than
+            through us. If we never sell it, we are never paid.</p></div></details>
+      <details class="faq"><summary><span>What is my week actually worth?</span><svg><use href="#i-chev"/></svg></summary>
+        <div class="a"><p>Almost certainly less than you paid, and we would rather tell you that at the start than
+          string you along. Resale value depends on the resort, the season, the unit size and whether the fees are current.
+          High-season weeks at the beachfront resorts hold value best.</p>
+          <p>The valuation is free and comes with the comparable sales it is based on.</p></div></details>
+      <details class="faq"><summary><span>Can a foreigner own property in Aruba?</span><svg><use href="#i-chev"/></svg></summary>
+        <div class="a"><p>Yes. Aruba does not restrict foreign ownership, which is why so much of the island's resort
+          property is owned from North America and Europe. Ownership can be freehold land or long-lease government land,
+          and which one you are buying matters — we will tell you plainly which it is before you commit.</p></div></details>
+      <details class="faq"><summary><span>How long does a sale take?</span><svg><use href="#i-chev"/></svg></summary>
+        <div class="a"><p>Honestly: it varies, and anyone giving you a firm number is guessing. Finding the right buyer is
+          the slow part; once an offer is accepted, the notary transfer is the predictable part. We will tell you what
+          we are seeing in the market rather than what you want to hear.</p></div></details>
+      <details class="faq"><summary><span>What happens to my maintenance fees while it is listed?</span><svg><use href="#i-chev"/></svg></summary>
+        <div class="a"><p>They remain yours until the transfer completes, and they need to stay current — a week in
+          arrears is much harder to sell and some resorts will block the transfer entirely. If you are behind, tell us;
+          it is a common situation and it is workable.</p></div></details>
+      <details class="faq"><summary><span>Do you handle ordinary property too, not just timeshare?</span><svg><use href="#i-chev"/></svg></summary>
+        <div class="a"><p>Yes — condos, villas and land alongside resale weeks. The process and the fee model are the same:
+          nothing upfront, commission on completion, transfer through the notary.</p></div></details>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="contact">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Talk to us</p>
+      <h2 id="sell">Start with a conversation</h2>
+      <p class="lede">Selling, buying, or just want to know what your week is worth — ask. There is no cost and no
+        obligation to list.</p>
+    </div>
+    <div class="contact-grid">
+      <div>
+        <div class="deets">
+          <a class="deet" id="d-wa" href="#"><span class="ic"><svg style="color:#25D366"><use href="#i-wa"/></svg></span>
+            <span><span class="k">WhatsApp</span><span class="v" id="v-wa">—</span></span></a>
+          <a class="deet" id="d-mail" href="#"><span class="ic"><svg><use href="#i-mail"/></svg></span>
+            <span><span class="k">Email</span><span class="v" id="v-mail">—</span></span></a>
+          <div class="deet"><span class="ic"><svg><use href="#i-pin"/></svg></span>
+            <span><span class="k">Office</span><span class="v" id="v-addr">—</span></span></div>
+        </div>
+        <div style="margin-top:22px;padding:18px 20px;background:var(--sand);border:1px solid var(--line);border-radius:var(--r)">
+          <p style="font-size:.9rem"><b style="color:var(--ink)">Not ready to list?</b> Ask for the valuation anyway.
+            Plenty of owners find out what their week is worth and then decide to keep it — that is a perfectly good outcome.</p>
+        </div>
+      </div>
+      <div class="form-card">
+        <h3>Tell us where you stand</h3>
+        <p>We reply personally, usually the same day.</p>
+        <form onsubmit="EP.submit(event)">
+          <div class="field"><label for="f-intent">I am…</label>
+            <select id="f-intent" onchange="EP.intent()">
+              <option value="sell">Selling a week or property</option>
+              <option value="buy">Looking to buy</option>
+              <option value="value">Just want a valuation</option>
+            </select></div>
+          <div class="field"><label for="f-name">Full name</label><input id="f-name" type="text" autocomplete="name" required></div>
+          <div class="field"><label for="f-email">Email</label><input id="f-email" type="email" autocomplete="email" required></div>
+          <div class="field" id="wrap-resort"><label for="f-resort">Which resort or area?</label>
+            <input id="f-resort" type="text" placeholder="e.g. Playa Linda, week 7"></div>
+          <div class="field"><label for="f-msg">Anything else we should know?</label>
+            <textarea id="f-msg" rows="3"></textarea></div>
+          <button type="submit" class="btn btn-coral btn-block"><svg><use href="#i-send"/></svg>Send</button>
+          <p class="form-note">No cost, no obligation, and we will not add you to a call list.</p>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <span class="brand"><svg class="mk" style="color:#fff"><use href="#i-mark"/></svg>
+          <span class="wm"><b style="color:#fff">Eagle &amp; Palm</b><span class="by">by Johnny Paesch</span></span></span>
+        <p>Aruba's resale marketplace for timeshare weeks and property. Based on the island; transfers handled
+          through an Aruban notary.</p>
+      </div>
+      <div><h4>Market</h4><ul>
+        <li><a href="#listings">Listings</a></li><li><a href="#sell">Sell your week</a></li>
+        <li><a href="#resorts">Resorts</a></li></ul></div>
+      <div><h4>Company</h4><ul>
+        <li><a href="#how">How it works</a></li><li><a href="#fees">Our fee</a></li>
+        <li><a href="#faq">FAQ</a></li><li><a href="#contact">Contact</a></li></ul></div>
+    </div>
+    <div class="foot-bot">
+      <p>© <span id="yr">2026</span> Eagle &amp; Palm</p>
+      <p class="credit">Demo imagery: Aruba coastline by Coolcaesar (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>); listing photographs public domain. All to be replaced with Johnny&rsquo;s own photography.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ─────────────────────────────────────────────────────────────
+   FILL THESE IN — they appear everywhere on the site.
+   Leave a value empty and it renders as "to be added" rather
+   than as a wrong number.
+   ───────────────────────────────────────────────────────────── */
+const CONTACT = {
+  whatsapp: "",                          // ← Johnny's real number, digits only e.g. "2975551234"
+  whatsappLabel: "+297 000 0000",        // ← placeholder shown until the real one is added
+  email: "hello@eagleandpalm.com",       // ← placeholder address
+  address: "Oranjestad, Aruba"           // ← full street address to add
+};
+
+/* Real listings only. Add one object per property and the grid fills itself.
+   photo: a file next to index.html, e.g. "listing-1.jpg"                     */
+const LISTINGS = [
+  {
+    title: "Two-bedroom, week 7",
+    resort: "Playa Linda Beach Resort",
+    area: "Palm Beach",
+    kind: "Timeshare",
+    specs: ["2 bed", "Sleeps 6", "High season", "Ocean view"],
+    price: "US$ 26,500",
+    photo: "listing-1.jpg"
+  },
+  {
+    title: "Studio, weeks 24 & 25",
+    resort: "Casa del Mar Beach Resort",
+    area: "Eagle Beach",
+    kind: "Timeshare",
+    specs: ["Studio", "Sleeps 4", "Two weeks", "Fees current"],
+    price: "US$ 11,900",
+    photo: "listing-2.jpg"
+  },
+  {
+    title: "Three-bedroom condo",
+    resort: "Private residence",
+    area: "Malmok",
+    kind: "Property",
+    specs: ["3 bed", "2 bath", "Pool", "Freehold"],
+    price: "US$ 485,000",
+    photo: "listing-3.jpg"
+  },
+];
+
+const EP = {
+  init(){
+    document.getElementById('yr').textContent = new Date().getFullYear();
+    this.contact();
+    this.render();
+    this.intent();
+    if(!matchMedia('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window){
+      const io = new IntersectionObserver(es => es.forEach(e => {
+        if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
+      }), { threshold:.12, rootMargin:'0px 0px -4% 0px' });
+      document.querySelectorAll('.rv').forEach((el,i) => { el.style.transitionDelay = Math.min(i%4*70,210)+'ms'; io.observe(el); });
+    } else document.querySelectorAll('.rv').forEach(el => el.classList.add('in'));
+  },
+
+  contact(){
+    const tbc = '<span class="tbc" style="font-size:.78rem">to be added</span>';
+    const wa = CONTACT.whatsapp, mail = CONTACT.email;
+    document.getElementById('v-wa').innerHTML = (CONTACT.whatsappLabel || wa) || tbc;
+    document.getElementById('v-mail').innerHTML = mail || tbc;
+    document.getElementById('v-addr').innerHTML = CONTACT.address || tbc;
+    const dwa = document.getElementById('d-wa'), dmail = document.getElementById('d-mail');
+    if(wa){ const u = 'https://wa.me/' + wa; dwa.href = u; document.getElementById('wa-head').href = u;
+            document.getElementById('wa-head').target = '_blank'; }
+    else { dwa.removeAttribute('href'); }
+    if(mail) dmail.href = 'mailto:' + mail; else dmail.removeAttribute('href');
+  },
+
+  render(){
+    const g = document.getElementById('listing-grid'), empty = document.getElementById('listing-empty');
+    if(!LISTINGS.length){ g.classList.add('hidden'); empty.classList.remove('hidden'); return; }
+    g.classList.remove('hidden'); empty.classList.add('hidden');
+    g.innerHTML = LISTINGS.map(l => `
+      <article class="card rv">
+        <div class="ph">${l.photo ? `<img src="${l.photo}" alt="${this.esc(l.title)} at ${this.esc(l.resort)}" loading="lazy">` : ''}
+          <span class="tag">${this.esc(l.kind || 'Timeshare')}</span></div>
+        <div class="body">
+          <h3>${this.esc(l.title)}</h3>
+          <p class="loc">${this.esc(l.resort)}${l.area ? ' · ' + this.esc(l.area) : ''}</p>
+          <div class="specs">${(l.specs||[]).map(s => `<span>${this.esc(s)}</span>`).join('')}</div>
+          <div class="foot">
+            <span class="price"><small>Asking</small>${this.esc(l.price)}</span>
+            <a class="btn btn-sm btn-line" href="#contact">Enquire</a>
+          </div>
+        </div>
+      </article>`).join('');
+  },
+
+  tab(which){
+    ['sell','buy'].forEach(t => {
+      document.getElementById('panel-'+t).classList.toggle('hidden', t !== which);
+      document.getElementById('tab-'+t).classList.toggle('on', t === which);
+    });
+    document.querySelectorAll('#panel-'+which+' .rv').forEach(e => e.classList.add('in'));
+  },
+
+  intent(){
+    const v = document.getElementById('f-intent').value;
+    document.getElementById('wrap-resort').style.display = (v === 'buy') ? 'none' : '';
+  },
+
+  menu(){ document.getElementById('mmenu').classList.toggle('hidden'); },
+  esc(s){ const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; },
+
+  submit(e){
+    e.preventDefault();
+    const to = CONTACT.email;
+    const f = id => document.getElementById(id).value;
+    const intent = { sell:'Selling', buy:'Buying', value:'Valuation' }[f('f-intent')];
+    if(!to){ alert('This form is not connected yet — add your email address in the CONTACT block of index.html.'); return; }
+    const body = encodeURIComponent(
+      `Enquiry type: ${intent}\nName: ${f('f-name')}\nEmail: ${f('f-email')}\n` +
+      `Resort / area: ${f('f-resort')}\n\n${f('f-msg')}`);
+    window.location.href = `mailto:${to}?subject=${encodeURIComponent('Eagle & Palm — ' + intent + ' enquiry')}&body=${body}`;
+  }
+};
+EP.init();
+</script>
+</body>
+</html>
