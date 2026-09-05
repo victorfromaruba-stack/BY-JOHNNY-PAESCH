@@ -1,0 +1,89 @@
+/* Hunto — design tokens. Light set on :root; dark redefines tokens only. Zero drop shadows:
+   depth is three luminance steps plus hairlines. Numbers always in the mono face. */
+:root {
+  color-scheme: light;
+  /* ground & surfaces */
+  --ground: #EDF1F0;          /* Salt: cool blue-grey, never bone */
+  --surface: #FFFFFF;
+  --raised: #F6F8F8;
+  --well: #E3E9E8;
+  --hairline: #C9D2D0;
+  --hairline-soft: #DDE4E3;
+  /* ink */
+  --ink: #121A26;             /* Lava, hue ~215 */
+  --ink-2: #66757A;           /* Reef: labels, the 15% row */
+  --ink-3: #93A1A6;
+  --on-ink: #EDF1F0;
+  /* semantic — good money (fills), good money (text), money in flight, returned/declined */
+  --good: #1E9FAE;
+  --good-text: #177F8C;
+  --good-soft: #DDF2F4;
+  --flight: #E4B41F;          /* fills only, always ink text on top */
+  --flight-soft: #F7ECC4;
+  --flag: #C8102E;            /* returned / declined / expired only, always with a sentence */
+  --flag-soft: #F8E1E5;
+  --out: #121A26;             /* points out: ink */
+  --share: #B7C2C4;           /* the Circle's share segment */
+  /* card finishes */
+  --card-100: #E9EEEE; --card-100-etch: #121A26; --card-100-line: rgba(18,26,38,.16);
+  --card-150: #8E9AA0; --card-150-etch: #F3F6F6; --card-150-line: rgba(255,255,255,.22);
+  --card-200: #131B27; --card-200-etch: #E4B41F; --card-200-line: rgba(228,180,31,.26);
+  /* charts: documented categorical slots, validated all-pairs on --surface in both themes.
+     Every chart also ships direct labels and a table view (contrast relief). */
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-dim: #B7C2C4;
+  --chart-grid: #DDE4E3; --chart-axis: #C9D2D0; --ring-track: #DDE4E3; --ring-fill: #1E9FAE; --surface-1: #FFFFFF;
+  /* type */
+  --font-display: "Archivo", "Archivo Fallback", system-ui, sans-serif;
+  --font-body: "Instrument Sans", "Instrument Sans Fallback", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* shape & motion */
+  --r-card: 20px; --r-input: 12px; --r-pill: 9999px; --r-chip: 8px;
+  --h-touch: 48px; --h-input: 52px;
+  --dur-fast: 200ms; --dur-split: 500ms; --dur-water: 700ms; --dur-odo: 900ms; --dur-flip: 600ms;
+  --ease-out: cubic-bezier(.2,.8,.2,1);
+  --wrap: 1080px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0B1220; --surface: #131C2B; --raised: #1B2637; --well: #0F1727;
+    --hairline: rgba(255,255,255,.14); --hairline-soft: rgba(255,255,255,.08);
+    --ink: #E8EEF0; --ink-2: #9AA8AD; --ink-3: #66757A; --on-ink: #0B1220;
+    --good: #4FD0DC; --good-text: #4FD0DC; --good-soft: #10343A;
+    --flight: #F2C744; --flight-soft: #2B2A1C;
+    --flag: #E0475E; --flag-soft: #33161C;
+    --out: #E8EEF0; --share: #3B4753;
+    --card-100: #1B2637; --card-100-etch: #E8EEF0; --card-100-line: rgba(255,255,255,.14);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-dim: #3B4753;
+    --chart-grid: #1B2637; --chart-axis: #2A3648; --ring-track: #1B2637; --ring-fill: #4FD0DC; --surface-1: #131C2B;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0B1220; --surface: #131C2B; --raised: #1B2637; --well: #0F1727;
+  --hairline: rgba(255,255,255,.14); --hairline-soft: rgba(255,255,255,.08);
+  --ink: #E8EEF0; --ink-2: #9AA8AD; --ink-3: #66757A; --on-ink: #0B1220;
+  --good: #4FD0DC; --good-text: #4FD0DC; --good-soft: #10343A;
+  --flight: #F2C744; --flight-soft: #2B2A1C;
+  --flag: #E0475E; --flag-soft: #33161C;
+  --out: #E8EEF0; --share: #3B4753;
+  --card-100: #1B2637; --card-100-etch: #E8EEF0; --card-100-line: rgba(255,255,255,.14);
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-dim: #3B4753;
+  --chart-grid: #1B2637; --chart-axis: #2A3648; --ring-track: #1B2637; --ring-fill: #4FD0DC; --surface-1: #131C2B;
+}
+/* The card screen is the one nocturnal moment: forced dark regardless of theme. */
+.nocturne {
+  color-scheme: dark;
+  --ground: #0B1220; --surface: #131C2B; --raised: #1B2637; --well: #0F1727;
+  --hairline: rgba(255,255,255,.14); --hairline-soft: rgba(255,255,255,.08);
+  --ink: #E8EEF0; --ink-2: #9AA8AD; --ink-3: #66757A; --on-ink: #0B1220;
+  --good: #4FD0DC; --good-text: #4FD0DC; --good-soft: #10343A;
+  --flight: #F2C744; --flight-soft: #2B2A1C; --flag: #E0475E; --flag-soft: #33161C; --out: #E8EEF0; --share: #3B4753;
+  --card-100: #1B2637; --card-100-etch: #E8EEF0; --card-100-line: rgba(255,255,255,.14);
+  --chart-grid: #1B2637; --chart-axis: #2A3648; --ring-track: #1B2637; --ring-fill: #4FD0DC; --surface-1: #131C2B;
+}
+@font-face { font-family: "Archivo Fallback"; src: local("Arial"), local("Helvetica Neue"); size-adjust: 96%; ascent-override: 92%; }
+@font-face { font-family: "Instrument Sans Fallback"; src: local("Arial"), local("Helvetica Neue"); size-adjust: 98%; }
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur-split: 0ms; --dur-water: 0ms; --dur-odo: 0ms; --dur-flip: 0ms; }
+}
