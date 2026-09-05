@@ -84,7 +84,7 @@ main:focus { outline: none; }
 .btn.ghost:hover { background: var(--raised); }
 .btn.quiet { background: transparent; color: var(--ink-2); border-color: transparent; padding-inline: 10px; }
 .btn.quiet:hover { color: var(--ink); background: var(--raised); }
-.btn.good { background: var(--good); color: #04222A; }
+.btn.good { background: var(--good); color: var(--on-good); }
 .btn.danger { background: transparent; color: var(--flag); border-color: var(--flag); }
 .btn.sm { min-height: 38px; padding: 7px 14px; font-size: .84rem; }
 .btn.block { width: 100%; }
@@ -279,7 +279,7 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 .toast { background: var(--ink); color: var(--on-ink); padding: 12px 16px; border-radius: var(--r-input); font-size: .9rem;
   opacity: 0; transform: translateY(8px); transition: opacity var(--dur-fast), transform var(--dur-fast) var(--ease-out); }
 .toast.in { opacity: 1; transform: none; }
-.toast-good { background: var(--good); color: #04222A; }
+.toast-good { background: var(--good); color: var(--on-good); }
 .toast-bad { background: var(--flag); color: #fff; }
 .toast .undo { margin-left: 10px; text-decoration: underline; cursor: pointer; font-weight: 600; }
 

@@ -149,6 +149,7 @@ export function landing({ store, go }) {
         <ol class="stack" start="4" style="padding-left:1.1em">
           <li>Your points never expire while you are active. Bonus points expire after 24 months.</li>
           <li>Pause for up to three months a year with one tap; your streak freezes rather than resets.</li>
+          <li>Chip in to a friend's booking with your own points — each share burns from its own ledger.</li>
           <li>Leave whenever you like: unused base points come back at face value, minus $25, after a 12-month window.</li>
         </ol>
       </div>
@@ -172,6 +173,7 @@ export function rules({ store }) {
     ['Leave any time.', `Thirty days’ notice, twelve months to use what you hold, then base points are refunded at face value minus $${s.exitFeeUsd} from the Reserve within thirty days. Promotional points are forfeited and the 15% is not refunded. In hardship or death the refund is immediate, at face value, with no fee.`],
     ['Household is always covered; guests use a certificate.', `Your partner and children travel on your points with no extra charge. Non-members use a guest certificate (${s.tiers.map(t => `${t.guestCerts} for ${tierName(t.monthlyUsd)}`).join(', ')} a year) or pay the same negotiated rate in cash.`],
     ['Points and bookings cannot be sold, transferred or advertised.', 'This is a private circle of friends. Reselling a booking ends a membership and returns the backing.'],
+    ['You can chip in to each other’s bookings.', 'Open a booking to the Circle and anyone can add their own points to it — for a room you are sharing, or as a gift. Their points are committed the moment they chip in and released if it falls through; when the hotel is paid, each person’s share burns from their own ledger. Nobody can chip in more than the booking still needs, and points never change hands as points.'],
     [`${VOCAB.clubName} is a private members’ club for prepaid, club-arranged travel.`, 'Points are not deposits and not an investment. There is no interest, no return, and no payout that depends on new members joining: your points are backed by your own money, held in the Reserve.'],
   ];
   const wrap = el(`<div><section class="sec"><div class="wrap">

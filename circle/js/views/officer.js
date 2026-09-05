@@ -319,6 +319,18 @@ export function desk({ store, go }) {
   return wrap;
 }
 
+/** A dollars box and a points box that keep each other honest. */
+function moneyPair(key, label, valueUsd, s) {
+  const usd = Number(valueUsd) || 0;
+  return `<div class="field"><span>${escapeHtml(label)}</span>
+    <div class="row" style="gap:8px;flex-wrap:nowrap">
+      <span class="row" style="gap:4px;flex:1;min-width:0"><span class="muted">$</span>
+        <input data-usd="${escapeHtml(key)}" type="number" step="1" min="0" inputmode="decimal" value="${usd.toFixed(0)}" aria-label="${escapeHtml(label)} in dollars" style="min-width:0"></span>
+      <span class="row" style="gap:4px;flex:1;min-width:0"><span class="muted">✦</span>
+        <input data-pts="${escapeHtml(key)}" type="number" step="100" min="0" inputmode="numeric" value="${Math.round(usd * s.pointsPerDollar)}" aria-label="${escapeHtml(label)} in points" class="mono" style="min-width:0"></span>
+    </div></div>`;
+}
+
 async function editStay(store, stay) {
   const s = store.settings;
   const isTrip = stay?.kind === 'trip';
@@ -328,11 +340,15 @@ async function editStay(store, stay) {
         <label class="field"><span>Name</span><input name="name" value="${escapeHtml(stay?.name || '')}" required></label>
         <label class="field"><span>Area</span><input name="area" value="${escapeHtml(stay?.area || '')}"></label>
       </div>
-      ${isTrip ? `<label class="field"><span>Points a seat</span><input name="pointsPerSeat" type="number" value="${stay.pointsPerSeat}" inputmode="numeric"></label>`
+      <p class="eyebrow" style="margin-bottom:8px">${isTrip ? 'What a seat costs' : 'What a night costs, all in'}</p>
+      <p class="small muted" style="margin-bottom:12px">Type dollars or points — whichever you have in your head. The other follows, at ${s.pointsPerDollar} points to the dollar.</p>
+      ${isTrip ? `<div class="grid g2">${moneyPair('seat', 'A seat, all in', stay.pointsPerSeat / s.pointsPerDollar, s)}
+          <label class="field"><span>Guest price in cash US$</span><input name="guestCashUsd" type="number" step="1" value="${stay.guestCashUsd || 0}" inputmode="decimal">
+            <span class="hint">What a non-member pays the Banker. No 15% is taken on it.</span></label></div>`
         : `<div class="grid g3">
-        <label class="field"><span>Summer, per night US$</span><input name="low" type="number" step="1" value="${stay?.rates?.low || 250}" inputmode="decimal"></label>
-        <label class="field"><span>Winter, per night US$</span><input name="high" type="number" step="1" value="${stay?.rates?.high || 380}" inputmode="decimal"></label>
-        <label class="field"><span>Peak, per night US$</span><input name="peak" type="number" step="1" value="${stay?.rates?.peak || 460}" inputmode="decimal"></label>
+        ${moneyPair('low', 'Summer · Apr 6 – Dec 19', stay?.rates?.low ?? 250, s)}
+        ${moneyPair('high', 'Winter · Jan 4 – Apr 5', stay?.rates?.high ?? 380, s)}
+        ${moneyPair('peak', 'Peak · Dec 20 – Jan 3', stay?.rates?.peak ?? 460, s)}
       </div>
       <div class="grid g3">
         <label class="field"><span>Minimum nights</span><input name="minNights" type="number" value="${stay?.minNights || 2}" inputmode="numeric"></label>
@@ -343,12 +359,20 @@ async function editStay(store, stay) {
       <label class="field"><span>Note from Victor</span><input name="dealNote" value="${escapeHtml(stay?.dealNote || '')}"></label>
       <label class="row" style="gap:10px;margin-bottom:12px"><input type="checkbox" name="active" ${stay?.active !== false ? 'checked' : ''} style="width:20px;height:20px"><span class="small">Live for members</span></label>
       <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Save</button></div>`;
+    // Typing in either box updates the other, so the two never disagree.
+    body.addEventListener('input', (e) => {
+      const usd = e.target.closest('[data-usd]'); const pts = e.target.closest('[data-pts]');
+      if (usd) { const p = body.querySelector(`[data-pts="${usd.dataset.usd}"]`); if (p) p.value = Math.round((Number(usd.value) || 0) * s.pointsPerDollar); }
+      if (pts) { const u = body.querySelector(`[data-usd="${pts.dataset.pts}"]`); if (u) u.value = (Math.round(Number(pts.value) || 0) / s.pointsPerDollar).toFixed(2); }
+    });
     body.querySelector('[data-ok]').addEventListener('click', () => {
       const v = (n) => body.querySelector(`[name=${n}]`)?.value;
+      const usd = (n) => Number(body.querySelector(`[data-usd="${n}"]`)?.value) || 0;
       const data = { id: stay?.id, kind: stay?.kind || 'aruba', name: v('name'), area: v('area'), vibe: v('vibe'), dealNote: v('dealNote'),
         active: body.querySelector('[name=active]').checked, country: stay?.country || 'Aruba', features: stay?.features || [] };
-      if (isTrip) Object.assign(data, { pointsPerSeat: Number(v('pointsPerSeat')), dates: stay.dates, nights: stay.nights, seats: stay.seats, holdDeadline: stay.holdDeadline, guestCashUsd: stay.guestCashUsd });
-      else Object.assign(data, { rates: { low: Number(v('low')), high: Number(v('high')), peak: Number(v('peak')) },
+      if (isTrip) Object.assign(data, { pointsPerSeat: Math.round(usd('seat') * s.pointsPerDollar), guestCashUsd: Number(v('guestCashUsd')) || 0,
+        dates: stay.dates, nights: stay.nights, seats: stay.seats, holdDeadline: stay.holdDeadline });
+      else Object.assign(data, { rates: { low: usd('low'), high: usd('high'), peak: usd('peak') },
         minNights: Number(v('minNights')), peakMinNights: Number(v('peakMinNights')), retailUsd: Number(v('retailUsd')),
         onSand: stay?.onSand ?? true, adultsOnly: stay?.adultsOnly ?? false, category: stay?.category || 2 });
       close(data);
@@ -436,6 +460,7 @@ export function circle({ store }) {
       <h1>The Circle</h1>
       <div class="row no-print" style="margin-top:16px" role="tablist" id="tabs">
         <button class="btn sm" data-tab="people" aria-pressed="true">Insiders</button>
+        <button class="btn quiet sm" data-tab="chipin" aria-pressed="false">Chip in${store.openToChipIn().length ? ` · ${store.openToChipIn().length}` : ''}</button>
         <button class="btn quiet sm" data-tab="notes" aria-pressed="false">Notes from Ian</button>
         <button class="btn quiet sm" data-tab="milestones" aria-pressed="false">Milestones</button>
       </div>
@@ -461,6 +486,30 @@ export function circle({ store }) {
             ${streak >= 6 ? `<span class="tag">${streak} in a row</span>` : ''}
           </div></div>`;
       }).join('')}</div>`));
+    } else if (tab === 'chipin') {
+      const open = store.openToChipIn();
+      const avail = store.availablePoints(me.id);
+      panel.replaceChildren(el(`<div class="stack">
+        <p class="small muted">When an Insider opens a booking to the Circle, anyone can put their own points toward it — for a room you are sharing, or as a gift. Points are committed the moment you chip in, and released if the booking falls through. You have ${escapeHtml(fmtPoints(avail))} available.</p>
+        ${open.length ? open.map(r => {
+          const st = store.stay(r.stayId); const m2 = store.member(r.memberId);
+          const target = r.quotedPoints || r.indicativePoints || 0;
+          const covered = store.coveredPoints(r);
+          const pct = Math.min(100, (covered / Math.max(target, 1)) * 100);
+          return `<div class="panel">
+            <div class="row-between"><div class="row" style="gap:12px">${avatar(m2, 38)}
+              <div><b>${escapeHtml(st?.name || 'Stay')}</b><br>
+                <span class="small muted">${escapeHtml(m2?.name || '')} · ${escapeHtml(fmtDay(r.checkIn))} · ${r.nights} night${r.nights > 1 ? 's' : ''}</span></div></div>
+              <div style="text-align:right"><b class="num">${escapeHtml(fmtPoints(Math.max(0, target - covered)))}</b><br><span class="small muted">still to cover</span></div></div>
+            <div class="balbar" style="margin-top:12px" role="img" aria-label="${Math.round(pct)}% covered"><span class="b-avail" style="width:${pct}%"></span></div>
+            <div class="row-between" style="margin-top:8px">
+              <span class="small muted num">${escapeHtml(fmtPoints(covered))} of ${escapeHtml(fmtPoints(target))} · ${(r.pledges || []).length} chipped in</span>
+              <a class="btn sm" href="#/requests/${r.id}">Chip in</a></div>
+          </div>`;
+        }).join('') : `<div class="empty"><b>Nothing open right now</b>
+          <p class="small muted">When you request a stay you can tick “Let the Circle chip in”, and it appears here for everyone.</p>
+          <a class="btn sm" href="#/stays">Find a stay</a></div>`}
+      </div>`));
     } else if (tab === 'notes') {
       panel.replaceChildren(el(`<div class="stack">${notes.map(n => `<div class="panel">
           <div class="row-between"><h2 style="font-size:1.1rem">${escapeHtml(n.title)}</h2>${n.pinned ? '<span class="tag">Pinned</span>' : ''}</div>
@@ -521,6 +570,18 @@ export function settings({ store, go }) {
         <button class="btn" type="submit">Save the accounts</button>
       </form>
 
+      <div class="panel" style="margin-top:16px">
+        <h2 style="font-size:1.1rem">Dollars and points</h2>
+        <p class="small muted" style="margin-top:6px">${s.pointsPerDollar} points = $1.00. Type either side to check a price before you put it in the catalog.</p>
+        <div class="grid g2" style="margin-top:14px">
+          <label class="field" style="margin:0"><span>Dollars</span>
+            <input id="conv-usd" type="number" step="1" min="0" value="450" inputmode="decimal" class="mono"></label>
+          <label class="field" style="margin:0"><span>Points</span>
+            <input id="conv-pts" type="number" step="100" min="0" value="${450 * s.pointsPerDollar}" inputmode="numeric" class="mono"></label>
+        </div>
+        <p class="small muted" style="margin-top:10px" id="conv-note"></p>
+      </div>
+
       ${isAdmin ? `<form class="panel" id="rules-form" style="margin-top:16px">
         <h2 style="font-size:1.1rem">The rules of the club</h2>
         <p class="small muted" style="margin-top:6px">Changing the share or the value of a point affects everyone. Tell the Circle before you do, and never after someone has booked against it.</p>
@@ -562,6 +623,20 @@ export function settings({ store, go }) {
       </div>` : ''}
     </div></section></div>`);
 
+  {
+    const u = wrap.querySelector('#conv-usd'), pt = wrap.querySelector('#conv-pts'), note = wrap.querySelector('#conv-note');
+    const say = () => {
+      const dollars = Number(u.value) || 0;
+      const months = s.tiers.map(t => {
+        const perMonth = Math.round(t.monthlyUsd * (1 - s.serviceRate) * s.pointsPerDollar) + Math.round(t.monthlyUsd * t.bonusRate * s.pointsPerDollar);
+        return `${tierName(t.monthlyUsd)} ${(dollars * s.pointsPerDollar / perMonth).toFixed(1)}`;
+      }).join(' · ');
+      note.textContent = `${fmtAfl2(dollars, s.awgPerUsd)} at the peg. Months of contributions to earn it: ${months}.`;
+    };
+    u.addEventListener('input', () => { pt.value = Math.round((Number(u.value) || 0) * s.pointsPerDollar); say(); });
+    pt.addEventListener('input', () => { u.value = ((Number(pt.value) || 0) / s.pointsPerDollar).toFixed(2); say(); });
+    say();
+  }
   wrap.querySelector('#accounts').addEventListener('submit', async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
     await store.updateSettings({

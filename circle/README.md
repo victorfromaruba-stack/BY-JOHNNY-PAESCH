@@ -45,8 +45,13 @@ Worth doing in this order:
    *Bank* and confirm one. You have a minute to undo it.
 3. **Kimberly** has a live quote with a cash top-up. Accept it as her, then pay the
    hotel as Vishnu — the top-up has to arrive first.
-4. **Victor** → *Desk* to quote Priya's open request, edit the catalog, or write a note.
-5. **Vishnu** → *Bank* → *Close September* — it will not close while transfers are
+4. **Kimberly** has also opened her Eagle Beach weekend to the Circle: Diego and Priya have
+   already chipped in, and 9,000 points are still to cover. Sign in as anyone and put the
+   rest in — *Circle* → *Chip in*, or straight from your home screen.
+5. **Victor** → *Desk* to quote Priya's open request, edit the catalog, or write a note.
+   The catalog editor takes **dollars or points in either box** — type one and the other
+   follows — and *Settings* has the same converter for checking a price before you enter it.
+6. **Vishnu** → *Bank* → *Close September* — it will not close while transfers are
    waiting, or if the Reserve is short.
 
 ## How the money works
@@ -72,6 +77,11 @@ Worth doing in this order:
   against the bank and by how much the two differed.
 - **No borrowing.** If a quote is more than a member holds, the difference is a cash
   top-up to the Banker — with no 15% taken on it — and the hotel is not paid until it lands.
+- **The Circle can chip in together.** Open a booking to everyone and any Insider can put
+  their own points toward it — for a room you are sharing, or as a gift. Their points are
+  committed the moment they chip in, released if it falls through, and when the hotel is
+  paid each person's share burns from their own ledger. Nobody can chip in more than the
+  booking still needs, and points never change hands as points.
 
 The rules a member agrees to are in the app at `#/rules`, and they are what the code does.
 
@@ -84,7 +94,8 @@ The rules a member agrees to are in the app at `#/rules`, and they are what the 
 | Undo a confirmation (60 s) | | ✓ | | | |
 | Quote and decline requests | | | ✓ | trips | |
 | Pay a hotel and burn points | | ✓ | ✓ | | |
-| Edit the catalog | | | ✓ | trips | ✓ |
+| Edit the catalog and its prices | | | ✓ | trips | ✓ |
+| Chip in to someone's booking | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Write notes to the Circle | | | | ✓ | ✓ |
 | Close a month (needs a second officer) | | ✓ | | | |
 | Invite people, change the rules | | bank details | | | ✓ |
@@ -128,6 +139,24 @@ The demo is deliberately self-contained. To run this for real:
 5. Which resorts have actually been negotiated so far?
 6. The club is named **Hunto** — Papiamento for "together". The name lives in
    `js/core/vocab.js`; change it there and every screen, reference and message follows.
+
+## The back office
+
+Everything the club charges is editable, and always in both units:
+
+- **Desk → Stays & trips** — each property has a dollar box and a points box per season
+  (Summer, Winter, Peak); type into either and the other follows at 100 points to the
+  dollar. Minimum nights, the Peak minimum, the public rate used for the “you save” line,
+  and whether it is live for members are all here too. Trips are priced per seat, with the
+  cash price a non-member guest pays.
+- **Settings → Dollars and points** — a converter that also tells you how many months of
+  contributions at each tier a price works out to, and the amount in Aruban florin.
+- **Settings → The rules of the club** (admin) — the 15% share, the points-per-dollar rate,
+  the seat cap, how long a quote is locked, the Banker's promised turnaround, and the
+  leaving fee. Changing the share or the value of a point asks for confirmation, because
+  both are promises to every member.
+- **Settings → Insiders** — invite someone (it makes a code and copies the link), change
+  roles or tiers, and write a correcting line into anyone's ledger with a reason attached.
 
 ## Notes on the build
 

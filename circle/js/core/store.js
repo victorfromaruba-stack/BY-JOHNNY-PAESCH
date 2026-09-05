@@ -85,7 +85,23 @@ export class Store {
 
   // ---------- balances ----------
   ledgerBalance(memberId) { return sum(this.ledgerFor(memberId), l => l.points); }
-  committedPoints(memberId) { return sum(this.state.redemptions.filter(r => r.memberId === memberId && r.status === REDEMPTION_STATUS.held), r => r.points); }
+  /** Points a member cannot spend twice: their own held booking, plus anything pledged to someone else's. */
+  committedPoints(memberId) {
+    const own = sum(this.state.redemptions.filter(r => r.memberId === memberId && r.status === REDEMPTION_STATUS.held), r => r.points);
+    const pledged = sum(this.state.redemptions.filter(r => [REDEMPTION_STATUS.quoted, REDEMPTION_STATUS.held].includes(r.status)),
+      r => sum((r.pledges || []).filter(p => p.memberId === memberId), p => p.points));
+    return own + pledged;
+  }
+  /** Everything covered so far on a booking: the requester's points plus every pledge. */
+  coveredPoints(r) { return (r.points || 0) + sum(r.pledges || [], p => p.points); }
+  pledgesOn(redemptionId) { return this.redemption(redemptionId)?.pledges || []; }
+  /** Bookings anyone in the Circle can still chip in to. */
+  openToChipIn() {
+    this.releaseExpired();
+    return this.state.redemptions
+      .filter(r => r.shared && [REDEMPTION_STATUS.quoted, REDEMPTION_STATUS.held].includes(r.status) && this.coveredPoints(r) < (r.quotedPoints || r.indicativePoints || 0))
+      .sort(asc('requestedAt'));
+  }
   availablePoints(memberId) { return this.ledgerBalance(memberId) - this.committedPoints(memberId); }
   promoPoints(memberId) { return sum(this.ledgerFor(memberId).filter(l => PROMO_KINDS.includes(l.kind)), l => l.points); }
   basePoints(memberId) { return Math.max(0, this.ledgerBalance(memberId) - this.promoPoints(memberId)); }
@@ -121,7 +137,9 @@ export class Store {
     // Promotional points the Circle funded, ignoring any whose contribution was reversed.
     const live = (l) => !(l.refType === 'contribution' && this.contribution(l.refId)?.status === CONTRIBUTION_STATUS.reversed);
     const promoUsd = sum(led.filter(l => PROMO_KINDS.includes(l.kind) && live(l)), l => l.points) / ppd;
-    const settled = this.state.redemptions.filter(r => [REDEMPTION_STATUS.confirmed, REDEMPTION_STATUS.completed].includes(r.status));
+    // Money that actually left the Reserve: every booking the club has paid for, including
+    // ones later cancelled — whatever the hotel gave back comes in again as a refund line.
+    const settled = this.state.redemptions.filter(r => !!r.confirmedAt);
     const paidOutUsd = sum(settled, r => (r.paidUsd == null ? r.points / ppd : r.paidUsd));
     const topUpsUsd = sum(settled.filter(r => r.topUpConfirmed), r => r.topUpUsd || 0);
     const burnedUsd = -sum(led.filter(l => l.kind === LEDGER_KIND.burn), l => l.points) / ppd;
@@ -322,7 +340,7 @@ export class Store {
     }
     if (changed) this.adapter.save(this.state);
   }
-  async requestRedemption({ memberId, stayId, checkIn, checkOut, guests = 2, seats = 1, note = '', flexDays = 0, maxPoints = null }) {
+  async requestRedemption({ memberId, stayId, checkIn, checkOut, guests = 2, seats = 1, note = '', flexDays = 0, maxPoints = null, shared = false }) {
     const stay = this.stay(stayId); if (!stay) throw new Error('No such stay');
     const m = this.member(memberId); const tier = tierFor(this.settings, m.monthlyUsd);
     const isTrip = stay.kind === 'trip';
@@ -337,7 +355,7 @@ export class Store {
     }
     const r = {
       id: uid('red'), memberId, stayId, kind: isTrip ? 'trip' : 'stay', checkIn: isTrip ? stay.dates.from : checkIn, checkOut: isTrip ? stay.dates.to : checkOut, nights: q.nights, guests: isTrip ? seats : Number(guests), seats: isTrip ? seats : null, note, flexDays, maxPoints,
-      indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
+      indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd, shared: !!shared, pledges: [],
       points: q.points, topUpUsd: 0, quoteStack: null, hotelTerms: '', hotelDeadline: null, quotedBy: null, quotedAt: null, quoteExpiresAt: null,
       status: REDEMPTION_STATUS.requested, requestedAt: nowIso(), decidedBy: null, decidedAt: null, decision: '', heldAt: null, confirmedAt: null, completedAt: null, paidUsd: null, confirmationRef: '',
     };
@@ -351,10 +369,11 @@ export class Store {
     const r = this.redemption(id); if (!r) throw new Error('No such request');
     if (r.status !== REDEMPTION_STATUS.requested) throw new Error('Only an open request can be quoted');
     const pts = Math.round(Number(points)); if (!(pts > 0)) throw new Error('Quote must be positive');
+    const pledged = sum(r.pledges || [], p => p.points);
     const available = Math.max(0, this.availablePoints(r.memberId));
-    const covered = Math.min(pts, available);
+    const covered = Math.min(Math.max(0, pts - pledged), available);
     const at = nowIso();
-    Object.assign(r, { status: REDEMPTION_STATUS.quoted, points: covered, quotedPoints: pts, topUpUsd: round((pts - covered) / this.settings.pointsPerDollar), quoteStack: stack, hotelTerms: terms, hotelDeadline, quotedBy: actorId, quotedAt: at, quoteExpiresAt: addHours(at, this.settings.quoteHours), decision: note });
+    Object.assign(r, { status: REDEMPTION_STATUS.quoted, points: covered, quotedPoints: pts, topUpUsd: round(Math.max(0, pts - covered - pledged) / this.settings.pointsPerDollar), quoteStack: stack, hotelTerms: terms, hotelDeadline, quotedBy: actorId, quotedAt: at, quoteExpiresAt: addHours(at, this.settings.quoteHours), decision: note });
     this.log(actorId, 'redemption.quote', 'redemption', id, { points: pts, topUpUsd: r.topUpUsd }); await this.commit('redemptions'); return r;
   }
   /** Member accepts → points Committed. */
@@ -363,20 +382,66 @@ export class Store {
     this.releaseExpired();
     if (r.status !== REDEMPTION_STATUS.quoted) throw new Error('There is no open quote to accept');
     if (r.memberId !== actorId) throw new Error('Only the member can accept their quote');
+    const pledged = sum(r.pledges || [], p => p.points);
     const available = Math.max(0, this.availablePoints(r.memberId));
-    if (available < r.points) { r.points = available; r.topUpUsd = round((r.quotedPoints - available) / this.settings.pointsPerDollar); }
+    if (available < r.points) r.points = available;
+    r.topUpUsd = round(Math.max(0, r.quotedPoints - r.points - pledged) / this.settings.pointsPerDollar);
     Object.assign(r, { status: REDEMPTION_STATUS.held, heldAt: nowIso() });
     this.log(actorId, 'redemption.hold', 'redemption', id, { points: r.points, topUpUsd: r.topUpUsd }); await this.commit('redemptions'); return r;
   }
+  /**
+   * Chip in to someone else's booking. The pledge is committed straight away, so the
+   * same points cannot be spent twice, and it is released if the booking falls through.
+   */
+  async pledgeToRedemption(id, memberId, points) {
+    const r = this.redemption(id); if (!r) throw new Error('No such request');
+    if (!r.shared) throw new Error('This booking is not open for the Circle to chip in');
+    if (![REDEMPTION_STATUS.quoted, REDEMPTION_STATUS.held].includes(r.status)) throw new Error('This booking is not taking contributions right now');
+    if (memberId === r.memberId) throw new Error('You are already covering your own share');
+    const pts = Math.round(Number(points));
+    if (!(pts > 0)) throw new Error('Chip in at least one point');
+    const available = this.availablePoints(memberId);
+    if (pts > available) throw new Error(`You have ${available.toLocaleString('en-US')} points available`);
+    const outstanding = (r.quotedPoints || r.indicativePoints || 0) - this.coveredPoints(r);
+    if (outstanding <= 0) throw new Error('This booking is already covered');
+    const amount = Math.min(pts, outstanding);
+    r.pledges ||= [];
+    const existing = r.pledges.find(p => p.memberId === memberId);
+    if (existing) existing.points += amount; else r.pledges.push({ id: uid('pld'), memberId, points: amount, at: nowIso() });
+    // Once a booking is fully covered, no cash top-up is owed any more.
+    r.topUpUsd = round(Math.max(0, (r.quotedPoints || 0) - this.coveredPoints(r)) / this.settings.pointsPerDollar);
+    this.log(memberId, 'redemption.pledge', 'redemption', id, { points: amount });
+    await this.commit('redemptions');
+    return r;
+  }
+  async withdrawPledge(id, memberId, actorId = memberId) {
+    const r = this.redemption(id); if (!r) throw new Error('No such request');
+    if (r.status === REDEMPTION_STATUS.confirmed || r.status === REDEMPTION_STATUS.completed) throw new Error('The hotel is already paid');
+    const before = (r.pledges || []).length;
+    r.pledges = (r.pledges || []).filter(p => p.memberId !== memberId);
+    if (r.pledges.length === before) throw new Error('You have not chipped in to this one');
+    r.topUpUsd = round(Math.max(0, (r.quotedPoints || 0) - this.coveredPoints(r)) / this.settings.pointsPerDollar);
+    this.log(actorId, 'redemption.pledge.withdraw', 'redemption', id, { memberId });
+    await this.commit('redemptions');
+    return r;
+  }
+
   /** Banker (or planner) pays the hotel: points burn, booking confirmed. */
   async payRedemption(id, actorId, { paidUsd = null, confirmationRef = '' } = {}) {
     const r = this.redemption(id); if (!r) throw new Error('No such request');
     if (r.status !== REDEMPTION_STATUS.held) throw new Error('The member has not accepted a quote yet');
     if (r.topUpUsd > 0 && !r.topUpConfirmed) throw new Error(`Top-up of $${r.topUpUsd.toFixed(2)} has not been confirmed as received`);
     if (this.availablePoints(r.memberId) + r.points < r.points) throw new Error('Member no longer has enough points');
+    for (const p of r.pledges || []) {
+      if (this.availablePoints(p.memberId) + p.points < p.points) throw new Error(`${this.member(p.memberId)?.name || 'A member'} no longer has the points they chipped in`);
+    }
     const stay = this.stay(r.stayId); const at = nowIso();
     Object.assign(r, { status: REDEMPTION_STATUS.confirmed, confirmedAt: at, paidUsd: paidUsd == null ? round(r.quotedPoints / this.settings.pointsPerDollar) : Number(paidUsd), confirmationRef, decidedBy: actorId, decidedAt: at });
-    this.state.ledger.push({ id: uid('led'), memberId: r.memberId, kind: LEDGER_KIND.burn, points: -r.points, usd: -round(r.points / this.settings.pointsPerDollar), refType: 'redemption', refId: r.id, note: `${stay?.name || 'Stay'} · ${r.nights} nights`, at, by: actorId });
+    const burn = (memberId, points, note) => this.state.ledger.push({ id: uid('led'), memberId, kind: LEDGER_KIND.burn, points: -points, usd: -round(points / this.settings.pointsPerDollar), refType: 'redemption', refId: r.id, note, at, by: actorId });
+    if (r.points > 0) burn(r.memberId, r.points, `${stay?.name || 'Stay'} · ${r.nights} nights`);
+    for (const p of r.pledges || []) {
+      burn(p.memberId, p.points, `${stay?.name || 'Stay'} · chipped in for ${this.member(r.memberId)?.name.split(' ')[0] || 'an Insider'}`);
+    }
     this.log(actorId, 'redemption.pay', 'redemption', id, { points: r.points, paidUsd: r.paidUsd, confirmationRef }); await this.commit('redemptions'); return r;
   }
   async confirmTopUp(id, actorId) { const r = this.redemption(id); if (!r) throw new Error('No such request'); r.topUpConfirmed = true; r.topUpConfirmedAt = nowIso(); this.log(actorId, 'redemption.topup', 'redemption', id, { topUpUsd: r.topUpUsd }); await this.commit('redemptions'); return r; }
@@ -401,9 +466,18 @@ export class Store {
       Object.assign(r, { status: REDEMPTION_STATUS.cancelled, decidedBy: actorId, decidedAt: at, decision: reason });
     } else if (r.status === REDEMPTION_STATUS.confirmed) {
       if (!this.hasRole('planner', 'admin', 'treasurer')) throw new Error('Only the Desk or the Banker can cancel a confirmed booking');
-      const refund = Math.max(0, r.points - Math.round(penaltyPoints));
-      Object.assign(r, { status: REDEMPTION_STATUS.cancelled, decidedBy: actorId, decidedAt: at, decision: reason, penaltyPoints: Math.round(penaltyPoints) });
-      if (refund > 0) this.state.ledger.push({ id: uid('led'), memberId: r.memberId, kind: LEDGER_KIND.refund, points: refund, usd: round(refund / this.settings.pointsPerDollar), refType: 'redemption', refId: r.id, note: `Refund · ${stay?.name || 'Stay'}${penaltyPoints ? ` · after ${Math.round(penaltyPoints).toLocaleString('en-US')} penalty` : ''}`, at, by: actorId });
+      // The hotel's penalty is shared in proportion to what each person put in.
+      const covered = this.coveredPoints(r);
+      const penalty = Math.min(Math.round(penaltyPoints), covered);
+      Object.assign(r, { status: REDEMPTION_STATUS.cancelled, decidedBy: actorId, decidedAt: at, decision: reason, penaltyPoints: penalty });
+      const parts = [{ memberId: r.memberId, points: r.points }, ...(r.pledges || [])].filter(p => p.points > 0);
+      let taken = 0;
+      parts.forEach((p, i) => {
+        const share = i === parts.length - 1 ? penalty - taken : Math.round(penalty * (p.points / covered));
+        taken += share;
+        const refund = Math.max(0, p.points - share);
+        if (refund > 0) this.state.ledger.push({ id: uid('led'), memberId: p.memberId, kind: LEDGER_KIND.refund, points: refund, usd: round(refund / this.settings.pointsPerDollar), refType: 'redemption', refId: r.id, note: `Refund · ${stay?.name || 'Stay'}${share ? ` · after a ${share.toLocaleString('en-US')} point penalty` : ''}`, at, by: actorId });
+      });
     } else throw new Error('This request cannot be cancelled');
     this.log(actorId, 'redemption.cancel', 'redemption', id, { reason, penaltyPoints }); await this.commit('redemptions'); return r;
   }

@@ -124,6 +124,15 @@ export function home({ store, go }) {
     blocks.push(`<div class="notice good"><b>Booked: ${escapeHtml(st.name)}</b>
       <p class="small">${u.nights} nights from ${escapeHtml(fmtDay(u.checkIn))} · confirmation <span class="num">${escapeHtml(u.confirmationRef)}</span>${u.hotelDeadline ? ` · free cancellation until ${escapeHtml(fmtDay(u.hotelDeadline))}` : ''}.</p></div>`);
   }
+  const chipIn = store.openToChipIn().filter(r => r.memberId !== me.id);
+  for (const r of chipIn.slice(0, 2)) {
+    const st = store.stay(r.stayId); const owner = store.member(r.memberId);
+    const target = r.quotedPoints || r.indicativePoints || 0;
+    const gap = Math.max(0, target - store.coveredPoints(r));
+    blocks.push(`<div class="notice"><b>${escapeHtml(owner?.name.split(' ')[0] || 'An Insider')} is ${escapeHtml(fmtPoints(gap))} short for ${escapeHtml(st?.name || 'a stay')}</b>
+      <p class="small">${r.nights} nights from ${escapeHtml(fmtDay(r.checkIn))}. Anyone can put their own points in — yours are committed only until it is booked or falls through.</p>
+      <p style="margin-top:8px"><a class="btn sm" href="#/requests/${r.id}">Chip in</a></p></div>`);
+  }
   if (blocks.length) left.appendChild(el(`<div class="stack">${blocks.join('')}</div>`));
 
   // 4 — the ledger, last five lines

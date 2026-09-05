@@ -149,7 +149,7 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
   {
     const q = quoteOf('stay_manchebo', '2026-08-10', '2026-08-13');
     const r = add({ id: uid('red'), memberId: 'mem_diego', stayId: 'stay_manchebo', kind: 'stay', checkIn: '2026-08-10', checkOut: '2026-08-13', nights: q.nights,
-      guests: 2, seats: null, note: 'Anniversary.', flexDays: 0, maxPoints: null, indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
+      guests: 2, seats: null, note: 'Anniversary.', flexDays: 0, maxPoints: null, shared: false, pledges: [], indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
       points: q.points, quotedPoints: q.points, topUpUsd: 0, topUpConfirmed: true, quoteStack: { room: 810, levy: 101.25, service: 89, resort: 0, env: 18 },
       hotelTerms: 'Free cancellation up to 30 days before arrival; one night inside 30 days.', hotelDeadline: '2026-07-11',
       quotedBy: 'mem_victor', quotedAt: '2026-06-02T15:10:00Z', quoteExpiresAt: '2026-06-05T15:10:00Z',
@@ -164,30 +164,36 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
   {
     const q = quoteOf('stay_hyatt', '2026-11-12', '2026-11-15');
     add({ id: uid('red'), memberId: 'mem_jeroen', stayId: 'stay_hyatt', kind: 'stay', checkIn: '2026-11-12', checkOut: '2026-11-15', nights: q.nights,
-      guests: 2, seats: null, note: '', flexDays: 1, maxPoints: null, indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
+      guests: 2, seats: null, note: '', flexDays: 1, maxPoints: null, shared: false, pledges: [], indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
       points: q.points, quotedPoints: q.points, topUpUsd: 0, quoteStack: { room: 900, levy: 112.5, service: 112.5, resort: 60, env: 12 },
       hotelTerms: 'Free cancellation up to 7 days before arrival.', hotelDeadline: '2026-11-05',
       quotedBy: 'mem_victor', quotedAt: '2026-09-01T16:00:00Z', quoteExpiresAt: '2026-09-04T16:00:00Z',
       status: 'held', requestedAt: '2026-08-31T20:12:00Z', decidedBy: 'mem_victor', decidedAt: '2026-09-01T16:00:00Z',
       decision: 'Lagoon view, high floor.', heldAt: '2026-09-02T08:30:00Z', confirmedAt: null, completedAt: null, paidUsd: null, confirmationRef: '' });
   }
-  // Kimberly has a live quote for Amsterdam Manor over New Year — it needs a top-up.
+  // Kimberly has a live quote for Amsterdam Manor over New Year. It is more than she holds,
+  // so she opened it to the Circle and two friends have already put points in.
   {
-    const q = quoteOf('stay_amsterdam', '2026-12-27', '2027-01-02');
+    const q = quoteOf('stay_amsterdam', '2026-11-20', '2026-11-23');
     const quoted = q.points;
-    add({ id: uid('red'), memberId: 'mem_kimberly', stayId: 'stay_amsterdam', kind: 'stay', checkIn: '2026-12-27', checkOut: '2027-01-02', nights: q.nights,
-      guests: 2, seats: null, note: 'New Year with my sister.', flexDays: 0, maxPoints: null, indicativePoints: quoted, seasons: q.breakdown, retailUsd: q.retailUsd,
-      points: 0, quotedPoints: quoted, topUpUsd: 0, quoteStack: { room: 1650, levy: 206, service: 165, resort: 90, env: 36 },
-      hotelTerms: 'Peak week: non-refundable inside 45 days.', hotelDeadline: '2026-11-12',
+    add({ id: uid('red'), memberId: 'mem_kimberly', stayId: 'stay_amsterdam', kind: 'stay', checkIn: '2026-11-20', checkOut: '2026-11-23', nights: q.nights,
+      guests: 4, seats: null, note: 'Long weekend on Eagle Beach — anyone who wants to come, chip in.', flexDays: 0, maxPoints: null, indicativePoints: quoted, seasons: q.breakdown, retailUsd: q.retailUsd,
+      points: 25000, quotedPoints: quoted, topUpUsd: 0, shared: true,
+      pledges: [
+        { id: uid('pld'), memberId: 'mem_diego', points: 24000, at: iso(new Date(now.getTime() - 12 * 36e5)) },
+        { id: uid('pld'), memberId: 'mem_priya', points: 8000, at: iso(new Date(now.getTime() - 6 * 36e5)) },
+      ],
+      quoteStack: { room: 510, levy: 64, service: 51, resort: 27, env: 18 },
+      hotelTerms: 'Free cancellation up to 14 days before arrival.', hotelDeadline: '2026-11-06',
       quotedBy: 'mem_victor', quotedAt: iso(new Date(now.getTime() - 17 * 36e5)), quoteExpiresAt: iso(new Date(now.getTime() + 55 * 36e5)),
       status: 'quoted', requestedAt: iso(new Date(now.getTime() - 40 * 36e5)), decidedBy: null, decidedAt: null,
-      decision: 'Seven nights is the peak minimum; I got them to hold six at the same nightly rate.', heldAt: null, confirmedAt: null, completedAt: null, paidUsd: null, confirmationRef: '' });
+      decision: 'Two rooms next to each other at the studio rate — put the rest of the Circle in the second one.', heldAt: null, confirmedAt: null, completedAt: null, paidUsd: null, confirmationRef: '' });
   }
   // Priya asked about Manchebo two days ago — Victor's 72-hour clock is running.
   {
     const q = quoteOf('stay_manchebo', '2026-11-06', '2026-11-09');
     add({ id: uid('red'), memberId: 'mem_priya', stayId: 'stay_manchebo', kind: 'stay', checkIn: '2026-11-06', checkOut: '2026-11-09', nights: q.nights,
-      guests: 2, seats: null, note: 'Flexible either side by a day.', flexDays: 1, maxPoints: null, indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
+      guests: 2, seats: null, note: 'Flexible either side by a day.', flexDays: 1, maxPoints: null, shared: false, pledges: [], indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
       points: q.points, quotedPoints: null, topUpUsd: 0, quoteStack: null, hotelTerms: '', hotelDeadline: null, quotedBy: null, quotedAt: null, quoteExpiresAt: null,
       status: 'requested', requestedAt: iso(new Date(now.getTime() - 50 * 36e5)), decidedBy: null, decidedAt: null, decision: '', heldAt: null, confirmedAt: null, completedAt: null, paidUsd: null, confirmationRef: '' });
   }
@@ -195,7 +201,7 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
   {
     const q = quoteOf('stay_ritz', '2027-02-05', '2027-02-08');
     add({ id: uid('red'), memberId: 'mem_sasha', stayId: 'stay_ritz', kind: 'stay', checkIn: '2027-02-05', checkOut: '2027-02-08', nights: q.nights,
-      guests: 2, seats: null, note: '', flexDays: 0, maxPoints: null, indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
+      guests: 2, seats: null, note: '', flexDays: 0, maxPoints: null, shared: false, pledges: [], indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
       points: q.points, quotedPoints: null, topUpUsd: 0, quoteStack: null, hotelTerms: '', hotelDeadline: null, quotedBy: null, quotedAt: null, quoteExpiresAt: null,
       status: 'declined', requestedAt: '2026-07-20T15:00:00Z', decidedBy: 'mem_victor', decidedAt: '2026-07-21T09:30:00Z',
       decision: 'Carnival week needs seven nights at the negotiated rate and the Ritz-Carlton has none left. 14–17 February is open at Winter points.',
@@ -205,7 +211,7 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
   for (const [i, memberId] of ['mem_sasha', 'mem_ricardo', 'mem_victor', 'mem_ian'].entries()) {
     const t = stayById.trip_cartagena; const q = quoteOf('trip_cartagena', t.dates.from, t.dates.to, 1);
     add({ id: uid('red'), memberId, stayId: 'trip_cartagena', kind: 'trip', checkIn: t.dates.from, checkOut: t.dates.to, nights: t.nights,
-      guests: 1, seats: 1, note: '', flexDays: 0, maxPoints: null, indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
+      guests: 1, seats: 1, note: '', flexDays: 0, maxPoints: null, shared: false, pledges: [], indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
       points: q.points, quotedPoints: q.points, topUpUsd: 0, quoteStack: null, hotelTerms: 'Seat released if the hold deadline passes.', hotelDeadline: t.holdDeadline,
       quotedBy: 'mem_ian', quotedAt: `2026-08-2${i}T12:00:00Z`, quoteExpiresAt: `2026-08-2${i + 3}T12:00:00Z`,
       status: 'held', requestedAt: `2026-08-2${i}T10:00:00Z`, decidedBy: 'mem_ian', decidedAt: `2026-08-2${i}T12:00:00Z`, decision: 'Seat held.',

@@ -177,6 +177,9 @@ export function book({ store, params, go }) {
             <label class="field"><span>Flexible by</span><select name="flexDays"><option value="0">Exact dates</option><option value="1">A day either way</option><option value="3">Three days either way</option><option value="7">A week either way</option></select></label>
           </div>`}
         <label class="field"><span>Anything Victor should know</span><textarea name="note" rows="3" placeholder="Ground floor if possible, arriving late, celebrating something…"></textarea></label>
+        <label class="row" style="gap:10px;align-items:flex-start;margin-bottom:14px">
+          <input type="checkbox" name="shared" style="width:20px;height:20px;margin-top:2px">
+          <span class="small">Let the Circle chip in. <span class="muted">Anyone can add their own points toward this booking — for a room you are sharing, or a gift. Their points are committed the moment they chip in, and released if it falls through.</span></span></label>
         <div id="preview" class="notice" style="margin-bottom:16px"></div>
         <button class="btn block" type="submit">Send the request</button>
         <p class="small muted" style="margin-top:12px">You currently hold ${escapeHtml(fmtPoints(avail))} available and can have ${tier.holds} open request${tier.holds > 1 ? 's' : ''} at a time as ${escapeHtml(tierName(me.monthlyUsd))}.</p>
@@ -210,7 +213,7 @@ export function book({ store, params, go }) {
         memberId: me.id, stayId: stay.id,
         checkIn: isTrip ? stay.dates.from : f.get('checkIn'), checkOut: isTrip ? stay.dates.to : f.get('checkOut'),
         guests: Number(f.get('guests') || 1), seats: Number(f.get('seats') || 1),
-        note: f.get('note'), flexDays: Number(f.get('flexDays') || 0),
+        note: f.get('note'), flexDays: Number(f.get('flexDays') || 0), shared: !!f.get('shared'),
       });
       toast('Sent to Victor. He answers within 72 hours.', { kind: 'good' });
       go(`/requests/${r.id}`);
@@ -247,7 +250,7 @@ export function requests({ store }) {
         const st = store.stay(r.stayId);
         const left = r.status === 'quoted' ? countdownTo(r.quoteExpiresAt) : null;
         return `<li><span class="what"><b><a href="#/requests/${r.id}">${escapeHtml(st?.name || 'Stay')}</a></b>
-            <span class="meta">${escapeHtml(fmtDay(r.checkIn))} · ${r.nights} night${r.nights > 1 ? 's' : ''}${r.decision ? ` · ${escapeHtml(r.decision.slice(0, 80))}${r.decision.length > 80 ? '…' : ''}` : ''}</span></span>
+            <span class="meta">${escapeHtml(fmtDay(r.checkIn))} · ${r.nights} night${r.nights > 1 ? 's' : ''}${r.shared ? ` · ${(r.pledges || []).length ? `${(r.pledges || []).length} chipped in` : 'open to the Circle'}` : ''}${r.decision ? ` · ${escapeHtml(r.decision.slice(0, 70))}${r.decision.length > 70 ? '…' : ''}` : ''}</span></span>
           <span class="delta"><b>${escapeHtml(fmtPoints(r.quotedPoints || r.indicativePoints || r.points))}</b>
             <small>${left ? `expires in ${escapeHtml(left)}` : escapeHtml(statusLabel(r.status))}</small></span></li>`;
       }).join('')}</ul></div>`));
@@ -285,6 +288,7 @@ export function requestDetail({ store, params, go, refresh }) {
       <div class="side" style="margin-top:22px">
         <div class="stack">
           <div class="panel" id="money"></div>
+          <div id="chipin"></div>
           ${r.note ? `<div class="panel flat"><p class="eyebrow">What they asked for</p><p class="small" style="margin-top:8px">${escapeHtml(r.note)}</p></div>` : ''}
           ${r.decision ? `<div class="notice ${['declined', 'cancelled', 'expired'].includes(r.status) ? 'bad' : ''}">
             <b>${escapeHtml(['declined'].includes(r.status) ? 'Declined by ' : 'Note from ')}${escapeHtml(store.member(r.decidedBy || r.quotedBy)?.name.split(' ')[0] || 'the Desk')}</b>
@@ -318,6 +322,67 @@ export function requestDetail({ store, params, go, refresh }) {
       ${r.confirmationRef ? `<li><span class="what"><b>Hotel confirmation</b></span><span class="delta"><b class="num">${escapeHtml(r.confirmationRef)}</b></span></li>` : ''}
     </ul>`;
 
+  // ---- who is chipping in
+  const chip$ = wrap.querySelector('#chipin');
+  const target = r.quotedPoints || r.indicativePoints || 0;
+  const covered = store.coveredPoints(r);
+  const outstanding = Math.max(0, target - covered);
+  const canChipIn = r.shared && ['quoted', 'held'].includes(r.status) && outstanding > 0 && r.memberId !== me.id;
+  const myPledge = (r.pledges || []).find(p => p.memberId === me.id);
+  if (r.shared || (r.pledges || []).length) {
+    const parts = [{ memberId: r.memberId, points: r.points, owner: true }, ...(r.pledges || [])];
+    chip$.className = 'panel';
+    chip$.innerHTML = `
+      <div class="row-between"><h2 style="font-size:1.1rem">Everyone chipping in</h2>
+        <span class="small muted num">${escapeHtml(fmtPoints(covered))} of ${escapeHtml(fmtPoints(target))}</span></div>
+      <div class="balbar" style="margin-top:12px" role="img" aria-label="${covered} of ${target} points covered">
+        <span class="b-avail" style="width:${Math.min(100, (covered / Math.max(target, 1)) * 100)}%"></span></div>
+      <ul class="ledger" style="margin-top:10px">
+        ${parts.filter(p => p.points > 0).map(p => {
+          const m2 = store.member(p.memberId);
+          return `<li><span class="what"><b>${escapeHtml(m2?.name || 'An Insider')}${p.owner ? ' · asked for it' : ''}</b>
+              <span class="meta">${p.owner ? 'their own points' : `chipped in ${escapeHtml(fmtDay(p.at))}`}</span></span>
+            <span class="delta"><b>${escapeHtml(fmtPoints(p.points))}</b><small>${escapeHtml(pointsUsd(p.points, s.pointsPerDollar))}</small>
+              ${!p.owner && (p.memberId === me.id || store.hasRole('planner', 'admin')) && !['confirmed', 'completed'].includes(r.status)
+                ? `<button class="btn quiet sm" data-unpledge="${escapeHtml(p.memberId)}">Take it back</button>` : ''}</span></li>`;
+        }).join('')}
+      </ul>
+      ${outstanding > 0
+        ? `<p class="small muted" style="margin-top:10px">${escapeHtml(fmtPoints(outstanding))} still to cover — ${escapeHtml(pointsUsd(outstanding, s.pointsPerDollar))}.
+             ${r.topUpUsd ? `Whatever is left when Victor books it is paid in cash by ${escapeHtml(store.member(r.memberId)?.name.split(' ')[0] || 'the member')}.` : ''}</p>`
+        : `<p class="small" style="margin-top:10px;color:var(--good-text)">Fully covered by the Circle.</p>`}
+      ${canChipIn ? `<form class="row" id="pledge-form" style="margin-top:14px;align-items:flex-end">
+          <label class="field" style="margin:0;flex:1;min-width:150px"><span>Chip in</span>
+            <input name="points" type="number" inputmode="numeric" min="1" max="${Math.min(outstanding, Math.max(0, store.availablePoints(me.id)))}"
+                   value="${Math.min(outstanding, Math.max(0, store.availablePoints(me.id)))}" class="mono">
+            <span class="hint" id="pledge-usd"></span></label>
+          <button class="btn" type="submit">Chip in</button>
+        </form>` : ''}
+      ${!canChipIn && myPledge ? `<p class="small muted" style="margin-top:10px">You have chipped in ${escapeHtml(fmtPoints(myPledge.points))}.</p>` : ''}
+      ${r.shared && r.memberId === me.id ? `<p class="small" style="margin-top:12px"><button class="btn ghost sm" id="ask-circle">Ask the Circle to chip in</button></p>` : ''}`;
+    const form = chip$.querySelector('#pledge-form');
+    if (form) {
+      const sync = () => { chip$.querySelector('#pledge-usd').textContent = `${pointsUsd(Number(form.points.value) || 0, s.pointsPerDollar)} of the booking`; };
+      sync(); form.addEventListener('input', sync);
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try { await store.pledgeToRedemption(r.id, me.id, Number(form.points.value)); toast('Chipped in. Your points are committed until the booking is paid or falls through.', { kind: 'good' }); }
+        catch (err) { toast(err.message, { kind: 'bad', timeout: 6000 }); }
+      });
+    }
+    chip$.addEventListener('click', async (e) => {
+      const un = e.target.closest('[data-unpledge]');
+      if (un) {
+        try { await store.withdrawPledge(r.id, un.dataset.unpledge, me.id); toast('Taken back. Those points are yours to spend again.'); }
+        catch (err) { toast(err.message, { kind: 'bad' }); }
+      }
+      if (e.target.id === 'ask-circle') {
+        shareText({ title: stay?.name, text: `I am putting ${fmtPoints(target)} toward ${stay?.name} from ${fmtDay(r.checkIn)} through the ${VOCAB.clubName} and ${fmtPoints(outstanding)} is still to cover. Chip in if you are coming.`,
+          url: `${location.origin}${location.pathname}#/requests/${r.id}` });
+      }
+    });
+  }
+
   const actions = wrap.querySelector('#actions');
   const buttons = [];
   if (mine && r.status === 'quoted' && left) buttons.push('<button class="btn" data-act="accept">Accept and commit the points</button>');
@@ -331,7 +396,8 @@ export function requestDetail({ store, params, go, refresh }) {
     ? `<p class="eyebrow">What you can do</p><div class="row" style="margin-top:12px">${buttons.join('')}</div>
        ${topUpOwed ? `<p class="small" style="margin-top:12px;color:var(--flag)">The hotel cannot be paid until the ${escapeHtml(fmtUsd2(r.topUpUsd))} top-up has reached the Banker. Nothing is ever booked on credit.</p>` : ''}
        ${r.status === 'quoted' && mine ? `<p class="small muted" style="margin-top:12px">Accepting moves ${escapeHtml(fmtPoints(Math.min(pts, avail)))} into Committed. They are still yours and still counted in the Circle’s coverage until the hotel is paid.</p>` : ''}`
-    : `<p class="small muted">Nothing to do here right now.</p>`;
+    : '';
+  if (!buttons.length) actions.remove();
 
   actions.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-act]'); if (!b) return;
