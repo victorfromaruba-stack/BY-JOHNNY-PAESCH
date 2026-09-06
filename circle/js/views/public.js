@@ -80,10 +80,12 @@ export function landing({ store, go }) {
       <div class="sec-head"><div><p class="eyebrow">The horizon</p><h2>Where the points go</h2>
       <p>Twenty-three places on the island and the trips Victor and Ian put together. Every price is the Circle’s all-in rate — taxes, levies and resort fees included.</p>
       <p class="small muted" style="margin-top:8px">These four are where we actually end up. The trips this cycle go to the Dominican Republic, Mexico and Japan.</p></div>
-      <a class="btn ghost sm" href="#/stays">${icon('chevronRight', { size: 15 })}All twenty-three</a></div>
+      <a class="btn ghost sm" href="${blind ? '#/sign-in' : '#/stays'}">${icon('chevronRight', { size: 15 })}${blind ? 'Sign in to see them all' : 'All twenty-three'}</a></div>
       <div class="horizon-wrap"><div class="horizon" id="horizon"></div></div></div></section>`);
   const hz = horizon.querySelector('#horizon');
-  featured.forEach(st => hz.appendChild(stayCard(st, { store, season: 'low' })));
+  // Signed out, every one of these opened a password form with no explanation — someone was
+  // browsing hotels and got a login screen. Send them somewhere deliberate instead.
+  featured.forEach(st => hz.appendChild(stayCard(st, { store, season: 'low', href: blind ? '#/sign-in' : null })));
   wrap.appendChild(horizon);
 
   // The split — the honest 85/15
@@ -192,17 +194,24 @@ export function landing({ store, go }) {
       <p class="small muted" style="margin-top:8px">The two Marriott villa resorts are the odd ones out: they are vacation-ownership weeks, so they come as seven nights Saturday to Saturday and there is no resort fee. A villa there sleeps four to eight, which is why the per-night number looks high and the per-person number does not — chip in with three others and it is the cheapest week on Palm Beach.</p>
       </div></section>`));
 
-  // The people
-  const officers = ['mem_victor', 'mem_ian', 'mem_vishnu'].map(id => store.member(id)).filter(Boolean);
+  // The people. Found by the job they do, not by a seed id — on the real backend every row
+  // has a uuid, so looking them up as mem_victor rendered an empty grid. And a signed-out
+  // visitor can read no members at all, so the three jobs are described either way: those
+  // are facts about how the Circle is arranged, not anybody's personal data.
+  const JOBS = [
+    { role: 'planner', job: 'The Desk', what: 'Finds the deals, plans the trips, and quotes every request within 72 hours.' },
+    { role: 'comms', job: 'The Voice', what: 'Every message from the Circle comes from one person, so nobody is chased in a group chat.' },
+    { role: 'treasurer', job: 'The Banker', what: 'Holds the money and confirms every transfer. Points are minted only by him, and every line in your ledger carries his name and the time.' },
+  ];
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><p class="eyebrow">Who runs it</p><h2>Three people, three jobs</h2></div></div>
-      <div class="grid g3">${officers.map(m => `<div class="panel"><div class="row" style="gap:12px">
-          <span class="avatar" style="--h:${m.hue};width:44px;height:44px;font-size:.95rem">${escapeHtml(initials(m.name))}</span>
-          <div><b>${escapeHtml(m.name)}</b><br><span class="small muted">${escapeHtml(m.title)}</span></div></div>
-        <p class="small muted" style="margin-top:12px">${escapeHtml(
-          m.id === 'mem_victor' ? 'Finds the deals around the world and plans the trips. He quotes every request within 72 hours.'
-          : m.id === 'mem_ian' ? 'Every message you get from the Circle comes from Ian. He plans the trips with Victor and nobody chases anybody in a group chat.'
-          : 'Holds the money and confirms every transfer. Points are minted only by him, and every line in your ledger carries his name and the time.')}</p></div>`).join('')}</div>
+      <div class="grid g3">${JOBS.map(({ role, job, what }) => {
+        const m = store.members.find(x => (x.roles || []).includes(role) && x.status !== 'left');
+        return `<div class="panel"><div class="row" style="gap:12px">
+          ${m ? `<span class="avatar" style="--h:${m.hue};width:44px;height:44px;font-size:.95rem">${escapeHtml(initials(m.name))}</span>` : ''}
+          <div><b>${escapeHtml(m?.name || job)}</b><br><span class="small muted">${escapeHtml(m?.title || job)}</span></div></div>
+        <p class="small muted" style="margin-top:12px">${escapeHtml(what)}</p></div>`;
+      }).join('')}</div>
       </div></section>`));
 
   // Rules in six sentences

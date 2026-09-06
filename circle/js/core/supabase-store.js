@@ -231,7 +231,13 @@ export class SupabaseStore extends Store {
   async quoteRedemption(id, _actor, { points, stack = null, terms = '', hotelDeadline = null, note = '' }) {
     return this.rpc('quote_redemption', { p_id: id, p_points: points, p_stack: stack, p_terms: terms, p_deadline: hotelDeadline, p_note: note });
   }
-  async acceptQuote(id) { return this.rpc('accept_quote', { p_id: id }); }
+  async acceptQuote(id) {
+    // A lapsed quote comes back as the expired row rather than an exception, because raising
+    // would roll back the write that records the expiry. The message belongs here.
+    const r = await this.rpc('accept_quote', { p_id: id });
+    if (r?.status === 'expired') throw new Error('That quote has expired — ask the Desk to quote it again.');
+    return r;
+  }
   async pledgeToRedemption(id, _memberId, points) { return this.rpc('pledge_to_redemption', { p_id: id, p_points: points }); }
   async withdrawPledge(id, memberId) { return this.rpc('withdraw_pledge', { p_id: id, p_member: memberId }); }
   async confirmTopUp(id) { return this.rpc('confirm_top_up', { p_id: id }); }

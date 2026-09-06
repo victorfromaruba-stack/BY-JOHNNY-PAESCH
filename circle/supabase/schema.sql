@@ -769,10 +769,15 @@ begin
   if r.id is null then raise exception 'No such request'; end if;
   if r.member_id <> current_member_id() then raise exception 'Only the member can accept their quote'; end if;
   if r.status <> 'quoted' then raise exception 'There is no open quote to accept'; end if;
+  -- Do not raise here. A raise aborts the transaction, which would undo the very update that
+  -- records the expiry, so the row stayed 'quoted' forever while the member was told it had
+  -- lapsed — and the Desk went on seeing an open quote. Write the truth and hand the row
+  -- back; the client reads the status and says so.
   if r.quote_expires_at < now() then
     update redemptions set status='expired', decided_at=now(),
-           decision='Quote expired before it was accepted' where id = p_id;
-    raise exception 'That quote has expired';
+           decision='Quote expired before it was accepted' where id = p_id returning * into r;
+    perform log_audit('redemption.expire','redemption',r.id::text, jsonb_build_object('at', now()));
+    return r;
   end if;
   select * into s from settings where id = 1;
   pledged := coalesce((select sum(points) from pledges where redemption_id = p_id), 0);
