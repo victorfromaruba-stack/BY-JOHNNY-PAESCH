@@ -376,3 +376,7 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 .nav-dot { position: absolute; top: -1px; right: -2px; width: 8px; height: 8px; border-radius: 50%;
   background: var(--good); box-shadow: 0 0 0 2px var(--surface); }
 .empty .ico { display: block; margin: 0 auto; }
+
+/* Live availability: a card that shouts only when the week beats our own rate. */
+.live-card.beats { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+.live-card h3 { overflow-wrap: anywhere; }

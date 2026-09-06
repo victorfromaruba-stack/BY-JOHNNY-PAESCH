@@ -102,6 +102,51 @@ properly. This is what the research found:
 | **Iberostar** | Employee and friends-and-family rates are a rate code, not a feed. | For a group, the **group desk** (10+ rooms) beats any published rate. Iberostar PRO is the agent channel; the affiliate feed is marketing content, not availability. |
 | **Real hotel APIs** | **Yes.** LiteAPI (Nuitée) has genuine self-signup and live availability. Expedia Rapid, RateHawk and Hotelbeds are partner APIs behind an application. | Any of these can be polled on a schedule without breaking anyone's terms. |
 
+### VakayMood — the one source that can genuinely be watched
+
+After that table was written, Victor found [vakaymood.com/developers](https://vakaymood.com/developers),
+and it changes the picture. It is a free, read-only, **unauthenticated** JSON API of live
+timeshare rental availability, with `Access-Control-Allow-Origin: *`. So the member's own
+browser calls it directly: no key, no server, nothing secret in this repository, and no
+term of service broken. It is the one source in the whole plan that permits exactly what
+Victor asked for.
+
+And it carries the right inventory. A query for Aruba returns about 2,800 live listings
+across fourteen resorts, including **Marriott's Aruba Surf Club** (roughly 1,700 of them),
+**Marriott's Aruba Ocean Club** and the **Renaissance Wind Creek** — three of our four. The
+Divi is all-inclusive rather than a timeshare, so owner weeks for it do not exist.
+
+**Open right now** (`#/live`) is the section. It shows live weeks priced in points at the
+club's own rate, filterable by resort, size, price and dates, and it says plainly when a
+week comes in under our own published rate.
+
+Two things it is careful about, both learned by getting them wrong first:
+
+- **It compares like with like.** Each property's catalog rate is modelled on one room — a
+  two-bedroom at the Surf Club, a one-bedroom at the Ocean Club. Comparing a live *studio*
+  against that invented a saving that was really just a smaller room; the first build
+  claimed six bargains out of six. It now matches on bedroom count and takes the cheapest
+  of our rooms at that size, so a reported saving is understated rather than flattering.
+  Same data, same screen: one genuine bargain out of six.
+- **Several owners list the identical week at the identical price.** They are distinct
+  listings, but six identical cards are noise, so they collapse into one that says how many
+  owners have it.
+
+Two corrections to their published docs, found by calling it:
+
+- the `resort` filter needs the **full slug** (`marriotts-aruba-surf-club-palm-beach-RR17209859`).
+  The RR code alone returns zero results, though the docs say it is accepted.
+- `limit` caps at **100**; 101 is rejected.
+
+Rate limit is 60 requests a minute per IP, and because each member's browser makes its own
+call that budget is per person rather than shared. Responses are cached in memory for the
+same 60 seconds their CDN caches them, so moving between tabs costs nothing. If the feed is
+slow or down the section says so and the rest of the app is untouched — it is someone else's
+server and it is treated that way.
+
+`connect-src` in the page's Content Security Policy was widened by exactly one origin,
+`https://vakaymood.com`, to allow it.
+
 So the design is: **the sites' own alerts do the watching, and the club turns those alerts
 into something everyone sees at once.**
 
