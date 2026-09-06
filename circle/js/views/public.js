@@ -3,16 +3,17 @@ import { escapeHtml, html, raw, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, fmtDa
 import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, projectPoints, seasonPoints, SEASONS, REACH, pointsPerMonth, monthsToAfford } from '../core/money.js';
 import { splitBar, poolGauge, memberCard, ring } from '../ui/pieces.js';
-import { drawContours, treeSvg, starSvg } from '../ui/art.js';
+import { sceneSvg, treeSvg, starSvg } from '../ui/art.js';
 import { toast, setBusy, sheet } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { copyText } from '../core/share.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 export const stayStrip = (stay) => {
-  const c = document.createElement('canvas');
-  requestAnimationFrame(() => drawContours(c, stay.id, { tone: stay.kind === 'trip' ? 'dusk' : 'sea' }));
-  return c;
+  const d = document.createElement('div');
+  d.className = 'scene';
+  d.innerHTML = sceneSvg(stay);
+  return d;
 };
 
 /** A stay or trip card, used on the landing page and throughout the catalog. */
@@ -37,17 +38,34 @@ export function landing({ store, go }) {
   const wrap = el('<div></div>');
   const featured = ['stay_oceanclub', 'stay_surfclub', 'stay_divi', 'stay_renaissance', 'trip_japan'].map(id => store.stay(id)).filter(Boolean);
 
-  wrap.appendChild(el(`<section class="sec">
-    <div class="wrap">
-      <p class="eyebrow enter">${escapeHtml(VOCAB.subtitle)} · by invitation</p>
-      <h1 class="enter" style="--d:40ms;max-width:16ch">A private travel circle in Aruba.</h1>
-      <p class="lede enter" style="--d:80ms;margin-top:14px">${escapeHtml(VOCAB.tagline)} You put in $100, $150 or $200 a month. Vishnu confirms the money has landed, and only then do your points appear — 100 points to the dollar, fixed forever.</p>
-      <p class="lede enter" style="--d:100ms;margin-top:12px">This is not a business and it is not open to the public. Every Insider is someone Victor or Ian knows, and you join because one of them asked you. ${escapeHtml(store.activeMembers().length)} of ${s.memberCap} seats are taken.</p>
-      <div class="row enter" style="--d:120ms;margin-top:22px">
-        <a class="btn" href="#/sign-in">I have an invitation</a>
-        <a class="btn ghost" href="#/rules">How the Circle works</a>
+  wrap.appendChild(el(`<section class="sec hero-sec">
+    <div class="wrap hero">
+      <div class="hero-copy">
+        <p class="eyebrow enter">${escapeHtml(VOCAB.subtitle)} · by invitation</p>
+        <h1 class="enter" style="--d:40ms;max-width:15ch">A private travel circle in Aruba.</h1>
+        <p class="lede enter" style="--d:80ms;margin-top:14px">${escapeHtml(VOCAB.tagline)} You put in $100, $150 or $200 a month. Vishnu confirms the money has landed, and only then do your points appear — 100 points to the dollar, fixed forever.</p>
+        <p class="lede enter" style="--d:100ms;margin-top:12px">This is not a business and it is not open to the public. Every Insider is someone Victor or Ian knows, and you join because one of them asked you. ${escapeHtml(store.activeMembers().length)} of ${s.memberCap} seats are taken.</p>
+        <div class="row enter" style="--d:120ms;margin-top:22px">
+          <a class="btn" href="#/sign-in">${icon('key', { size: 17 })}I have an invitation</a>
+          <a class="btn ghost" href="#/rules">${icon('compass', { size: 17 })}How the Circle works</a>
+        </div>
       </div>
-      <div id="gauge-slot" class="enter" style="--d:160ms;margin-top:26px"></div>
+      <figure class="hero-shot enter" style="--d:140ms">
+        <picture>
+          <source media="(max-width:760px)" srcset="assets/hero-tall.jpg">
+          <img src="assets/hero.jpg" alt="The shallows off Aruba's west coast on a clear morning" fetchpriority="high" decoding="async">
+        </picture>
+        <figcaption>${icon('mapPin', { size: 14 })}The west coast — every place on the list is on this water or ten minutes from it.</figcaption>
+      </figure>
+      <div class="hero-gauge enter" style="--d:180ms">
+        <div id="gauge-slot"></div>
+        <div class="hero-facts">
+          <div><p class="eyebrow">${icon('users', { size: 14 })}Seats</p>
+            <p><b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of ${s.memberCap} taken · by invitation only</p></div>
+          <div><p class="eyebrow">${icon('bed', { size: 14 })}On the list</p>
+            <p><b class="num">${escapeHtml(String(store.stays.filter(x => x.kind !== 'trip').length))}</b> places · <b class="num">${escapeHtml(String(store.stays.filter(x => x.kind === "trip").length))}</b> trips</p></div>
+        </div>
+      </div>
     </div></section>`));
   wrap.querySelector('#gauge-slot').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, configured: t.accountsConfigured, size: 'full' }));
 
@@ -55,8 +73,9 @@ export function landing({ store, go }) {
   const horizon = el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><p class="eyebrow">The horizon</p><h2>Where the points go</h2>
       <p>Twenty-three places on the island and the trips Victor and Ian put together. Every price is the Circle’s all-in rate — taxes, levies and resort fees included.</p>
-      <p class="small muted" style="margin-top:8px">These four are where we actually end up. The trips this cycle go to the Dominican Republic, Mexico and Japan.</p></div></div>
-      <div class="horizon" id="horizon"></div></div></section>`);
+      <p class="small muted" style="margin-top:8px">These four are where we actually end up. The trips this cycle go to the Dominican Republic, Mexico and Japan.</p></div>
+      <a class="btn ghost sm" href="#/stays">${icon('chevronRight', { size: 15 })}All twenty-three</a></div>
+      <div class="horizon-wrap"><div class="horizon" id="horizon"></div></div></div></section>`);
   const hz = horizon.querySelector('#horizon');
   featured.forEach(st => hz.appendChild(stayCard(st, { store, season: 'low' })));
   wrap.appendChild(horizon);

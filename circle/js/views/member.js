@@ -4,7 +4,7 @@ import { VOCAB, tierName, refFor } from '../core/vocab.js';
 import { splitContribution, tierFor, seasonPoints, SEASONS, isDushiSeason, pointsPerMonth } from '../core/money.js';
 import { splitBar, poolGauge, ring, memberCard } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
-import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel } from '../ui/components.js';
+import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel, avatar } from '../ui/components.js';
 import { sparkline, columns, tableFor } from '../ui/charts.js';
 import { waLink, TEMPLATES, copyText, shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
@@ -172,9 +172,19 @@ export function home({ store, go }) {
     const st = store.stay(r.stayId); const owner = store.member(r.memberId);
     const target = r.quotedPoints || r.indicativePoints || 0;
     const gap = Math.max(0, target - store.coveredPoints(r));
-    blocks.push(`<div class="notice"><b>${escapeHtml(owner?.name.split(' ')[0] || 'An Insider')} is ${escapeHtml(fmtPoints(gap))} short for ${escapeHtml(st?.name || 'a stay')}</b>
-      <p class="small">${r.nights} nights from ${escapeHtml(fmtDay(r.checkIn))}. Anyone can put their own points in — yours are committed only until it is booked or falls through.</p>
-      <p style="margin-top:8px"><a class="btn sm" href="#/requests/${r.id}">Chip in</a></p></div>`);
+    const pct = target ? Math.min(1, store.coveredPoints(r) / target) : 0;
+    blocks.push(`<div class="notice ask">
+      <div class="row" style="gap:11px;align-items:flex-start;flex-wrap:nowrap">
+        ${avatar(owner, 40)}
+        <div style="min-width:0;flex:1">
+          <b>${escapeHtml(owner?.name.split(' ')[0] || 'An Insider')} is ${escapeHtml(fmtPoints(gap))} short for ${escapeHtml(st?.name || 'a stay')}</b>
+          <p class="small muted" style="margin-top:3px">${r.nights} nights from ${escapeHtml(fmtDay(r.checkIn))}. Anyone can put their own points in — yours are committed only until it is booked or falls through.</p>
+          <div class="goal-bar" style="margin-top:10px" role="img"
+            aria-label="${escapeHtml(fmtPct(pct))} of the way there"><span style="width:${(pct * 100).toFixed(1)}%"></span></div>
+          <p class="tiny muted" style="margin-top:6px">${escapeHtml(fmtPoints(store.coveredPoints(r)))} of ${escapeHtml(fmtPoints(target))} together — ${escapeHtml(fmtPct(pct))} there</p>
+          <p style="margin-top:10px"><a class="btn sm" href="#/requests/${r.id}">${icon('chipIn', { size: 15 })}Chip in</a></p>
+        </div>
+      </div></div>`);
   }
   if (blocks.length) left.appendChild(el(`<div class="stack">${blocks.join('')}</div>`));
 
@@ -189,9 +199,9 @@ export function home({ store, go }) {
   // right column — streak, roll call, coverage, the note from Ian
   right.appendChild(el(`<div class="panel">
       <p class="eyebrow">${icon('crown')}Your standing</p>
-      <div class="row" style="gap:12px;margin-top:10px;align-items:center">
-        ${treeSvg(VOCAB.tierLean[me.monthlyUsd], { size: 30 })}
-        <div><b>${escapeHtml(tierName(me.monthlyUsd))}</b> · ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month
+      <div class="row" style="gap:11px;margin-top:10px;align-items:flex-start;flex-wrap:nowrap">
+        <span style="flex:none;margin-top:-4px">${treeSvg(VOCAB.tierLean[me.monthlyUsd], { size: 30 })}</span>
+        <div style="min-width:0"><b>${escapeHtml(tierName(me.monthlyUsd))}</b> · ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month
         <br><span class="small muted">${escapeHtml(fmtPointsUsd(store.lifetime(me.id).balance, s.pointsPerDollar))} held${me.founding ? ` · ${escapeHtml(VOCAB.founding)}` : ''}</span></div>
       </div>
       <p class="small" style="margin-top:14px"><b class="num">${streak}</b> consecutive contribution${streak === 1 ? '' : 's'}${next ? ` · ${next - streak} more to the ${next}-month bonus of ${fmtPoints(s.streakBonuses[next])}` : ''}.</p>
