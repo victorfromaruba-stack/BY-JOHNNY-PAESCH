@@ -50,7 +50,10 @@ export class SupabaseStore extends Store {
   }
   async reload() {
     const tables = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'pledges', 'announcements', 'audit', 'invitations', 'month_closes', 'promo_deferrals', 'room_types', 'watches', 'deals'];
-    const results = await Promise.all(tables.map(t => this.sb.from(t).select('*')));
+    // members comes from a view that leaves out auth_user_id and the officer's private notes;
+    // it is security_invoker, so the members_read policy still decides which rows come back.
+    const source = { members: 'members_v' };
+    const results = await Promise.all(tables.map(t => this.sb.from(source[t] || t).select('*')));
     results.forEach((r, i) => { if (!r.error) this.state[tables[i]] = (r.data || []).map(toCamel); });
     this.state.monthCloses = this.state.month_closes || this.state.monthCloses || [];
     this.state.promoDeferrals = this.state.promo_deferrals || this.state.promoDeferrals || [];
@@ -80,10 +83,12 @@ export class SupabaseStore extends Store {
     // purpose. But the public page still has to show what the Circle is for, and the same
     // catalog is already inside the JavaScript this browser just downloaded, so falling
     // back to it exposes nothing new and keeps the front page from being a blank frame.
-    if (!this.state.session && !this.state.stays.length) {
+    // Recomputed on every reload, never latched: signing in must lift it, or a member who
+    // arrived at the front page first keeps being shown the stranger's copy.
+    this.publicOnly = !this.state.session && !this.state.stays.length;
+    if (this.publicOnly) {
       const { ARUBA_STAYS, WORLD_TRIPS } = await import('../data/stays.js');
       this.state.stays = [...ARUBA_STAYS, ...WORLD_TRIPS].map(x => ({ ...x, active: true }));
-      this.publicOnly = true;
     }
     const { data: s } = await this.sb.from('settings').select('*').eq('id', 1).maybeSingle();
     if (s) this.state.settings = { ...DEFAULT_SETTINGS, serviceRate: Number(s.service_rate), pointsPerDollar: Number(s.points_per_dollar), awgPerUsd: Number(s.awg_per_usd), tiers: s.tiers, streakBonuses: s.streak_bonuses, foundingBonus: s.founding_bonus, memberCap: s.member_cap, exitFeeUsd: Number(s.exit_fee_usd), quoteHours: s.quote_hours, bankerSlaHours: s.banker_sla_hours, reserveAccount: s.reserve_account, operatingAccount: s.operating_account, reserveVerified: s.reserve_verified, wallet: s.wallet, clubName: s.club_name };
@@ -124,11 +129,11 @@ export class SupabaseStore extends Store {
   /** Is this email one the club is expecting, and does it already have an account? */
   async lookupInvite(email) {
     const clean = String(email).trim().toLowerCase();
-    const { data, error } = await this.sb.from('members').select('id, name, auth_user_id').ilike('email', clean).maybeSingle();
+    const { data, error } = await this.sb.from('members_v').select('id, name, claimed').ilike('email', clean).maybeSingle();
     // Signed-out visitors cannot read members at all, which is the point — so a failure
     // here is expected and simply means "we cannot tell you".
     if (error) return null;
-    return data ? { name: data.name, claimed: !!data.auth_user_id } : null;
+    return data ? { name: data.name, claimed: !!data.claimed } : null;
   }
   async signInWithPassword(email, password) {
     const { error } = await this.sb.auth.signInWithPassword({ email: String(email).trim().toLowerCase(), password });

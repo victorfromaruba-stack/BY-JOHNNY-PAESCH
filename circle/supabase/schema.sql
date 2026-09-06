@@ -1281,6 +1281,37 @@ create policy settings_write on settings for update to authenticated
 
 drop policy if exists members_read on members;
 create policy members_read on members for select to authenticated using (current_member_id() is not null);
+-- Row-level security cannot restrict columns, and members_read hands every Insider every
+-- column of every row. Two of those have no business being club-wide: `notes` is what an
+-- officer wrote about a member, readable by that same member, and auth_user_id is the link
+-- to their login account. The app reads neither.
+--
+-- A security_invoker view is how the columns get dropped without losing the row policy: it
+-- runs as the caller, so members_read still decides which rows come back. `claimed` replaces
+-- auth_user_id with the one fact the sign-in screen actually needs.
+--
+-- Being honest about what this does not fix: showOnRollcall is still only respected by the
+-- screens. A member who opts out is hidden in the app but their row is still readable. For a
+-- forty-seat club of people who know each other that is a fair line, but it is a convention
+-- rather than a guarantee.
+create or replace view members_v with (security_invoker = on) as
+  select id, email, name, phone, roles, status, monthly_usd, hue, home, title, joined_at,
+         founding, sponsor_id, card_code, household, preferences, standing_order,
+         show_on_rollcall, paused_until, paused_months, dream_stay_id, goal, left_at,
+         (auth_user_id is not null) as claimed
+    from members;
+-- security_invoker means the caller needs the underlying columns too, so this is a column
+-- grant rather than a table one. auth_user_id stays granted because the view's `claimed`
+-- expression reads it; the view does not return it, so nothing the app passes around carries
+-- it. `notes` is granted to nobody.
+revoke select on members from authenticated, anon;
+grant select (id, auth_user_id, email, name, phone, roles, status, monthly_usd, hue, home,
+              title, joined_at, founding, sponsor_id, card_code, household, preferences,
+              standing_order, show_on_rollcall, paused_until, paused_months, dream_stay_id,
+              goal, left_at)
+  on members to authenticated;
+grant select on members_v to authenticated;
+revoke all on members_v from anon;
 -- Nobody edits a member row directly: roles, status and founding are not the member's to
 -- change, and row-level security cannot restrict columns. Both paths below are functions.
 drop policy if exists members_self on members;
