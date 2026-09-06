@@ -64,7 +64,7 @@ export function dealCard(deal, { store, match = null, canEdit = false } = {}) {
           You are ${escapeHtml(fmtPoints(match.short))} short — ask anyway and close the gap with a top-up, or open it to the Circle.</p>` : ''}
         <div class="row" style="margin-top:14px">
           <a class="btn sm" href="#/book/${escapeHtml(deal.stayId)}?from=${escapeHtml(deal.from)}&to=${escapeHtml(deal.to)}&deal=${escapeHtml(deal.id)}">${icon('send', { size: 16 })}Ask for it</a>
-          ${deal.sourceUrl ? `<a class="btn ghost sm" href="${escapeHtml(deal.sourceUrl)}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 16 })}Where it is</a>` : ''}
+          ${canEdit && deal.sourceUrl ? `<a class="btn ghost sm" href="${escapeHtml(deal.sourceUrl)}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 16 })}Go and book it</a>` : ''}
           ${canEdit ? `<button class="btn quiet sm" data-act="retire">${icon('x', { size: 16 })}Gone</button>` : ''}
         </div>
       </div>
@@ -84,7 +84,8 @@ export function deals({ store, go }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <div class="row-between">
         <div><p class="eyebrow">${icon('zap')}As they turn up</p><h1>Deals</h1>
-          <p class="lede" style="margin-top:10px;max-width:60ch">Rooms that became available somewhere Victor or Ian was looking. They go as fast as they come, so anything here is worth asking about the same day.</p></div>
+          <p class="lede" style="margin-top:10px;max-width:60ch">Rooms that became available somewhere Victor or Ian was looking. They go as fast as they come, so anything here is worth asking about the same day.
+            <b>You do not book these yourself</b> — put your points in, alone or with others, and the Circle books it in your name.</p></div>
         ${canEdit ? `<div class="row no-print"><button class="btn sm" id="post">${icon('plus', { size: 16 })}Post a deal</button></div>` : ''}
       </div>
 

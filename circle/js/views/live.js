@@ -79,14 +79,14 @@ export function live({ store, go }) {
 
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <div class="sec-head"><div>
-        <p class="eyebrow">${icon('refresh')}Checked live, every time you open this</p>
-        <h1>Open right now</h1>
-        <p class="lede" style="margin-top:10px;max-width:62ch">Owner-rented weeks at the resorts we already use, straight from
-          <a href="https://vakaymood.com/developers" target="_blank" rel="noopener noreferrer">VakayMood</a>'s public feed.
-          Everything is priced in points at ${s.pointsPerDollar} to the dollar so you can hold it against the catalog.
-          It carries three of our four — the Surf Club, the Ocean Club and the Renaissance. The Divi is all-inclusive rather
-          than a timeshare, so owner weeks for it do not exist.
-          Nothing here is booked by the Circle — Victor still quotes it, and you accept the way you always do.</p>
+        <p class="eyebrow">${icon('eye')}A window, not a shop</p>
+        <h1>What is open right now</h1>
+        <p class="lede" style="margin-top:10px;max-width:62ch">Weeks that are free at the moment at the places we use, so you
+          can see what exists before you ask. <b>You never book here.</b> You put your points in — on your own or with others —
+          and Victor books it for you, the same as everything else in the Circle.</p>
+        <p class="small muted" style="margin-top:10px;max-width:62ch">Prices are in points at ${s.pointsPerDollar} to the dollar
+          so they sit beside the catalog. They are a guide: what you accept is Victor's quote, and he often does better than
+          what is showing here.</p>
       </div></div>
 
       <div class="row no-print" id="filters" style="margin-top:18px" role="group" aria-label="Filter live availability"></div>
@@ -95,9 +95,10 @@ export function live({ store, go }) {
       <div class="row" id="more" style="margin-top:18px"></div>
 
       <p class="small muted" style="margin-top:26px">${icon('shield', { size: 14, cls: 'ico-muted' })}
-        VakayMood publishes this feed free and without a key, and allows it to be read from any site. It is the only one of
-        the sources we looked at that does — Interval and RedWeek both forbid automated access in their terms, so those two
-        reach us through their own alert emails instead. <a href="#/rules">How the Circle works</a>.</p>
+        This one feed happens to be public, so it can be shown live. Most of what the Circle books does not work that way:
+        Victor and Ian find it on Interval, on RedWeek, or on the phone to the hotel, and put it on
+        <a href="#/deals">the board</a> themselves. Either way the Circle does the booking.
+        <a href="#/rules">How the Circle works</a>.</p>
     </div></section></div>`);
 
   const list = wrap.querySelector('#list');
@@ -170,9 +171,9 @@ export function live({ store, go }) {
                 : 'You hold enough for this.'}</p>
 
       <div class="row" style="margin-top:14px">
-        ${d.stayId ? `<a class="btn sm" href="#/book/${escapeHtml(d.stayId)}?from=${escapeHtml(d.from)}&to=${escapeHtml(d.to)}">${icon('send', { size: 16 })}Ask Victor for it</a>` : ''}
-        ${d.bookingUrl ? `<a class="btn ghost sm" href="${escapeHtml(d.bookingUrl)}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 16 })}See it on VakayMood</a>` : ''}
-        ${canPost && d.stayId ? `<button class="btn quiet sm" data-post="${escapeHtml(d.externalId)}">${icon('plus', { size: 15 })}Put it on the board</button>` : ''}
+        ${d.stayId ? `<a class="btn sm" href="#/book/${escapeHtml(d.stayId)}?from=${escapeHtml(d.from)}&to=${escapeHtml(d.to)}">${icon('send', { size: 16 })}Ask the Circle for it</a>` : ''}
+        ${canPost && d.stayId ? `<button class="btn ghost sm" data-post="${escapeHtml(d.externalId)}">${icon('plus', { size: 15 })}Put it on the board</button>` : ''}
+        ${canPost && d.bookingUrl ? `<a class="btn quiet sm" href="${escapeHtml(d.bookingUrl)}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 16 })}Go and book it</a>` : ''}
       </div>
     </article>`;
   };

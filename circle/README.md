@@ -116,9 +116,20 @@ across fourteen resorts, including **Marriott's Aruba Surf Club** (roughly 1,700
 **Marriott's Aruba Ocean Club** and the **Renaissance Wind Creek** — three of our four. The
 Divi is all-inclusive rather than a timeshare, so owner weeks for it do not exist.
 
-**Open right now** (`#/live`) is the section. It shows live weeks priced in points at the
-club's own rate, filterable by resort, size, price and dates, and it says plainly when a
-week comes in under our own published rate.
+**What is open** (`#/live`) is the section — and it is deliberately an extra, not a
+destination. It is not in the thumb bar; it sits at the end of the top bar and is linked
+from Stays, because the Circle's model is that **members never book anything themselves**.
+They put points in, alone or pooled with others, and Victor books the room in their name.
+That is the whole product, and a feed of clickable outside inventory would quietly route
+members around the club and around the 15%.
+
+So the outbound "go and book it" link is **planner-and-comms only**. A member sees the week,
+sees what it costs in points, and gets one button: *Ask the Circle for it*. Verified by
+role in the suite — a member's view contains zero links to the outside site, Victor's
+contains one per card.
+
+It shows live weeks priced in points at the club's own rate, filterable by resort, size,
+price and dates, and says plainly when a week comes in under our own published rate.
 
 Two things it is careful about, both learned by getting them wrong first:
 
@@ -147,8 +158,11 @@ server and it is treated that way.
 `connect-src` in the page's Content Security Policy was widened by exactly one origin,
 `https://vakaymood.com`, to allow it.
 
-So the design is: **the sites' own alerts do the watching, and the club turns those alerts
-into something everyone sees at once.**
+So the design is: **the sites' own alerts do the watching, the Desk does the booking, and
+the club turns both into something every member sees at once.**
+
+The point of Interval and RedWeek was never automation for its own sake — it is that Victor
+and Ian are the ones who go and book, and they need to know the moment something appears.
 
 1. Victor and Ian switch on Getaway Alerts, RedWeek Posting Alerts and the MVC waitlist.
 2. Those emails forward to a club address. A free Cloudflare Email Worker parses each one and
