@@ -13,10 +13,11 @@ const AREAS = ['Palm Beach', 'Eagle Beach', 'Druif Beach', 'Oranjestad', 'Malmok
 export function stays({ store, query, go }) {
   const me = store.me, s = store.settings;
   const avail = store.availablePoints(me.id);
-  const state = { season: query.season || 'low', area: '', onSand: false, adultsOnly: false, allInclusive: false, affordable: false };
+  const state = { season: query.season || 'low', area: '', house: false, onSand: false, adultsOnly: false, allInclusive: false, affordable: false };
   const wrap = el(`<div><section class="sec"><div class="wrap">
-      <div class="sec-head"><div><p class="eyebrow">Twenty-one places on the island</p><h1>Stays in Aruba</h1>
-        <p>Every price is the Circle’s all-in rate per night — room, the 12.5% tourist levy, service charge, resort fee and the environmental levy. Your binding quote comes from Victor and is usually better.</p></div></div>
+      <div class="sec-head"><div><p class="eyebrow">Twenty-three places on the island</p><h1>Stays in Aruba</h1>
+        <p>Every price is the Circle’s all-in rate per night — room, the 12.5% tourist levy, service charge, resort fee and the environmental levy. Your binding quote comes from Victor and is usually better.</p>
+        <p class="small muted" style="margin-top:8px">Four of these are where we actually end up: the Marriott villas at the <a href="#/stays/stay_oceanclub">Ocean Club</a> and the <a href="#/stays/stay_surfclub">Surf Club</a>, the <a href="#/stays/stay_divi">Divi</a> on Druif, and the <a href="#/stays/stay_renaissance">Renaissance</a> in town. The rest of the list is here because Victor can get them, not because we have been.</p></div></div>
       <div class="row no-print" id="filters" style="margin-bottom:18px" role="group" aria-label="Filter stays"></div>
       <p class="small muted" id="count" style="margin-bottom:14px"></p>
       <div class="grid g3" id="list"></div>
@@ -27,6 +28,7 @@ export function stays({ store, query, go }) {
   const draw = () => {
     filters.innerHTML = `
       <div class="row" role="group" aria-label="Season">${Object.values(SEASONS).map(se => `<button class="btn ${state.season === se.id ? '' : 'quiet'} sm" data-season="${se.id}" aria-pressed="${state.season === se.id}">${escapeHtml(se.label)}</button>`).join('')}</div>
+      <button class="btn ${state.house ? '' : 'quiet'} sm" data-flag="house" aria-pressed="${state.house}">Where we stay</button>
       <select class="btn ghost sm" id="area" aria-label="Area" style="padding-inline:12px"><option value="">Anywhere on the island</option>${AREAS.map(a => `<option${a === state.area ? ' selected' : ''}>${a}</option>`).join('')}</select>
       <button class="btn ${state.onSand ? '' : 'quiet'} sm" data-flag="onSand" aria-pressed="${state.onSand}">On the sand</button>
       <button class="btn ${state.adultsOnly ? '' : 'quiet'} sm" data-flag="adultsOnly" aria-pressed="${state.adultsOnly}">Adults only</button>
@@ -34,9 +36,9 @@ export function stays({ store, query, go }) {
       <button class="btn ${state.affordable ? '' : 'quiet'} sm" data-flag="affordable" aria-pressed="${state.affordable}">I can afford it now</button>`;
     let items = store.arubaStays();
     if (state.area) items = items.filter(x => x.area === state.area);
-    for (const f of ['onSand', 'adultsOnly', 'allInclusive']) if (state[f]) items = items.filter(x => x[f]);
+    for (const f of ['house', 'onSand', 'adultsOnly', 'allInclusive']) if (state[f]) items = items.filter(x => x[f]);
     if (state.affordable) items = items.filter(x => avail >= seasonPoints(x, state.season, s) * (x.minNights || 1));
-    items = items.slice().sort((a, b) => seasonPoints(a, state.season, s) - seasonPoints(b, state.season, s));
+    items = items.slice().sort((a, b) => (b.house ? 1 : 0) - (a.house ? 1 : 0) || seasonPoints(a, state.season, s) - seasonPoints(b, state.season, s));
     count.textContent = `${items.length} of ${store.arubaStays().length} places · ${SEASONS[state.season].label}, ${SEASONS[state.season].range}` +
       (state.season === 'low' && isDushiSeason(new Date()) ? ' · dushi season, the quietest and cheapest weeks of the year' : '');
     list.replaceChildren(...items.map(st => {
@@ -67,7 +69,8 @@ export function trips({ store }) {
   const all = store.trips();
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <div class="sec-head"><div><p class="eyebrow">Sourced by Victor, run with Ian</p><h1>Trips</h1>
-        <p>A seat covers the hotel and everything listed. Flights are extra unless the note says otherwise. Guests can come at the same rate, in cash.</p></div></div>
+        <p>A seat covers the hotels, every internal transfer and everything else listed. Flights to and from Aruba are extra unless the note says otherwise. Guests can come at the same rate, in cash.</p>
+        <p class="small muted" style="margin-top:8px">Three countries this cycle: the Dominican Republic in March, Mexico in February, Japan the December after. Read the notes — Victor writes down what the journey actually costs you in days, not just in points.</p></div></div>
       <div class="notice" style="margin-bottom:18px"><b>Everyone can come on everything</b>
         <p class="small">There is no level that shuts you out of a trip. What your level changes is how quickly the points build — at ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))}, so a seat further afield takes longer to save for — and the perks: ${tier.holds} open request${tier.holds > 1 ? 's' : ''} at a time, ${tier.windowMonths} months ahead${tier.firstLookHours ? `, and first look at a new trip ${tier.firstLookHours} hours early` : ''}. <a href="#/profile">Change your level</a> any month; it starts on your next contribution.</p></div>
       <div class="grid g3" id="list"></div>
@@ -99,7 +102,7 @@ export function stayDetail({ store, params, go }) {
   const avail = store.availablePoints(me.id);
   const tier = tierFor(s, me.monthlyUsd);
   const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:940px">
-      <p class="eyebrow">${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}${isTrip ? '' : ` · ${stay.onSand ? 'on the sand' : 'across the road'}`}</p>
+      <p class="eyebrow">${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}${isTrip ? '' : ` · ${stay.onSand ? 'on the sand' : 'across the road'}`}${stay.house ? ' · <span style="color:var(--good-text)">where we stay</span>' : ''}</p>
       <h1>${escapeHtml(stay.name)}</h1>
       <p class="lede" style="margin-top:12px">${escapeHtml(stay.vibe)}</p>
       <div class="stay-card daylight" style="margin-top:20px;border-radius:var(--r-card)"><span class="strip"><span class="ph-note">illustration</span></span></div>
@@ -148,7 +151,7 @@ export function stayDetail({ store, params, go }) {
     <p class="eyebrow">Against your points</p>
     <div class="row" style="gap:14px;margin-top:12px;align-items:center"><span id="ring"></span>
       <div class="small"><b>${escapeHtml(fmtPoints(avail))}</b> available<br>
-      <span class="muted">${canCover >= min ? `enough for ${Math.min(canCover, 14)} ${isTrip ? 'seat' : 'night'}${canCover === 1 ? '' : 's'}` : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of the minimum`}</span></div></div>
+      <span class="muted">${canCover >= min ? `enough for ${Math.min(canCover, 14)} ${isTrip ? 'seat' : 'night'}${canCover === 1 ? '' : 's'}` : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of ${isTrip ? 'a seat' : `the ${min}-night minimum`}`}</span></div></div>
     <p class="small muted" style="margin-top:14px">Short of it? Pay the difference as a top-up when Victor quotes you — no 15% is taken on a top-up, and nothing is booked on credit.</p>
     <p class="small muted" style="margin-top:8px">${escapeHtml(tierName(me.monthlyUsd))} can hold ${tier.holds} open request${tier.holds > 1 ? 's' : ''} and book ${tier.windowMonths} months ahead.</p>`;
   wrap.querySelector('#ring').replaceChildren(ring({ total: min, filled: Math.min(min, canCover), size: 76, label: String(Math.min(canCover, 99)), sub: isTrip ? 'seats' : 'nights' }));

@@ -9,6 +9,21 @@ money has arrived; only then are points minted. The club keeps 15% for running i
 other 85% backs the points, and points pay for stays on the island and trips the Desk
 organizes.
 
+**Where we actually stay.** The catalog lists twenty-three places on Aruba, but four of them
+are where the Circle keeps ending up, and they carry a *Where we stay* badge and sort first:
+Marriott's Aruba Ocean Club and Marriott's Aruba Surf Club (the two Marriott Vacation Club
+villa resorts on Palm Beach — villas with kitchens, rented as owner weeks, so seven nights
+Saturday to Saturday), the Divi Aruba All Inclusive on Druif Beach (which buys the Tamarijn
+next door as well), and the Renaissance Wind Creek in Oranjestad (whose beach is a
+forty-acre private island reached by water taxi from the lobby). Planners can move the badge
+from the Desk — it is a checkbox on every stay.
+
+**The trips this cycle** go to three countries: the Dominican Republic (seven nights, two in
+the Zona Colonial and five on the Samaná peninsula in whale season), Mexico (nine nights
+across Mexico City and Oaxaca), and Japan (ten nights in Kyoto and Tokyo, which is honestly
+fourteen days door to door — there is no same-day connection from Aruba). Nobody is shut out
+of any of them; the level only changes how fast the points build.
+
 **What a level is for.** No level shuts anyone out of anything: every Insider can ask for
 every stay and every trip. What the level changes is how fast the points build — and that
 is what decides, in practice, whether you are doing long weekends on the island or leaving
@@ -18,8 +33,9 @@ it with the group.
 |---|---|---|---|
 | Earns a month | ✦ 8,500 | ✦ 13,050 | ✦ 17,800 |
 | 3 nights on Eagle Beach | 8 months | 6 months | 4 months |
-| A seat in Cartagena | 8 months | 5 months | 4 months |
-| A week in Portugal | 20 months | 13 months | 10 months |
+| Your quarter of a Surf Club villa for a week | 6 months | 4 months | 3 months |
+| A seat on the Samaná week | 15 months | 10 months | 8 months |
+| Ten nights in Japan | 25 months | 17 months | 12 months |
 | Open requests · booked ahead | 1 · 10 months | 2 · 12 months | 2 · 13 months |
 | Guest passes · first look | 2 · — | 3 · 48h | 4 · 72h |
 
@@ -158,11 +174,16 @@ The demo is deliberately self-contained. To run this for real:
 2. Who is the deputy Banker when Vishnu is away?
 3. Is "within 48 hours of the money arriving" a promise Vishnu can keep?
 4. Founding cohort of 20 and a cap of 40 members — right numbers?
-5. Which resorts have actually been negotiated so far?
+5. Every rate in `js/data/stays.js` is a modeled planning band, not a quote. The four
+   *Where we stay* properties need a written rate before members book against them —
+   and the two Marriott Vacation Club resorts are rented as owner weeks (RedWeek/Vrbo),
+   which is a different negotiation from a hotel contract. The three trips likewise: the
+   hotel and villa figures behind them are aggregator ranges, not held blocks.
 6. The club is named **Hunto** — Papiamento for "together". The name lives in
    `js/core/vocab.js`; change it there and every screen, reference and message follows.
-7. Is the reach right — $100 the island, $150 the region, $200 anywhere? And should a
-   lower-level member be able to buy into a single trip, or only move up for the year?
+7. *Settled:* anyone can join any trip at any level, and someone who wants a bigger trip
+   moves up for the year rather than buying into one. `reach` is now only a description of
+   how far a trip goes, not a gate.
 8. Wallet passes: pay Apple the $99 so the pass says Hunto, or use a free shared
    certificate and accept someone else's name on it?
 

@@ -29,9 +29,9 @@ const PEOPLE = [
   { id: 'mem_daniela', name: 'Daniela Croes', roles: ['member'], tier: 150, since: '2026-01', hue: 338, home: 'Santa Cruz', founding: true, story: ['paused', 'pendingNow'], dream: 'stay_manchebo' },
   { id: 'mem_marcus', name: 'Marcus Tromp', roles: ['member'], tier: 100, since: '2026-01', hue: 18, home: 'San Nicolas', founding: true, story: ['partial', 'pendingNow'], dream: 'stay_boardwalk' },
   { id: 'mem_ana', name: 'Ana-Lucía Maduro', roles: ['member'], tier: 150, since: '2026-01', hue: 4, home: 'Savaneta', founding: true, story: ['returned', 'notYet'], showOnRollcall: true, dream: 'stay_bucuti' },
-  { id: 'mem_jeroen', name: 'Jeroen de Cuba', roles: ['member'], tier: 200, since: '2026-02', hue: 226, home: 'Palm Beach', founding: true, story: ['notYet'], dream: 'stay_hyatt' },
+  { id: 'mem_jeroen', name: 'Jeroen de Cuba', roles: ['member'], tier: 200, since: '2026-02', hue: 226, home: 'Palm Beach', founding: true, story: ['notYet'], dream: 'stay_oceanclub' },
   { id: 'mem_kimberly', name: 'Kimberly Werleman', roles: ['member'], tier: 100, since: '2026-06', hue: 96, home: 'Piedra Plat', showOnRollcall: true, dream: 'stay_amsterdam' },
-  { id: 'mem_ricardo', name: 'Ricardo Lacle', roles: ['member'], tier: 150, since: '2026-01', hue: 190, home: 'Tanki Leendert', founding: true, standingOrder: true, dream: 'stay_hilton' },
+  { id: 'mem_ricardo', name: 'Ricardo Lacle', roles: ['member'], tier: 150, since: '2026-01', hue: 190, home: 'Tanki Leendert', founding: true, standingOrder: true, dream: 'stay_surfclub' },
   { id: 'mem_priya', name: 'Priya Nandwani', roles: ['member'], tier: 100, since: '2026-03', hue: 300, home: 'Bubali', story: ['notYet'], dream: 'stay_amsterdam' },
   { id: 'mem_diego', name: 'Diego Arends', roles: ['member'], tier: 200, since: '2026-01', hue: 48, home: 'Pos Chiquito', founding: true, dream: 'stay_bucuti' },
   { id: 'mem_fabian', name: 'Fabian Oduber', roles: ['member'], tier: 150, since: '2026-04', hue: 120, home: 'Sabana Blanco', story: ['pendingNow'], dream: 'stay_divi' },
@@ -207,24 +207,41 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
       decision: 'Carnival week needs seven nights at the negotiated rate and the Ritz-Carlton has none left. 14–17 February is open at Winter points.',
       heldAt: null, confirmedAt: null, completedAt: null, paidUsd: null, confirmationRef: '' });
   }
-  // Seats held on the Cartagena drop.
-  for (const [i, memberId] of ['mem_sasha', 'mem_ricardo', 'mem_victor', 'mem_ian'].entries()) {
-    const t = stayById.trip_cartagena; const q = quoteOf('trip_cartagena', t.dates.from, t.dates.to, 1);
-    add({ id: uid('red'), memberId, stayId: 'trip_cartagena', kind: 'trip', checkIn: t.dates.from, checkOut: t.dates.to, nights: t.nights,
+  // Two seats held outright on the Samaná drop, and one that Ian opened to the Circle.
+  for (const [i, memberId] of ['mem_victor', 'mem_sasha'].entries()) {
+    const t = stayById.trip_samana; const q = quoteOf('trip_samana', t.dates.from, t.dates.to, 1);
+    add({ id: uid('red'), memberId, stayId: 'trip_samana', kind: 'trip', checkIn: t.dates.from, checkOut: t.dates.to, nights: t.nights,
       guests: 1, seats: 1, note: '', flexDays: 0, maxPoints: null, shared: false, pledges: [], indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
       points: q.points, quotedPoints: q.points, topUpUsd: 0, quoteStack: null, hotelTerms: 'Seat released if the hold deadline passes.', hotelDeadline: t.holdDeadline,
       quotedBy: 'mem_ian', quotedAt: `2026-08-2${i}T12:00:00Z`, quoteExpiresAt: `2026-08-2${i + 3}T12:00:00Z`,
       status: 'held', requestedAt: `2026-08-2${i}T10:00:00Z`, decidedBy: 'mem_ian', decidedAt: `2026-08-2${i}T12:00:00Z`, decision: 'Seat held.',
       heldAt: `2026-08-2${i}T13:00:00Z`, confirmedAt: null, completedAt: null, paidUsd: null, confirmationRef: '' });
   }
+  // Ian is 10,000 short of a seat and said so out loud. Vishnu and Ricardo have already put points in.
+  {
+    const t = stayById.trip_samana; const q = quoteOf('trip_samana', t.dates.from, t.dates.to, 1);
+    add({ id: uid('red'), memberId: 'mem_ian', stayId: 'trip_samana', kind: 'trip', checkIn: t.dates.from, checkOut: t.dates.to, nights: t.nights,
+      guests: 1, seats: 1, note: 'Ten thousand short. If two of you come in on this I will do all the driving.', flexDays: 0, maxPoints: null,
+      indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
+      points: 70000, quotedPoints: q.points, topUpUsd: 0, shared: true,
+      pledges: [
+        { id: uid('pld'), memberId: 'mem_vishnu', points: 30000, at: iso(new Date(now.getTime() - 30 * 36e5)) },
+        { id: uid('pld'), memberId: 'mem_ricardo', points: 15000, at: iso(new Date(now.getTime() - 9 * 36e5)) },
+      ],
+      quoteStack: null, hotelTerms: 'Seat released if the hold deadline passes.', hotelDeadline: t.holdDeadline,
+      quotedBy: 'mem_victor', quotedAt: iso(new Date(now.getTime() - 34 * 36e5)), quoteExpiresAt: iso(new Date(now.getTime() + 38 * 36e5)),
+      status: 'quoted', requestedAt: iso(new Date(now.getTime() - 46 * 36e5)), decidedBy: null, decidedAt: null,
+      decision: 'One of the fourteen seats, two nights at the Billini and five at Sublime. Whale boat is in.',
+      heldAt: null, confirmedAt: null, completedAt: null, paidUsd: null, confirmationRef: '' });
+  }
 
   // --- Notes from Ian -------------------------------------------------------
   const note = (title, body, at, pinned = false, authorId = 'mem_ian') => announcements.push({ id: uid('ann'), authorId, title, body, pinned, kind: 'note', at });
   note('August is closed and sealed', 'Bon dia, Circle. Vishnu closed August on the 31st and Victor co-signed it. Every confirmed transfer is matched, coverage is at 100.0%, and your statement is in Ledger → August. Masha danki to everyone who used their reference — matching took eleven minutes this month.', '2026-09-01T17:30:00Z', true);
-  note('Cartagena is live for Kibrahacha', 'Bon dia, Circle. Four nights inside the walls, 15–19 October, 132,000 points a seat all-in. Kibrahacha can hold a seat now, Fofoti from tomorrow morning, everyone from Thursday. Ten seats, and Victor holds the block until 20 September.', '2026-08-30T09:00:00Z');
+  note('Samaná is open — fourteen seats', 'Bon dia, Circle. Seven nights in the Dominican Republic, 7–14 March: two inside the walls of the Zona Colonial, then up the Boulevard Turístico to Las Terrenas for five on Playa Cosón. 125,000 points a seat, everything on the ground included, whale boat in Samaná Bay included. Flights are yours — Arajet goes nonstop from Aruba in about an hour and a half, Wednesdays and Sundays, which is why it is Sunday to Sunday. Kibrahacha can hold now, Fofoti from tomorrow, everyone from Thursday. Fourteen seats and Victor holds the block until 15 December. Short? Ask anyway and open it to the Circle — Ian just did.', '2026-08-30T09:00:00Z');
   note('Dushi season: September to November', 'Bon dia, Circle. The island is quiet, the rates are the lowest of the year, and Aruba sits outside the hurricane belt — so low-season points carry almost no weather risk. Every Aruba stay is at Summer points until 19 December.', '2026-08-28T09:15:00Z');
   note('Setting a standing order (it is free)', 'Bon dia, Circle. Banco di Caribe and Aruba Bank both do standing orders online at no charge. Set the amount, set the 5th, and put your reference in the description once — it carries over every month. Then you never think about it again.', '2026-08-14T11:00:00Z');
-  note('Bonaire: what we learned', 'Bon dia, Circle. Six of us went, the shore diving was the whole point, and the truck per pair was worth every florin. Next time we book the last two nights on the north side. Photos are in the group.', '2026-08-25T19:00:00Z');
+  note('Japan is on the board for next December', 'Bon dia, Circle. Victor has been asked about it enough times, so: Kyoto and Tokyo, 2–12 December 2027, ten nights, eight seats. Read the trip page before you get excited — there is no same-day connection from Aruba to Japan and there never has been, so it is fourteen days door to door with two of them in a seat over Amsterdam. 210,000 points. At $200 a month that is about eleven months of contributions, so the people who want it should start now.', '2026-08-25T19:00:00Z');
   note('Contributions are due on the 5th', 'Bon dia, Circle. A reminder that contributions are due on the 5th. Transfer to the Reserve account, put your reference in the description, then tap “I sent it” so Vishnu can match it. If a month is tight, pause with one tap — your points stay yours and your streak freezes rather than resets.', '2026-08-02T08:30:00Z');
 
   // --- the August close -----------------------------------------------------
