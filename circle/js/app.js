@@ -189,8 +189,8 @@ function updateChrome(current) {
   // How many deals answer something this member asked for and has not looked at yet.
   const unseen = me ? (() => { try { return store.unseenMatches(me.id).length; } catch { return 0; } })() : 0;
   const main = me ? [{ path: '/home', label: 'Home' }, { path: '/stays', label: 'Stays' }, { path: '/trips', label: 'Trips' },
-                     { path: '/deals', label: 'Deals', badge: unseen }, { path: '/live', label: 'Open now' }, { path: '/pay', label: 'Send' },
-                     { path: '/circle', label: 'Circle' }, { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }, ...roleTabs]
+                     { path: '/deals', label: 'Deals', badge: unseen }, { path: '/pay', label: 'Send' },
+                     { path: '/circle', label: 'Circle' }, { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }, { path: '/live', label: 'What is open' }, ...roleTabs]
                   : [{ path: '/rules', label: 'How it works' }];
   tabs.innerHTML = main.map(n => `<a href="#${n.path}"${path === n.path ? ' aria-current="page"' : ''}>${escapeHtml(n.label)}${
     n.badge ? `<span class="nav-badge">${n.badge > 9 ? '9+' : n.badge}</span>` : ''}</a>`).join('');

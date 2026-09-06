@@ -18,6 +18,9 @@ export function stays({ store, query, go }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <div class="sec-head"><div><p class="eyebrow">${icon('palm')}Twenty-three places on the island</p><h1>Stays in Aruba</h1>
         <p>Every price is the Circle’s all-in rate per night — room, the 12.5% tourist levy, service charge, resort fee and the environmental levy. Your binding quote comes from Victor and is usually better.</p>
+        <p class="small muted" style="margin-top:8px">${icon('eye', { size: 14, cls: 'ico-muted' })}
+          <a href="#/live">See what is open right now</a> at these places — a window on what exists, so you know what to ask for.
+          You never book it yourself; you put points in and the Circle books it for you.</p>
         <p class="small muted" style="margin-top:8px">Four of these are where we actually end up: the Marriott villas at the <a href="#/stays/stay_oceanclub">Ocean Club</a> and the <a href="#/stays/stay_surfclub">Surf Club</a>, the <a href="#/stays/stay_divi">Divi</a> on Druif, and the <a href="#/stays/stay_renaissance">Renaissance</a> in town. The rest of the list is here because Victor can get them, not because we have been.</p></div></div>
       <div class="row no-print" id="filters" style="margin-bottom:18px" role="group" aria-label="Filter stays"></div>
       <p class="small muted" id="count" style="margin-bottom:14px"></p>
