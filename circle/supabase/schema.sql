@@ -1904,3 +1904,188 @@ create index if not exists watches_room_type_idx         on watches(room_type_id
 create index if not exists ledger_ref_idx                on ledger(ref_type, ref_id);
 create index if not exists pledges_member_idx            on pledges(member_id);
 create index if not exists audit_actor_idx               on audit(actor_id);
+
+-- =====================================================================
+--  Crews, their chat, and the pictures people bring home
+-- =====================================================================
+-- A crew is who you actually travel with — the four who split a villa, the family group, the
+-- ones who always go in October. It is named by the people in it, it has its own thread, and
+-- its pictures stay inside it unless somebody posts them to the whole Circle. Deliberately NOT
+-- the same thing as chipping in: a pledge is money on one booking, a crew outlives any week.
+--
+-- All of it is built and live. Whether members can post pictures is settings.moments_on, which
+-- is off until Victor turns it on in Settings.
+
+create table if not exists crews (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null check (length(btrim(name)) between 2 and 40),
+  about       text,
+  cover_path  text,
+  created_by  uuid not null references members(id),
+  created_at  timestamptz not null default now(),
+  archived_at timestamptz
+);
+
+create table if not exists crew_members (
+  crew_id   uuid not null references crews(id) on delete cascade,
+  member_id uuid not null references members(id) on delete cascade,
+  role      text not null default 'member' check (role in ('lead','member')),
+  joined_at timestamptz not null default now(),
+  primary key (crew_id, member_id)
+);
+create index if not exists crew_members_by_member on crew_members(member_id);
+
+create table if not exists crew_messages (
+  id         bigserial primary key,
+  crew_id    uuid not null references crews(id) on delete cascade,
+  member_id  uuid not null references members(id),
+  body       text,
+  moment_id  uuid,
+  created_at timestamptz not null default now(),
+  edited_at  timestamptz,
+  deleted_at timestamptz,
+  check (coalesce(btrim(body),'') <> '' or moment_id is not null)
+);
+create index if not exists crew_messages_thread on crew_messages(crew_id, id desc);
+
+-- The file itself lives in storage, byte for byte as the phone made it; this row is only the
+-- label on it. width/height/duration are read off the file in the browser for layout — nothing
+-- is re-encoded, ever, because re-encoding IS the quality loss.
+create table if not exists moments (
+  id            uuid primary key default gen_random_uuid(),
+  member_id     uuid not null references members(id) on delete cascade,
+  crew_id       uuid references crews(id) on delete set null,   -- null = the whole Circle
+  stay_id       uuid references stays(id) on delete set null,
+  redemption_id uuid references redemptions(id) on delete set null,
+  path          text not null unique,
+  kind          text not null check (kind in ('photo','video')),
+  mime          text,
+  bytes         bigint,
+  width         int,
+  height        int,
+  duration_s    numeric(8,2),
+  caption       text,
+  taken_at      timestamptz,
+  created_at    timestamptz not null default now()
+);
+create index if not exists moments_recent on moments(created_at desc);
+create index if not exists moments_by_crew on moments(crew_id, created_at desc);
+
+create table if not exists moment_reactions (
+  moment_id uuid not null references moments(id) on delete cascade,
+  member_id uuid not null references members(id) on delete cascade,
+  emoji     text not null check (length(emoji) between 1 and 8),
+  at        timestamptz not null default now(),
+  primary key (moment_id, member_id, emoji)
+);
+
+alter table crews            enable row level security;
+alter table crew_members     enable row level security;
+alter table crew_messages    enable row level security;
+alter table moments          enable row level security;
+alter table moment_reactions enable row level security;
+
+create or replace function in_crew(p_crew uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from crew_members cm
+                  where cm.crew_id = p_crew and cm.member_id = current_member_id())
+$$;
+create or replace function leads_crew(p_crew uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from crew_members cm
+                  where cm.crew_id = p_crew and cm.member_id = current_member_id() and cm.role = 'lead')
+$$;
+
+-- Who exists is not a secret among forty friends; what is said inside one is.
+drop policy if exists crews_read on crews;
+create policy crews_read on crews for select to authenticated using (current_member_id() is not null);
+drop policy if exists crews_make on crews;
+create policy crews_make on crews for insert to authenticated with check (created_by = current_member_id());
+drop policy if exists crews_edit on crews;
+create policy crews_edit on crews for update to authenticated
+  using ((select leads_crew(id)) or (select has_role('admin')))
+  with check ((select leads_crew(id)) or (select has_role('admin')));
+
+drop policy if exists crew_members_read on crew_members;
+create policy crew_members_read on crew_members for select to authenticated using (current_member_id() is not null);
+drop policy if exists crew_members_write on crew_members;
+create policy crew_members_write on crew_members for all to authenticated
+  using ((select leads_crew(crew_id)) or member_id = current_member_id() or (select has_role('admin')))
+  with check ((select leads_crew(crew_id)) or (select has_role('admin')));
+
+drop policy if exists crew_messages_read on crew_messages;
+create policy crew_messages_read on crew_messages for select to authenticated using ((select in_crew(crew_id)));
+drop policy if exists crew_messages_send on crew_messages;
+create policy crew_messages_send on crew_messages for insert to authenticated
+  with check (member_id = current_member_id() and (select in_crew(crew_id))
+              and deleted_at is null and edited_at is null);
+-- Your own words are yours to change or take back. Nobody else's are.
+drop policy if exists crew_messages_own on crew_messages;
+create policy crew_messages_own on crew_messages for update to authenticated
+  using (member_id = current_member_id()) with check (member_id = current_member_id());
+
+drop policy if exists moments_read on moments;
+create policy moments_read on moments for select to authenticated
+  using (crew_id is null and current_member_id() is not null or (select in_crew(crew_id)));
+drop policy if exists moments_post on moments;
+create policy moments_post on moments for insert to authenticated
+  with check (member_id = current_member_id()
+              and (crew_id is null or (select in_crew(crew_id)))
+              and (select moments_on from settings where id = 1));
+-- Edit and delete only. This was one `for all` policy, and permissive policies are OR'd, so it
+-- granted INSERT on its own terms and moments_post's conditions never had to hold — which made
+-- both the on/off switch and, worse, the crew check bypassable. "Own" means own, not new.
+drop policy if exists moments_own on moments;
+drop policy if exists moments_edit on moments;
+create policy moments_edit on moments for update to authenticated
+  using (member_id = current_member_id() or (select has_role('admin')))
+  with check (member_id = current_member_id() or (select has_role('admin')));
+drop policy if exists moments_delete on moments;
+create policy moments_delete on moments for delete to authenticated
+  using (member_id = current_member_id() or (select has_role('admin')));
+
+drop policy if exists reactions_read on moment_reactions;
+create policy reactions_read on moment_reactions for select to authenticated
+  using (exists (select 1 from moments mo where mo.id = moment_id
+                   and (mo.crew_id is null or (select in_crew(mo.crew_id)))));
+drop policy if exists reactions_own on moment_reactions;
+create policy reactions_own on moment_reactions for all to authenticated
+  using (member_id = current_member_id()) with check (member_id = current_member_id());
+
+revoke all on function in_crew(uuid), leads_crew(uuid) from public, anon;
+grant execute on function in_crew(uuid), leads_crew(uuid) to authenticated;
+grant select, insert, update, delete on crews, crew_members, crew_messages, moments, moment_reactions to authenticated;
+grant usage, select on sequence crew_messages_id_seq to authenticated;
+revoke all on crews, crew_members, crew_messages, moments, moment_reactions from anon;
+
+-- Storage. Two buckets: avatars are public and small; moments are private, served by signed
+-- URL, and take the file exactly as the phone made it. On the current plan the ceiling is
+-- 50 MB a file and 1 GB for the whole club — which one long 4K clip can use on its own.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 5242880,
+        array['image/jpeg','image/png','image/webp','image/avif','image/heic','image/heif'])
+on conflict (id) do update set public = excluded.public,
+  file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('moments', 'moments', false, 52428800, null)
+on conflict (id) do update set public = excluded.public,
+  file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+-- Paths are <member_id>/<file>, so the first folder decides who may write.
+drop policy if exists avatars_read on storage.objects;
+create policy avatars_read on storage.objects for select to public using (bucket_id = 'avatars');
+drop policy if exists avatars_own on storage.objects;
+create policy avatars_own on storage.objects for all to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = current_member_id()::text)
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = current_member_id()::text);
+drop policy if exists moments_file_read on storage.objects;
+create policy moments_file_read on storage.objects for select to authenticated
+  using (bucket_id = 'moments' and exists (
+    select 1 from moments mo where mo.path = storage.objects.name
+      and (mo.crew_id is null or in_crew(mo.crew_id))));
+drop policy if exists moments_file_write on storage.objects;
+create policy moments_file_write on storage.objects for insert to authenticated
+  with check (bucket_id = 'moments' and (storage.foldername(name))[1] = current_member_id()::text);
+drop policy if exists moments_file_own on storage.objects;
+create policy moments_file_own on storage.objects for delete to authenticated
+  using (bucket_id = 'moments' and (storage.foldername(name))[1] = current_member_id()::text);

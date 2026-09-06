@@ -32,6 +32,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   exitFeeUsd: 25,
   memberCap: 40,
   dueDay: 5,
+  // The pictures are built and the tables are live, but off until Victor turns them on in
+  // Settings. Off is the default in both backends so the two never disagree about it.
+  momentsOn: false,
   reserveAccount: { bank: '', holder: '', number: '' },
   operatingAccount: { bank: '', holder: '', number: '' },
   reserveVerified: null,      // { balanceUsd, at, byId } entered by the Banker at Month Close

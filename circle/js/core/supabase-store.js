@@ -97,7 +97,7 @@ export class SupabaseStore extends Store {
       this.state.stays = [...ARUBA_STAYS, ...WORLD_TRIPS].map(x => ({ ...x, active: true }));
     }
     const { data: s } = await this.sb.from('settings').select('*').eq('id', 1).maybeSingle();
-    if (s) this.state.settings = { ...DEFAULT_SETTINGS, serviceRate: Number(s.service_rate), pointsPerDollar: Number(s.points_per_dollar), awgPerUsd: Number(s.awg_per_usd), tiers: s.tiers, streakBonuses: s.streak_bonuses, foundingBonus: s.founding_bonus, memberCap: s.member_cap, exitFeeUsd: Number(s.exit_fee_usd), quoteHours: s.quote_hours, bankerSlaHours: s.banker_sla_hours, reserveAccount: s.reserve_account, operatingAccount: s.operating_account, reserveVerified: s.reserve_verified, wallet: s.wallet, clubName: s.club_name };
+    if (s) this.state.settings = { ...DEFAULT_SETTINGS, serviceRate: Number(s.service_rate), pointsPerDollar: Number(s.points_per_dollar), awgPerUsd: Number(s.awg_per_usd), tiers: s.tiers, streakBonuses: s.streak_bonuses, foundingBonus: s.founding_bonus, memberCap: s.member_cap, exitFeeUsd: Number(s.exit_fee_usd), quoteHours: s.quote_hours, bankerSlaHours: s.banker_sla_hours, reserveAccount: s.reserve_account, operatingAccount: s.operating_account, reserveVerified: s.reserve_verified, wallet: s.wallet, clubName: s.club_name, momentsOn: !!s.moments_on };
     this.notify('reload');
   }
   subscribeRealtime() {
@@ -340,7 +340,7 @@ export class SupabaseStore extends Store {
     if (Object.keys(rules).length) await this.rpc('update_club_rules', { p_patch: rules });
 
     const row = {};
-    const map = { reserveAccount: 'reserve_account', operatingAccount: 'operating_account', wallet: 'wallet' };
+    const map = { reserveAccount: 'reserve_account', operatingAccount: 'operating_account', wallet: 'wallet', momentsOn: 'moments_on' };
     for (const [k, v] of Object.entries(patch)) if (map[k]) row[map[k]] = v;
     if (!Object.keys(row).length) { await this.reload(); return; }
     const { error } = await this.sb.from('settings').update({ ...row, updated_at: new Date().toISOString() }).eq('id', 1);

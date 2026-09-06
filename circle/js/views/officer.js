@@ -819,6 +819,19 @@ export function settings({ store, go }) {
         <button class="btn" type="submit">Save the rules</button>
       </form>
 
+      ${isAdmin ? `<div class="panel" style="margin-top:16px">
+        <h2 style="font-size:1.1rem">Pictures from your trips</h2>
+        <p class="small muted" style="margin-top:6px">Insiders posting photos and videos to the
+          Circle, and to their own crews. It is built and ready; it is switched off until you want it.
+          Turning it on is this tap — nothing has to be rebuilt.</p>
+        <label class="row" style="gap:10px;align-items:flex-start;margin-top:12px">
+          <input type="checkbox" id="moments-on" ${s.momentsOn ? 'checked' : ''} style="width:20px;height:20px;margin-top:2px">
+          <span class="small"><b>Let Insiders post pictures and video</b><br>
+            <span class="muted">Files go up exactly as the phone made them — nothing is re-compressed.
+            On the current plan the ceiling is 50 MB a file and 1 GB for the whole club, which one
+            long 4K clip can use on its own.</span></span></label>
+      </div>` : ''}
+
       <div class="panel" style="margin-top:16px">
         <div class="row-between"><h2 style="font-size:1.1rem">Insiders</h2>
           <div class="row">${isAdmin ? `<button class="btn sm" id="add-member">${icon('plus', { size: 16 })}Add an Insider</button>` : ''}
@@ -891,6 +904,22 @@ export function settings({ store, go }) {
   });
   // Adding an Insider, roles and all. This is the path that means nobody ever has to open
   // the table editor: name, email, level, what they do — and a message to send them.
+    {
+    const box = wrap.querySelector('#moments-on');
+    box?.addEventListener('change', async () => {
+      box.disabled = true;
+      const on = box.checked;
+      try {
+        await store.updateSettings({ momentsOn: on });
+        // A toast, not a line in the panel: saving re-renders this whole view, so anything
+        // written into the DOM here is gone before it can be read.
+        toast(on ? 'Pictures are on. Insiders can post to the Circle and inside a crew.'
+                 : 'Pictures are off. Nothing new can be posted; what is already there stays.',
+              { kind: on ? 'good' : 'info', timeout: 5000 });
+      } catch (err) { box.checked = !on; toast(err.message, { kind: 'bad' }); }
+      finally { box.disabled = false; }
+    });
+  }
   wrap.querySelector('#add-member')?.addEventListener('click', async () => {
     const ROLES = [
       { id: 'member', label: 'Insider', note: 'Contributes and books. Everyone has this.' },

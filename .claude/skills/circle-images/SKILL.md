@@ -95,9 +95,38 @@ looked at small, not at 300px.
 For anything that goes into the app, also confirm it survives dark mode. The site paints its own
 background per theme, so a mark with a baked-in white halo looks broken for half the members.
 
-## If photographs are ever wanted
+## Generated photography
 
-There is no image-generation API wired up here, and inventing photorealistic pictures of hotel
-rooms the club has not stayed in would be a lie told to prospective members. If Victor does want
-generated photography, it needs an API key on his side, and the honest place for such an image
-is the hero — never a stay card, where a member would reasonably read it as the actual room.
+`scripts/generate.mjs` calls Google's Gemini image models. The key comes from
+`NANOBANANA_GEMINI_API_KEY` or `GEMINI_API_KEY` in the environment and is never written down.
+
+```sh
+node .claude/skills/circle-images/scripts/generate.mjs --aspect 16:9 \
+  --prompt "..." --out /tmp/hero-raw.jpg
+python3 .claude/skills/circle-images/scripts/shrink.py /tmp/hero-raw.jpg circle/assets/hero.jpg --width 1600
+```
+
+Two things that are not optional. **Ask for the aspect ratio with `--aspect`**, because the model
+ignores it when it is only in the prose and you get a square that then gets cropped into a
+composition nobody chose. And **always run `shrink.py`** — the raw files come back at 1.5–2 MB,
+which on Aruban mobile data is the difference between a page that opens and a page somebody
+gives up on. Resizing first and then re-encoding gets a hero to ~150KB with nothing visible lost.
+
+`--ref <file>` passes images in, which is how you edit instead of starting over: hand it the
+current hero and ask for the same scene at dusk and the composition survives. `--model
+gemini-3-pro-image` costs more and is worth it for the one picture a stranger's first impression
+rests on; `gemini-2.5-flash-image` (the default, about $0.04) is right for everything else.
+
+Prompts that work here are specific about what is ABSENT. "No people, no boats, no buildings, no
+palm trees" does more for this site's look than any adjective, because the failure mode is a
+saturated postcard and the house style is quiet. Name the lens and the light, ask for film grain,
+and ask for muted colour rather than vivid.
+
+### Where a generated photograph may and may not go
+
+The hero is fair game: it is atmosphere, and nobody reads it as a specific room.
+
+A stay card is not. A member looking at a picture on the Surf Club card will reasonably believe
+it is the Surf Club, and inventing a room the club has never booked is a lie told to somebody
+about to spend points. Those stay illustrations are drawn for that reason, and they should stay
+drawn. If a real photograph of a real property is ever wanted, it has to be a real photograph.
