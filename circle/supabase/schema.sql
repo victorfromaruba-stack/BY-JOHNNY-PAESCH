@@ -192,6 +192,8 @@ create table if not exists stays (
   adults_only     boolean not null default false,
   all_inclusive   boolean not null default false,
   taxes_included  boolean not null default false,
+  -- true for the four places the Circle actually uses; they sort first and carry a badge
+  house           boolean not null default false,
   -- trips
   starts_on       date,
   ends_on         date,
@@ -710,11 +712,13 @@ begin
   if r.status not in ('quoted','held') then raise exception 'This booking is not taking contributions right now'; end if;
   if r.member_id = me then raise exception 'You are already covering your own share'; end if;
   if p_points <= 0 then raise exception 'Chip in at least one point'; end if;
-  avail := available_points(me);
-  if p_points > avail then raise exception 'You have % points available', avail; end if;
   outstanding := coalesce(r.quoted_points, r.indicative_points, 0) - covered_points(p_id);
   if outstanding <= 0 then raise exception 'This booking is already covered'; end if;
+  -- cap at what the booking still needs before checking the balance, so offering more
+  -- than is wanted puts in what is wanted rather than being refused
   amount := least(p_points, outstanding);
+  avail := available_points(me);
+  if amount > avail then raise exception 'You have % points available', avail; end if;
   insert into pledges(redemption_id, member_id, points) values (p_id, me, amount)
     on conflict (redemption_id, member_id) do update set points = pledges.points + excluded.points;
   select * into s from settings where id = 1;

@@ -22,7 +22,7 @@ export function stayCard(stay, { store, season = 'low', href = null, footer = ''
         <h3>${escapeHtml(stay.name)}</h3>
         <span class="where">${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}${stay.kind === 'trip' ? ` · ${stay.nights} nights` : stay.onSand ? ' · on the sand' : ' · across the road'}</span>
         <span class="price"><b class="num">${escapeHtml(fmtPoints(per))}</b><small>${escapeHtml(stay.kind === 'trip' ? `a seat · ${fmtUsd2(per / 100)}` : `a night · ${fmtUsd2(per / 100)}`)}</small></span>
-        <span class="flags">${(stay.features || []).slice(0, 3).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</span>
+        <span class="flags">${stay.house ? '<span class="tag house">Where we stay</span>' : ''}${(stay.features || []).slice(0, stay.house ? 2 : 3).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</span>
         ${footer}
       </span></a>`);
   node.querySelector('.strip').prepend(stayStrip(stay));
@@ -33,7 +33,7 @@ export function landing({ store, go }) {
   const s = store.settings;
   const t = store.treasury();
   const wrap = el('<div></div>');
-  const featured = ['stay_bucuti', 'stay_ritz', 'stay_oceanvillas', 'stay_renaissance', 'trip_cartagena'].map(id => store.stay(id)).filter(Boolean);
+  const featured = ['stay_oceanclub', 'stay_surfclub', 'stay_divi', 'stay_renaissance', 'trip_japan'].map(id => store.stay(id)).filter(Boolean);
 
   wrap.appendChild(el(`<section class="sec">
     <div class="wrap">
@@ -52,7 +52,8 @@ export function landing({ store, go }) {
   // Horizon — the dream, before the ledger
   const horizon = el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><p class="eyebrow">The horizon</p><h2>Where the points go</h2>
-      <p>Twenty-one places on the island and the trips Victor and Ian put together. Every price is the Circle’s all-in rate — taxes, levies and resort fees included.</p></div></div>
+      <p>Twenty-three places on the island and the trips Victor and Ian put together. Every price is the Circle’s all-in rate — taxes, levies and resort fees included.</p>
+      <p class="small muted" style="margin-top:8px">These four are where we actually end up. The trips this cycle go to the Dominican Republic, Mexico and Japan.</p></div></div>
       <div class="horizon" id="horizon"></div></div></section>`);
   const hz = horizon.querySelector('#horizon');
   featured.forEach(st => hz.appendChild(stayCard(st, { store, season: 'low' })));
@@ -90,7 +91,7 @@ export function landing({ store, go }) {
         <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta">15%, taken once, at the start</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(p12.shareUsd))}</b></span></li>
         <li><span class="what"><b>Points after a year</b><span class="meta">Includes the 6- and 12-month streak bonuses</span></span><span class="delta"><b>${escapeHtml(fmtPoints(p12.points))}</b><small>${escapeHtml(fmtUsd2(p12.points / 100))}</small></span></li>
       </ul>
-      <p class="small muted" style="margin-top:12px">That is ${escapeHtml(fmtPct(p12.effectiveBacking, 1))} of everything you sent, back as hotel — and about ${Math.floor(p12.points / seasonPoints(store.stay('stay_amsterdam'), 'low'))} nights at Amsterdam Manor in Summer, or ${Math.floor(p12.points / seasonPoints(store.stay('stay_ritz'), 'low'))} at the Ritz-Carlton.</p>`;
+      <p class="small muted" style="margin-top:12px">That is ${escapeHtml(fmtPct(p12.effectiveBacking, 1))} of everything you sent, back as hotel — and about ${Math.floor(p12.points / seasonPoints(store.stay('stay_surfclub'), 'low'))} nights in a villa at Marriott’s Surf Club in Summer, or ${Math.floor(p12.points / seasonPoints(store.stay('stay_divi'), 'low'))} all-inclusive at the Divi.</p>`;
   };
   draw();
   choices.addEventListener('click', (e) => { const b = e.target.closest('[data-amt]'); if (!b) return; chosen = Number(b.dataset.amt); draw(); });
@@ -102,16 +103,19 @@ export function landing({ store, go }) {
       <div class="grid g3">
         ${s.tiers.map(t => {
           const perMonth = pointsPerMonth(s, t.monthlyUsd);
-          const aruba = store.stay('stay_amsterdam'), trip = store.stay('trip_cartagena'), far = store.stay('trip_lisbon');
+          const aruba = store.stay('stay_amsterdam'), villa = store.stay('stay_surfclub'), trip = store.stay('trip_samana'), far = store.stay('trip_japan');
           const nights = 3;
+          // A Surf Club villa sleeps eight and rents by the week; four of you chipping in is the real number.
+          const villaShare = Math.round(seasonPoints(villa, 'low', s) * (villa.minNights || 7) / 4);
           return `<div class="panel">
           <div class="row-between"><div><p class="eyebrow" style="color:var(--ink-2)">$${t.monthlyUsd} a month</p>
             <h3 style="margin-top:6px">${escapeHtml(tierName(t.monthlyUsd))}</h3></div>${treeSvg(VOCAB.tierLean[t.monthlyUsd], { size: 26 })}</div>
           <p class="small" style="margin-top:10px"><b>${escapeHtml(fmtPoints(perMonth))} a month</b>${t.bonusRate ? `, including a ${Math.round(t.bonusRate * 100)}% bonus the Circle funds` : ''} — ${escapeHtml(fmtUsd2(perMonth / s.pointsPerDollar))} of hotel.</p>
           <ul class="stack" style="margin-top:10px;padding-left:1.1em;gap:6px">
-            <li class="small muted">${monthsToAfford(s, seasonPoints(aruba, 'low', s) * nights, t.monthlyUsd)} months for a ${nights}-night weekend on Eagle Beach</li>
-            <li class="small muted">${monthsToAfford(s, trip.pointsPerSeat, t.monthlyUsd)} months for a seat in Cartagena</li>
-            <li class="small muted">${monthsToAfford(s, far.pointsPerSeat, t.monthlyUsd)} months for a week in Portugal</li>
+            <li class="small muted">${monthsToAfford(s, seasonPoints(aruba, 'low', s) * nights, t.monthlyUsd)} months for ${nights} nights at Amsterdam Manor in Summer</li>
+            <li class="small muted">${monthsToAfford(s, villaShare, t.monthlyUsd)} months for your quarter of a Surf Club villa for a week</li>
+            <li class="small muted">${monthsToAfford(s, trip.pointsPerSeat, t.monthlyUsd)} months for a seat on the Samaná week</li>
+            <li class="small muted">${monthsToAfford(s, far.pointsPerSeat, t.monthlyUsd)} months for ten nights in Japan</li>
             <li class="small muted">${t.holds} open request${t.holds > 1 ? 's' : ''} · ${t.windowMonths} months ahead · ${t.guestCerts} guest passes${t.firstLookHours ? ` · first look ${t.firstLookHours}h early` : ''}</li>
           </ul></div>`;
         }).join('')}
@@ -132,6 +136,7 @@ export function landing({ store, go }) {
   // Award bands
   const bands = [
     ['Boutique and low-rise', 'Amsterdam Manor · Boardwalk · voco Surfside · Eagle Aruba', 18000, 24000, 26000, 34000],
+    ['Villas, rented by the week', 'Marriott’s Aruba Surf Club · Marriott’s Aruba Ocean Club', 28000, 31000, 45000, 48000],
     ['Full-service Palm Beach', 'Hilton · Holiday Inn · Courtyard · Radisson Blu · Embassy Suites', 25000, 32000, 36000, 48000],
     ['Premium', 'Aruba Marriott · Hyatt Regency · Renaissance · Manchebo · Ocean Z', 33000, 42000, 50000, 65000],
     ['Luxury', 'Ritz-Carlton · Bucuti & Tara · Aruba Ocean Villas', 55000, 75000, 85000, 120000],
@@ -147,6 +152,7 @@ export function landing({ store, go }) {
           <td class="num">${a.toLocaleString('en-US')}–${b.toLocaleString('en-US')}</td><td class="num">${c.toLocaleString('en-US')}–${d.toLocaleString('en-US')}</td></tr>`).join('')}</tbody>
       </table></div>
       <p class="small muted" style="margin-top:12px">Peak — 20 December to 3 January, and Carnival week — runs 15–20% above Winter with a seven-night minimum at most resorts.</p>
+      <p class="small muted" style="margin-top:8px">The two Marriott villa resorts are the odd ones out: they are vacation-ownership weeks, so they come as seven nights Saturday to Saturday and there is no resort fee. A villa there sleeps four to eight, which is why the per-night number looks high and the per-person number does not — chip in with three others and it is the cheapest week on Palm Beach.</p>
       </div></section>`));
 
   // The people

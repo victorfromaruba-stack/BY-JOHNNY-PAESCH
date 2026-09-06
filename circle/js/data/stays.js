@@ -6,6 +6,8 @@
 // These are planning bands, not quotes. Victor's negotiated all-in rate is what a
 // member actually accepts, and planners edit every number in the Desk.
 // `retailUsd` is a typical public all-in winter rate, for the "you save" line.
+// `house: true` marks the four places the Circle actually uses most — the Marriott villas
+// at the Ocean Club and the Surf Club, the Divi on Druif, and the Renaissance in town.
 
 export const ARUBA_STAYS = [
   { id: 'stay_bucuti', kind: 'aruba', name: 'Bucuti & Tara Beach Resort', area: 'Eagle Beach', country: 'Aruba', category: 4,
@@ -20,6 +22,16 @@ export const ARUBA_STAYS = [
     rates: { low: 620, high: 920, peak: 1104 }, retailUsd: 900, minNights: 3, peakMinNights: 5, onSand: true, adultsOnly: true,
     vibe: 'Eight overwater bungalows in a fishing village. Bali meets Aruba, and it sells out months ahead.',
     features: ['Overwater villas', 'Adults only', 'Tree house', 'Meal plans'], dealNote: 'Victor is watching this one — put requests in early.' },
+  { id: 'stay_surfclub', kind: 'aruba', name: 'Marriott’s Aruba Surf Club', area: 'Palm Beach', country: 'Aruba', category: 4, house: true,
+    rates: { low: 285, high: 455, peak: 760 }, retailUsd: 850, minNights: 7, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: false,
+    vibe: 'Aruba’s largest villa resort, at the north end of Palm Beach: 450 villas across the Lighthouse, Compass and Spyglass towers, wrapped around the lazy river, with a side gate onto the restaurant strip.',
+    features: ['Villas sleep up to 8', 'Full kitchen', 'Washer-dryer in villa', 'Lazy river', 'On the sand'],
+    dealNote: 'One of the four we keep coming back to. Owner weeks rent Saturday to Saturday, so this is a seven-night booking — but a two-bedroom villa sleeps eight, and split three or four ways it is the cheapest good week on Palm Beach. No resort fee; the 12.5% levy is already in the price.' },
+  { id: 'stay_oceanclub', kind: 'aruba', name: 'Marriott’s Aruba Ocean Club', area: 'Palm Beach', country: 'Aruba', category: 4, house: true,
+    rates: { low: 300, high: 475, peak: 790 }, retailUsd: 875, minNights: 7, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: false,
+    vibe: 'The original Marriott villas — 218 of them, a quarter the size of the Surf Club next door, quieter, and two minutes from the Stellaris casino and the whole strip.',
+    features: ['Villas sleep 4–8', 'Full kitchen', 'Mandara Spa', 'Casino next door', 'On the sand'],
+    dealNote: 'One of the four we keep coming back to. Seven nights, Saturday to Saturday, the same as the Surf Club. The 941 sq ft one-bedroom is the sweet spot for two; the 1,335 sq ft two-bedroom sleeps eight. No washer-dryer in the villas here — that is the Surf Club’s trick.' },
   { id: 'stay_marriott', kind: 'aruba', name: 'Aruba Marriott Resort & Stellaris Casino', area: 'Palm Beach', country: 'Aruba', category: 3,
     rates: { low: 420, high: 640, peak: 768 }, retailUsd: 980, minNights: 2, peakMinNights: 7, onSand: true, adultsOnly: false,
     vibe: 'Renovated through 2025, adults-only Tradewinds wing, the largest casino on the island.',
@@ -28,10 +40,11 @@ export const ARUBA_STAYS = [
     rates: { low: 395, high: 610, peak: 732 }, retailUsd: 961, minNights: 2, peakMinNights: 7, onSand: true, adultsOnly: false,
     vibe: 'Twelve acres of lagoon gardens, black swans and macaws, adults-only Trankilo pool.',
     features: ['Regency Club', 'ZoiA Spa', 'Kids club', 'Casino'], dealNote: '' },
-  { id: 'stay_renaissance', kind: 'aruba', name: 'Renaissance Wind Creek Aruba Resort', area: 'Oranjestad', country: 'Aruba', category: 3,
-    rates: { low: 360, high: 550, peak: 660 }, retailUsd: 800, minNights: 2, peakMinNights: 7, onSand: false, adultsOnly: false,
-    vibe: 'A marina hotel with a private island: flamingos, and a water taxi that leaves from the lobby.',
-    features: ['Private island', 'Flamingo Beach', 'Adults-only tower', 'Casino'], dealNote: 'The Marina tower is 18+; Ocean Suites is the family side.' },
+  { id: 'stay_renaissance', kind: 'aruba', name: 'Renaissance Wind Creek Aruba Resort', area: 'Oranjestad', country: 'Aruba', category: 3, house: true,
+    rates: { low: 420, high: 640, peak: 930 }, retailUsd: 800, minNights: 2, peakMinNights: 5, onSand: false, adultsOnly: false,
+    vibe: 'A marina hotel in the middle of the capital with a forty-acre private island: flamingos, iguanas, and a water taxi that leaves from the lobby.',
+    features: ['Private island', 'Flamingo Beach', 'Adults-only tower', 'Casino', 'Renaissance Mall'],
+    dealNote: 'One of the four we keep coming back to. Marina tower is 18+ (297 rooms); Ocean Suites is the family side (258 one-bedroom suites with kitchenettes). Renaissance Island is free for guests of both — outsiders queue for about thirty day passes a day at $130 a head. The $65 resort fee and the 12.5% levy are already in our price.' },
   { id: 'stay_manchebo', kind: 'aruba', name: 'Manchebo Beach Resort & Spa', area: 'Eagle Beach', country: 'Aruba', category: 3,
     rates: { low: 340, high: 510, peak: 612 }, retailUsd: 694, minNights: 3, peakMinNights: 7, onSand: true, adultsOnly: false,
     vibe: 'Barefoot boutique with a yoga pavilion on the sand and not a high-rise in sight.',
@@ -56,10 +69,11 @@ export const ARUBA_STAYS = [
     rates: { low: 460, high: 630, peak: 725 }, retailUsd: 680, minNights: 3, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: true,
     vibe: 'Every room oceanfront, two floors, toes in the sand. Guests use Divi next door too.',
     features: ['All inclusive', 'Oceanfront rooms', 'Divi access'], dealNote: 'Rate is all-inclusive for two adults.' },
-  { id: 'stay_divi', kind: 'aruba', name: 'Divi Aruba All Inclusive', area: 'Druif Beach', country: 'Aruba', category: 'ai',
-    rates: { low: 450, high: 620, peak: 713 }, retailUsd: 670, minNights: 3, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: true,
-    vibe: 'Classic low-rise all-inclusive; ten restaurants across the two sister resorts.',
-    features: ['All inclusive', '10 restaurants', 'Alhambra casino', 'Sister resort access'], dealNote: 'Rate is all-inclusive for two adults.' },
+  { id: 'stay_divi', kind: 'aruba', name: 'Divi Aruba All Inclusive', area: 'Druif Beach', country: 'Aruba', category: 'ai', house: true,
+    rates: { low: 520, high: 700, peak: 950 }, retailUsd: 850, minNights: 3, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: true,
+    vibe: '203 rooms in low buildings on Druif Beach, five minutes from Oranjestad and ten from the airport; every room has a patio facing the sea or the garden.',
+    features: ['All inclusive', '15 restaurants', 'Alhambra casino', 'Tamarijn included'],
+    dealNote: 'One of the four we keep coming back to. Rate is all-inclusive for two adults and it buys the Tamarijn next door as well — the two together are fifteen restaurants, twelve bars and eleven pools. On an all-inclusive the tourist levy only applies to half the package, which is why this looks better against retail than it should.' },
   { id: 'stay_embassy', kind: 'aruba', name: 'Embassy Suites by Hilton Aruba Resort', area: 'Eagle Beach', country: 'Aruba', category: 2,
     rates: { low: 290, high: 440, peak: 528 }, retailUsd: 600, minNights: 2, peakMinNights: 7, onSand: false, adultsOnly: false,
     vibe: 'New-build all-suite resort: cooked breakfast, evening reception, rooftop pool, beach club across the road.',
@@ -94,38 +108,27 @@ export const ARUBA_STAYS = [
     features: ['Two pools', 'Casino', 'Walk to Eagle Beach'], dealNote: '' },
 ];
 
-// Trips Victor and Ian organize. A seat covers the hotel, transfers and whatever is
-// listed — flights are extra unless the note says otherwise; two sharing a double.
+// Trips Victor and Ian organize. A seat covers the hotels, every internal transfer and
+// whatever is listed — flights to and from Aruba are extra unless the note says otherwise;
+// two sharing a double. Three countries this cycle: the Dominican Republic, Mexico, Japan.
 //
-// `reach` says which level a trip is for. Watapana is the island; Fofoti adds the
-// region — the other islands and the near mainland; Kibrahacha adds everywhere else. Guests pay `guestCashUsd` to the Banker (no 15% on that).
+// `reach` says how far a trip goes. It does not gate anyone: every Insider can ask for
+// every trip at every level. What the level changes is how fast the points build.
+// Guests pay `guestCashUsd` to the Banker (no 15% on that).
 export const WORLD_TRIPS = [
-  { id: 'trip_cartagena', kind: 'trip', reach: 'region', name: 'Cartagena, inside the walls', area: 'Cartagena', country: 'Colombia', dates: { from: '2026-10-15', to: '2026-10-19' }, nights: 4,
-    pointsPerSeat: 64000, guestCashUsd: 640, retailUsd: 880, seats: 10, holdDeadline: '2026-09-20', isDrop: true,
-    vibe: 'A boutique casa inside the old city, rooftop pool, and a long dinner in Getsemaní.',
-    features: ['Group trip', 'Boutique casa', 'Four nights'], dealNote: 'Flights not included. Victor holds the block until 20 September.' },
-  { id: 'trip_curacao', kind: 'trip', reach: 'region', name: 'Curaçao, Pietermaai weekend', area: 'Willemstad', country: 'Curaçao', dates: { from: '2026-11-20', to: '2026-11-23' }, nights: 3,
-    pointsPerSeat: 42000, guestCashUsd: 420, retailUsd: 560, seats: 12, holdDeadline: '2026-10-25', isDrop: false,
-    vibe: 'A pastel townhouse hotel in Pietermaai, twenty-five minutes across the water.',
-    features: ['Group trip', 'Short flight', 'Dive day optional'], dealNote: 'Ian is organising; group fare on Divi Divi Air.' },
-  { id: 'trip_medellin', kind: 'trip', reach: 'region', name: 'Medellín in January', area: 'Medellín', country: 'Colombia', dates: { from: '2027-01-14', to: '2027-01-19' }, nights: 5,
-    pointsPerSeat: 70000, guestCashUsd: 700, retailUsd: 950, seats: 10, holdDeadline: '2026-11-30', isDrop: false,
-    vibe: 'A design hotel in Provenza, the Comuna 13 walk, and a day out at Guatapé.',
-    features: ['Group trip', 'City break', 'Cool climate'], dealNote: '' },
-  { id: 'trip_bonaire', kind: 'trip', reach: 'region', name: 'Bonaire dive & shore week', area: 'Kralendijk', country: 'Bonaire', dates: { from: '2027-05-06', to: '2027-05-11' }, nights: 5,
-    pointsPerSeat: 78000, guestCashUsd: 780, retailUsd: 1020, seats: 8, holdDeadline: '2027-03-15', isDrop: false,
-    vibe: 'Oceanfront apartments, unlimited shore diving, and a pickup truck per pair.',
-    features: ['Group trip', 'Dive package', 'Truck included'], dealNote: '' },
-  { id: 'trip_panama', kind: 'trip', reach: 'world', name: 'Panama City & Casco Viejo', area: 'Panama City', country: 'Panama', dates: { from: '2027-03-04', to: '2027-03-09' }, nights: 5,
-    pointsPerSeat: 82000, guestCashUsd: 820, retailUsd: 1080, seats: 10, holdDeadline: '2027-01-15', isDrop: false, draft: true,
-    vibe: 'Casco Viejo rooftops, the canal at first light, and a day on the islands.',
-    features: ['Group trip', 'City break'], dealNote: 'Still a draft — Victor is negotiating the hotel block.' },
-  { id: 'trip_lisbon', kind: 'trip', reach: 'world', name: 'Lisbon & Porto', area: 'Lisbon', country: 'Portugal', dates: { from: '2027-05-08', to: '2027-05-15' }, nights: 7,
-    pointsPerSeat: 165000, guestCashUsd: 1650, retailUsd: 2100, seats: 12, holdDeadline: '2027-02-01', isDrop: false,
-    vibe: 'Chiado for four nights, then the Douro; one train, two cities.',
-    features: ['Europe', 'Group trip', 'Two cities'], dealNote: 'Via Amsterdam with a KLM group fare.' },
-  { id: 'trip_mexico', kind: 'trip', reach: 'world', name: 'Mexico City', area: 'Ciudad de México', country: 'Mexico', dates: { from: '2027-06-18', to: '2027-06-23' }, nights: 5,
-    pointsPerSeat: 88000, guestCashUsd: 880, retailUsd: 1150, seats: 10, holdDeadline: '2027-04-20', isDrop: false, draft: true,
-    vibe: 'Roma Norte, Teotihuacán at sunrise, and the best week of eating of your year.',
-    features: ['Group trip', 'City break'], dealNote: 'Still a draft.' },
+  { id: 'trip_samana', kind: 'trip', reach: 'region', name: 'Samaná, whale season', area: 'Santo Domingo & Las Terrenas', country: 'Dominican Republic', dates: { from: '2027-03-07', to: '2027-03-14' }, nights: 7,
+    pointsPerSeat: 125000, guestCashUsd: 1250, retailUsd: 1950, seats: 14, holdDeadline: '2026-12-15', isDrop: true,
+    vibe: 'Two nights inside the walls of the Zona Colonial, then the drive up the Boulevard Turístico to Las Terrenas — five nights on Playa Cosón with the humpbacks in Samaná Bay.',
+    features: ['Group trip', 'Whale watching', 'Seven nights', 'Fourteen seats'],
+    dealNote: 'Arajet flies Aruba–Santo Domingo nonstop in about an hour and a half, Wednesdays and Sundays, so this is a Sunday-to-Sunday week. Flights are extra, around $300–450 return. March is the driest month in Las Terrenas and the last of the whale season — the boats run to 25 March and no later. Two-bedroom residences at Sublime sleep four, which is what makes the per-head number work; chip in with someone and it drops again.' },
+  { id: 'trip_oaxaca', kind: 'trip', reach: 'world', name: 'Mexico City & Oaxaca', area: 'Ciudad de México & Oaxaca', country: 'Mexico', dates: { from: '2027-02-18', to: '2027-02-27' }, nights: 9,
+    pointsPerSeat: 175000, guestCashUsd: 1750, retailUsd: 2550, seats: 12, holdDeadline: '2026-12-15', isDrop: false,
+    vibe: 'The anti-beach trip. Four nights in Roma Norte and Condesa, Teotihuacán before the buses arrive, then the short hop south for five nights of mezcal, mole and Monte Albán.',
+    features: ['Group trip', 'Two cities', 'Nine nights', 'Dry season'],
+    dealNote: 'Copa via Panama, about eight and a half hours in the air; flights are extra, roughly $480–650 return. The Mexico City–Oaxaca hop is inside the seat price. Late February is dry season in Oaxaca and misses both the Day of the Dead and Guelaguetza premiums — Day of the Dead triples the centro rates and books a year out.' },
+  { id: 'trip_japan', kind: 'trip', reach: 'world', name: 'Kyoto & Tokyo, early December', area: 'Kyoto & Tokyo', country: 'Japan', dates: { from: '2027-12-02', to: '2027-12-12' }, nights: 10,
+    pointsPerSeat: 210000, guestCashUsd: 2100, retailUsd: 2975, seats: 8, holdDeadline: '2027-06-30', isDrop: false,
+    vibe: 'The far one. Five nights in Kyoto with the maples still turning and the illuminations lit, five in Tokyo, in apartments with kitchens rather than hotel rooms. Open-jaw: into Osaka, out of Haneda, so nobody backtracks.',
+    features: ['The far one', 'Ten nights', 'Open-jaw', 'Apartments'],
+    dealNote: 'Be honest with yourself about the journey: there is no same-day connection from Aruba to Japan. Every Aruba departure lands at its hub after the day’s transpacific flights have gone. We route Aruba–Amsterdam–Osaka so both overnights happen in a seat instead of a hotel — two days out, two days back, fourteen days door to door. Early December is the one window where Kyoto still has colour, the crowds have gone and the rooms cost about half of what they do in November. Hotels, the shinkansen between the two cities and every transfer are in the seat; flights are extra. Eight seats, and Victor needs the names by 30 June 2027.' },
 ];

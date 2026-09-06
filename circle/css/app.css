@@ -122,6 +122,7 @@ main:focus { outline: none; }
 .chip-info i { background: var(--ink); }
 .chip-muted { color: var(--ink-2); }
 .tag { display: inline-block; padding: 3px 9px; border-radius: var(--r-chip); background: var(--raised); border: 1px solid var(--hairline-soft); font-size: .74rem; color: var(--ink-2); white-space: nowrap; }
+.tag.house { background: var(--good-soft); border-color: transparent; color: var(--good-text); font-weight: 600; }
 
 /* ---------- the split bar: 85 backing | 15 the Circle's share ---------- */
 .split { position: relative; height: 6px; border-radius: 3px; background: var(--share); overflow: hidden; }

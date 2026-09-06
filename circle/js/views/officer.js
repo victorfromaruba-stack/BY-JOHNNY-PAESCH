@@ -280,7 +280,7 @@ export function desk({ store, go }) {
       <form class="panel" id="note-form">
         <h2 style="font-size:1.1rem">Write to the Circle</h2>
         <p class="small muted" style="margin-top:6px">Every note opens “Bon dia, Circle” and is signed by you. Nothing is ever sent without you tapping send.</p>
-        <label class="field" style="margin-top:12px"><span>Title</span><input name="title" required placeholder="Cartagena is live for Kibrahacha"></label>
+        <label class="field" style="margin-top:12px"><span>Title</span><input name="title" required placeholder="Samaná is open — fourteen seats"></label>
         <label class="field"><span>Note</span><textarea name="body" rows="5" required placeholder="Bon dia, Circle. …"></textarea></label>
         <label class="row" style="gap:10px;margin-bottom:14px"><input type="checkbox" name="pinned" style="width:20px;height:20px"><span class="small">Pin it to the top</span></label>
         <button class="btn" type="submit">Publish</button>
@@ -358,6 +358,7 @@ async function editStay(store, stay) {
       <label class="field"><span>What it is like</span><textarea name="vibe" rows="2">${escapeHtml(stay?.vibe || '')}</textarea></label>
       <label class="field"><span>Note from Victor</span><input name="dealNote" value="${escapeHtml(stay?.dealNote || '')}"></label>
       <label class="row" style="gap:10px;margin-bottom:12px"><input type="checkbox" name="active" ${stay?.active !== false ? 'checked' : ''} style="width:20px;height:20px"><span class="small">Live for members</span></label>
+      ${isTrip ? '' : `<label class="row" style="gap:10px;margin-bottom:12px"><input type="checkbox" name="house" ${stay?.house ? 'checked' : ''} style="width:20px;height:20px"><span class="small">One of the places we actually use — shows first, with a badge</span></label>`}
       <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Save</button></div>`;
     // Typing in either box updates the other, so the two never disagree.
     body.addEventListener('input', (e) => {
@@ -374,7 +375,8 @@ async function editStay(store, stay) {
         dates: stay.dates, nights: stay.nights, seats: stay.seats, holdDeadline: stay.holdDeadline });
       else Object.assign(data, { rates: { low: usd('low'), high: usd('high'), peak: usd('peak') },
         minNights: Number(v('minNights')), peakMinNights: Number(v('peakMinNights')), retailUsd: Number(v('retailUsd')),
-        onSand: stay?.onSand ?? true, adultsOnly: stay?.adultsOnly ?? false, category: stay?.category || 2 });
+        onSand: stay?.onSand ?? true, adultsOnly: stay?.adultsOnly ?? false, category: stay?.category || 2,
+        house: !!body.querySelector('[name=house]')?.checked });
       close(data);
     });
   } });

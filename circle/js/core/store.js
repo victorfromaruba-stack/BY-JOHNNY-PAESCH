@@ -406,11 +406,13 @@ export class Store {
     if (memberId === r.memberId) throw new Error('You are already covering your own share');
     const pts = Math.round(Number(points));
     if (!(pts > 0)) throw new Error('Chip in at least one point');
-    const available = this.availablePoints(memberId);
-    if (pts > available) throw new Error(`You have ${available.toLocaleString('en-US')} points available`);
     const outstanding = (r.quotedPoints || r.indicativePoints || 0) - this.coveredPoints(r);
     if (outstanding <= 0) throw new Error('This booking is already covered');
+    // Cap at what the booking still needs before checking the balance, so offering more
+    // than is wanted puts in what is wanted rather than being refused.
     const amount = Math.min(pts, outstanding);
+    const available = this.availablePoints(memberId);
+    if (amount > available) throw new Error(`You have ${available.toLocaleString('en-US')} points available`);
     r.pledges ||= [];
     const existing = r.pledges.find(p => p.memberId === memberId);
     if (existing) existing.points += amount; else r.pledges.push({ id: uid('pld'), memberId, points: amount, at: nowIso() });
