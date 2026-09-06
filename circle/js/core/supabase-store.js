@@ -40,7 +40,8 @@ export class SupabaseStore extends Store {
   }
   async afterSignIn() {
     const { data: me } = await this.sb.rpc('claim_membership');
-    if (me?.id) this.state.session = { memberId: me.id, at: new Date().toISOString() };
+    if (me?.id) { this.state.session = { memberId: me.id, at: new Date().toISOString() }; this.strandedEmail = null; }
+    else this.strandedEmail = (await this.sb.auth.getUser())?.data?.user?.email || 'that account';
     await this.reload();
     this.subscribeRealtime();
   }
@@ -122,6 +123,11 @@ export class SupabaseStore extends Store {
   async signInWithPassword(email, password) {
     const { error } = await this.sb.auth.signInWithPassword({ email: String(email).trim().toLowerCase(), password });
     if (error) throw new Error(this.authMessage(error));
+    await this.afterSignIn();
+    if (!this.state.session) {
+      await this.sb.auth.signOut();
+      throw new Error(`That password is right, but ${this.strandedEmail} is not on the Circle's list. Ask Victor or Ian to add that exact address.`);
+    }
   }
   /** Send the reset email. Deliberately silent about whether the address is one of ours. */
   async sendPasswordReset(email) {
