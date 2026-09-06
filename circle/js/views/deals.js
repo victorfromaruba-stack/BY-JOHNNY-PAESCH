@@ -105,7 +105,10 @@ export function deals({ store, go }) {
     const grid = el('<div class="grid g2"></div>');
     mine.forEach(m => grid.appendChild(dealCard(m.deal, { store, match: m, canEdit })));
     mineSlot.appendChild(grid);
-    store.markWatchesSeen(me.id);
+    // Only when something is actually unseen. markWatchesSeen() commits, a commit notifies,
+    // a notify re-renders, and this runs again — so keying it off mine.length (which never
+    // shrinks) spun the page against the database forever the moment one deal matched.
+    if (store.unseenMatches(me.id).length) store.markWatchesSeen(me.id);
   }
 
   allSlot.appendChild(el(`<div class="sec-head"><div><p class="eyebrow">${mine.length ? 'Everything else' : 'On the board'}</p>

@@ -199,6 +199,9 @@ create table if not exists stays (
   adults_only     boolean not null default false,
   all_inclusive   boolean not null default false,
   taxes_included  boolean not null default false,
+  -- how far a trip goes: 'region' (the Caribbean) or 'world'. Null for Aruba stays, which
+  -- are always 'aruba'. Without it every trip reads as regional, so Japan lost its badge.
+  reach           text check (reach in ('region','world')),
   -- true for the four places the Circle actually uses; they sort first and carry a badge
   house           boolean not null default false,
   -- trips

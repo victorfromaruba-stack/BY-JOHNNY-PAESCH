@@ -39,6 +39,9 @@ export class SupabaseStore extends Store {
     return this;
   }
   async afterSignIn() {
+    // Quotes lapse on the clock, so somebody has to notice. Once per session, not per
+    // render — releaseExpired() runs inside getters and would loop if it called out.
+    await this.sb.rpc('release_expired_quotes').catch(() => {});
     const { data: me } = await this.sb.rpc('claim_membership');
     if (me?.id) { this.state.session = { memberId: me.id, at: new Date().toISOString() }; this.strandedEmail = null; }
     else this.strandedEmail = (await this.sb.auth.getUser())?.data?.user?.email || 'that account';
@@ -54,6 +57,13 @@ export class SupabaseStore extends Store {
     this.state.roomTypes = this.state.room_types || this.state.roomTypes || [];
     // The database calls them from_date/to_date because `from` and `to` are awkward in SQL;
     // the rest of the app calls them from/to. Bridge it here rather than everywhere else.
+    // Column names the screens do not use: full_amount is read as `full`, the stored proof
+    // path is what tells the Banker a screenshot exists, and amount_usd never existed.
+    this.state.contributions = this.state.contributions.map(c => ({ ...c,
+      full: c.fullAmount ?? c.full ?? null,
+      proofName: c.proofName || (c.proofPath ? String(c.proofPath).split('/').pop() : ''),
+      amountUsd: c.amountUsd ?? c.receivedUsd ?? c.expectedUsd ?? null }));
+    this.state.ledger = this.state.ledger.map(l => ({ ...l, by: l.byId ?? l.by ?? null }));
     const dated = (r) => ({ ...r, from: r.fromDate, to: r.toDate });
     this.state.watches = (this.state.watches || []).map(dated);
     this.state.deals = (this.state.deals || []).map(dated);

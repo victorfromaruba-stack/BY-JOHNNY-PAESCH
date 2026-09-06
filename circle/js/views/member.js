@@ -377,7 +377,10 @@ export function pay({ store, go }) {
       const file = e.target.proof?.files?.[0];
       await store.submitContribution({
         memberId: me.id, amountUsd, forMonth: month, currency, bank: f.get('bank'), reference,
-        note: f.get('note'), sentOn: f.get('sentOn'), proofName: file?.name || '',
+        // The file itself, not just its name: the Supabase backend uploads it to storage and
+        // the local one keeps it as a data URL. Sending only the name meant every transfer
+        // screenshot a member attached was accepted by the form and then dropped.
+        note: f.get('note'), sentOn: f.get('sentOn'), proofFile: file || null, proofName: file?.name || '',
       });
       toast('Marked as sent. Vishnu will confirm it once it lands.', { kind: 'good' });
       go('/home');

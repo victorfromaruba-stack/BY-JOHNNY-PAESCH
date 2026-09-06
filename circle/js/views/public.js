@@ -40,7 +40,7 @@ export function landing({ store, go }) {
   // cannot see instead of publishing a number we did not read.
   const blind = !!store.publicOnly;
   const wrap = el('<div></div>');
-  const featured = ['stay_oceanclub', 'stay_surfclub', 'stay_divi', 'stay_renaissance', 'trip_japan'].map(id => store.stay(id)).filter(Boolean);
+  const featured = ['stay_oceanclub', 'stay_surfclub', 'stay_divi', 'stay_renaissance', 'trip_japan'].map(id => store.stayLike(id)).filter(Boolean);
 
   wrap.appendChild(el(`<section class="sec hero-sec">
     <div class="wrap hero">
@@ -118,7 +118,14 @@ export function landing({ store, go }) {
         <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta">15%, taken once, at the start</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(p12.shareUsd))}</b></span></li>
         <li><span class="what"><b>Points after a year</b><span class="meta">Includes the 6- and 12-month streak bonuses</span></span><span class="delta"><b>${escapeHtml(fmtPoints(p12.points))}</b><small>${escapeHtml(fmtUsd2(p12.points / 100))}</small></span></li>
       </ul>
-      <p class="small muted" style="margin-top:12px">That is ${escapeHtml(fmtPct(p12.effectiveBacking, 1))} of everything you sent, back as hotel — and about ${Math.floor(p12.points / seasonPoints(store.stay('stay_surfclub'), 'low'))} nights in a villa at Marriott’s Surf Club in Summer, or ${Math.floor(p12.points / seasonPoints(store.stay('stay_divi'), 'low'))} all-inclusive at the Divi.</p>`;
+      ${(() => {
+        const nights = (id) => { const st = store.stayLike(id); if (!st) return null;
+          const per = seasonPoints(st, 'low'); return per > 0 ? { n: Math.floor(p12.points / per), name: st.name } : null; };
+        const villa = nights('stay_surfclub'), ai = nights('stay_divi');
+        const both = [villa && `about ${villa.n} nights in a villa at ${escapeHtml(villa.name)} in Summer`,
+                      ai && `${ai.n} all-inclusive at ${escapeHtml(ai.name)}`].filter(Boolean);
+        return `<p class="small muted" style="margin-top:12px">That is ${escapeHtml(fmtPct(p12.effectiveBacking, 1))} of everything you sent, back as hotel${both.length ? ` — and ${both.join(', or ')}` : ''}.</p>`;
+      })()}`;
   };
   draw();
   choices.addEventListener('click', (e) => { const b = e.target.closest('[data-amt]'); if (!b) return; chosen = Number(b.dataset.amt); draw(); });
@@ -130,19 +137,22 @@ export function landing({ store, go }) {
       <div class="grid g3">
         ${s.tiers.map(t => {
           const perMonth = pointsPerMonth(s, t.monthlyUsd);
-          const aruba = store.stay('stay_amsterdam'), villa = store.stay('stay_surfclub'), trip = store.stay('trip_samana'), far = store.stay('trip_japan');
+          const aruba = store.stayLike('stay_amsterdam'), villa = store.stayLike('stay_surfclub'), trip = store.stayLike('trip_samana'), far = store.stayLike('trip_japan');
           const nights = 3;
           // A Surf Club villa sleeps eight and rents by the week; four of you chipping in is the real number.
-          const villaShare = Math.round(seasonPoints(villa, 'low', s) * (villa.minNights || 7) / 4);
+          // Every one of these is a lookup that can come back empty on a catalog that has been
+          // edited, and a missing place must cost one bullet, not the whole page.
+          const villaShare = villa ? Math.round(seasonPoints(villa, 'low', s) * (villa.minNights || 7) / 4) : 0;
+          const line = (ok, text) => (ok ? `<li class="small muted">${text}</li>` : '');
           return `<div class="panel">
           <div class="row-between"><div><p class="eyebrow" style="color:var(--ink-2)">$${t.monthlyUsd} a month</p>
             <h3 style="margin-top:6px">${escapeHtml(tierName(t.monthlyUsd))}</h3></div>${treeSvg(VOCAB.tierLean[t.monthlyUsd], { size: 26 })}</div>
           <p class="small" style="margin-top:10px"><b>${escapeHtml(fmtPoints(perMonth))} a month</b>${t.bonusRate ? `, including a ${Math.round(t.bonusRate * 100)}% bonus the Circle funds` : ''} — ${escapeHtml(fmtUsd2(perMonth / s.pointsPerDollar))} of hotel.</p>
           <ul class="stack" style="margin-top:10px;padding-left:1.1em;gap:6px">
-            <li class="small muted">${monthsToAfford(s, seasonPoints(aruba, 'low', s) * nights, t.monthlyUsd)} months for ${nights} nights at Amsterdam Manor in Summer</li>
-            <li class="small muted">${monthsToAfford(s, villaShare, t.monthlyUsd)} months for your quarter of a Surf Club villa for a week</li>
-            <li class="small muted">${monthsToAfford(s, trip.pointsPerSeat, t.monthlyUsd)} months for a seat on the Samaná week</li>
-            <li class="small muted">${monthsToAfford(s, far.pointsPerSeat, t.monthlyUsd)} months for ten nights in Japan</li>
+            ${line(aruba, `${monthsToAfford(s, seasonPoints(aruba, 'low', s) * nights, t.monthlyUsd)} months for ${nights} nights at ${escapeHtml(aruba?.name || '')} in Summer`)}
+            ${line(villa, `${monthsToAfford(s, villaShare, t.monthlyUsd)} months for your quarter of a Surf Club villa for a week`)}
+            ${line(trip, `${monthsToAfford(s, trip?.pointsPerSeat, t.monthlyUsd)} months for a seat on the Samaná week`)}
+            ${line(far, `${monthsToAfford(s, far?.pointsPerSeat, t.monthlyUsd)} months for ten nights in Japan`)}
             <li class="small muted">${t.holds} open request${t.holds > 1 ? 's' : ''} · ${t.windowMonths} months ahead · ${t.guestCerts} guest passes${t.firstLookHours ? ` · first look ${t.firstLookHours}h early` : ''}</li>
           </ul></div>`;
         }).join('')}

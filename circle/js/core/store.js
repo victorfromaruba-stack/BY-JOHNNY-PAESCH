@@ -24,6 +24,36 @@ export const emptyState = () => ({
   settings: null, credentials: {}, session: null,
 });
 
+/** id → name for the bundled catalog, so stayLike() can match across backends. */
+export const CATALOG_NAMES = Object.freeze({
+  'stay_bucuti': 'Bucuti & Tara Beach Resort',
+  'stay_ritz': 'The Ritz-Carlton, Aruba',
+  'stay_oceanvillas': 'Aruba Ocean Villas',
+  'stay_surfclub': 'Marriott’s Aruba Surf Club',
+  'stay_oceanclub': 'Marriott’s Aruba Ocean Club',
+  'stay_marriott': 'Aruba Marriott Resort & Stellaris Casino',
+  'stay_hyatt': 'Hyatt Regency Aruba Resort Spa & Casino',
+  'stay_renaissance': 'Renaissance Wind Creek Aruba Resort',
+  'stay_manchebo': 'Manchebo Beach Resort & Spa',
+  'stay_oceanz': 'Ocean Z Boutique Hotel',
+  'stay_hilton': 'Hilton Aruba Caribbean Resort & Casino',
+  'stay_riu': 'RIU Palace Antillas',
+  'stay_barcelo': 'Barceló Aruba',
+  'stay_tamarijn': 'Tamarijn Aruba All Inclusive',
+  'stay_divi': 'Divi Aruba All Inclusive',
+  'stay_embassy': 'Embassy Suites by Hilton Aruba Resort',
+  'stay_radisson': 'Radisson Blu Aruba',
+  'stay_holidayinn': 'Holiday Inn Resort Aruba',
+  'stay_courtyard': 'Courtyard by Marriott Aruba Resort',
+  'stay_boardwalk': 'Boardwalk Boutique Hotel Aruba',
+  'stay_amsterdam': 'Amsterdam Manor Beach Resort',
+  'stay_voco': 'voco Surfside Aruba',
+  'stay_eagle': 'Eagle Aruba Resort & Casino',
+  'trip_samana': 'Samaná, whale season',
+  'trip_oaxaca': 'Mexico City & Oaxaca',
+  'trip_japan': 'Kyoto & Tokyo, early December',
+});
+
 const asc = (k) => (a, b) => (a[k] < b[k] ? -1 : a[k] > b[k] ? 1 : 0);
 const desc = (k) => (a, b) => (a[k] < b[k] ? 1 : a[k] > b[k] ? -1 : 0);
 export function shiftDays(iso, n) { const d = new Date(`${String(iso).slice(0, 10)}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
@@ -377,7 +407,13 @@ export class Store {
   async leaveMember(id, actorId) { this.assertSelfOrAdmin(id); return this._writeMember(id, { status: 'left', leftAt: nowIso() }, actorId); }
 
   // ---------- contributions ----------
-  async submitContribution({ memberId, amountUsd, forMonth, method = 'bank', bank = '', reference = '', currency = 'USD', note = '', proofName = '', proofDataUrl = '', sentOn = '' }) {
+  async submitContribution({ memberId, amountUsd, forMonth, method = 'bank', bank = '', reference = '', currency = 'USD', note = '', proofFile = null, proofName = '', proofDataUrl = '', sentOn = '' }) {
+    if (proofFile) {
+      proofName = proofName || proofFile.name || 'screenshot';
+      proofDataUrl = proofDataUrl || await new Promise((res) => {
+        const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = () => res(''); fr.readAsDataURL(proofFile);
+      });
+    }
     const m = this.member(memberId); if (!m) throw new Error('No such member');
     if (!(amountUsd > 0)) throw new Error('Amount must be positive');
     if (this.state.contributions.some(c => c.memberId === memberId && c.forMonth === forMonth && [CONTRIBUTION_STATUS.pending, CONTRIBUTION_STATUS.confirmed].includes(c.status))) throw new Error(`${forMonth} already has a sent or confirmed contribution`);
@@ -518,7 +554,11 @@ export class Store {
     for (const r of this.state.redemptions) {
       if (r.status === REDEMPTION_STATUS.quoted && r.quoteExpiresAt && r.quoteExpiresAt < now) { r.status = REDEMPTION_STATUS.expired; r.decidedAt = now; r.decision = 'Quote expired before it was accepted'; changed = true; }
     }
-    if (changed) this.adapter.save(this.state);
+    // Called from getters that run on every render, so it must never write through a
+    // backend that has no local adapter — SupabaseStore has none, and this threw a
+    // TypeError out of the member home the moment any quote lapsed. There the server's
+    // release_expired_quotes() is authoritative; this only keeps the screen honest.
+    if (changed) this.adapter?.save(this.state);
   }
   async requestRedemption({ memberId, stayId, checkIn, checkOut, guests = 2, seats = 1, note = '', flexDays = 0, maxPoints = null, shared = false }) {
     const stay = this.stay(stayId); if (!stay) throw new Error('No such stay');
@@ -733,9 +773,28 @@ export class Store {
     this.log(actorId, 'watch.remove', 'watch', id, {}); await this.commit('watches'); return w;
   }
   /** Mark every match on this member's watches as seen, so the bell stops ringing. */
+  /**
+   * Find a catalog entry by the id it has in the bundled catalog. On the local backend that
+   * IS the id; on Supabase every row has a fresh uuid, so fall back to matching the name the
+   * bundled catalog gives that id. Copy that names a specific hotel needs this — reading
+   * store.stay('stay_surfclub') straight off the live backend returns undefined, and the
+   * landing page then called seasonPoints(undefined) and took the whole page down.
+   * Returns undefined rather than throwing when the catalog has no such place.
+   */
+  stayLike(seedId) {
+    const direct = this.stay(seedId);
+    if (direct) return direct;
+    const name = CATALOG_NAMES[seedId];
+    if (!name) return undefined;
+    return this.state.stays.find(x => x.name === name);
+  }
+
   async markWatchesSeen(memberId) {
+    const stale = this.watchesFor(memberId).filter(w => this.matchesForMember(memberId)
+      .some(m => m.watch.id === w.id && (!w.lastSeenAt || m.deal.postedAt > w.lastSeenAt)));
+    if (!stale.length) return;            // nothing new: do not commit, do not re-render
     const at = nowIso();
-    for (const w of this.watchesFor(memberId)) w.lastSeenAt = at;
+    for (const w of stale) w.lastSeenAt = at;
     await this.commit('watches');
   }
 
