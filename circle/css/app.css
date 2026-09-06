@@ -50,7 +50,7 @@ main:focus { outline: none; }
 .sec { padding-block: clamp(28px, 5vw, 56px); }
 .sec + .sec { border-top: 1px solid var(--hairline-soft); }
 .sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
-.sec-head p { color: var(--ink-2); font-size: .95rem; max-width: 62ch; }
+.sec-head p { color: var(--ink-2); font-size: .95rem; max-width: 62ch; margin-top: 10px; }
 .eyebrow { font-size: .7rem; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
 .lede { font-size: clamp(1rem, 1.6vw, 1.12rem); color: var(--ink-2); max-width: 62ch; }
 .muted { color: var(--ink-2); }
@@ -258,6 +258,26 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .stay-card .price b { font-size: 1.05rem; font-weight: 500; }
 .stay-card .price small { color: var(--ink-2); }
 .stay-card .flags { display: flex; flex-wrap: wrap; gap: 6px; }
+/* A statement section: one sentence at display size, no card, no heading, no label. It exists
+   to break the rhythm of eight sections that all open the same way, and because the sentence
+   is the single most important thing on the page. */
+.statement { border-top: 1px solid var(--hairline); }
+.statement p { font-family: var(--font-display); font-weight: 600; letter-spacing: -.02em;
+  font-size: clamp(1.4rem, 3.4vw, 2.3rem); line-height: 1.18; max-width: 26ch; text-wrap: balance; }
+.statement span { display: block; margin-top: .5em; font-family: var(--font-body); font-weight: 400;
+  font-size: clamp(.95rem, 1.5vw, 1.08rem); line-height: 1.5; letter-spacing: 0; color: var(--ink-2); max-width: 44ch; }
+
+/* Who runs it: three jobs separated by rules rather than boxed. Nothing here is elevated
+   above anything else, so nothing here is a card. */
+.jobs { display: grid; gap: 0; border-top: 1px solid var(--hairline); }
+.job { padding: 22px 0; border-bottom: 1px solid var(--hairline-soft); display: grid; gap: 8px;
+  grid-template-columns: minmax(0, 12ch) minmax(0, 18ch) minmax(0, 1fr); align-items: start; }
+.job h3 { font-size: 1.05rem; }
+.job-who { display: flex; align-items: center; gap: 8px; font-size: .92rem; }
+.job-who .avatar { flex: none; }
+.job .small { margin: 0; max-width: 52ch; }
+@media (max-width: 760px) { .job { grid-template-columns: 1fr; gap: 6px; padding: 18px 0; } }
+
 /* ---------- landing hero ---------- */
 /* The one photograph on the site. Everything else is drawn, but the first thing a person
    sees should be the actual water, not an illustration of it. */

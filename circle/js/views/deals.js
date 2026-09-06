@@ -86,7 +86,8 @@ export function deals({ store, go }) {
         <div><p class="eyebrow">${icon('zap')}As they turn up</p><h1>Deals</h1>
           <p class="lede" style="margin-top:10px;max-width:60ch">Rooms that became available somewhere Victor or Ian was looking. They go as fast as they come, so anything here is worth asking about the same day.
             <b>You do not book these yourself</b> — put your points in, alone or with others, and the Circle books it in your name.</p></div>
-        ${canEdit ? `<div class="row no-print"><button class="btn sm" id="post">${icon('plus', { size: 16 })}Post a deal</button></div>` : ''}
+        ${canEdit ? `<div class="row no-print"><button class="btn sm" id="paste">${icon('copy', { size: 16 })}Paste a listing</button>
+          <button class="btn ghost sm" id="post">${icon('plus', { size: 16 })}By hand</button></div>` : ''}
       </div>
 
       <div class="row" style="margin-top:18px">
@@ -134,6 +135,7 @@ export function deals({ store, go }) {
     }
   });
   wrap.querySelector('#post')?.addEventListener('click', () => postDealSheet({ store }));
+  wrap.querySelector('#paste')?.addEventListener('click', () => pasteListingSheet({ store }));
   return wrap;
 }
 
@@ -155,16 +157,16 @@ export async function postDealSheet({ store, prefill = {} }) {
           <label class="field"><span>To</span><input type="date" name="to" value="${escapeHtml(prefill.to || '')}" required></label>
         </div>
         <div class="grid g2">
-          <label class="field"><span>All-in cost US$</span><input type="number" name="usd" step="1" min="1" inputmode="decimal" placeholder="1995"></label>
-          <label class="field"><span>In points</span><input type="number" name="points" step="100" min="1" inputmode="numeric" placeholder="199500"></label>
+          <label class="field"><span>All-in cost US$</span><input type="number" name="usd" step="1" min="1" inputmode="decimal" placeholder="1995" value="${escapeHtml(prefill.usd ?? '')}"></label>
+          <label class="field"><span>In points</span><input type="number" name="points" step="100" min="1" inputmode="numeric" placeholder="199500" value="${escapeHtml(prefill.points ?? '')}"></label>
         </div>
         <div class="grid g2">
           <label class="field"><span>Where it came from</span>
-            <select name="source">${Object.entries(SOURCES).map(([k, v]) => `<option value="${k}">${escapeHtml(v.label)}</option>`).join('')}</select></label>
+            <select name="source">${Object.entries(SOURCES).map(([k, v]) => `<option value="${k}"${k === prefill.source ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}</select></label>
           <label class="field"><span>Public rate US$, if you know it</span><input type="number" name="retailUsd" step="1" min="0" inputmode="decimal" placeholder="2800"></label>
         </div>
-        <label class="field"><span>Link to it</span><input type="url" name="sourceUrl" placeholder="https://…"></label>
-        <label class="field"><span>Anything the Circle should know</span><input name="note" placeholder="Lighthouse tower, owner rental, Saturday to Saturday."></label>
+        <label class="field"><span>Link to it</span><input type="url" name="sourceUrl" placeholder="https://…" value="${escapeHtml(prefill.sourceUrl || '')}"></label>
+        <label class="field"><span>Anything the Circle should know</span><input name="note" placeholder="Lighthouse tower, owner rental, Saturday to Saturday." value="${escapeHtml(prefill.note || '')}"></label>
         <div id="who" class="notice" style="margin-top:4px"></div>
         <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>${icon('send', { size: 16 })}Post it</button></div>`;
 
@@ -352,4 +354,60 @@ export async function addWatchSheet({ store, prefill = {} }) {
     toast(hits ? `Watching. ${hits} on the board already — go and look.` : 'Watching. You will hear the moment one appears.', { kind: 'good', timeout: 6000 });
     return w;
   } catch (err) { toast(err.message, { kind: 'bad', timeout: 6000 }); return null; }
+}
+
+
+/**
+ * Interval and RedWeek have no API and both forbid automated access, so this does not log
+ * into anything. Victor is already looking at the listing; he copies it, pastes it here, and
+ * the Desk reads the dates, the unit, the price and which of our places it is. What it cannot
+ * read it leaves blank rather than guessing, and he confirms everything before it is posted.
+ */
+export async function pasteListingSheet({ store }) {
+  const { parseListing } = await import('../data/listing-paste.js');
+  const stays = [...store.arubaStays(), ...store.trips()];
+  const ppd = store.settings.pointsPerDollar;
+
+  const read = await sheet({ title: 'Paste a listing', render: (body, close) => {
+    body.innerHTML = `
+      <p class="sheet-text">Select the listing on Interval or RedWeek, copy it, and paste it below.
+        Nothing is logged into and nothing is fetched — this only reads what you paste.</p>
+      <label class="field"><span>The listing</span>
+        <textarea name="raw" rows="7" placeholder="Sep 11–18, 2026  7 Nights&#10;3 Bedroom Villa, Ocean view&#10;Sleeps: 12, Building: Compass&#10;$525/night   $4,031 total" style="font-family:var(--font-mono);font-size:.86rem"></textarea></label>
+      <div id="read" class="notice" style="margin-top:4px"><p class="small muted">Waiting for a paste.</p></div>
+      <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button>
+        <button class="btn" data-ok disabled>${icon('chevronRight', { size: 16 })}Check it over</button></div>`;
+    const ta = body.querySelector('[name=raw]'), out = body.querySelector('#read'), okBtn = body.querySelector('[data-ok]');
+    let parsed = null;
+    const draw = () => {
+      parsed = parseListing(ta.value, { stays, pointsPerDollar: ppd });
+      if (!parsed) { out.innerHTML = '<p class="small muted">Waiting for a paste.</p>'; okBtn.disabled = true; return; }
+      const rows = [
+        ['Where', parsed.stay?.name || '<span style="color:var(--flag)">not one of ours — pick it on the next screen</span>'],
+        ['When', parsed.from ? `${escapeHtml(fmtDay(parsed.from))} → ${escapeHtml(fmtDay(parsed.to))} · ${parsed.nights} nights` : '<span style="color:var(--flag)">could not read the dates</span>'],
+        ['Room', parsed.unit || '—'],
+        ['Sleeps', parsed.sleeps ?? '—'],
+        ['Cost', parsed.usdTotal ? `${escapeHtml(fmtUsd2(parsed.usdTotal))} all in · ${escapeHtml(fmtPoints(parsed.pointsTotal))}` : '<span style="color:var(--flag)">could not read a price</span>'],
+        ['From', SOURCES[parsed.source]?.label || 'somewhere else'],
+      ];
+      out.className = `notice ${parsed.taken ? 'bad' : parsed.ok ? 'good' : 'warn'}`;
+      out.innerHTML = `${parsed.taken ? '<b>This one says it is already gone.</b>' : ''}
+        <dl class="grid g2" style="gap:4px 12px;margin:0">${rows.map(([k, v]) =>
+          `<div class="row-between"><span class="small muted">${k}</span><span class="small" style="text-align:right">${v}</span></div>`).join('')}</dl>
+        ${parsed.missing.length ? `<p class="small" style="margin-top:8px">You will need to fill in ${escapeHtml(parsed.missing.join(' and '))} yourself.</p>` : ''}`;
+      okBtn.disabled = !parsed.from;
+    };
+    ta.addEventListener('input', draw);
+    ta.addEventListener('paste', () => setTimeout(draw, 0));
+    body.querySelector('[data-ok]').addEventListener('click', () => close(parsed));
+  } });
+
+  if (!read?.from) return;
+  // Straight into the normal posting sheet, filled in, so every guard it already has still runs.
+  return postDealSheet({ store, prefill: {
+    stayId: read.stayId || undefined, from: read.from, to: read.to,
+    usd: read.usdTotal || '', points: read.pointsTotal || '',
+    source: read.source === 'redweek' ? 'redweek' : read.source === 'interval' ? 'interval' : 'other',
+    note: [read.unit, read.sleeps ? `sleeps ${read.sleeps}` : ''].filter(Boolean).join(' · '),
+  } });
 }

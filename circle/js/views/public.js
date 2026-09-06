@@ -4,7 +4,7 @@ import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, projectPoints, seasonPoints, SEASONS, REACH, pointsPerMonth, monthsToAfford } from '../core/money.js';
 import { splitBar, poolGauge, memberCard, ring } from '../ui/pieces.js';
 import { sceneSvg, treeSvg, starSvg } from '../ui/art.js';
-import { toast, setBusy, sheet } from '../ui/components.js';
+import { toast, setBusy, sheet, avatar } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { copyText } from '../core/share.js';
 
@@ -45,10 +45,8 @@ export function landing({ store, go }) {
   wrap.appendChild(el(`<section class="sec hero-sec">
     <div class="wrap hero">
       <div class="hero-copy">
-        <p class="eyebrow enter">${escapeHtml(VOCAB.subtitle)} · by invitation</p>
-        <h1 class="enter" style="--d:40ms;max-width:15ch">A private travel circle in Aruba.</h1>
-        <p class="lede enter" style="--d:80ms;margin-top:14px">${escapeHtml(VOCAB.tagline)} You put in $100, $150 or $200 a month. Vishnu confirms the money has landed, and only then do your points appear — 100 points to the dollar, fixed forever.</p>
-        <p class="lede enter" style="--d:100ms;margin-top:12px">This is not a business and it is not open to the public. Every Insider is someone Victor or Ian knows, and you join because one of them asked you. ${blind ? `There are ${s.memberCap} seats in all.` : `${escapeHtml(store.activeMembers().length)} of ${s.memberCap} seats are taken.`}</p>
+        <h1 class="enter" style="max-width:14ch">A private travel circle in Aruba.</h1>
+        <p class="lede enter" style="--d:60ms;margin-top:16px;max-width:46ch">Put in a hundred dollars a month. Take it out as hotel, at cost, with people you know.</p>
         <div class="row enter" style="--d:120ms;margin-top:22px">
           <a class="btn" href="#/sign-in">${icon('key', { size: 17 })}I have an invitation</a>
           <a class="btn ghost" href="#/rules">${icon('compass', { size: 17 })}How the Circle works</a>
@@ -75,9 +73,14 @@ export function landing({ store, go }) {
     </div></section>`));
   if (!blind) wrap.querySelector('#gauge-slot').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, configured: t.accountsConfigured, size: 'full' }));
 
+  wrap.appendChild(el(`<section class="sec statement"><div class="wrap">
+      <p>This is not a business, and it is not open to the public.
+        <span>Every Insider is someone Victor or Ian knows, and you are here because one of them asked you.</span></p>
+    </div></section>`));
+
   // Horizon — the dream, before the ledger
   const horizon = el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><p class="eyebrow">The horizon</p><h2>Where the points go</h2>
+      <div class="sec-head"><div><h2>Where the points go</h2>
       <p>Twenty-three places on the island and the trips Victor and Ian put together. Every price is the Circle’s all-in rate — taxes, levies and resort fees included.</p>
       <p class="small muted" style="margin-top:8px">These four are where we actually end up. The trips this cycle go to the Dominican Republic, Mexico and Japan.</p></div>
       <a class="btn ghost sm" href="${blind ? '#/sign-in' : '#/stays'}">${icon('chevronRight', { size: 15 })}${blind ? 'Sign in to see them all' : 'All twenty-three'}</a></div>
@@ -90,7 +93,7 @@ export function landing({ store, go }) {
 
   // The split — the honest 85/15
   const split = el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><p class="eyebrow">The split</p><h2>Where every dollar goes</h2>
+      <div class="sec-head"><div><h2>Where every dollar goes</h2>
       <p>The Circle takes 15% for setting this up and running it. The other 85% backs your points and stays yours until you spend it on a stay.</p></div></div>
       <div class="side">
         <div class="panel">
@@ -134,7 +137,7 @@ export function landing({ store, go }) {
 
   // What each level is for
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><p class="eyebrow">What each level is for</p><h2>Everyone comes on everything</h2>
+      <div class="sec-head"><div><h2>Everyone comes on everything</h2>
       <p>No level shuts anyone out of a stay or a trip. What the level changes is how quickly the points build — and that is what decides, in practice, whether you are doing long weekends on the island or leaving it with the group.</p></div></div>
       <div class="grid g3">
         ${s.tiers.map(t => {
@@ -164,7 +167,7 @@ export function landing({ store, go }) {
 
   // How a contribution becomes a stay
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><p class="eyebrow">The path</p><h2>How a contribution becomes a stay</h2></div></div>
+      <div class="sec-head"><div><h2>How a contribution becomes a stay</h2></div></div>
       <div class="grid g4">
         <div class="panel"><p class="eyebrow" style="color:var(--ink-2)">1 · You</p><h3>Send the transfer</h3><p class="small muted" style="margin-top:6px">Bank transfer to the Circle’s Reserve account with your reference, then tap “I sent it”. No points yet.</p></div>
         <div class="panel"><p class="eyebrow" style="color:var(--good-text)">2 · Vishnu</p><h3>Confirms it landed</h3><p class="small muted" style="margin-top:6px">He matches the reference on the bank statement. The moment he confirms, your points are minted and dated.</p></div>
@@ -182,7 +185,7 @@ export function landing({ store, go }) {
     ['All-inclusive, two adults', 'Divi · Tamarijn · Barceló · RIU Palace Antillas', 45000, 55000, 60000, 75000],
   ];
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><p class="eyebrow">Planning bands</p><h2>What a night costs</h2>
+      <div class="sec-head"><div><h2>What a night costs</h2>
       <p>Published once a year and never changed after you have booked against them. Your binding quote is Victor’s negotiated all-in rate, which is usually better.</p></div></div>
       <div class="tablewrap"><table>
         <caption class="sr-only">Indicative points per night by category and season</caption>
@@ -204,19 +207,19 @@ export function landing({ store, go }) {
     { role: 'treasurer', job: 'The Banker', what: 'Holds the money and confirms every transfer. Points are minted only by him, and every line in your ledger carries his name and the time.' },
   ];
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><p class="eyebrow">Who runs it</p><h2>Three people, three jobs</h2></div></div>
-      <div class="grid g3">${JOBS.map(({ role, job, what }) => {
+      <div class="sec-head"><div><h2>Three people, three jobs</h2></div></div>
+      <div class="jobs">${JOBS.map(({ role, job, what }) => {
         const m = store.members.find(x => (x.roles || []).includes(role) && x.status !== 'left');
-        return `<div class="panel"><div class="row" style="gap:12px">
-          ${m ? `<span class="avatar" style="--h:${m.hue};width:44px;height:44px;font-size:.95rem">${escapeHtml(initials(m.name))}</span>` : ''}
-          <div><b>${escapeHtml(m?.name || job)}</b><br><span class="small muted">${escapeHtml(m?.title || job)}</span></div></div>
-        <p class="small muted" style="margin-top:12px">${escapeHtml(what)}</p></div>`;
+        return `<div class="job">
+          <h3>${escapeHtml(job)}</h3>
+          <p class="job-who">${m ? `${avatar(m, 30)}<span>${escapeHtml(m.name)}</span>` : '<span class="muted">not yet filled</span>'}</p>
+          <p class="small muted">${escapeHtml(what)}</p></div>`;
       }).join('')}</div>
       </div></section>`));
 
   // Rules in six sentences
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><p class="eyebrow">The rules, short</p><h2>What you are agreeing to</h2></div></div>
+      <div class="sec-head"><div><h2>What you are agreeing to</h2></div></div>
       <div class="grid g2">
         <ol class="stack" style="padding-left:1.1em">
           <li>100 points = $1.00 of hotel. That never changes.</li>
