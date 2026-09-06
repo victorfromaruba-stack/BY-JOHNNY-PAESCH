@@ -1,8 +1,25 @@
-# Eagle & Palm — by Johnny Paesch
+# BY-JOHNNY-PAESCH
 
-Aruba resale marketplace for timeshare weeks and property.
+Two Aruba projects live in this repository.
+
+## Eagle & Palm — by Johnny Paesch
+
+Aruba resale marketplace for timeshare weeks and property. Lives at the repository root
+(`index.html`).
 
 Live: https://victorfromaruba-stack.github.io/BY-JOHNNY-PAESCH/
+
+## Hunto — the Inner Circle
+
+A private travel club for Victor's circle of friends: monthly contributions confirmed by
+the Banker, points at 100 to the dollar, and stays in Aruba and trips further afield.
+Lives in [`circle/`](circle/) with [its own README](circle/README.md).
+
+Live: https://victorfromaruba-stack.github.io/BY-JOHNNY-PAESCH/circle/
+
+---
+
+# Eagle & Palm — notes
 
 ## Before this goes live
 

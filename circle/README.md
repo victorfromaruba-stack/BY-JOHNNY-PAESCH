@@ -1,0 +1,247 @@
+# Hunto — the Inner Circle
+
+A private travel club for a group of friends in Aruba. It is invitation only: every
+Insider is someone Victor or Ian knows, there is no public sign-up, and the club is
+capped at 40 seats.
+
+Members contribute $100, $150 or $200 a month by bank transfer. The Banker confirms the
+money has arrived; only then are points minted. The club keeps 15% for running it, the
+other 85% backs the points, and points pay for stays on the island and trips the Desk
+organizes.
+
+**What a level is for.** No level shuts anyone out of anything: every Insider can ask for
+every stay and every trip. What the level changes is how fast the points build — and that
+is what decides, in practice, whether you are doing long weekends on the island or leaving
+it with the group.
+
+| | Watapana · $100 | Fofoti · $150 | Kibrahacha · $200 |
+|---|---|---|---|
+| Earns a month | ✦ 8,500 | ✦ 13,050 | ✦ 17,800 |
+| 3 nights on Eagle Beach | 8 months | 6 months | 4 months |
+| A seat in Cartagena | 8 months | 5 months | 4 months |
+| A week in Portugal | 20 months | 13 months | 10 months |
+| Open requests · booked ahead | 1 · 10 months | 2 · 12 months | 2 · 13 months |
+| Guest passes · first look | 2 · — | 3 · 48h | 4 · 72h |
+
+Short of something you want? Ask for it anyway — Victor quotes it and you accept when the
+points are there — or close the gap with a cash top-up, or have the Circle chip in. Moving
+between levels takes effect on your next contribution and changes nothing already held.
+
+**Everything in this build runs in the browser with seeded demo data.** Nothing real is
+stored anywhere and no money moves. See *Going live* below for what has to happen first.
+
+```
+circle/
+├── index.html            the whole app shell (no build step, no framework)
+├── config.js             which backend to use — local demo or Supabase
+├── css/                  tokens.css (the palette, in both themes) + app.css
+├── js/
+│   ├── core/             store.js (all the rules) · money.js (the arithmetic)
+│   │                     router.js · util.js · vocab.js · share.js · supabase-store.js
+│   ├── data/             seed.js (the demo) · stays.js (the catalog)
+│   ├── ui/               pieces.js (card, gauge, ring, split bar) · components.js
+│   │                     charts.js · art.js · qr.js
+│   ├── views/            public.js · member.js · catalog.js · officer.js
+│   └── app.js            boot, routes, the shell
+├── supabase/schema.sql   tables, row-level security, and the money rules in SQL
+├── sw.js                 offline shell
+└── manifest.webmanifest  installable on a phone
+```
+
+## Try it
+
+Open `circle/` on any static server:
+
+```sh
+npx http-server -p 8123 -c-1      # then http://127.0.0.1:8123/circle/
+```
+
+On the sign-in screen, pick a person. Each browser tab can be a different one, and they
+update each other live — open **Vishnu** in one tab and a member in another, mark a
+contribution as sent, then confirm it and watch the points land.
+
+Worth doing in this order:
+
+1. **Sasha** — the home screen: her card, what she can afford, her committed points.
+2. **Marcus, Daniela, Victor, Fabian** have transfers waiting. Sign in as **Vishnu** →
+   *Bank* and confirm one. You have a minute to undo it.
+3. **Kimberly** has a live quote with a cash top-up. Accept it as her, then pay the
+   hotel as Vishnu — the top-up has to arrive first.
+4. **Kimberly** has also opened her Eagle Beach weekend to the Circle: Diego and Priya have
+   already chipped in, and 9,000 points are still to cover. Sign in as anyone and put the
+   rest in — *Circle* → *Chip in*, or straight from your home screen.
+5. **Victor** → *Desk* to quote Priya's open request, edit the catalog, or write a note.
+   The catalog editor takes **dollars or points in either box** — type one and the other
+   follows — and *Settings* has the same converter for checking a price before you enter it.
+6. **Vishnu** → *Bank* → *Close September* — it will not close while transfers are
+   waiting, or if the Reserve is short.
+
+## How the money works
+
+| | $100 | $150 | $200 |
+|---|---|---|---|
+| Tier | Watapana | Fofoti | Kibrahacha |
+| The Circle's share (15%) | $15.00 | $22.50 | $30.00 |
+| Backs your points | $85.00 | $127.50 | $170.00 |
+| Points a month | 8,500 | 13,050 | 17,800 |
+| Of which bonus | — | 300 | 800 |
+| Net to the Circle | $15.00 | $19.50 | $22.00 |
+
+- **100 points = $1.00 of hotel, fixed forever.** Every balance prints the dollar beside it.
+- **Points are minted only by the Banker**, when he has matched the transfer against the
+  bank statement. Marking a transfer as sent creates a pending row and nothing else.
+- **Bonuses are funded by the Circle out of its own 15%**, never out of another member's
+  backing, and are capped at 40% of that month's service charges.
+- **Points follow the money that actually arrived.** A short month earns proportionally
+  fewer points, no tier bonus, and does not extend a streak.
+- **Coverage** is the Reserve divided by everything the club owes in points. It is on the
+  Pool page for every member to see, together with the date the Banker last checked it
+  against the bank and by how much the two differed.
+- **No borrowing.** If a quote is more than a member holds, the difference is a cash
+  top-up to the Banker — with no 15% taken on it — and the hotel is not paid until it lands.
+- **The Circle can chip in together.** Open a booking to everyone and any Insider can put
+  their own points toward it — for a room you are sharing, or as a gift. Their points are
+  committed the moment they chip in, released if it falls through, and when the hotel is
+  paid each person's share burns from their own ledger. Nobody can chip in more than the
+  booking still needs, and points never change hands as points.
+
+The rules a member agrees to are in the app at `#/rules`, and they are what the code does.
+
+## Roles
+
+| | Member | Banker (Vishnu) | Planner (Victor) | Comms (Ian) | Admin |
+|---|---|---|---|---|---|
+| Send and withdraw own contribution | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Confirm, return or correct money | | ✓ | | | |
+| Undo a confirmation (60 s) | | ✓ | | | |
+| Quote and decline requests | | | ✓ | trips | |
+| Pay a hotel and burn points | | ✓ | ✓ | | |
+| Edit the catalog and its prices | | | ✓ | trips | ✓ |
+| Chip in to someone's booking | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Write notes to the Circle | | | | ✓ | ✓ |
+| Close a month (needs a second officer) | | ✓ | | | |
+| Invite people, change the rules | | bank details | | | ✓ |
+
+## Going live
+
+The demo is deliberately self-contained. To run this for real:
+
+1. **Create a Supabase project**, open the SQL editor and run `supabase/schema.sql`. It
+   creates the tables, turns on row-level security, and puts every money rule in a
+   `SECURITY DEFINER` function so a browser can never mint points.
+2. **Set the redirect URLs** in Authentication → URL Configuration to include
+   `https://<user>.github.io/BY-JOHNNY-PAESCH/circle/**`, and configure your own SMTP —
+   the built-in mail server is rate-limited to a handful of messages an hour.
+3. **Point the app at it** in `config.js`:
+   ```js
+   export const CONFIG = {
+     backend: 'supabase',
+     supabaseUrl: 'https://xxxxxxxx.supabase.co',
+     supabaseKey: 'sb_publishable_...',   // publishable, not secret — RLS is the guard
+   };
+   ```
+4. **Add the real people** in Settings → Insiders, and give Vishnu `treasurer`, Victor
+   `planner` + `admin`, Ian `comms`.
+5. **Register the two bank accounts** in Settings. Until the Reserve and Operating are
+   two different accounts, the app says "Coverage: not yet verifiable" and refuses to
+   close a month — which is the honest thing for it to say.
+6. **Replace the planning rates.** Every price in the catalog is a planning band, marked
+   as such. Put Victor's actual negotiated all-in rates in through the Desk.
+7. **Have the rules read by an Aruban accountant** before the first real contribution —
+   the turnover tax treatment of the 15%, and how the club is framed relative to the
+   Centrale Bank van Aruba's rules on taking deposits.
+
+### Open questions for Victor
+
+1. Does the club open its own account (a *vereniging* or *stichting*), or at least two
+   clearly labelled accounts in Vishnu's name? Coverage cannot be verified without it.
+2. Who is the deputy Banker when Vishnu is away?
+3. Is "within 48 hours of the money arriving" a promise Vishnu can keep?
+4. Founding cohort of 20 and a cap of 40 members — right numbers?
+5. Which resorts have actually been negotiated so far?
+6. The club is named **Hunto** — Papiamento for "together". The name lives in
+   `js/core/vocab.js`; change it there and every screen, reference and message follows.
+7. Is the reach right — $100 the island, $150 the region, $200 anywhere? And should a
+   lower-level member be able to buy into a single trip, or only move up for the year?
+8. Wallet passes: pay Apple the $99 so the pass says Hunto, or use a free shared
+   certificate and accept someone else's name on it?
+
+## The back office
+
+Everything the club charges is editable, and always in both units:
+
+- **Desk → Stays & trips** — each property has a dollar box and a points box per season
+  (Summer, Winter, Peak); type into either and the other follows at 100 points to the
+  dollar. Minimum nights, the Peak minimum, the public rate used for the “you save” line,
+  and whether it is live for members are all here too. Trips are priced per seat, with the
+  cash price a non-member guest pays.
+- **Settings → Dollars and points** — a converter that also tells you how many months of
+  contributions at each tier a price works out to, and the amount in Aruban florin.
+- **Settings → The rules of the club** (admin) — the 15% share, the points-per-dollar rate,
+  the seat cap, how long a quote is locked, the Banker's promised turnaround, and the
+  leaving fee. Changing the share or the value of a point asks for confirmation, because
+  both are promises to every member.
+- **Settings → Insiders** — invite someone (it makes a code and copies the link), change
+  roles or tiers, and write a correcting line into anyone's ledger with a reason attached.
+
+## The membership card
+
+Every Insider has a card with their name, their level and a QR code. The QR is generated
+in the app itself (`js/ui/qrcode.js` — byte mode, error correction M, versions 1–10,
+checked module-for-module against a reference implementation and decoded back in the
+tests) so there is no CDN script and no external dependency. It encodes a link to the
+member's entry, which any phone camera opens.
+
+Four ways to keep the card, in the order they cost anything:
+
+1. **Save it as an image** — works on every phone today. Credit-card proportions at
+   300dpi with the QR on it, so it is scannable on its own.
+2. **Print it, card sized** — the print dialog is set to 85.6 × 53.98 mm, so it comes out
+   as a card rather than a card floating on A4.
+3. **Add the app to the home screen** — one tap to the card. On iPhone this is the Share
+   button in Safari, then *Add to Home Screen*; iOS gives no way for a page to offer it.
+4. **Add to Apple Wallet** — needs a signed pass, which needs a certificate. See below.
+
+### Getting the card into Apple Wallet
+
+A `.pkpass` is a zip containing `pass.json`, a `manifest.json` of SHA-1 hashes, a
+detached PKCS#7 `signature`, and the images. The signature has to be made with a
+certificate Apple issues, which means it cannot happen in the browser — the private key
+would be sitting in the page. `supabase/functions/issue-pass/` does it on the server and
+`js/ui/wallet.js` calls it; paste the function's URL into *Settings → Apple Wallet
+passes* and the button appears on every member's card.
+
+Three ways to get there, honestly compared:
+
+| | Cost | Whose name is on the pass | Worth it when |
+|---|---|---|---|
+| **Apple developer account** | $99 a year | Hunto's | You want the club to own its pass and control updates |
+| **A shared-certificate service** (PassSource is free; WalletWallet has a free tier well above 40 members) | $0 | Theirs | You want a pass in Wallet this weekend |
+| **QR and a saved image only** | $0 | — | Honestly, this is fine for a club that meets in person |
+
+The paid path, end to end: enrol at developer.apple.com as an **Individual** (an
+organisation enrolment wants a D-U-N-S number and a company website, which a friends'
+club does not have); create a Pass Type ID (`pass.aw.hunto.card`); generate a certificate
+for it and export it as a `.p12`; download the **WWDR G4** intermediate from
+`apple.com/certificateauthority/AppleWWDRCAG4.cer` and convert it to PEM; then:
+
+```sh
+supabase secrets set PASS_TYPE_ID=pass.aw.hunto.card TEAM_ID=XXXXXXXXXX \
+  PASS_CERT_P12_BASE64="$(base64 -i pass.p12)" PASS_CERT_PASSWORD=... \
+  WWDR_PEM="$(cat AppleWWDRCAG4.pem)" CLUB_URL=https://…/circle/
+supabase functions deploy issue-pass
+```
+
+Google Wallet is deliberately not built: it has no iPhone app, and the club is
+iPhone-first. If enough members end up on Android it is the same Edge Function with a
+different signature.
+
+## Notes on the build
+
+- No framework, no bundler, no dependencies to install, and one lazily-loaded library:
+  `@supabase/supabase-js`, only in Supabase mode. Everything else — the QR encoder, the
+  charts, the card artwork — is in the repository.
+- The service worker caches the shell but never Supabase traffic.
+- A strict `Content-Security-Policy` is set in `index.html`; there are no inline scripts.
+- The demo lives in `localStorage`, so on iOS Safari it is cleared after about a week of
+  not visiting. Profile → *Export everything as JSON* keeps a copy.
