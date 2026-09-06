@@ -44,11 +44,17 @@ export class SupabaseStore extends Store {
     this.subscribeRealtime();
   }
   async reload() {
-    const tables = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'pledges', 'announcements', 'audit', 'invitations', 'month_closes', 'promo_deferrals'];
+    const tables = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'pledges', 'announcements', 'audit', 'invitations', 'month_closes', 'promo_deferrals', 'room_types', 'watches', 'deals'];
     const results = await Promise.all(tables.map(t => this.sb.from(t).select('*')));
     results.forEach((r, i) => { if (!r.error) this.state[tables[i]] = (r.data || []).map(toCamel); });
     this.state.monthCloses = this.state.month_closes || [];
     this.state.promoDeferrals = this.state.promo_deferrals || [];
+    this.state.roomTypes = this.state.room_types || [];
+    // The database calls them from_date/to_date because `from` and `to` are awkward in SQL;
+    // the rest of the app calls them from/to. Bridge it here rather than everywhere else.
+    const dated = (r) => ({ ...r, from: r.fromDate, to: r.toDate });
+    this.state.watches = (this.state.watches || []).map(dated);
+    this.state.deals = (this.state.deals || []).map(dated);
     // pledges live in their own table; the views expect them on the redemption
     const byRedemption = {};
     for (const p of this.state.pledges || []) (byRedemption[p.redemptionId] ||= []).push(p);
@@ -65,7 +71,9 @@ export class SupabaseStore extends Store {
   subscribeRealtime() {
     if (this.channel) return;
     this.channel = this.sb.channel('circle-live');
-    ['contributions', 'redemptions', 'ledger', 'announcements'].forEach(t => this.channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => this.reload()));
+    // Deals are the whole point of the live channel: a deal posted at eleven at night has
+    // to be on everyone's phone without them refreshing.
+    ['contributions', 'redemptions', 'ledger', 'announcements', 'deals', 'watches'].forEach(t => this.channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => this.reload()));
     this.channel.subscribe();
   }
   notify(reason) { this.listeners.forEach(fn => fn(reason, this.state)); }
@@ -220,6 +228,37 @@ export class SupabaseStore extends Store {
     if (error) throw new Error(error.message);
     await this.reload();
   }
+  // ---------- room types, the watch list and deals ----------
+  // Without these the base class would happily mutate its own copy of the state and never
+  // tell the server, which looks like it worked until the next reload.
+  async upsertRoomType(data) { return this.rpc('upsert_room_type', { p_patch: data }); }
+  async removeRoomType(id) { return this.rpc('upsert_room_type', { p_patch: { id, active: false } }); }
+
+  async addWatch({ stayId = null, roomTypeId = null, kind = 'aruba', from, to, nights = 3, flexDays = 3, guests = 2, maxPoints = null, note = '' }) {
+    const w = await this.rpc('add_watch', { p_stay: stayId, p_from: from, p_to: to, p_nights: nights,
+      p_room_type: roomTypeId, p_kind: kind, p_flex: flexDays, p_guests: guests, p_max_points: maxPoints, p_note: note });
+    return w ? { ...w, from: w.fromDate, to: w.toDate } : w;
+  }
+  async removeWatch(id) { return this.rpc('remove_watch', { p_id: id }); }
+  async markWatchesSeen() { return this.rpc('mark_watches_seen', {}); }
+
+  async postDeal({ stayId, roomTypeId = null, from, to, pointsTotal = null, pointsPerNight = null, nights = null,
+                   title = '', retailUsd = null, source = 'other', sourceUrl = '', sourceRef = '', units = 1, expiresAt = null, note = '' }) {
+    const n = nights || null;
+    const points = pointsTotal != null ? pointsTotal : (pointsPerNight != null && n ? pointsPerNight * n : null);
+    const d = await this.rpc('post_deal', { p_stay: stayId, p_from: from, p_to: to, p_points: points,
+      p_room_type: roomTypeId, p_title: title, p_nights: n, p_retail_usd: retailUsd, p_source: source,
+      p_source_url: sourceUrl, p_source_ref: sourceRef, p_units: units, p_expires_at: expiresAt, p_note: note });
+    return d ? { ...d, from: d.fromDate, to: d.toDate } : d;
+  }
+  async retireDeal(id, _actorId, reason = '') { return this.rpc('retire_deal', { p_id: id, p_reason: reason }); }
+
+  async setGoal(_memberId, goal) { return this.rpc('set_my_goal', { p_goal: goal }); }
+  async recordDirectContribution({ memberId, amountUsd, forMonth = null, method = 'cash', currency = 'USD', note = '' }) {
+    return this.rpc('record_direct_contribution', { p_member: memberId, p_amount: amountUsd,
+      p_for_month: forMonth, p_method: method, p_currency: currency, p_note: note });
+  }
+
   async removeStay(id) { const { error } = await this.sb.from('stays').update({ active: false }).eq('id', id); if (error) throw new Error(error.message); await this.reload(); }
   async postAnnouncement({ authorId, title, body, pinned = false, kind = 'note' }) {
     const { error } = await this.sb.from('announcements').insert({ author_id: authorId, title, body, pinned, kind });
