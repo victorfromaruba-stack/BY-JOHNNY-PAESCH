@@ -338,18 +338,34 @@ export class Store {
     await this.commit('members');
     return m;
   }
+  // What a person may change about themselves, and nothing more. This is the same list the
+  // backend's update_my_profile() writes; email is not on it, because email is what ties the
+  // row to the sign-in account and handing that to the account holder hands them the row.
+  static SELF_FIELDS = ['name', 'phone', 'preferences', 'household', 'showOnRollcall', 'standingOrder', 'dreamStayId', 'goal', 'monthlyUsd'];
+
   async updateMember(id, patch, actorId) {
+    if (!this.hasRole('admin')) {
+      if (id !== this.session?.memberId) throw new Error('Only an admin can change someone else');
+      const over = Object.keys(patch).filter(k => !Store.SELF_FIELDS.includes(k));
+      if (over.length) throw new Error(`Only an admin can change ${over.join(' and ')}`);
+    }
+    return this._writeMember(id, patch, actorId);
+  }
+  /** No guard: for the paths that carry their own, like pausing yourself. */
+  async _writeMember(id, patch, actorId) {
     const m = this.member(id); if (!m) throw new Error('No such member');
     const before = {}; for (const k of Object.keys(patch)) before[k] = m[k];
     Object.assign(m, patch); this.log(actorId, 'member.update', 'member', id, { before, after: patch }); await this.commit('members'); return m;
   }
-  async pauseMember(id, untilMonth, actorId) { return this.updateMember(id, { status: 'paused', pausedUntil: untilMonth }, actorId); }
-  async resumeMember(id, actorId) { return this.updateMember(id, { status: 'active', pausedUntil: null }, actorId); }
+  // Pausing and leaving are your own to do; being made inactive by someone else is not.
+  async pauseMember(id, untilMonth, actorId) { this.assertSelfOrAdmin(id); return this._writeMember(id, { status: 'paused', pausedUntil: untilMonth }, actorId); }
+  async resumeMember(id, actorId) { this.assertSelfOrAdmin(id); return this._writeMember(id, { status: 'active', pausedUntil: null }, actorId); }
+  assertSelfOrAdmin(id) { if (id !== this.session?.memberId && !this.hasRole('admin')) throw new Error('That is not yours to change'); }
   exitQuote(memberId) {
     const base = this.basePoints(memberId); const promo = this.promoPoints(memberId); const ppd = this.settings.pointsPerDollar;
     return { basePoints: base, promoPoints: promo, refundUsd: round(Math.max(0, base / ppd - this.settings.exitFeeUsd)), feeUsd: this.settings.exitFeeUsd, windowMonths: 12 };
   }
-  async leaveMember(id, actorId) { return this.updateMember(id, { status: 'left', leftAt: nowIso() }, actorId); }
+  async leaveMember(id, actorId) { this.assertSelfOrAdmin(id); return this._writeMember(id, { status: 'left', leftAt: nowIso() }, actorId); }
 
   // ---------- contributions ----------
   async submitContribution({ memberId, amountUsd, forMonth, method = 'bank', bank = '', reference = '', currency = 'USD', note = '', proofName = '', proofDataUrl = '', sentOn = '' }) {

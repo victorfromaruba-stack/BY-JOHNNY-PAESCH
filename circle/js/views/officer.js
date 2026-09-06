@@ -774,19 +774,21 @@ export function settings({ store, go }) {
 
       <div class="panel" style="margin-top:16px">
         <div class="row-between"><h2 style="font-size:1.1rem">Insiders</h2>
-          <div class="row"><button class="btn sm" id="add-member">${icon('plus', { size: 16 })}Add an Insider</button>
+          <div class="row">${isAdmin ? `<button class="btn sm" id="add-member">${icon('plus', { size: 16 })}Add an Insider</button>` : ''}
             <button class="btn ghost sm" id="invite">${icon('link', { size: 15 })}Make an invitation link</button></div></div>
         <p class="small muted" style="margin-top:6px">Adding someone puts them on the list. They then open the site, tap
           <b>Set it up</b> with the same email, and choose their own password — you never see it and you never touch the database.</p>
         <div class="tablewrap" style="margin-top:14px;border:0"><table>
           <thead><tr><th>Name</th><th>Tier</th><th>Roles</th><th>State</th><th class="num">Points</th><th></th></tr></thead>
           <tbody>${store.members.map(m => `<tr>
-            <td><b>${escapeHtml(m.name)}</b><br><span class="small muted">${escapeHtml(m.email)}</span></td>
+            <td><b>${escapeHtml(m.name)}</b><br><span class="small ${m.email ? 'muted' : ''}" ${m.email ? '' : 'style="color:var(--flag)"'}>${escapeHtml(m.email || 'no email yet — they cannot sign in')}</span></td>
             <td>${escapeHtml(tierName(m.monthlyUsd))}</td>
             <td class="small">${escapeHtml(m.roles.join(', '))}</td>
             <td>${chip(m.status === 'active' ? 'active' : m.status)}</td>
             <td class="num">${escapeHtml(fmtPoints(store.availablePoints(m.id)))}</td>
-            <td><button class="btn quiet sm" data-adjust="${m.id}">Adjust</button></td></tr>`).join('')}</tbody></table></div>
+            <td><div class="row nowrap" style="gap:6px;justify-content:flex-end;flex-wrap:nowrap">
+              ${isAdmin ? `<button class="btn ghost sm" data-edit="${m.id}">${icon('edit', { size: 15 })}Edit</button>` : ''}
+              <button class="btn quiet sm" data-adjust="${m.id}">Adjust</button></div></td></tr>`).join('')}</tbody></table></div>
       </div>
 
       <div class="panel" style="margin-top:16px">
@@ -911,6 +913,58 @@ export function settings({ store, go }) {
       toast(`Invitation created and the link is copied: ${inv.code}`, { kind: 'good', timeout: 7000 });
     }
   });
+  // Editing someone — above all, giving them the email they sign in with. Without this the
+  // only way to fix a missing address is the table editor, which is how we got two Ians.
+  wrap.addEventListener('click', async (e) => {
+    const ed = e.target.closest('[data-edit]'); if (!ed) return;
+    const m = store.member(ed.dataset.edit); if (!m) return;
+    const ROLES = [
+      { id: 'member', label: 'Insider' }, { id: 'treasurer', label: 'Banker' },
+      { id: 'planner', label: 'Desk' }, { id: 'comms', label: 'Voice' },
+      { id: 'deputy', label: 'Deputy Banker' }, { id: 'admin', label: 'Admin' },
+    ];
+    const out = await sheet({ title: `Edit ${m.name}`, render: (body, close) => {
+      body.innerHTML = `
+        ${m.email ? '' : `<div class="notice warn"><b>${icon('alert', { size: 16 })} No email yet</b>
+          <p class="small">They cannot sign in until this is set. It has to be the address they will type on the sign-in screen.</p></div>`}
+        <div class="grid g2">
+          <label class="field"><span>Name</span><input name="name" value="${escapeHtml(m.name)}" required></label>
+          <label class="field"><span>Email they sign in with</span><input name="email" type="email" inputmode="email" value="${escapeHtml(m.email || '')}" placeholder="them@example.aw"></label>
+        </div>
+        <div class="grid g2">
+          <label class="field"><span>Level</span><select name="monthlyUsd">${s.tiers.map(t => `<option value="${t.monthlyUsd}"${t.monthlyUsd === m.monthlyUsd ? ' selected' : ''}>${escapeHtml(fmtUsd2(t.monthlyUsd))} · ${escapeHtml(tierName(t.monthlyUsd))}</option>`).join('')}</select></label>
+          <label class="field"><span>What they are called</span><input name="title" value="${escapeHtml(m.title || '')}"></label>
+        </div>
+        <p class="eyebrow" style="margin-top:6px">What they can do</p>
+        <div class="row" style="flex-wrap:wrap;gap:12px;margin-top:8px">
+          ${ROLES.map(r => `<label class="row" style="gap:7px"><input type="checkbox" name="role" value="${r.id}"${(m.roles || []).includes(r.id) ? ' checked' : ''} style="width:18px;height:18px"><span class="small">${escapeHtml(r.label)}</span></label>`).join('')}
+        </div>
+        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button>
+          <button class="btn" data-ok>${icon('check', { size: 16 })}Save</button></div>`;
+      body.querySelector('[data-ok]').addEventListener('click', () => {
+        const roles = [...body.querySelectorAll('[name=role]:checked')].map(x => x.value);
+        close({
+          name: body.querySelector('[name=name]').value.trim(),
+          email: body.querySelector('[name=email]').value.trim(),
+          title: body.querySelector('[name=title]').value.trim(),
+          monthlyUsd: Number(body.querySelector('[name=monthlyUsd]').value),
+          roles: roles.length ? roles : ['member'],
+        });
+      });
+    } });
+    if (!out?.name) return;
+    // Another member already on that address would break sign-in for both of them.
+    const clash = out.email && store.members.find(x => x.id !== m.id && (x.email || '').toLowerCase() === out.email.toLowerCase());
+    if (clash) { toast(`${clash.name} is already on that email.`, { kind: 'bad', timeout: 6000 }); return; }
+    // Read this before the write: updateMember assigns straight onto the member object.
+    const wasLockedOut = !m.email;
+    try {
+      await store.updateMember(m.id, out, me.id);
+      toast(out.email && wasLockedOut ? `${out.name} can sign in now — send them the link.` : 'Saved.', { kind: 'good' });
+      go('/settings');
+    } catch (err) { toast(err.message, { kind: 'bad', timeout: 6000 }); }
+  });
+
   wrap.addEventListener('click', async (e) => {
     const adj = e.target.closest('[data-adjust]');
     if (adj) {

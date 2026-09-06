@@ -1316,9 +1316,15 @@ returns members language plpgsql security definer set search_path = public as $$
 declare m members;
 begin
   if not has_role('admin') then raise exception 'Only an admin can change a membership'; end if;
+  -- Two rows on one address means one sign-in matching two memberships. The unique index on
+  -- lower(email) would catch it anyway, but not in words anyone would want to read.
+  if p_patch ? 'email' and coalesce(trim(p_patch->>'email'), '') <> ''
+     and exists (select 1 from members where id <> p_id and lower(email) = lower(trim(p_patch->>'email'))) then
+    raise exception 'Someone else is already on that email';
+  end if;
   update members set
     name        = coalesce(p_patch->>'name', name),
-    email       = coalesce(p_patch->>'email', email),
+    email       = case when p_patch ? 'email' then nullif(trim(p_patch->>'email'), '') else email end,
     phone       = coalesce(p_patch->>'phone', phone),
     roles       = coalesce((select array_agg(x::member_role) from jsonb_array_elements_text(p_patch->'roles') x), roles),
     status      = coalesce((p_patch->>'status')::member_status, status),
