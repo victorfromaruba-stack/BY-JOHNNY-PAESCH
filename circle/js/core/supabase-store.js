@@ -38,10 +38,29 @@ export class SupabaseStore extends Store {
     this.sb.auth.onAuthStateChange(async (_evt, s) => { if (s) { await this.afterSignIn(); } else { this.state.session = null; this.notify('session'); } });
     return this;
   }
+  /**
+   * Everything that has to happen once a session exists.
+   *
+   * Latched, because onAuthStateChange fires for the very sign-in that called this: without it
+   * every real sign-in runs the whole thing twice, at the same time — two reloads of twenty
+   * tables racing each other, and signInWithPassword's session check reading half-written
+   * state and telling a member who is perfectly on the list that they are not on it.
+   */
   async afterSignIn() {
+    if (!this._afterSignIn) {
+      this._afterSignIn = this._runAfterSignIn().finally(() => { this._afterSignIn = null; });
+    }
+    return this._afterSignIn;
+  }
+  async _runAfterSignIn() {
     // Quotes lapse on the clock, so somebody has to notice. Once per session, not per
     // render — releaseExpired() runs inside getters and would loop if it called out.
-    await this.sb.rpc('release_expired_quotes').catch(() => {});
+    //
+    // try/catch, not .catch(). sb.rpc() hands back a Postgrest query builder, which is a
+    // thenable — it has .then() so `await` works — but it is not a Promise and has no .catch.
+    // Calling it threw before the sign-in could finish, so every member on the real backend
+    // met "The Circle is not answering" while the Circle was answering perfectly well.
+    try { await this.sb.rpc('release_expired_quotes'); } catch { /* a lapsed quote can wait */ }
     const { data: me } = await this.sb.rpc('claim_membership');
     if (me?.id) { this.state.session = { memberId: me.id, at: new Date().toISOString() }; this.strandedEmail = null; }
     else this.strandedEmail = (await this.sb.auth.getUser())?.data?.user?.email || 'that account';
@@ -153,8 +172,11 @@ export class SupabaseStore extends Store {
     try {
       await this.signInWithPassword(u + SupabaseStore.LOGIN_DOMAIN, password);
     } catch (err) {
-      // Never say which half was wrong — that tells a stranger which usernames exist.
-      if (/not on the Circle|Invalid login|password|credentials/i.test(err.message)) {
+      // Never say which half was wrong — that tells a stranger which usernames exist. But only
+      // for a genuine credential refusal: /password/ used to match "That password is right, but
+      // you are not on the Circle's list", turning the one message that says exactly what to do
+      // into the one that says nothing. Anything else keeps its own words.
+      if (/invalid login|invalid credentials|not on the Circle's list/i.test(err.message)) {
         throw new Error('That username and password do not go together. Ask Victor or Ian if you are stuck.');
       }
       throw err;

@@ -438,14 +438,32 @@ returns void language sql security definer set search_path = public as $$
 $$;
 
 -- Link a freshly signed-in account to the member row invited under that email.
-create or replace function claim_membership() returns members
-language plpgsql security definer set search_path = public as $$
+-- Matching an account to a member row. This matched on EMAIL until it bit: logins became
+-- usernames, admin_set_login started writing auth_user_id directly, members.email went null,
+-- and so `lower(null) = lower('victor@members.hunto.aw')` was null. No row came back, no session
+-- was ever established, and every signed-in member was told they were not on the Circle's list.
+--
+-- The link is auth_user_id. Look there first. The email branch stays only for a legacy row made
+-- before usernames that has never been claimed.
+create or replace function claim_membership()
+returns members language plpgsql security definer set search_path = public as $$
 declare m members;
 begin
+  -- Already linked, which is every account admin_set_login has ever made.
+  select * into m from members where auth_user_id = auth.uid();
+  if m.id is not null then
+    if m.status = 'invited' then
+      update members set status = 'active' where id = m.id returning * into m;
+    end if;
+    return m;
+  end if;
+
+  -- Not linked yet: an older row that carries an email and has never been claimed.
   update members set auth_user_id = auth.uid(),
          status = case when status = 'invited' then 'active' else status end
-  where lower(email) = lower((select email from auth.users where id = auth.uid()))
-    and (auth_user_id is null or auth_user_id = auth.uid())
+  where email is not null
+    and lower(email) = lower((select email from auth.users where id = auth.uid()))
+    and auth_user_id is null
   returning * into m;
   return m;
 end $$;
