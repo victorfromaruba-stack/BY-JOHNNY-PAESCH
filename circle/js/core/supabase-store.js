@@ -291,12 +291,18 @@ export class SupabaseStore extends Store {
     if (error) throw new Error(error.message); await this.reload();
   }
   async deleteAnnouncement(id) { const { error } = await this.sb.from('announcements').delete().eq('id', id); if (error) throw new Error(error.message); await this.reload(); }
+  // The settings row holds two different kinds of thing. The Banker owns the account details;
+  // the Admin owns everything that prices a point. The database enforces that with a column
+  // grant, so send each half down the path it is allowed to take.
+  static RULE_FIELDS = ['serviceRate', 'pointsPerDollar', 'awgPerUsd', 'memberCap', 'quoteHours', 'bankerSlaHours', 'exitFeeUsd', 'tiers', 'clubName'];
   async updateSettings(patch) {
+    const rules = Object.fromEntries(Object.entries(patch).filter(([k]) => SupabaseStore.RULE_FIELDS.includes(k)));
+    if (Object.keys(rules).length) await this.rpc('update_club_rules', { p_patch: rules });
+
     const row = {};
-    const map = { serviceRate: 'service_rate', pointsPerDollar: 'points_per_dollar', memberCap: 'member_cap',
-      quoteHours: 'quote_hours', bankerSlaHours: 'banker_sla_hours', exitFeeUsd: 'exit_fee_usd',
-      tiers: 'tiers', reserveAccount: 'reserve_account', operatingAccount: 'operating_account', clubName: 'club_name', wallet: 'wallet' };
+    const map = { reserveAccount: 'reserve_account', operatingAccount: 'operating_account', wallet: 'wallet' };
     for (const [k, v] of Object.entries(patch)) if (map[k]) row[map[k]] = v;
+    if (!Object.keys(row).length) { await this.reload(); return; }
     const { error } = await this.sb.from('settings').update({ ...row, updated_at: new Date().toISOString() }).eq('id', 1);
     if (error) throw new Error(error.message); await this.reload();
   }

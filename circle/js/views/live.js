@@ -42,7 +42,7 @@ function bedroomsOf(d) {
  */
 function clubRateFor(store, d) {
   if (!d.stayId) return null;
-  const stay = store.stay(d.stayId);
+  const stay = store.stayLike(d.stayId);
   if (!stay || stay.kind === 'trip') return null;
   const season = seasonFor(`${d.from}T12:00:00Z`) || 'low';
   const base = seasonPoints(stay, season, store.settings);
@@ -137,7 +137,9 @@ export function live({ store, go }) {
     const savedPts = club ? club.total - d.pointsTotal : 0;
     const avail = Math.max(0, store.availablePoints(me.id));
     const short = Math.max(0, d.pointsTotal - avail);
-    const stay = d.stayId ? store.stay(d.stayId) : null;
+    // Resolve to whatever this backend actually calls the place, and use that id in links.
+    const stay = d.stayId ? store.stayLike(d.stayId) : null;
+    const stayRef = stay?.id || null;
 
     return `<article class="panel live-card${beatsClub ? ' beats' : ''}" data-id="${escapeHtml(d.externalId)}">
       <div class="row-between" style="align-items:flex-start;gap:14px">
@@ -147,7 +149,7 @@ export function live({ store, go }) {
             ${d.unitType ? `${escapeHtml(d.unitType)} · ` : ''}${d.sleeps ? `sleeps ${d.sleeps}` : ''}${d.bedrooms ? ` · ${d.bedrooms} bed${d.bedrooms > 1 ? 'rooms' : 'room'}` : ''}
             ${d.copies > 1 ? ` · <b>${d.copies} owners have it</b>` : ''}
             ${stay?.house ? ` · <span style="color:var(--good-text)">where we stay</span>` : ''}
-            ${!d.stayId ? ' · <span class="muted">not in our catalog yet</span>' : ''}</p>
+            ${!stayRef ? ' · <span class="muted">not in our catalog yet</span>' : ''}</p>
         </div>
         <div style="text-align:right;flex:none">
           <b class="num" style="font-size:1.12rem">${escapeHtml(fmtPoints(d.pointsTotal))}</b>
@@ -171,8 +173,8 @@ export function live({ store, go }) {
                 : 'You hold enough for this.'}</p>
 
       <div class="row" style="margin-top:14px">
-        ${d.stayId ? `<a class="btn sm" href="#/book/${escapeHtml(d.stayId)}?from=${escapeHtml(d.from)}&to=${escapeHtml(d.to)}">${icon('send', { size: 16 })}Ask the Circle for it</a>` : ''}
-        ${canPost && d.stayId ? `<button class="btn ghost sm" data-post="${escapeHtml(d.externalId)}">${icon('plus', { size: 15 })}Put it on the board</button>` : ''}
+        ${stayRef ? `<a class="btn sm" href="#/book/${escapeHtml(stayRef)}?from=${escapeHtml(d.from)}&to=${escapeHtml(d.to)}">${icon('send', { size: 16 })}Ask the Circle for it</a>` : ''}
+        ${canPost && stayRef ? `<button class="btn ghost sm" data-post="${escapeHtml(d.externalId)}">${icon('plus', { size: 15 })}Put it on the board</button>` : ''}
         ${canPost && d.bookingUrl ? `<a class="btn quiet sm" href="${escapeHtml(d.bookingUrl)}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 16 })}Go and book it</a>` : ''}
       </div>
     </article>`;
@@ -261,7 +263,7 @@ export function live({ store, go }) {
       if (!yes) return;
       try {
         const deal = await store.postDeal({
-          stayId: d.stayId, from: d.from, to: d.to, nights: d.nights,
+          stayId: store.stayLike(d.stayId)?.id || null, from: d.from, to: d.to, nights: d.nights,
           pointsTotal: d.pointsTotal, retailUsd: d.usdTotal,
           source: 'other', sourceUrl: d.bookingUrl,
           sourceRef: `vakaymood:${d.externalId}`,

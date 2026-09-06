@@ -775,7 +775,7 @@ export function settings({ store, go }) {
       <div class="panel" style="margin-top:16px">
         <div class="row-between"><h2 style="font-size:1.1rem">Insiders</h2>
           <div class="row">${isAdmin ? `<button class="btn sm" id="add-member">${icon('plus', { size: 16 })}Add an Insider</button>` : ''}
-            <button class="btn ghost sm" id="invite">${icon('link', { size: 15 })}Make an invitation link</button></div></div>
+            ${isAdmin ? `<button class="btn ghost sm" id="invite">${icon('link', { size: 15 })}Make an invitation link</button>` : ''}</div></div>
         <p class="small muted" style="margin-top:6px">Adding someone puts them on the list. They then open the site, tap
           <b>Set it up</b> with the same email, and choose their own password — you never see it and you never touch the database.
           Being on the list <em>is</em> the invitation; the link below is just the way in.</p>
@@ -789,17 +789,18 @@ export function settings({ store, go }) {
             <td class="num">${escapeHtml(fmtPoints(store.availablePoints(m.id)))}</td>
             <td><div class="row nowrap" style="gap:6px;justify-content:flex-end;flex-wrap:nowrap">
               ${isAdmin ? `<button class="btn ghost sm" data-edit="${m.id}">${icon('edit', { size: 15 })}Edit</button>` : ''}
-              <button class="btn quiet sm" data-adjust="${m.id}">Adjust</button></div></td></tr>`).join('')}</tbody></table></div>
+              ${isAdmin ? `<button class="btn quiet sm" data-adjust="${m.id}">Adjust</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>
       </div>
 
       <div class="panel" style="margin-top:16px">
         <h2 style="font-size:1.1rem">The record</h2>
         <p class="small muted" style="margin-top:6px">Everything anyone did, oldest at the bottom. The ledger itself can never be edited — corrections are new lines with a reason.</p>
         <div class="row" style="margin-top:12px">
-          <button class="btn ghost sm" id="backup">Back up everything</button>
-          <button class="btn ghost sm" id="restore">Restore from a backup</button>
-          <button class="btn quiet sm" id="reset">Reset the demo</button>
+          <button class="btn ghost sm" id="backup">${icon('download', { size: 15 })}Back up everything</button>
+          ${store.mode === 'supabase' ? '' : `<button class="btn ghost sm" id="restore">Restore from a backup</button>
+          <button class="btn quiet sm" id="reset">Reset the preview</button>`}
         </div>
+        ${store.mode === 'supabase' ? `<p class="tiny muted" style="margin-top:8px">The backup is a record you can keep and read, not a restore point — putting data back is a job for Supabase, where the ledger's own history lives.</p>` : ''}
         <ul class="ledger" style="margin-top:14px">${store.audit(25).map(a => `<li>
           <span class="what"><b>${escapeHtml(a.action)}</b><span class="meta">${escapeHtml(store.member(a.actorId)?.name || 'system')} · ${escapeHtml(a.entity)}</span></span>
           <span class="delta"><small>${escapeHtml(fmtDayTime(a.at))}</small></span></li>`).join('')}</ul>
@@ -907,7 +908,8 @@ export function settings({ store, go }) {
         monthlyUsd: Number(body.querySelector('[name=monthlyUsd]').value),
       }));
     } });
-    if (out?.name) {
+    if (!out?.name) return;
+    try {
       const inv = await store.createInvitation({ ...out, sponsorId: me.id }, me.id);
       const live = store.mode === 'supabase';
       // A /join/CODE link cannot be read by a signed-out browser on the real backend, so
@@ -917,7 +919,7 @@ export function settings({ store, go }) {
       toast(live
         ? `Link copied. Add ${out.name} as an Insider with that same email, then send it — they tap "Set it up".`
         : `Invitation created and the link is copied: ${inv.code}`, { kind: 'good', timeout: 8000 });
-    }
+    } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
   });
   // Editing someone — above all, giving them the email they sign in with. Without this the
   // only way to fix a missing address is the table editor, which is how we got two Ians.
@@ -986,7 +988,7 @@ export function settings({ store, go }) {
     }
     if (e.target.id === 'backup') downloadText(`${VOCAB.clubName.toLowerCase()}-backup-${new Date().toISOString().slice(0, 10)}.json`, store.exportJson(), 'application/json');
     if (e.target.id === 'reset') {
-      const yes = await confirmDialog({ title: 'Reset the demo?', danger: true, confirmText: 'Reset', message: 'Everything in this browser goes back to how the demo started.' });
+      const yes = await confirmDialog({ title: 'Reset the preview?', danger: true, confirmText: 'Reset', message: 'Everything in this browser goes back to how the preview started. The real Circle is untouched.' });
       if (yes) { const { seed } = await import('../data/seed.js'); await store.reset(seed); toast('Back to the start.'); go('/'); }
     }
     if (e.target.id === 'restore') {

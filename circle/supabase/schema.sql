@@ -151,6 +151,10 @@ create table if not exists ledger (
   usd        numeric(10,2),
   ref_type   text,
   ref_id     uuid,
+  -- ref_id cannot hold a ledger id: ledger.id is a bigserial and ref_id is a uuid. An expiry
+  -- line has to name the promotional line it cancels, or close_month expires it again every
+  -- month forever, and the member's balance walks down with each close.
+  ref_ledger_id bigint references ledger(id),
   note       text,
   by_id      uuid references members(id),
   expires_at timestamptz,                            -- promotional points only
@@ -673,9 +677,9 @@ begin
   end loop;
   delete from promo_deferrals where ref_id = c.id and minted_at is null;
   update contributions set status = 'reversed' where id = c.id;
-  insert into contributions (member_id, for_month, expected_usd, currency, method, bank, reference, note,
+  insert into contributions (member_id, for_month, extra, recorded_by, expected_usd, currency, method, bank, reference, note,
                              proof_path, sent_on, submitted_at, status, reversed_of)
-    values (c.member_id, c.for_month, c.expected_usd, c.currency, c.method, c.bank, c.reference, c.note,
+    values (c.member_id, c.for_month, c.extra, c.recorded_by, c.expected_usd, c.currency, c.method, c.bank, c.reference, c.note,
             c.proof_path, c.sent_on, c.submitted_at, 'pending', c.id)
     returning * into again;
   perform log_audit('contribution.reverse','contribution',c.id::text, jsonb_build_object('reopenedAs', again.id));
@@ -1024,9 +1028,9 @@ begin
   -- promotional points past their date go back to Operating
   for l in select * from ledger where kind in ('bonus','streak','founding')
            and expires_at is not null and to_char(expires_at,'YYYY-MM') <= p_month
-           and not exists (select 1 from ledger x where x.kind='expire' and x.ref_type='ledger' and x.ref_id::text = ledger.id::text) loop
-    insert into ledger(member_id, kind, points, usd, ref_type, note, by_id)
-      values (l.member_id, 'expire', -l.points, -coalesce(l.usd,0), 'ledger', 'Expired · ' || l.note, current_member_id());
+           and not exists (select 1 from ledger x where x.kind='expire' and x.ref_ledger_id = ledger.id) loop
+    insert into ledger(member_id, kind, points, usd, ref_type, ref_ledger_id, note, by_id)
+      values (l.member_id, 'expire', -l.points, -coalesce(l.usd,0), 'ledger', l.id, 'Expired · ' || l.note, current_member_id());
   end loop;
 
   -- deferred promotional points are minted if there is room now
@@ -1265,6 +1269,12 @@ revoke update, delete on contributions from authenticated;
 
 drop policy if exists settings_read on settings;
 create policy settings_read on settings for select to authenticated using (true);
+-- Row-level security cannot narrow to columns, so the column grant does it: the Banker keeps
+-- the two account fields and the wallet, and everything that prices a point goes through
+-- update_club_rules(), which requires an admin.
+revoke update on settings from authenticated;
+grant update (reserve_account, operating_account, wallet, updated_at) on settings to authenticated;
+
 drop policy if exists settings_write on settings;
 create policy settings_write on settings for update to authenticated
   using ((select has_role('admin','treasurer'))) with check ((select has_role('admin','treasurer')));
@@ -1312,6 +1322,31 @@ begin
   where id = me returning * into m;
   perform log_audit('member.status','member',me::text, jsonb_build_object('status', p_status));
   return m;
+end $$;
+
+-- The rules of the club are the Admin's, not the Banker's. The Banker legitimately edits the
+-- Reserve and Operating account details, which live in the same row — so the split is done
+-- with a column grant rather than by tightening settings_write, which would take the
+-- accounts away from the person whose job they are.
+create or replace function update_club_rules(p_patch jsonb)
+returns settings language plpgsql security definer set search_path = public as $$
+declare s settings;
+begin
+  if not has_role('admin') then raise exception 'Only an admin can change the rules of the club'; end if;
+  update settings set
+    club_name         = coalesce(p_patch->>'clubName', club_name),
+    service_rate      = coalesce((p_patch->>'serviceRate')::numeric, service_rate),
+    points_per_dollar = coalesce((p_patch->>'pointsPerDollar')::int, points_per_dollar),
+    awg_per_usd       = coalesce((p_patch->>'awgPerUsd')::numeric, awg_per_usd),
+    tiers             = coalesce(p_patch->'tiers', tiers),
+    quote_hours       = coalesce((p_patch->>'quoteHours')::int, quote_hours),
+    banker_sla_hours  = coalesce((p_patch->>'bankerSlaHours')::int, banker_sla_hours),
+    exit_fee_usd      = coalesce((p_patch->>'exitFeeUsd')::numeric, exit_fee_usd),
+    member_cap        = coalesce((p_patch->>'memberCap')::int, member_cap),
+    updated_at        = now()
+  where id = 1 returning * into s;
+  perform log_audit('settings.rules','settings','settings', p_patch);
+  return s;
 end $$;
 
 create or replace function admin_update_member(p_id uuid, p_patch jsonb)
@@ -1571,6 +1606,7 @@ declare
     'ledger_balance','ledger_is_append_only','log_audit','mark_watches_seen','my_matches',
     'pay_redemption','pledge_to_redemption','post_deal','promo_room','quote_points',
     'quote_redemption','record_direct_contribution','reject_contribution','release_expired_quotes',
+    'update_club_rules',
     'remove_watch','request_redemption','reserve_expected_usd','retire_deal','reverse_contribution',
     'season_for','set_my_goal','set_my_status','update_my_profile','upsert_room_type',
     'withdraw_contribution','withdraw_pledge','set_updated_at'
@@ -1586,15 +1622,30 @@ begin
   end loop;
 end $$;
 
--- Two of these are triggers and internal helpers; nothing outside the database should be
--- able to call them at all, not even a signed-in member.
+-- Triggers, and helpers that take a member id. Nothing outside the database should be able
+-- to call these, not even a signed-in member.
+--
+-- The balance helpers matter most. ledger_read only lets a member see their own ledger rows,
+-- but ledger_balance(uuid) is SECURITY DEFINER, so it reads straight past that policy and
+-- answers for anybody. Every member id is readable (the roll call needs them), so leaving
+-- these callable handed every Insider a way to look up anyone's exact balance — precisely
+-- what the policy exists to prevent. They stay callable from inside the SECURITY DEFINER
+-- functions that legitimately need them, because those execute as the owner.
 do $$
 declare fn text;
 begin
   for fn in
     select format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid))
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-     where n.nspname = 'public' and p.proname in ('log_audit','ledger_is_append_only','set_updated_at')
+     where n.nspname = 'public' and p.proname in (
+       'log_audit','ledger_is_append_only','set_updated_at',
+       'ledger_balance','committed_points','available_points','covered_points','consecutive_months',
+       'promo_room','quote_points','reserve_expected_usd','season_for','easter_sunday',
+       'deal_matches_watch')
+     -- NOT has_role or current_member_id: eighteen and sixteen row-level security policies
+     -- call them, and a policy expression is evaluated as the querying user, so revoking
+     -- those would make every policy in the database fail and lock everyone out.
+     -- NOT release_expired_quotes: the client calls it directly at sign-in.
   loop
     execute format('revoke all on function %s from authenticated', fn);
   end loop;

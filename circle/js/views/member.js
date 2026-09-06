@@ -125,7 +125,8 @@ export function home({ store, go }) {
   goalPanel.addEventListener('click', async (e) => {
     if (!e.target.closest('#set-goal')) return;
     const picked = await goalSheet({ store });
-    if (picked !== null) { await store.setGoal(me.id, picked, me.id); drawGoal(); }
+    if (picked === CLEAR_GOAL) { await store.setGoal(me.id, null, me.id); drawGoal(); }
+    else if (picked?.stayId) { await store.setGoal(me.id, picked, me.id); drawGoal(); }
   });
 
   // 3 — what needs you, in the order it needs you
@@ -230,6 +231,10 @@ export function home({ store, go }) {
   return wrap;
 }
 
+/** The sheet resolves with this when someone asks to stop saving, so it can never be
+ *  confused with the undefined that closing or cancelling the sheet gives back. */
+const CLEAR_GOAL = Symbol('clear-goal');
+
 /** Choose what you are saving for: a place, how many nights, which season. */
 export async function goalSheet({ store }) {
   const s = store.settings;
@@ -273,7 +278,7 @@ export async function goalSheet({ store }) {
           ${stay?.minNights > 1 && !isTrip ? `<p class="small muted" style="margin-top:6px">${escapeHtml(stay.name)} takes a minimum of ${stay.minNights} nights.</p>` : ''}`;
       };
       body.addEventListener('input', draw); body.addEventListener('change', draw); draw();
-      body.querySelector('[data-clear]')?.addEventListener('click', () => close(null));
+      body.querySelector('[data-clear]')?.addEventListener('click', () => close(CLEAR_GOAL));
       body.querySelector('[data-ok]').addEventListener('click', () => {
         const stay = store.stay(v('stayId').value);
         close({ stayId: stay.id, nights: stay.kind === 'trip' ? stay.nights : Number(v('nights').value) || 1, season: v('season').value });
@@ -618,7 +623,9 @@ export function profile({ store, go, refresh }) {
 
       <div class="panel" style="margin-top:16px">
         <h2>Your data</h2>
-        <p class="small muted" style="margin-top:6px">In the demo everything lives in this browser, and Safari clears it after about a week of not visiting. Keep a copy if you want it to survive.</p>
+        <p class="small muted" style="margin-top:6px">${store.mode === 'supabase'
+          ? 'Everything you see here is held by the Circle, not by this phone — sign in anywhere and it follows you. A copy is still yours to keep whenever you want one.'
+          : 'This is a preview running in your browser, and Safari clears it after about a week of not visiting. Keep a copy if you want it to survive.'}</p>
         <div class="row" style="margin-top:12px">
           <button class="btn ghost sm" id="export">Export everything as JSON</button>
           <button class="btn quiet sm" id="signout">Sign out</button>
