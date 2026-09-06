@@ -96,21 +96,28 @@ The same guards run in the browser and in the database, so both refuse the same 
 name is required, a duplicate email is refused, a role that is not a real role is refused
 rather than silently dropped, only an admin can add anyone, and the 40-seat cap holds.
 
-If you ever do want to do it in the SQL editor — a dozen people at once, say — this is the
-shape. It goes through the same function, so all of the above still applies:
+Roles are `member`, `treasurer`, `deputy`, `planner`, `comms`, `admin`.
+
+**In the SQL editor, do not call `admin_add_member`.** The editor connects as the database
+owner rather than as a signed-in member, so `auth.uid()` is null, the function cannot tell
+who you are, and it correctly refuses with *Only an admin can add a member*. The guard is
+right; calling it from there is the mistake. In the editor you already hold the highest
+privilege, so write the row:
 
 ```sql
-select admin_add_member('{
-  "name": "Ian Hekman",
-  "email": "ian@example.aw",
-  "monthlyUsd": 150,
-  "title": "Voice of the Circle",
-  "roles": ["comms"]
-}'::jsonb);
+insert into members (name, email, monthly_usd, roles, status, title, founding, card_code)
+values
+  ('Ian Hekman', 'ian@example.aw',    150, '{comms}'::member_role[],     'invited', 'Voice of the Circle',  true,
+   upper(substr(md5(random()::text), 1, 6))),
+  ('Vishnu',     'vishnu@example.aw', 150, '{treasurer}'::member_role[], 'invited', 'Banker of the Circle', true,
+   upper(substr(md5(random()::text), 1, 6)))
+on conflict do nothing;
+
+select name, email, roles, status from members order by name;
 ```
 
-Roles are `member`, `treasurer`, `deputy`, `planner`, `comms`, `admin`. Leave `roles` out and
-they are a plain Insider.
+Safe to run twice — `email` is unique, case-insensitively, so a second run adds nothing.
+A misspelled role fails on the `member_role[]` cast rather than going in wrong.
 
 ## Where the deals come from — and what is honestly automatable
 
