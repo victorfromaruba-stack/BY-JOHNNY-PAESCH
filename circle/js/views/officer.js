@@ -773,7 +773,11 @@ export function settings({ store, go }) {
       </form>
 
       <div class="panel" style="margin-top:16px">
-        <div class="row-between"><h2 style="font-size:1.1rem">Insiders</h2><button class="btn ghost sm" id="invite">Invite someone</button></div>
+        <div class="row-between"><h2 style="font-size:1.1rem">Insiders</h2>
+          <div class="row"><button class="btn sm" id="add-member">${icon('plus', { size: 16 })}Add an Insider</button>
+            <button class="btn ghost sm" id="invite">${icon('link', { size: 15 })}Make an invitation link</button></div></div>
+        <p class="small muted" style="margin-top:6px">Adding someone puts them on the list. They then open the site, tap
+          <b>Set it up</b> with the same email, and choose their own password — you never see it and you never touch the database.</p>
         <div class="tablewrap" style="margin-top:14px;border:0"><table>
           <thead><tr><th>Name</th><th>Tier</th><th>Roles</th><th>State</th><th class="num">Points</th><th></th></tr></thead>
           <tbody>${store.members.map(m => `<tr>
@@ -833,6 +837,61 @@ export function settings({ store, go }) {
       message: 'The share and the value of a point are promises to every Insider. Tell the Circle first, and never change them after someone has booked against them.' });
     if (yes) { await store.updateSettings(patch, me.id); toast('Saved. Tell the Circle what changed.', { kind: 'good' }); }
   });
+  // Adding an Insider, roles and all. This is the path that means nobody ever has to open
+  // the table editor: name, email, level, what they do — and a message to send them.
+  wrap.querySelector('#add-member')?.addEventListener('click', async () => {
+    const ROLES = [
+      { id: 'member', label: 'Insider', note: 'Contributes and books. Everyone has this.' },
+      { id: 'treasurer', label: 'Banker', note: 'Confirms money and closes the month.' },
+      { id: 'planner', label: 'Desk', note: 'Quotes requests, edits the catalog, posts deals.' },
+      { id: 'comms', label: 'Voice', note: 'Writes the notes and posts deals.' },
+      { id: 'deputy', label: 'Deputy Banker', note: 'Stands in when the Banker is away.' },
+      { id: 'admin', label: 'Admin', note: 'Adds people and changes the rules. Give this rarely.' },
+    ];
+    const out = await sheet({ title: 'Add an Insider', render: (body, close) => {
+      body.innerHTML = `
+        <p class="sheet-text">This puts them on the list. Nothing is emailed from here — you send them the link, they set their own password against this email, and their account links itself.</p>
+        <div class="grid g2">
+          <label class="field"><span>Their name</span><input name="name" required autofocus placeholder="Ian Hekman"></label>
+          <label class="field"><span>Their email</span><input name="email" type="email" inputmode="email" placeholder="ian@example.aw"></label>
+        </div>
+        <div class="grid g2">
+          <label class="field"><span>Level</span><select name="monthlyUsd">${s.tiers.map(t => `<option value="${t.monthlyUsd}"${t.monthlyUsd === 150 ? ' selected' : ''}>${escapeHtml(fmtUsd2(t.monthlyUsd))} · ${escapeHtml(tierName(t.monthlyUsd))}</option>`).join('')}</select></label>
+          <label class="field"><span>What they are called</span><input name="title" placeholder="Voice of the Circle"></label>
+        </div>
+        <p class="eyebrow" style="margin-top:6px">What they can do</p>
+        <div class="stack" style="gap:8px;margin-top:8px">
+          ${ROLES.map(r => `<label class="row" style="gap:10px;align-items:flex-start">
+            <input type="checkbox" name="role" value="${r.id}"${r.id === 'member' ? ' checked' : ''} style="width:19px;height:19px;margin-top:2px">
+            <span><b class="small">${escapeHtml(r.label)}</b><br><span class="small muted">${escapeHtml(r.note)}</span></span></label>`).join('')}
+        </div>
+        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button>
+          <button class="btn" data-ok>${icon('plus', { size: 16 })}Add them</button></div>`;
+      body.querySelector('[data-ok]').addEventListener('click', () => {
+        const roles = [...body.querySelectorAll('[name=role]:checked')].map(x => x.value);
+        close({
+          name: body.querySelector('[name=name]').value.trim(),
+          email: body.querySelector('[name=email]').value.trim(),
+          title: body.querySelector('[name=title]').value.trim(),
+          monthlyUsd: Number(body.querySelector('[name=monthlyUsd]').value),
+          roles: roles.length ? roles : ['member'],
+        });
+      });
+    } });
+    if (!out?.name) return;
+    try {
+      const m = await store.addMember(out, me.id);
+      const url = `${location.origin}${location.pathname}`;
+      const msg = `Bon dia ${out.name.split(' ')[0]} — you are on the list for ${VOCAB.clubName}.\n\n`
+        + `Open ${url} , tap Sign in, put in ${out.email || 'your email'} and tap "Set it up". `
+        + `Choose a password and you are in.`;
+      const copied = await copyText(msg);
+      toast(copied ? `${out.name} is on the list. The message to send them is copied.` : `${out.name} is on the list.`,
+        { kind: 'good', timeout: 8000 });
+      go('/settings');
+    } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
+  });
+
   wrap.querySelector('#invite')?.addEventListener('click', async () => {
     const out = await sheet({ title: 'Invite an Insider', render: (body, close) => {
       body.innerHTML = `<p class="sheet-text">They pick their own level when they accept. ${store.activeMembers().length} of ${s.memberCap} seats are taken.</p>

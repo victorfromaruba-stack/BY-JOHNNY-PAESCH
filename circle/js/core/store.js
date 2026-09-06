@@ -318,9 +318,25 @@ export class Store {
     await this.signIn(m.id);
     return m;
   }
+  /** The same guards the SQL applies, so the two backends refuse the same things. */
   async addMember(data, actorId) {
-    const m = { id: uid('mem'), roles: ['member'], status: 'invited', joinedAt: nowIso(), hue: Math.floor(Math.random() * 360), founding: false, cardCode: Math.random().toString(36).slice(2, 8).toUpperCase(), ...data };
-    this.state.members.push(m); this.log(actorId, 'member.add', 'member', m.id, { name: m.name }); await this.commit('members'); return m;
+    if (!this.hasRole('admin')) throw new Error('Only an admin can add a member');
+    const name = String(data.name || '').trim();
+    if (!name) throw new Error('They need a name');
+    const email = String(data.email || '').trim();
+    if (email && this.memberByEmail(email)) throw new Error('Someone is already on the list with that email');
+    if (this.state.members.filter(x => ['active', 'paused'].includes(x.status)).length >= this.settings.memberCap) {
+      throw new Error(`The Circle is capped at ${this.settings.memberCap} Insiders`);
+    }
+    const roles = (Array.isArray(data.roles) && data.roles.length ? data.roles : ['member']);
+    for (const r of roles) if (!ROLES.includes(r)) throw new Error(`${r} is not a role`);
+    const m = { id: uid('mem'), status: 'invited', joinedAt: nowIso(), hue: Math.floor(Math.random() * 360),
+      founding: false, cardCode: Math.random().toString(36).slice(2, 8).toUpperCase(),
+      ...data, name, email, roles, monthlyUsd: Number(data.monthlyUsd) || 100 };
+    this.state.members.push(m);
+    this.log(actorId, 'member.add', 'member', m.id, { name: m.name, roles });
+    await this.commit('members');
+    return m;
   }
   async updateMember(id, patch, actorId) {
     const m = this.member(id); if (!m) throw new Error('No such member');

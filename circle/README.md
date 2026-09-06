@@ -84,8 +84,33 @@ Two things worth knowing while you are in there:
 - **Authentication → Policies** has a *Leaked password protection* switch that checks new
   passwords against HaveIBeenPwned. It is off. Turn it on — it costs nothing.
 
-Ian and Vishnu have no email address on their member rows yet. Add theirs from
-**Settings → Insiders** and they can set themselves up the same way.
+### Adding people
+
+**Settings → Insiders → Add an Insider.** Name, email, level, and tick what they can do —
+Insider, Banker, Desk, Voice, Deputy Banker, Admin. It writes the member row and copies a
+message you can send them. They open the site, tap *Set it up* with that same email, choose
+their own password, and the account links itself to the row. Nobody opens the table editor
+and nobody writes SQL.
+
+The same guards run in the browser and in the database, so both refuse the same things: a
+name is required, a duplicate email is refused, a role that is not a real role is refused
+rather than silently dropped, only an admin can add anyone, and the 40-seat cap holds.
+
+If you ever do want to do it in the SQL editor — a dozen people at once, say — this is the
+shape. It goes through the same function, so all of the above still applies:
+
+```sql
+select admin_add_member('{
+  "name": "Ian Hekman",
+  "email": "ian@example.aw",
+  "monthlyUsd": 150,
+  "title": "Voice of the Circle",
+  "roles": ["comms"]
+}'::jsonb);
+```
+
+Roles are `member`, `treasurer`, `deputy`, `planner`, `comms`, `admin`. Leave `roles` out and
+they are a plain Insider.
 
 ## Where the deals come from — and what is honestly automatable
 

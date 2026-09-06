@@ -1332,22 +1332,49 @@ begin
   return m;
 end $$;
 
+-- Adding someone should not mean opening the table editor. This takes the roles too, so
+-- Ian goes in as comms and Vishnu as treasurer without anyone writing SQL by hand.
+--
+-- The member row is all that is needed: the person then goes to the sign-in screen, taps
+-- "Set it up" with the same email, and claim_membership() links their new account to this
+-- row. Nothing is emailed from here — Ian sends them the link himself.
 create or replace function admin_add_member(p_patch jsonb)
 returns members language plpgsql security definer set search_path = public as $$
-declare m members; s settings;
+declare m members; s settings; wanted member_role[]; r text;
 begin
   if not has_role('admin') then raise exception 'Only an admin can add a member'; end if;
   select * into s from settings where id = 1;
   if (select count(*) from members where status in ('active','paused')) >= s.member_cap then
     raise exception 'The Circle is capped at % Insiders', s.member_cap;
   end if;
-  insert into members(email, name, phone, monthly_usd, roles, status, founding, card_code)
-    values (p_patch->>'email', p_patch->>'name', p_patch->>'phone',
-            coalesce((p_patch->>'monthlyUsd')::int, 100), '{member}', 'invited',
-            (select count(*) from members) < s.founding_seats,
+  if coalesce(trim(p_patch->>'name'), '') = '' then raise exception 'They need a name'; end if;
+  if p_patch ? 'email' and coalesce(trim(p_patch->>'email'), '') <> ''
+     and exists (select 1 from members where lower(email) = lower(trim(p_patch->>'email'))) then
+    raise exception 'Someone is already on the list with that email';
+  end if;
+
+  -- Roles come in as a JSON array of strings. Anything not in the enum is refused rather
+  -- than silently dropped, so a typo cannot quietly create a member with no powers.
+  wanted := '{}';
+  if jsonb_typeof(p_patch->'roles') = 'array' then
+    for r in select jsonb_array_elements_text(p_patch->'roles') loop
+      if r not in ('member','treasurer','deputy','planner','comms','admin') then
+        raise exception '% is not a role', r;
+      end if;
+      wanted := wanted || r::member_role;
+    end loop;
+  end if;
+  if array_length(wanted, 1) is null then wanted := '{member}'; end if;
+
+  insert into members(email, name, phone, monthly_usd, roles, status, founding, home, title, card_code)
+    values (nullif(trim(p_patch->>'email'), ''), trim(p_patch->>'name'), nullif(trim(p_patch->>'phone'), ''),
+            coalesce((p_patch->>'monthlyUsd')::int, 100), wanted, 'invited',
+            coalesce((p_patch->>'founding')::boolean, (select count(*) from members) < s.founding_seats),
+            nullif(trim(p_patch->>'home'), ''), nullif(trim(p_patch->>'title'), ''),
             upper(substr(md5(random()::text), 1, 6)))
     returning * into m;
-  perform log_audit('member.add','member',m.id::text, jsonb_build_object('name', m.name));
+  perform log_audit('member.add','member',m.id::text,
+                    jsonb_build_object('name', m.name, 'roles', to_jsonb(m.roles)));
   return m;
 end $$;
 
