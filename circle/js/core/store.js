@@ -3,9 +3,9 @@
 //   SupabaseStore          – same API; every rule runs server-side (supabase/schema.sql).
 // Business rules live here so the demo and the real club produce identical numbers.
 
-import { uid, nowIso, sum, monthKey, fmtMonth } from './util.js';
-import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford } from './money.js';
-import { initialsOf } from './vocab.js';
+import { uid, nowIso, sum, monthKey, fmtMonth, nightsBetween } from './util.js';
+import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, seasonPoints, pointsPerMonth } from './money.js';
+import { initialsOf, refFor } from './vocab.js';
 
 export const CONTRIBUTION_STATUS = Object.freeze({ pending: 'pending', confirmed: 'confirmed', rejected: 'rejected', withdrawn: 'withdrawn', reversed: 'reversed' });
 export const REDEMPTION_STATUS = Object.freeze({ requested: 'requested', quoted: 'quoted', held: 'held', confirmed: 'confirmed', completed: 'completed', declined: 'declined', expired: 'expired', cancelled: 'cancelled' });
@@ -13,10 +13,11 @@ export const OPEN_REDEMPTION = [REDEMPTION_STATUS.requested, REDEMPTION_STATUS.q
 export const LEDGER_KIND = Object.freeze({ earn: 'earn', bonus: 'bonus', streak: 'streak', founding: 'founding', burn: 'burn', refund: 'refund', adjust: 'adjust', expire: 'expire', reverse: 'reverse' });
 export const PROMO_KINDS = [LEDGER_KIND.bonus, LEDGER_KIND.streak, LEDGER_KIND.founding];
 export const ROLES = Object.freeze(['member', 'treasurer', 'deputy', 'planner', 'comms', 'admin']);
-const COLLECTIONS = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances'];
+const COLLECTIONS = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes'];
 
 const asc = (k) => (a, b) => (a[k] < b[k] ? -1 : a[k] > b[k] ? 1 : 0);
 const desc = (k) => (a, b) => (a[k] < b[k] ? 1 : a[k] > b[k] ? -1 : 0);
+export function shiftDays(iso, n) { const d = new Date(`${String(iso).slice(0, 10)}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
 export function shiftMonth(yyyyMm, n) { const [y, m] = yyyyMm.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
 const addHours = (iso, h) => new Date(new Date(iso).getTime() + h * 3600000).toISOString();
 const addMonthsIso = (iso, n) => { const d = new Date(iso); d.setMonth(d.getMonth() + n); return d.toISOString(); };
@@ -31,6 +32,7 @@ export class Store {
   normalize() {
     this.state.settings = { ...DEFAULT_SETTINGS, ...(this.state.settings || {}) };
     for (const c of COLLECTIONS) this.state[c] ||= [];
+    this.state.credentials ||= {};
     this.state.session ||= this.adapter.loadSession?.() || null;
   }
   subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -60,6 +62,35 @@ export class Store {
     return m;
   }
   async signOut() { this.state.session = null; this.adapter.saveSession?.(null); this.notify('session'); }
+
+  // ---------- passwords, for the browser-only backend ----------
+  // With Supabase connected this is all handled server-side; these exist so that preview
+  // mode is a real lock instead of an open door, and so a first password can be generated
+  // without it ever being written down in the repository.
+  credentials() { return (this.state.credentials ||= {}); }
+  hasPassword(memberId) { return !!this.credentials()[memberId]; }
+  memberByEmail(email) {
+    const e = String(email || '').trim().toLowerCase();
+    return this.state.members.find(m => (m.email || '').toLowerCase() === e && m.status !== 'left') || null;
+  }
+  async setPasswordFor(memberId, password) {
+    const { hashPassword, passwordStrength } = await import('./passwords.js');
+    const s = passwordStrength(password);
+    if (!s.ok) throw new Error('Use at least twelve characters');
+    this.credentials()[memberId] = { ...(await hashPassword(password)), setAt: nowIso() };
+    this.log(memberId, 'auth.password_set', 'member', memberId, {});
+    await this.commit('credentials');
+  }
+  /** Sign in by email and password. Wrong either way gives the same answer, on purpose. */
+  async signInWithPassword(email, password) {
+    const { verifyPassword } = await import('./passwords.js');
+    const m = this.memberByEmail(email);
+    const rec = m ? this.credentials()[m.id] : null;
+    // Do the work either way so a missing account is not distinguishable by timing.
+    const ok = await verifyPassword(password, rec || { hash: 'AAAA', salt: 'AAAA' });
+    if (!m || !rec || !ok) throw new Error('That email and password do not match.');
+    return this.signIn(m.id);
+  }
 
   // ---------- lookups ----------
   get settings() { return this.state.settings; }
@@ -107,6 +138,53 @@ export class Store {
     return this.state.redemptions
       .filter(r => r.shared && [REDEMPTION_STATUS.quoted, REDEMPTION_STATUS.held].includes(r.status) && this.coveredPoints(r) < (r.quotedPoints || r.indicativePoints || 0))
       .sort(asc('requestedAt'));
+  }
+  /**
+   * What a member is saving for, and how far off it is. A goal is a stay (with a number of
+   * nights and a season) or a seat on a trip. Nothing is reserved by setting one — it is
+   * the thing that makes a contribution feel like it moved something.
+   */
+  goalFor(memberId = this.session?.memberId) {
+    const m = this.member(memberId); const g = m?.goal;
+    if (!g?.stayId) return null;
+    const stay = this.stay(g.stayId); if (!stay || stay.active === false) return null;
+    const isTrip = stay.kind === 'trip';
+    const nights = isTrip ? stay.nights : Math.max(Number(g.nights) || 0, stay.minNights || 1);
+    const season = g.season || 'low';
+    const target = isTrip ? (stay.pointsPerSeat || 0) : seasonPoints(stay, season, this.settings) * nights;
+    const have = Math.max(0, this.availablePoints(memberId));
+    const short = Math.max(0, target - have);
+    const perMonth = pointsPerMonth(this.settings, m.monthlyUsd);
+    return {
+      stay, isTrip, nights, season, target, have, short,
+      pct: target ? Math.min(1, have / target) : 1,
+      months: monthsToAfford(this.settings, target, m.monthlyUsd, have),
+      perMonth, topUpUsd: round(short / this.settings.pointsPerDollar),
+      // What each of the three ways out of the gap would do.
+      ways: this.settings.tiers.map(t => ({ monthlyUsd: t.monthlyUsd, mine: t.monthlyUsd === m.monthlyUsd,
+        months: monthsToAfford(this.settings, target, t.monthlyUsd, have) })),
+    };
+  }
+  async setGoal(memberId, goal, actorId = memberId) {
+    if (goal && !this.stay(goal.stayId)) throw new Error('That place is no longer on the list');
+    return this.updateMember(memberId, { goal: goal || null }, actorId);
+  }
+  /** Everything the member needs to see their own progress on one screen. */
+  standing(memberId = this.session?.memberId) {
+    const m = this.member(memberId); if (!m) return null;
+    const month = monthKey();
+    const perMonth = pointsPerMonth(this.settings, m.monthlyUsd);
+    const streak = this.streak(memberId);
+    const nextStreak = Object.keys(this.settings.streakBonuses || {}).map(Number)
+      .filter(n => n > streak).sort((a, b) => a - b)[0] || null;
+    return {
+      balance: this.ledgerBalance(memberId), committed: this.committedPoints(memberId),
+      available: this.availablePoints(memberId), perMonth, streak, nextStreak,
+      nextStreakBonus: nextStreak ? this.settings.streakBonuses[nextStreak] : 0,
+      monthStatus: this.monthStatus(memberId, month), month,
+      openMonths: this.openMonthsFor(memberId),
+      goal: this.goalFor(memberId),
+    };
   }
   availablePoints(memberId) { return this.ledgerBalance(memberId) - this.committedPoints(memberId); }
   promoPoints(memberId) { return sum(this.ledgerFor(memberId).filter(l => PROMO_KINDS.includes(l.kind)), l => l.points); }
@@ -180,7 +258,7 @@ export class Store {
   monthlySeries(months = 12) {
     const out = []; let m = shiftMonth(monthKey(), -(months - 1));
     for (let i = 0; i < months; i++) {
-      const cs = this.state.contributions.filter(c => c.forMonth === m && c.status === CONTRIBUTION_STATUS.confirmed);
+      const cs = this.state.contributions.filter(c => (c.forMonth || c.reviewedAt?.slice(0, 7)) === m && c.status === CONTRIBUTION_STATUS.confirmed);
       out.push({ month: m, collected: round(sum(cs, c => c.receivedUsd)), backing: round(sum(cs, c => c.backingUsd)), share: round(sum(cs, c => c.shareUsd)), count: cs.length });
       m = shiftMonth(m, 1);
     }
@@ -288,12 +366,17 @@ export class Store {
     const tier = tierFor(s, m.monthlyUsd);
     const split = splitContribution(received, s, tier);
     const at = nowIso();
-    Object.assign(c, { status: CONTRIBUTION_STATUS.confirmed, reviewedBy: actorId, reviewedAt: at, reason: note, receivedUsd: split.amountUsd, currency, native, shareUsd: split.shareUsd, backingUsd: split.backingUsd, basePoints: split.basePoints, bonusPoints: 0, streakPoints: 0, foundingPoints: 0, points: split.basePoints, full: split.full });
+    // An extra — money on top of the monthly, or cash handed over — buys points at the
+    // plain rate. It earns no tier bonus and no streak, and it never covers a month.
+    const full = c.extra ? false : split.full;
+    Object.assign(c, { status: CONTRIBUTION_STATUS.confirmed, reviewedBy: actorId, reviewedAt: at, reason: note, receivedUsd: split.amountUsd, currency, native, shareUsd: split.shareUsd, backingUsd: split.backingUsd, basePoints: split.basePoints, bonusPoints: 0, streakPoints: 0, foundingPoints: 0, points: split.basePoints, full });
     const push = (kind, points, usd, refType, refId, note, promo = false) => { this.state.ledger.push({ id: uid('led'), memberId: c.memberId, kind, points, usd, refType, refId, note, at, by: actorId, expiresAt: promo ? addMonthsIso(at, s.bonusExpireMonths) : null }); };
-    push(LEDGER_KIND.earn, split.basePoints, split.backingUsd, 'contribution', c.id, `${fmtMonth(c.forMonth)} contribution${split.full ? '' : ' · part of it'}`);
+    push(LEDGER_KIND.earn, split.basePoints, split.backingUsd, 'contribution', c.id,
+      c.extra ? (c.note?.trim() || 'Extra contribution') : `${fmtMonth(c.forMonth)} contribution${split.full ? '' : ' · part of it'}`);
     // Promotional points: tier bonus, streak, founding — all funded from the share, capped per month.
     const promoRoom = () => {
-      const monthShare = sum(this.state.contributions.filter(x => x.forMonth === c.forMonth && x.status === CONTRIBUTION_STATUS.confirmed), x => x.shareUsd) * s.pointsPerDollar * s.promoCapRate;
+      const bucket = c.forMonth || at.slice(0, 7);
+      const monthShare = sum(this.state.contributions.filter(x => (x.forMonth || x.reviewedAt?.slice(0, 7)) === bucket && x.status === CONTRIBUTION_STATUS.confirmed), x => x.shareUsd) * s.pointsPerDollar * s.promoCapRate;
       const monthPromo = sum(this.state.ledger.filter(l => PROMO_KINDS.includes(l.kind) && this.contribution(l.refId)?.forMonth === c.forMonth), l => l.points);
       return Math.max(0, Math.floor(monthShare - monthPromo));
     };
@@ -304,17 +387,67 @@ export class Store {
       push(kind, points, round(points / s.pointsPerDollar), 'contribution', c.id, note, true);
       return points;
     };
-    if (split.bonusPoints > 0) c.bonusPoints = mint(LEDGER_KIND.bonus, split.bonusPoints, `${tierName(s, m.monthlyUsd)} bonus ${Math.round(tier.bonusRate * 100)}% of $${m.monthlyUsd}`);
-    if (split.full) {
+    if (!c.extra && split.bonusPoints > 0) c.bonusPoints = mint(LEDGER_KIND.bonus, split.bonusPoints, `${tierName(s, m.monthlyUsd)} bonus ${Math.round(tier.bonusRate * 100)}% of $${m.monthlyUsd}`);
+    if (full) {
       const streakNow = this.consecutiveMonthsThrough(c.memberId, c.forMonth);
       const sb = s.streakBonuses?.[streakNow];
       if (sb && !this.state.ledger.some(l => l.memberId === c.memberId && l.kind === LEDGER_KIND.streak && l.note.startsWith(`${streakNow} `))) c.streakPoints = mint(LEDGER_KIND.streak, sb, `${streakNow} consecutive contributions`);
     }
-    if (m.founding && s.foundingBonus > 0 && !this.state.ledger.some(l => l.memberId === c.memberId && l.kind === LEDGER_KIND.founding)) c.foundingPoints = mint(LEDGER_KIND.founding, s.foundingBonus, 'Founding Insider · 2026');
+    if (!c.extra && m.founding && s.foundingBonus > 0 && !this.state.ledger.some(l => l.memberId === c.memberId && l.kind === LEDGER_KIND.founding)) c.foundingPoints = mint(LEDGER_KIND.founding, s.foundingBonus, 'Founding Insider · 2026');
     c.points = split.basePoints + c.bonusPoints + c.streakPoints + c.foundingPoints;
     this.log(actorId, 'contribution.confirm', 'contribution', id, { receivedUsd: split.amountUsd, points: c.points, full: split.full });
     await this.commit('contributions');
     return c;
+  }
+  /**
+   * Money that arrived outside the queue: cash in the Banker's hand, a transfer he spotted
+   * on the statement himself, or someone catching up a month they missed. Recorded and
+   * confirmed in one step so the ledger, the Reserve and the month all stay true.
+   *
+   * With `forMonth` set it IS that month's contribution and earns everything a normal one
+   * does. With `forMonth` null it is an extra: base points only, and it covers no month.
+   */
+  async recordDirectContribution({ memberId, amountUsd, forMonth = null, method = 'cash', currency = 'USD', note = '', sentOn = '' }, actorId) {
+    if (!this.canConfirmMoney()) throw new Error('Only the Banker can record money that arrived');
+    const m = this.member(memberId); if (!m) throw new Error('No such member');
+    const usd = round(amountUsd);
+    if (!(usd > 0)) throw new Error('Enter the amount that actually arrived');
+    const extra = !forMonth;
+    if (!extra && this.state.contributions.some(c => c.memberId === memberId && c.forMonth === forMonth
+      && [CONTRIBUTION_STATUS.pending, CONTRIBUTION_STATUS.confirmed].includes(c.status)))
+      throw new Error(`${fmtMonth(forMonth)} already has a sent or confirmed contribution — confirm that one instead`);
+    if (extra && !note?.trim()) throw new Error('Say what this money was for — members read it on their ledger');
+    const c = {
+      id: uid('con'), memberId, forMonth: extra ? null : forMonth, extra, expectedUsd: usd, amountUsd: usd, receivedUsd: null,
+      currency, method, bank: '', reference: extra ? '' : refFor(m, forMonth),
+      note: note.trim(), proofName: '', proofDataUrl: '', sentOn: sentOn || nowIso().slice(0, 10), submittedAt: nowIso(),
+      status: CONTRIBUTION_STATUS.pending, reviewedBy: null, reviewedAt: null, reason: '', shareUsd: null, backingUsd: null,
+      points: null, basePoints: null, bonusPoints: null, streakPoints: 0, foundingPoints: 0, full: null, reversedOf: null,
+      recordedBy: actorId,
+    };
+    this.state.contributions.push(c);
+    this.log(actorId, 'contribution.record', 'contribution', c.id, { memberId, amountUsd: usd, forMonth: c.forMonth, method });
+    return this.confirmContribution(c.id, actorId, { receivedUsd: usd, currency, note: note.trim() });
+  }
+  /** What the Banker would mint for a given amount, before he commits to it. */
+  previewDirect(memberId, amountUsd, { forMonth = null, currency = 'USD' } = {}) {
+    const m = this.member(memberId); const s = this.settings;
+    const usd = currency === 'AWG' ? round(Number(amountUsd) / s.awgPerUsd) : round(amountUsd);
+    const split = splitContribution(usd, s, tierFor(s, m?.monthlyUsd || 100));
+    const extra = !forMonth;
+    const bonus = extra ? 0 : split.bonusPoints;
+    return { usd, extra, shareUsd: split.shareUsd, backingUsd: split.backingUsd, basePoints: split.basePoints,
+      bonusPoints: bonus, points: split.basePoints + bonus, full: extra ? false : split.full };
+  }
+  /** Months this member could still be recorded against: missed, or the one running now. */
+  openMonthsFor(memberId, back = 6) {
+    const out = []; let m = shiftMonth(monthKey(), -back);
+    for (let i = 0; i <= back; i++) {
+      const st = this.monthStatus(memberId, m);
+      if (st === 'due' && (this.member(memberId)?.joinedAt || '').slice(0, 7) <= m) out.push(m);
+      m = shiftMonth(m, 1);
+    }
+    return out;
   }
   async rejectContribution(id, actorId, reason) {
     const c = this.contribution(id); if (!c) throw new Error('No such contribution');
@@ -488,6 +621,169 @@ export class Store {
       });
     } else throw new Error('This request cannot be cancelled');
     this.log(actorId, 'redemption.cancel', 'redemption', id, { reason, penaltyPoints }); await this.commit('redemptions'); return r;
+  }
+
+  // ---------- room types ----------
+  // What you can actually be given at a property: a studio, a one-bedroom villa, an
+  // oceanfront room. `rateFactor` is what that type costs relative to the cheapest one,
+  // so one seasonal rate per property still prices every room in it.
+  roomTypes() { return (this.state.roomTypes || []).filter(r => r.active !== false); }
+  roomTypesFor(stayId) { return this.roomTypes().filter(r => r.stayId === stayId).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (a.rateFactor || 1) - (b.rateFactor || 1)); }
+  roomType(id) { return id ? (this.state.roomTypes || []).find(r => r.id === id) || null : null; }
+  /** What a night in this particular room costs, in points. */
+  roomPoints(stayId, roomTypeId, season = 'low') {
+    const stay = this.stay(stayId); if (!stay) return 0;
+    const base = seasonPoints(stay, season, this.settings);
+    const rt = this.roomType(roomTypeId);
+    return Math.round(base * (rt?.rateFactor || 1));
+  }
+  async upsertRoomType(data, actorId) {
+    if (!this.canPlan()) throw new Error('Only a planner can edit the rooms');
+    if (!data.stayId || !this.stay(data.stayId)) throw new Error('Which property is this room in?');
+    if (!data.name?.trim()) throw new Error('Give the room type its name');
+    this.state.roomTypes ||= [];
+    let r = data.id ? this.roomType(data.id) : null;
+    if (r) Object.assign(r, data);
+    else { r = { id: uid('rt'), active: true, sortOrder: this.roomTypesFor(data.stayId).length, rateFactor: 1, ...data }; this.state.roomTypes.push(r); }
+    this.log(actorId, 'roomType.upsert', 'roomType', r.id, { name: r.name });
+    await this.commit('roomTypes');
+    return r;
+  }
+  async removeRoomType(id, actorId) {
+    const r = this.roomType(id); if (!r) return;
+    if (!this.canPlan()) throw new Error('Only a planner can edit the rooms');
+    r.active = false;
+    this.log(actorId, 'roomType.retire', 'roomType', id, {}); await this.commit('roomTypes');
+  }
+
+  // ---------- the watch list, and deals that turn up ----------
+  //
+  // A watch is a standing want: "a one-bedroom at the Ocean Club, some week in March,
+  // and I will not pay more than 200,000 points for it." Nothing is reserved by it.
+  //
+  // A deal is a real thing that became available — Victor saw it on Interval, Ian got the
+  // email, a hotel came back with a rate. Posting one matches it against every open watch
+  // and puts it in front of the people who asked for exactly that.
+  watches() { return (this.state.watches || []).filter(w => w.active !== false).sort(desc('createdAt')); }
+  watchesFor(memberId) { return this.watches().filter(w => w.memberId === memberId); }
+  watch(id) { return (this.state.watches || []).find(w => w.id === id) || null; }
+
+  async addWatch({ memberId, stayId = null, roomTypeId = null, kind = 'aruba', from, to, nights = 3, flexDays = 3, guests = 2, maxPoints = null, note = '' }) {
+    if (!this.member(memberId)) throw new Error('No such member');
+    if (!from || !to) throw new Error('Say roughly when you would go');
+    if (from > to) throw new Error('Those dates are the wrong way round');
+    if (!(nights > 0)) throw new Error('How many nights?');
+    if (stayId && !this.stay(stayId)) throw new Error('That place is no longer on the list');
+    const dup = this.watchesFor(memberId).find(w => w.stayId === stayId && w.roomTypeId === roomTypeId && w.from === from && w.to === to);
+    if (dup) throw new Error('You are already watching for exactly that');
+    const w = { id: uid('wch'), memberId, stayId, roomTypeId, kind, from, to, nights: Math.round(nights),
+      flexDays: Math.max(0, Math.round(flexDays)), guests: Math.round(guests) || 1,
+      maxPoints: maxPoints ? Math.round(maxPoints) : null, note: note.trim(), active: true,
+      createdAt: nowIso(), lastSeenAt: null };
+    (this.state.watches ||= []).push(w);
+    this.log(memberId, 'watch.add', 'watch', w.id, { stayId, from, to, nights });
+    await this.commit('watches');
+    return w;
+  }
+  async removeWatch(id, actorId) {
+    const w = this.watch(id); if (!w) throw new Error('No such watch');
+    if (w.memberId !== actorId && !this.canPlan()) throw new Error('That is not your watch');
+    w.active = false; w.endedAt = nowIso();
+    this.log(actorId, 'watch.remove', 'watch', id, {}); await this.commit('watches'); return w;
+  }
+  /** Mark every match on this member's watches as seen, so the bell stops ringing. */
+  async markWatchesSeen(memberId) {
+    const at = nowIso();
+    for (const w of this.watchesFor(memberId)) w.lastSeenAt = at;
+    await this.commit('watches');
+  }
+
+  deals() { return (this.state.deals || []).slice().sort(desc('postedAt')); }
+  deal(id) { return (this.state.deals || []).find(d => d.id === id) || null; }
+  /** Deals still worth looking at: not expired, not taken. */
+  liveDeals() {
+    const now = nowIso();
+    return this.deals().filter(d => d.status === 'live' && (!d.expiresAt || d.expiresAt > now));
+  }
+  async postDeal({ stayId, roomTypeId = null, title = '', from, to, nights = null, pointsTotal = null, pointsPerNight = null,
+                   retailUsd = null, source = 'other', sourceUrl = '', sourceRef = '', units = 1, expiresAt = null, note = '' }, actorId) {
+    if (!this.canPlan()) throw new Error('Only Victor or Ian can post a deal');
+    const stay = this.stay(stayId); if (!stay) throw new Error('Pick a place from the catalog');
+    if (!from || !to) throw new Error('A deal needs the dates it is for');
+    if (from > to) throw new Error('Those dates are the wrong way round');
+    const n = nights || nightsBetween(from, to) || 1;
+    const total = pointsTotal != null ? Math.round(pointsTotal)
+      : pointsPerNight != null ? Math.round(pointsPerNight) * n : null;
+    if (!(total > 0)) throw new Error('What does it cost in points?');
+    const d = { id: uid('del'), stayId, roomTypeId, kind: stay.kind === 'trip' ? 'trip' : 'aruba',
+      title: title.trim() || stay.name, from, to, nights: n, pointsTotal: total,
+      pointsPerNight: Math.round(total / n), retailUsd: retailUsd != null ? round(retailUsd) : null,
+      source, sourceUrl: sourceUrl.trim(), sourceRef: sourceRef.trim(), units: Math.max(1, Math.round(units)),
+      note: note.trim(), status: 'live', postedBy: actorId, postedAt: nowIso(), expiresAt, claimedBy: [] };
+    (this.state.deals ||= []).push(d);
+    this.log(actorId, 'deal.post', 'deal', d.id, { stayId, from, to, pointsTotal: total, source });
+    await this.commit('deals');
+    return d;
+  }
+  async retireDeal(id, actorId, reason = '') {
+    const d = this.deal(id); if (!d) throw new Error('No such deal');
+    if (!this.canPlan()) throw new Error('Only Victor or Ian can take a deal down');
+    d.status = 'gone'; d.retiredAt = nowIso(); d.retiredReason = reason;
+    this.log(actorId, 'deal.retire', 'deal', id, { reason }); await this.commit('deals'); return d;
+  }
+
+  /**
+   * Does this deal answer that watch? Deliberately generous on dates — a watch is a rough
+   * want, not a booking — and strict on the two things a member actually said no to:
+   * a different property, and more points than they are willing to spend.
+   */
+  dealMatchesWatch(deal, watch) {
+    if (!deal || !watch || watch.active === false) return null;
+    if (deal.status !== 'live') return null;
+    if (watch.stayId && watch.stayId !== deal.stayId) return null;
+    if (watch.roomTypeId && deal.roomTypeId && watch.roomTypeId !== deal.roomTypeId) return null;
+    if (!watch.stayId && watch.kind !== 'any' && watch.kind !== deal.kind) return null;
+    if (watch.maxPoints && deal.pointsTotal > watch.maxPoints) return null;
+    const flex = watch.flexDays || 0;
+    const wantFrom = shiftDays(watch.from, -flex), wantTo = shiftDays(watch.to, flex);
+    const start = deal.from > wantFrom ? deal.from : wantFrom;
+    const end = deal.to < wantTo ? deal.to : wantTo;
+    const overlap = nightsBetween(start, end);
+    if (overlap < Math.min(watch.nights, deal.nights)) return null;
+    const affordable = this.availablePoints(watch.memberId) >= deal.pointsTotal;
+    return { deal, watch, overlap, affordable,
+      short: Math.max(0, deal.pointsTotal - Math.max(0, this.availablePoints(watch.memberId))) };
+  }
+  /** Everyone who asked for something this deal answers. */
+  matchesForDeal(dealId) {
+    const d = this.deal(dealId); if (!d) return [];
+    return this.watches().map(w => this.dealMatchesWatch(d, w)).filter(Boolean);
+  }
+  /** Live deals that answer anything this member is watching for. */
+  matchesForMember(memberId = this.session?.memberId) {
+    const mine = this.watchesFor(memberId);
+    const out = [];
+    for (const d of this.liveDeals()) {
+      for (const w of mine) { const m = this.dealMatchesWatch(d, w); if (m) { out.push(m); break; } }
+    }
+    return out.sort((a, b) => (a.deal.postedAt < b.deal.postedAt ? 1 : -1));
+  }
+  /** Matches this member has not looked at yet — what the bell counts. */
+  unseenMatches(memberId = this.session?.memberId) {
+    return this.matchesForMember(memberId).filter(m => !m.watch.lastSeenAt || m.deal.postedAt > m.watch.lastSeenAt);
+  }
+  /** For the Desk: what the Circle is waiting for, most-wanted first. */
+  demand() {
+    const rows = {};
+    for (const w of this.watches()) {
+      const key = `${w.stayId || 'any'}|${w.roomTypeId || 'any'}`;
+      (rows[key] ||= { stayId: w.stayId, roomTypeId: w.roomTypeId, watches: [], members: new Set() });
+      rows[key].watches.push(w); rows[key].members.add(w.memberId);
+    }
+    return Object.values(rows)
+      .map(r => ({ ...r, stay: r.stayId ? this.stay(r.stayId) : null, count: r.members.size,
+        matched: this.liveDeals().some(d => r.watches.some(w => this.dealMatchesWatch(d, w))) }))
+      .sort((a, b) => b.count - a.count);
   }
 
   // ---------- adjustments (admin, with a written reason) ----------

@@ -7,6 +7,8 @@ import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel } from '../ui/components.js';
 import { sparkline, columns, tableFor } from '../ui/charts.js';
 import { waLink, TEMPLATES, copyText, shareText } from '../core/share.js';
+import { icon } from '../ui/icons.js';
+import { shiftMonth } from '../core/store.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 const KIND_LABEL = { earn: 'Contribution', bonus: 'Tier bonus', streak: 'Streak bonus', founding: 'Founding bonus', burn: 'Stay', refund: 'Refund', adjust: 'Adjustment', expire: 'Expired', reverse: 'Reversal' };
@@ -66,36 +68,77 @@ export function home({ store, go }) {
       ${lt.committed ? `<span><i style="background:var(--flight)"></i>Committed <b>${escapeHtml(fmtPoints(lt.committed))}</b></span>` : ''}</div>`;
   }
 
-  // 2 — the dream, with a season scrubber
-  const dreamPanel = el(`<div class="panel">
-      <div class="row-between"><p class="eyebrow">Where you are heading</p>
-        <div class="row" role="group" aria-label="Season" id="season-dial">
-          ${Object.values(SEASONS).map((se, i) => `<button class="btn quiet sm" data-season="${se.id}" aria-pressed="${i === 0}">${escapeHtml(se.label)}</button>`).join('')}
-        </div></div>
-      <div class="row" style="gap:18px;margin-top:12px;align-items:center">
-        <span id="dream-ring"></span>
-        <div><h2 id="dream-line" style="font-size:1.25rem"></h2>
-        <p class="small muted" id="dream-sub" style="margin-top:6px"></p>
-        <p class="small" style="margin-top:8px"><a href="#/stays">Choose a different one</a></p></div>
-      </div></div>`);
-  left.appendChild(dreamPanel);
-  let season = 'low';
-  const drawDream = () => {
-    const per = seasonPoints(dream, season, s);
-    const coverable = per ? lt.available / per : 0;
-    const min = dream.minNights || 1;
-    dreamPanel.querySelector('#dream-ring').replaceChildren(ring({ total: min, filled: Math.min(min, Math.floor(coverable)), size: 84, label: coverable.toFixed(1), sub: 'nights' }));
-    dreamPanel.querySelector('#dream-line').textContent = `You are ${coverable.toFixed(1)} nights from ${dream.name} in ${SEASONS[season].label}.`;
-    dreamPanel.querySelector('#dream-sub').textContent =
-      `${fmtPoints(per)} a night all-in (${fmtUsd2(per / 100)}) · ${SEASONS[season].range} · minimum ${min} night${min > 1 ? 's' : ''}` +
-      (isDushiSeason(new Date()) && season === 'low' ? ' · dushi season: the quietest, cheapest weeks of the year.' : '');
-    dreamPanel.querySelectorAll('[data-season]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.season === season)));
+  // 2 — what you are saving for, and exactly how far off it is
+  const goalPanel = el(`<div class="panel" id="goal-panel"></div>`);
+  left.appendChild(goalPanel);
+  const drawGoal = () => {
+    const g = store.goalFor(me.id);
+    if (!g) {
+      goalPanel.innerHTML = `
+        <p class="eyebrow">${icon('target')}What you are saving for</p>
+        <h2 style="font-size:1.15rem;margin-top:8px">Pick something and watch it come closer</h2>
+        <p class="small muted" style="margin-top:8px">Every contribution moves a bar instead of a number. Choose a place and how many nights, and the app works out how many months it takes at your level — and what would get you there sooner.</p>
+        <div class="row" style="margin-top:14px">
+          <button class="btn sm" id="set-goal">${icon('target', { size: 16 })}Choose one</button>
+          <a class="btn ghost sm" href="#/stays">Look at the places</a>
+        </div>`;
+      return;
+    }
+    const pct = Math.round(g.pct * 100);
+    const others = g.ways.filter(w => !w.mine && w.months < g.months);
+    goalPanel.innerHTML = `
+      <div class="row-between"><p class="eyebrow">${icon('target')}What you are saving for</p>
+        <button class="btn quiet sm" id="set-goal">${icon('edit', { size: 15 })}Change</button></div>
+      <h2 style="font-size:1.2rem;margin-top:10px">${escapeHtml(g.stay.name)}</h2>
+      <p class="small muted" style="margin-top:4px">${g.isTrip
+        ? `A seat · ${g.nights} nights · ${escapeHtml(fmtDay(g.stay.dates.from))}`
+        : `${g.nights} night${g.nights === 1 ? '' : 's'} · ${escapeHtml(SEASONS[g.season].label)} · ${escapeHtml(SEASONS[g.season].range)}`}</p>
+
+      <div class="goal-bar" style="margin-top:16px" role="img"
+           aria-label="${fmtPoints(g.have)} of ${fmtPoints(g.target)}, ${pct} per cent of the way">
+        <span style="width:${pct}%"></span>
+        <b class="goal-pct">${pct}%</b>
+      </div>
+      <div class="row-between small" style="margin-top:8px">
+        <span><b class="num">${escapeHtml(fmtPoints(g.have))}</b> <span class="muted">you hold</span></span>
+        <span class="muted">of ${escapeHtml(fmtPoints(g.target))} · ${escapeHtml(pointsUsd(g.target, s.pointsPerDollar))}</span>
+      </div>
+
+      ${g.short === 0
+        ? `<div class="notice good" style="margin-top:14px"><b>${icon('checkCircle', { size: 16 })} You can ask for this now</b>
+             <p class="small">The points are there. Victor quotes it, and it is held the moment you accept.</p>
+             <p style="margin-top:10px"><a class="btn sm" href="#/book/${escapeHtml(g.stay.id)}">${icon('send', { size: 15 })}Ask for it</a></p></div>`
+        : `<div class="notice" style="margin-top:14px">
+             <b>${escapeHtml(fmtPoints(g.short))} to go</b>
+             <p class="small" style="margin-top:6px">At ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(g.perMonth))}, so that is
+               <b>${g.months} more month${g.months === 1 ? '' : 's'}</b> — around ${escapeHtml(fmtMonth(shiftMonth(monthKey(), g.months)))}.</p>
+             <ul class="stack" style="margin-top:10px;padding-left:1.1em;gap:6px">
+               <li class="small muted">${escapeHtml(fmtUsd2(g.topUpUsd))} as a cash top-up closes it today — no 15% is taken on a top-up</li>
+               ${others.length ? `<li class="small muted">At ${escapeHtml(fmtUsd2(others[0].monthlyUsd))} a month it would be ${others[0].months} months instead of ${g.months} · <a href="#/profile">change your level</a></li>` : ''}
+               <li class="small muted">Or ask for it anyway and open it to the Circle — others put their own points in</li>
+             </ul>
+           </div>`}
+      <p class="small muted" style="margin-top:12px">${icon('bell', { size: 14, cls: 'ico-muted' })}
+        <a href="#/watching">Tell the Desk you want it</a> and you hear the moment one comes free.</p>`;
   };
-  drawDream();
-  dreamPanel.querySelector('#season-dial').addEventListener('click', (e) => { const b = e.target.closest('[data-season]'); if (!b) return; season = b.dataset.season; drawDream(); });
+  drawGoal();
+  goalPanel.addEventListener('click', async (e) => {
+    if (!e.target.closest('#set-goal')) return;
+    const picked = await goalSheet({ store });
+    if (picked !== null) { await store.setGoal(me.id, picked, me.id); drawGoal(); }
+  });
 
   // 3 — what needs you, in the order it needs you
   const blocks = [];
+  // A deal that answers something you asked for goes above everything else: these go fast.
+  for (const m of store.matchesForMember(me.id).slice(0, 3)) {
+    const st = store.stay(m.deal.stayId);
+    const room = store.roomType(m.deal.roomTypeId);
+    blocks.push(`<div class="notice good"><b>${icon('bellRing', { size: 16 })} ${escapeHtml(st?.name || 'A place you asked for')} came free</b>
+      <p class="small">${room ? `${escapeHtml(room.name)} · ` : ''}${m.deal.nights} nights from ${escapeHtml(fmtDay(m.deal.from))} · ${escapeHtml(fmtPoints(m.deal.pointsTotal))}.
+      ${m.affordable ? 'You have the points.' : `You are ${escapeHtml(fmtPoints(m.short))} short — ask anyway and close it with a top-up.`}</p>
+      <p style="margin-top:8px"><a class="btn sm" href="#/deals">${icon('eye', { size: 15 })}Look at it</a></p></div>`);
+  }
   if (status === 'due') blocks.push(`<div class="notice warn"><b>Your ${escapeHtml(fmtMonth(month))} contribution is due</b>
       <p class="small">${escapeHtml(fmtUsd2(me.monthlyUsd))} to the Reserve with reference <span class="num">${escapeHtml(refFor(me, month))}</span>, then tap “I sent it”.</p>
       <p style="margin-top:8px"><a class="btn sm" href="#/pay">Send it</a></p></div>`);
@@ -175,6 +218,58 @@ export function home({ store, go }) {
       <p class="small muted" style="margin-top:8px">${escapeHtml(note.body.slice(0, 180))}${note.body.length > 180 ? '…' : ''}</p>
       <p class="small" style="margin-top:10px"><a href="#/circle">All the notes</a></p></div>`));
   return wrap;
+}
+
+/** Choose what you are saving for: a place, how many nights, which season. */
+export async function goalSheet({ store }) {
+  const s = store.settings;
+  const me = store.me;
+  const current = me.goal || {};
+  const stays = store.arubaStays(), trips = store.trips();
+  return sheet({
+    title: 'What are you saving for?',
+    render: (body, close) => {
+      body.innerHTML = `
+        <p class="sheet-text">Nothing is reserved and nothing is charged. It is here so that every contribution moves something you actually want, instead of a number.</p>
+        <label class="field"><span>Where</span>
+          <select name="stayId" required>
+            <optgroup label="On the island">${stays.map(x => `<option value="${escapeHtml(x.id)}"${x.id === current.stayId ? ' selected' : ''}>${escapeHtml(x.name)}${x.house ? ' · where we stay' : ''}</option>`).join('')}</optgroup>
+            <optgroup label="Trips">${trips.map(x => `<option value="${escapeHtml(x.id)}"${x.id === current.stayId ? ' selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}</optgroup>
+          </select></label>
+        <div class="grid g2" id="stay-only">
+          <label class="field"><span>Nights</span><input name="nights" type="number" min="1" max="30" value="${current.nights || 3}" inputmode="numeric"></label>
+          <label class="field"><span>Season</span><select name="season">${Object.values(SEASONS).map(se => `<option value="${se.id}"${se.id === (current.season || 'low') ? ' selected' : ''}>${escapeHtml(se.label)}</option>`).join('')}</select></label>
+        </div>
+        <div id="prev" class="notice"></div>
+        <div class="sheet-actions">
+          ${me.goal ? '<button class="btn quiet" data-clear>Stop saving for it</button>' : ''}
+          <button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Set it</button></div>`;
+      const v = (n) => body.querySelector(`[name=${n}]`);
+      const draw = () => {
+        const stay = store.stay(v('stayId').value);
+        const isTrip = stay?.kind === 'trip';
+        body.querySelector('#stay-only').hidden = isTrip;
+        const nights = isTrip ? stay.nights : Math.max(Number(v('nights').value) || 1, stay?.minNights || 1);
+        const target = isTrip ? stay.pointsPerSeat : seasonPoints(stay, v('season').value, s) * nights;
+        const have = Math.max(0, store.availablePoints(me.id));
+        const short = Math.max(0, target - have);
+        const perMonth = pointsPerMonth(s, me.monthlyUsd);
+        const months = short ? Math.ceil(short / perMonth) : 0;
+        body.querySelector('#prev').innerHTML = `
+          <b>${escapeHtml(fmtPoints(target))} · ${escapeHtml(pointsUsd(target, s.pointsPerDollar))}</b>
+          <p class="small" style="margin-top:6px">${short
+            ? `You hold ${escapeHtml(fmtPoints(have))}, so ${escapeHtml(fmtPoints(short))} to go — about ${months} month${months === 1 ? '' : 's'} at ${escapeHtml(fmtUsd2(me.monthlyUsd))}.`
+            : 'You already hold enough for this. Ask for it whenever you like.'}</p>
+          ${stay?.minNights > 1 && !isTrip ? `<p class="small muted" style="margin-top:6px">${escapeHtml(stay.name)} takes a minimum of ${stay.minNights} nights.</p>` : ''}`;
+      };
+      body.addEventListener('input', draw); body.addEventListener('change', draw); draw();
+      body.querySelector('[data-clear]')?.addEventListener('click', () => close(null));
+      body.querySelector('[data-ok]').addEventListener('click', () => {
+        const stay = store.stay(v('stayId').value);
+        close({ stayId: stay.id, nights: stay.kind === 'trip' ? stay.nights : Number(v('nights').value) || 1, season: v('season').value });
+      });
+    },
+  });
 }
 
 const sparkSlot = () => '<div class="spark-slot"></div>';
@@ -329,9 +424,9 @@ export function ledger({ store, params }) {
       </div>
     </div></section></div>`);
 
-  const contribs = store.contributionsFor(me.id).filter(c => !month || c.forMonth === month);
+  const contribs = store.contributionsFor(me.id).filter(c => !month || c.forMonth === month || (c.extra && (c.reviewedAt || '').slice(0, 7) === month));
   wrap.querySelector('#contrib-rows').innerHTML = contribs.map(c => `<tr>
-      <td>${escapeHtml(fmtMonth(c.forMonth))}<br><span class="small muted num">${escapeHtml(c.reference || '—')}</span></td>
+      <td>${c.extra ? 'Extra' : escapeHtml(fmtMonth(c.forMonth))}<br><span class="small muted num">${escapeHtml(c.reference || (c.extra ? c.note || 'handed over' : '—'))}</span></td>
       <td class="num">${escapeHtml(fmtUsd2(c.expectedUsd))}</td>
       <td class="num">${c.receivedUsd == null ? '—' : escapeHtml(fmtUsd2(c.receivedUsd))}</td>
       <td style="min-width:150px">${c.status === 'confirmed' ? `<div class="split drawn" style="--cut:85%"><i style="width:85%"></i></div><span class="small muted num">${escapeHtml(fmtUsd2(c.backingUsd))} + ${escapeHtml(fmtUsd2(c.shareUsd))}</span>` : '<span class="small muted">—</span>'}</td>

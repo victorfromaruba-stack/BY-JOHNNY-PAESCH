@@ -6,6 +6,7 @@ import { ring } from '../ui/pieces.js';
 import { stayCard, stayStrip } from './public.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
 import { shareText } from '../core/share.js';
+import { icon } from '../ui/icons.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 const AREAS = ['Palm Beach', 'Eagle Beach', 'Druif Beach', 'Oranjestad', 'Malmok', 'Savaneta', 'Noord'];
@@ -112,6 +113,7 @@ export function stayDetail({ store, params, go }) {
         <div class="panel" id="pricing"></div>
         <div class="panel flat" id="afford"></div>
       </div>
+      <div id="rooms"></div>
       <div id="reach-note"></div>
       <div class="row" style="margin-top:20px">
         <a class="btn" href="#/book/${escapeHtml(stay.id)}">${isTrip ? 'Ask for a seat' : 'Ask Victor for dates'}</a>
@@ -119,6 +121,63 @@ export function stayDetail({ store, params, go }) {
       </div>
     </div></section></div>`);
   wrap.querySelector('.strip').prepend(stayStrip(stay));
+
+  // What you can actually be given here, and what each one costs a night.
+  const roomsSlot = wrap.querySelector('#rooms');
+  const rooms = store.roomTypesFor(stay.id);
+  if (rooms.length && !isTrip) {
+    let rSeason = 'low';
+    roomsSlot.appendChild(el(`<section class="panel" style="margin-top:22px">
+        <div class="row-between" style="flex-wrap:wrap;gap:10px">
+          <div><p class="eyebrow">${icon('bed')}The rooms</p>
+            <h2 style="font-size:1.15rem;margin-top:6px">${rooms.length} you can be given here</h2></div>
+          <div class="row" role="group" aria-label="Season" id="r-season">
+            ${Object.values(SEASONS).map((se, i) => `<button class="btn ${i ? 'quiet' : ''} sm" data-rs="${se.id}" aria-pressed="${!i}">${escapeHtml(se.label)}</button>`).join('')}
+          </div>
+        </div>
+        <div class="tablewrap" style="margin-top:14px"><table class="rooms-table">
+          <caption class="sr-only">Room types with size, occupancy and points per night</caption>
+          <thead><tr><th>Room</th><th>Size</th><th>Sleeps</th><th class="num">A night</th><th></th></tr></thead>
+          <tbody id="r-body"></tbody>
+        </table></div>
+        <p class="small muted" style="margin-top:12px">${icon('scale', { size: 14, cls: 'ico-muted' })}
+          Every room is priced off this property's one seasonal rate, so when Victor negotiates a better rate they all move together.
+          A room marked <em>inferred</em> is one nobody publishes a size for.</p>
+      </section>`));
+    const drawRooms = () => {
+      roomsSlot.querySelector('#r-body').innerHTML = rooms.map(r => {
+        const per = store.roomPoints(stay.id, r.id, rSeason);
+        const min = stay.minNights || 1;
+        const can = Math.floor(avail / (per || 1));
+        return `<tr>
+          <td><b>${escapeHtml(r.name)}</b>
+            ${r.beds ? `<br><span class="small muted">${escapeHtml(r.beds)}</span>` : ''}
+            <br><span class="flags">${r.kitchen === 'full' ? `<span class="tag">${icon('kitchen', { size: 13 })}Full kitchen</span>` : r.kitchen === 'kitchenette' ? '<span class="tag">Kitchenette</span>' : ''}
+              ${(r.extras || []).slice(0, 2).map(x => `<span class="tag">${escapeHtml(x)}</span>`).join('')}
+              ${r.source === 'inferred' ? '<span class="tag">inferred</span>' : ''}</span></td>
+          <td class="small">${r.sqft ? `${r.sqft.toLocaleString('en-US')} sq ft` : '<span class="muted">not published</span>'}
+            ${r.sqm ? `<br><span class="muted">${r.sqm} m²</span>` : ''}</td>
+          <td class="small">${icon('users', { size: 14, cls: 'ico-muted' })} ${r.sleeps}${r.bedrooms ? `<br><span class="muted">${r.bedrooms} bed${r.bedrooms > 1 ? 'rooms' : 'room'}</span>` : ''}</td>
+          <td class="num"><b>${escapeHtml(fmtPoints(per))}</b><br><span class="small muted">${escapeHtml(fmtUsd2(per / s.pointsPerDollar))}</span>
+            <br><span class="small ${can >= min ? 'muted' : ''}">${can >= min ? `covers ${Math.min(can, 14)} night${can === 1 ? '' : 's'}` : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of ${min}`}</span></td>
+          <td><div class="row nowrap" style="gap:6px;justify-content:flex-end;flex-wrap:nowrap">
+            <a class="btn ghost sm" href="#/book/${escapeHtml(stay.id)}?room=${escapeHtml(r.id)}">Ask</a>
+            <button class="btn quiet sm icon-only" data-watch-room="${escapeHtml(r.id)}" aria-label="Tell me when a ${escapeHtml(r.name)} comes free">${icon('bell', { size: 15 })}</button>
+          </div></td></tr>`;
+      }).join('');
+      roomsSlot.querySelectorAll('[data-rs]').forEach(b => {
+        b.setAttribute('aria-pressed', String(b.dataset.rs === rSeason));
+        b.classList.toggle('quiet', b.dataset.rs !== rSeason);
+      });
+    };
+    drawRooms();
+    roomsSlot.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-rs]');
+      if (b) { rSeason = b.dataset.rs; drawRooms(); return; }
+      const w = e.target.closest('[data-watch-room]');
+      if (w) { const { addWatchSheet } = await import('./deals.js'); addWatchSheet({ store, prefill: { stayId: stay.id, roomTypeId: w.dataset.watchRoom, nights: stay.minNights || 3 } }); }
+    });
+  }
 
   if (isTrip) {
     const held = store.seatsHeld(stay.id);

@@ -121,6 +121,15 @@ main:focus { outline: none; }
 .chip-bad i { background: var(--flag); } .chip-bad { background: var(--flag-soft); border-color: transparent; }
 .chip-info i { background: var(--ink); }
 .chip-muted { color: var(--ink-2); }
+/* Icons: they take the colour and optical weight of the text beside them. */
+.ico { display: inline-block; vertical-align: -0.18em; flex: none; }
+.ico + span, .ico + b { margin-left: .4em; }
+.row .ico, .btn .ico { vertical-align: middle; }
+.btn .ico:first-child { margin-right: .45em; margin-left: -.15em; }
+.btn.icon-only { padding-inline: .7em; }
+.eyebrow .ico { vertical-align: -0.2em; margin-right: .35em; opacity: .85; }
+.ico-muted { color: var(--ink-3); }
+.ico-good { color: var(--good-text); }
 .tag { display: inline-block; padding: 3px 9px; border-radius: var(--r-chip); background: var(--raised); border: 1px solid var(--hairline-soft); font-size: .74rem; color: var(--ink-2); white-space: nowrap; }
 .tag.house { background: var(--good-soft); border-color: transparent; color: var(--good-text); font-weight: 600; }
 
@@ -319,3 +328,50 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
   .split i { background: #666; } .split { background: #ddd; }
   a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 9pt; color: #555; }
 }
+
+/* Passwords: a peek toggle, a strength bar, and the one-time reveal. */
+.pw-wrap { position: relative; display: block; }
+.pw-wrap input { padding-right: 44px; width: 100%; }
+.pw-peek { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none;
+  border: 0; color: var(--ink-3); padding: 8px; cursor: pointer; border-radius: var(--r-chip); line-height: 0; }
+.pw-peek:hover { color: var(--ink); background: var(--raised); }
+.pw-meter { display: flex; align-items: center; gap: 10px; margin: -6px 0 12px; }
+.pw-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--raised); overflow: hidden; }
+.pw-bar span { display: block; height: 100%; border-radius: 3px; transition: width .25s ease; }
+.pw-reveal code { user-select: all; }
+
+/* The goal bar: one thing you are saving for, and how far along it is. */
+.goal-bar { position: relative; height: 30px; border-radius: 15px; background: var(--raised);
+  border: 1px solid var(--hairline-soft); overflow: hidden; }
+.goal-bar > span { display: block; height: 100%; border-radius: 15px;
+  background: linear-gradient(90deg, var(--good) 0%, var(--good) 100%); transition: width .6s cubic-bezier(.2,.7,.2,1); }
+.goal-pct { position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: .8rem; font-weight: 600; color: var(--ink); mix-blend-mode: normal; }
+@media (prefers-reduced-motion: reduce) { .goal-bar > span { transition: none; } }
+
+/* The room table: dense, but every row still readable on a phone. */
+.rooms-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.rooms-table th { text-align: left; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 600; padding: 0 12px 8px 0; white-space: nowrap; }
+.rooms-table th.num, .rooms-table td.num { text-align: right; }
+.rooms-table td { padding: 12px 12px 12px 0; border-top: 1px solid var(--hairline-soft); vertical-align: top; }
+.rooms-table td:last-child, .rooms-table th:last-child { padding-right: 0; }
+.rooms-table .flags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.rooms-table .tag { font-size: .68rem; padding: 2px 7px; }
+
+/* Deal cards: the strip runs along the top like a stay card, but shorter. */
+.deal { padding: 0; overflow: hidden; }
+.deal .deal-strip { height: 76px; background: var(--raised); }
+.deal .deal-strip canvas { width: 100%; height: 100%; display: block; object-fit: cover; }
+.deal .deal-body { padding: 16px 18px 18px; }
+.deal.matched { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+.rooms-table td .row.nowrap { flex-wrap: nowrap; }
+.rooms-table { min-width: 620px; }
+
+/* Nav badges: how many deals are waiting that you asked for. */
+.nav-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px;
+  margin-left: 6px; border-radius: 9px; background: var(--good); color: var(--on-good, #04222A);
+  font-size: .68rem; font-weight: 700; line-height: 1; vertical-align: 1px; }
+.botnav-ico { position: relative; display: inline-flex; }
+.nav-dot { position: absolute; top: -1px; right: -2px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--good); box-shadow: 0 0 0 2px var(--surface); }

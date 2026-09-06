@@ -83,6 +83,7 @@ create table if not exists members (
   paused_until   text,                              -- 'YYYY-MM'
   paused_months  text[] not null default '{}',      -- a pause freezes a streak; it does not reset it
   dream_stay_id  uuid,
+  goal           jsonb,                             -- {stayId, nights, season} — what they are saving for
   left_at        timestamptz,
   notes          text
 );
@@ -103,7 +104,10 @@ create table if not exists invitations (
 create table if not exists contributions (
   id             uuid primary key default gen_random_uuid(),
   member_id      uuid not null references members(id) on delete cascade,
-  for_month      text not null check (for_month ~ '^\d{4}-\d{2}$'),
+  -- null for an extra: money on top of the monthly, or cash handed to the Banker
+  for_month      text check (for_month ~ '^\d{4}-\d{2}$'),
+  extra          boolean not null default false,
+  recorded_by    uuid references members(id),      -- set when the Banker entered it himself
   expected_usd   numeric(10,2) not null check (expected_usd > 0),
   received_usd   numeric(10,2),
   currency       text not null default 'USD',
@@ -133,7 +137,10 @@ create index if not exists contributions_member_idx on contributions(member_id, 
 create index if not exists contributions_status_idx on contributions(status);
 -- One live submission per member per month; a returned or withdrawn one can be re-sent.
 create unique index if not exists contributions_one_per_month
-  on contributions(member_id, for_month) where status in ('pending','confirmed');
+  on contributions(member_id, for_month) where status in ('pending','confirmed') and for_month is not null;
+alter table contributions drop constraint if exists contributions_extra_has_no_month;
+alter table contributions add constraint contributions_extra_has_no_month
+  check ((extra and for_month is null) or (not extra and for_month is not null));
 
 -- ---------- the ledger (append-only) ----------
 create table if not exists ledger (
@@ -263,6 +270,87 @@ create table if not exists pledges (
 create index if not exists pledges_member_idx on pledges(member_id);
 create index if not exists redemptions_member_idx on redemptions(member_id, requested_at desc);
 create index if not exists redemptions_status_idx on redemptions(status);
+
+-- ---------- room types: what you can actually be given at a property ----------
+create table if not exists room_types (
+  id            uuid primary key default gen_random_uuid(),
+  stay_id       uuid not null references stays(id) on delete cascade,
+  name          text not null,                       -- as the property markets it
+  sqft          int,                                 -- null when genuinely unpublished
+  sqm           int,
+  sleeps        int not null default 2,
+  beds          text,
+  bedrooms      int not null default 0,              -- 0 = studio or hotel room
+  bathrooms     numeric(3,1) not null default 1,
+  kitchen       text not null default 'none' check (kitchen in ('none','kitchenette','full')),
+  view          text,
+  extras        text[] not null default '{}',
+  -- what this type costs relative to the property's cheapest, as a multiplier of the
+  -- season rate. 1.0 is the base type; 1.4 is forty per cent more.
+  rate_factor   numeric(4,2) not null default 1.00 check (rate_factor > 0),
+  source        text not null default 'official' check (source in ('official','aggregator','inferred')),
+  source_url    text,
+  sort_order    int not null default 0,
+  active        boolean not null default true
+);
+create index if not exists room_types_stay_idx on room_types(stay_id, sort_order);
+
+-- ---------- the watch list: standing wants ----------
+-- "A one-bedroom at the Ocean Club, some week in March, not more than 220,000 points."
+-- Nothing is reserved by a watch. It exists so that when the thing appears, the people
+-- who asked for it hear about it in the same minute the Desk does.
+create table if not exists watches (
+  id           uuid primary key default gen_random_uuid(),
+  member_id    uuid not null references members(id) on delete cascade,
+  stay_id      uuid references stays(id) on delete cascade,   -- null = anywhere of that kind
+  room_type_id uuid references room_types(id) on delete set null,
+  kind         text not null default 'aruba' check (kind in ('aruba','trip','any')),
+  from_date    date not null,
+  to_date      date not null,
+  nights       int not null default 3 check (nights > 0),
+  flex_days    int not null default 3 check (flex_days >= 0),
+  guests       int not null default 2 check (guests > 0),
+  max_points   int check (max_points > 0),
+  note         text,
+  active       boolean not null default true,
+  created_at   timestamptz not null default now(),
+  last_seen_at timestamptz,
+  ended_at     timestamptz,
+  check (to_date >= from_date)
+);
+create index if not exists watches_member_idx on watches(member_id) where active;
+create index if not exists watches_stay_idx on watches(stay_id) where active;
+
+-- ---------- deals: something real that became available ----------
+create table if not exists deals (
+  id            uuid primary key default gen_random_uuid(),
+  stay_id       uuid not null references stays(id) on delete cascade,
+  room_type_id  uuid references room_types(id) on delete set null,
+  kind          text not null default 'aruba' check (kind in ('aruba','trip')),
+  title         text,
+  from_date     date not null,
+  to_date       date not null,
+  nights        int not null check (nights > 0),
+  points_total  int not null check (points_total > 0),
+  points_per_night int,
+  retail_usd    numeric(10,2),
+  -- where it came from. `source_url` is the link the Desk clicks to go and book it.
+  source        text not null default 'other'
+                check (source in ('interval','redweek','iberostar','airbnb','vrbo','hotel','member','other')),
+  source_url    text,
+  source_ref    text,
+  units         int not null default 1 check (units > 0),
+  note          text,
+  status        text not null default 'live' check (status in ('live','gone','expired','booked')),
+  posted_by     uuid references members(id),
+  posted_at     timestamptz not null default now(),
+  expires_at    timestamptz,
+  retired_at    timestamptz,
+  retired_reason text,
+  check (to_date >= from_date)
+);
+create index if not exists deals_live_idx on deals(status, posted_at desc);
+create index if not exists deals_stay_idx on deals(stay_id, from_date);
 
 -- ---------- notes from the Voice of the Circle ----------
 create table if not exists announcements (
@@ -474,7 +562,8 @@ begin
 
   select t into tier from jsonb_array_elements(s.tiers) t where (t->>'monthlyUsd')::int = m.monthly_usd limit 1;
   bonus_rate := coalesce((tier->>'bonusRate')::numeric, 0);
-  is_full := received + 0.005 >= m.monthly_usd;
+  -- An extra buys points at the plain rate: no tier bonus, no streak, and it covers no month.
+  is_full := (not c.extra) and (received + 0.005 >= m.monthly_usd);
 
   update contributions set status='confirmed', reviewed_by=current_member_id(), reviewed_at=now(), reason=p_note,
          received_usd=received, currency=p_currency, received_native=p_native,
@@ -483,8 +572,9 @@ begin
 
   insert into ledger(member_id, kind, points, usd, ref_type, ref_id, note, by_id)
     values (c.member_id, 'earn', base_pts, backing, 'contribution', c.id,
-            to_char(to_date(c.for_month || '-01','YYYY-MM-DD'),'FMMonth YYYY') || ' contribution'
-              || case when is_full then '' else ' · part of it' end,
+            case when c.extra then coalesce(nullif(trim(c.note), ''), 'Extra contribution')
+                 else to_char(to_date(c.for_month || '-01','YYYY-MM-DD'),'FMMonth YYYY') || ' contribution'
+                        || case when is_full then '' else ' · part of it' end end,
             current_member_id());
 
   -- Promotional points are funded by the Circle out of its own share, and capped per month.
@@ -523,7 +613,7 @@ begin
     end if;
   end if;
 
-  if m.founding and s.founding_bonus > 0
+  if (not c.extra) and m.founding and s.founding_bonus > 0
      and not exists (select 1 from ledger l where l.member_id = c.member_id and l.kind = 'founding') then
     room := promo_room(c.for_month);
     if s.founding_bonus > room then
@@ -966,6 +1056,184 @@ begin
 end $$;
 
 -- =====================================================================
+--  Money the Banker takes by hand, goals, the watch list and deals
+-- =====================================================================
+
+-- Cash across a table, a transfer the Banker spotted himself, or someone catching up a
+-- month they missed. Recorded and confirmed in one step so the ledger, the Reserve and
+-- the month all stay true. With p_for_month set it IS that month's contribution and
+-- earns everything a normal one does; without, it is an extra at the plain rate.
+create or replace function record_direct_contribution(
+  p_member uuid, p_amount numeric, p_for_month text default null,
+  p_method text default 'cash', p_currency text default 'USD', p_note text default '')
+returns contributions language plpgsql security definer set search_path = public as $$
+declare c contributions; m members; is_extra boolean; usd numeric;
+begin
+  if not has_role('treasurer','deputy','admin') then raise exception 'Only the Banker can record money that arrived'; end if;
+  select * into m from members where id = p_member;
+  if m.id is null then raise exception 'No such member'; end if;
+  usd := round(p_amount, 2);
+  if usd <= 0 then raise exception 'Enter the amount that actually arrived'; end if;
+  is_extra := p_for_month is null;
+  if is_extra and coalesce(trim(p_note), '') = '' then
+    raise exception 'Say what this money was for — members read it on their ledger';
+  end if;
+  if not is_extra and exists (select 1 from contributions x
+      where x.member_id = p_member and x.for_month = p_for_month and x.status in ('pending','confirmed')) then
+    raise exception '% already has a sent or confirmed contribution — confirm that one instead', p_for_month;
+  end if;
+  insert into contributions(member_id, for_month, extra, expected_usd, currency, method, note, sent_on,
+                            status, recorded_by, reference)
+    values (p_member, p_for_month, is_extra, usd, p_currency, p_method, trim(p_note), current_date,
+            'pending', current_member_id(),
+            case when is_extra then null
+                 else 'HUNTO-' || upper(substring(regexp_replace(m.name, '[^A-Za-z ]', '', 'g') from 1 for 1))
+                      || upper(coalesce(substring(split_part(m.name, ' ', 2) from 1 for 1), ''))
+                      || '-' || p_for_month end)
+    returning * into c;
+  perform log_audit('contribution.record','contribution', c.id::text,
+                    jsonb_build_object('memberId', p_member, 'amountUsd', usd, 'forMonth', p_for_month, 'method', p_method));
+  return confirm_contribution(c.id, usd, p_currency, null, trim(p_note));
+end $$;
+
+-- What a member is saving for. Nothing is reserved by it.
+create or replace function set_my_goal(p_goal jsonb)
+returns members language plpgsql security definer set search_path = public as $$
+declare me uuid; m members;
+begin
+  me := current_member_id();
+  if me is null then raise exception 'Not a member'; end if;
+  if p_goal is not null and not exists (select 1 from stays where id = (p_goal->>'stayId')::uuid and active) then
+    raise exception 'That place is no longer on the list';
+  end if;
+  update members set goal = p_goal where id = me returning * into m;
+  return m;
+end $$;
+
+-- ---------- the watch list ----------
+create or replace function add_watch(
+  p_stay uuid, p_from date, p_to date, p_nights int,
+  p_room_type uuid default null, p_kind text default 'aruba',
+  p_flex int default 3, p_guests int default 2, p_max_points int default null, p_note text default '')
+returns watches language plpgsql security definer set search_path = public as $$
+declare me uuid; w watches;
+begin
+  me := current_member_id();
+  if me is null then raise exception 'Not a member'; end if;
+  if p_from is null or p_to is null then raise exception 'Say roughly when you would go'; end if;
+  if p_to < p_from then raise exception 'Those dates are the wrong way round'; end if;
+  if coalesce(p_nights, 0) <= 0 then raise exception 'How many nights?'; end if;
+  if p_stay is not null and not exists (select 1 from stays where id = p_stay and active) then
+    raise exception 'That place is no longer on the list';
+  end if;
+  if exists (select 1 from watches x where x.member_id = me and x.active
+      and x.stay_id is not distinct from p_stay and x.room_type_id is not distinct from p_room_type
+      and x.from_date = p_from and x.to_date = p_to) then
+    raise exception 'You are already watching for exactly that';
+  end if;
+  insert into watches(member_id, stay_id, room_type_id, kind, from_date, to_date, nights, flex_days, guests, max_points, note)
+    values (me, p_stay, p_room_type, p_kind, p_from, p_to, p_nights, greatest(0, p_flex), greatest(1, p_guests),
+            nullif(p_max_points, 0), nullif(trim(p_note), ''))
+    returning * into w;
+  perform log_audit('watch.add','watch', w.id::text, jsonb_build_object('stayId', p_stay, 'from', p_from, 'to', p_to));
+  return w;
+end $$;
+
+create or replace function remove_watch(p_id uuid)
+returns watches language plpgsql security definer set search_path = public as $$
+declare w watches;
+begin
+  select * into w from watches where id = p_id;
+  if w.id is null then raise exception 'No such watch'; end if;
+  if w.member_id <> current_member_id() and not has_role('planner','admin') then
+    raise exception 'That is not your watch';
+  end if;
+  update watches set active = false, ended_at = now() where id = p_id returning * into w;
+  perform log_audit('watch.remove','watch', p_id::text, '{}'::jsonb);
+  return w;
+end $$;
+
+create or replace function mark_watches_seen()
+returns int language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  update watches set last_seen_at = now() where member_id = current_member_id() and active;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
+-- ---------- deals ----------
+create or replace function post_deal(
+  p_stay uuid, p_from date, p_to date, p_points int,
+  p_room_type uuid default null, p_title text default null, p_nights int default null,
+  p_retail_usd numeric default null, p_source text default 'other', p_source_url text default '',
+  p_source_ref text default '', p_units int default 1, p_expires_at timestamptz default null,
+  p_note text default '')
+returns deals language plpgsql security definer set search_path = public as $$
+declare d deals; st stays; n int;
+begin
+  if not has_role('planner','comms','admin') then raise exception 'Only Victor or Ian can post a deal'; end if;
+  select * into st from stays where id = p_stay;
+  if st.id is null then raise exception 'Pick a place from the catalog'; end if;
+  if p_from is null or p_to is null then raise exception 'A deal needs the dates it is for'; end if;
+  if p_to < p_from then raise exception 'Those dates are the wrong way round'; end if;
+  n := greatest(1, coalesce(p_nights, (p_to - p_from)));
+  if coalesce(p_points, 0) <= 0 then raise exception 'What does it cost in points?'; end if;
+  insert into deals(stay_id, room_type_id, kind, title, from_date, to_date, nights, points_total,
+                    points_per_night, retail_usd, source, source_url, source_ref, units, note, posted_by, expires_at)
+    values (p_stay, p_room_type, case when st.kind = 'trip' then 'trip' else 'aruba' end,
+            coalesce(nullif(trim(p_title), ''), st.name), p_from, p_to, n, p_points,
+            round(p_points::numeric / n), p_retail_usd, p_source, nullif(trim(p_source_url), ''),
+            nullif(trim(p_source_ref), ''), greatest(1, p_units), nullif(trim(p_note), ''),
+            current_member_id(), p_expires_at)
+    returning * into d;
+  perform log_audit('deal.post','deal', d.id::text,
+                    jsonb_build_object('stayId', p_stay, 'points', p_points, 'source', p_source));
+  return d;
+end $$;
+
+create or replace function retire_deal(p_id uuid, p_reason text default '')
+returns deals language plpgsql security definer set search_path = public as $$
+declare d deals;
+begin
+  if not has_role('planner','comms','admin') then raise exception 'Only Victor or Ian can take a deal down'; end if;
+  update deals set status = 'gone', retired_at = now(), retired_reason = nullif(trim(p_reason), '')
+    where id = p_id returning * into d;
+  if d.id is null then raise exception 'No such deal'; end if;
+  perform log_audit('deal.retire','deal', p_id::text, jsonb_build_object('reason', p_reason));
+  return d;
+end $$;
+
+-- Does a deal answer a watch? Generous on dates — a watch is a rough want, not a booking —
+-- and strict on the two things the member actually ruled out: a different property, and
+-- more points than they said they would spend.
+create or replace function deal_matches_watch(d deals, w watches)
+returns boolean language sql stable set search_path = public as $$
+  select d.status = 'live'
+     and (w.stay_id is null or w.stay_id = d.stay_id)
+     and (w.room_type_id is null or d.room_type_id is null or w.room_type_id = d.room_type_id)
+     and (w.stay_id is not null or w.kind = 'any' or w.kind = d.kind)
+     and (w.max_points is null or d.points_total <= w.max_points)
+     and greatest(0, least(d.to_date, w.to_date + w.flex_days)
+                   - greatest(d.from_date, w.from_date - w.flex_days))
+         >= least(w.nights, d.nights)
+$$;
+
+-- Live deals that answer something this member asked for.
+create or replace function my_matches()
+returns table (deal_id uuid, watch_id uuid, unseen boolean)
+language sql stable security definer set search_path = public as $$
+  select distinct on (d.id) d.id, w.id,
+         (w.last_seen_at is null or d.posted_at > w.last_seen_at)
+    from deals d
+    join watches w on w.member_id = current_member_id() and w.active
+   where d.status = 'live'
+     and (d.expires_at is null or d.expires_at > now())
+     and deal_matches_watch(d, w)
+   order by d.id, d.posted_at desc
+$$;
+
+-- =====================================================================
 --  Row-level security
 -- =====================================================================
 alter table settings          enable row level security;
@@ -980,10 +1248,16 @@ alter table announcements     enable row level security;
 alter table month_closes      enable row level security;
 alter table audit             enable row level security;
 alter table rules_acceptances enable row level security;
+alter table room_types        enable row level security;
+alter table watches           enable row level security;
+alter table deals             enable row level security;
 
 -- Signed-out visitors get nothing, and the browser never writes money tables directly.
 revoke all on all tables in schema public from anon;
 revoke insert, update, delete on ledger, redemptions, pledges, month_closes, promo_deferrals, audit from authenticated;
+-- Watches and deals are created through the functions above, never written directly:
+-- a member could otherwise set someone else's member_id, or post a deal without the role.
+revoke insert, update, delete on watches, deals, room_types from authenticated;
 revoke update, delete on contributions from authenticated;
 
 drop policy if exists settings_read on settings;
@@ -1014,6 +1288,7 @@ begin
     show_on_rollcall = coalesce((p_patch->>'showOnRollcall')::boolean, show_on_rollcall),
     standing_order   = coalesce((p_patch->>'standingOrder')::boolean, standing_order),
     dream_stay_id    = coalesce((p_patch->>'dreamStayId')::uuid, dream_stay_id),
+    goal             = case when p_patch ? 'goal' then p_patch->'goal' else goal end,
     monthly_usd      = coalesce((p_patch->>'monthlyUsd')::int, monthly_usd)
   where id = me returning * into m;
   perform log_audit('member.update','member',me::text, p_patch);
@@ -1164,3 +1439,146 @@ create policy proofs_read on storage.objects for select to authenticated
 do $$ begin
   alter publication supabase_realtime add table contributions, redemptions, pledges, ledger, announcements;
 exception when others then null; end $$;
+
+-- =====================================================================
+--  Row-level security for room types, the watch list and deals
+-- =====================================================================
+
+-- Room types are part of the catalog: everyone signed in can read the live ones,
+-- planners see retired ones too. Writes go through the Desk's upsert, not the table.
+drop policy if exists room_types_read on room_types;
+create policy room_types_read on room_types for select to authenticated
+  using (active or (select has_role('planner','comms','admin')));
+
+-- Your watches are yours. Victor and Ian see them all, because knowing what the Circle is
+-- waiting for is the whole point — it tells them what to go and find.
+drop policy if exists watches_read on watches;
+create policy watches_read on watches for select to authenticated
+  using (member_id = current_member_id() or (select has_role('planner','comms','admin')));
+
+-- A deal is club-wide news. Everyone signed in sees every live one.
+drop policy if exists deals_read on deals;
+create policy deals_read on deals for select to authenticated
+  using (current_member_id() is not null);
+
+-- The Desk edits room types the same way it edits a stay: through a guarded function.
+create or replace function upsert_room_type(p_patch jsonb)
+returns room_types language plpgsql security definer set search_path = public as $$
+declare r room_types; rid uuid;
+begin
+  if not has_role('planner','admin') then raise exception 'Only a planner can edit the rooms'; end if;
+  rid := nullif(p_patch->>'id','')::uuid;
+  if rid is null then
+    insert into room_types(stay_id, name, sqft, sqm, sleeps, beds, bedrooms, bathrooms, kitchen, view,
+                           extras, rate_factor, source, source_url, sort_order, active)
+      values ((p_patch->>'stayId')::uuid, p_patch->>'name',
+              nullif(p_patch->>'sqft','')::int, nullif(p_patch->>'sqm','')::int,
+              coalesce((p_patch->>'sleeps')::int, 2), p_patch->>'beds',
+              coalesce((p_patch->>'bedrooms')::int, 0), coalesce((p_patch->>'bathrooms')::numeric, 1),
+              coalesce(p_patch->>'kitchen','none'), p_patch->>'view',
+              coalesce((select array_agg(value::text) from jsonb_array_elements_text(p_patch->'extras')), '{}'),
+              coalesce((p_patch->>'rateFactor')::numeric, 1.0), coalesce(p_patch->>'source','official'),
+              p_patch->>'sourceUrl', coalesce((p_patch->>'sortOrder')::int, 0),
+              coalesce((p_patch->>'active')::boolean, true))
+      returning * into r;
+  else
+    update room_types set
+      name = coalesce(p_patch->>'name', name),
+      sqft = case when p_patch ? 'sqft' then nullif(p_patch->>'sqft','')::int else sqft end,
+      sqm  = case when p_patch ? 'sqm'  then nullif(p_patch->>'sqm','')::int  else sqm end,
+      sleeps = coalesce((p_patch->>'sleeps')::int, sleeps),
+      beds = coalesce(p_patch->>'beds', beds),
+      bedrooms = coalesce((p_patch->>'bedrooms')::int, bedrooms),
+      bathrooms = coalesce((p_patch->>'bathrooms')::numeric, bathrooms),
+      kitchen = coalesce(p_patch->>'kitchen', kitchen),
+      view = coalesce(p_patch->>'view', view),
+      extras = coalesce((select array_agg(value::text) from jsonb_array_elements_text(p_patch->'extras')), extras),
+      rate_factor = coalesce((p_patch->>'rateFactor')::numeric, rate_factor),
+      source = coalesce(p_patch->>'source', source),
+      source_url = coalesce(p_patch->>'sourceUrl', source_url),
+      sort_order = coalesce((p_patch->>'sortOrder')::int, sort_order),
+      active = coalesce((p_patch->>'active')::boolean, active)
+    where id = rid returning * into r;
+    if r.id is null then raise exception 'No such room type'; end if;
+  end if;
+  perform log_audit('room_type.upsert','room_type', r.id::text, jsonb_build_object('name', r.name));
+  return r;
+end $$;
+-- =====================================================================
+--  Execute privileges: close the door anon was left holding
+-- =====================================================================
+-- Postgres grants EXECUTE on a new function to PUBLIC by default. Revoking table access
+-- from `anon` therefore did nothing for the functions — and because these are SECURITY
+-- DEFINER, a caller holding only the publishable key could read the Reserve total, read
+-- any member's balance, and (through log_audit) write rows into the audit table.
+--
+-- These are named one by one on purpose: this project also hosts another application, and
+-- a blanket `revoke ... on all functions in schema public` would break it.
+
+do $$
+declare
+  fn text;
+  circle_functions text[] := array[
+    'accept_quote','add_watch','adjust_points','admin_add_member','admin_update_member',
+    'available_points','cancel_redemption','claim_membership','close_month','committed_points',
+    'complete_redemption','confirm_contribution','confirm_top_up','consecutive_months','covered_points',
+    'current_member_id','deal_matches_watch','decline_redemption','easter_sunday','has_role',
+    'ledger_balance','ledger_is_append_only','log_audit','mark_watches_seen','my_matches',
+    'pay_redemption','pledge_to_redemption','post_deal','promo_room','quote_points',
+    'quote_redemption','record_direct_contribution','reject_contribution','release_expired_quotes',
+    'remove_watch','request_redemption','reserve_expected_usd','retire_deal','reverse_contribution',
+    'season_for','set_my_goal','set_my_status','update_my_profile','upsert_room_type',
+    'withdraw_contribution','withdraw_pledge','set_updated_at'
+  ];
+begin
+  for fn in
+    select format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid))
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname = any(circle_functions)
+  loop
+    execute format('revoke all on function %s from public, anon', fn);
+    execute format('grant execute on function %s to authenticated', fn);
+  end loop;
+end $$;
+
+-- Two of these are triggers and internal helpers; nothing outside the database should be
+-- able to call them at all, not even a signed-in member.
+do $$
+declare fn text;
+begin
+  for fn in
+    select format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid))
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname in ('log_audit','ledger_is_append_only','set_updated_at')
+  loop
+    execute format('revoke all on function %s from authenticated', fn);
+  end loop;
+end $$;
+
+-- search_path was left mutable on four functions. On a SECURITY DEFINER function that is a
+-- way in: a caller who can create objects in a schema earlier on the path can shadow a
+-- built-in the function relies on.
+alter function public.easter_sunday(int) set search_path = public;
+alter function public.season_for(date) set search_path = public;
+alter function public.ledger_is_append_only() set search_path = public;
+do $$ begin
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+              where n.nspname='public' and p.proname='set_updated_at') then
+    execute 'alter function public.set_updated_at() set search_path = public';
+  end if;
+end $$;
+
+-- The treasury view ran as its owner, so it ignored row-level security. Nothing in it is
+-- per-member, but a view that bypasses RLS is a habit worth not having.
+alter view public.treasury set (security_invoker = true);
+
+-- Foreign keys the Circle actually joins on, which had no index behind them.
+create index if not exists contributions_recorded_by_idx on contributions(recorded_by);
+create index if not exists redemptions_stay_idx          on redemptions(stay_id);
+create index if not exists redemptions_member_idx        on redemptions(member_id);
+create index if not exists deals_room_type_idx           on deals(room_type_id);
+create index if not exists deals_posted_by_idx           on deals(posted_by);
+create index if not exists watches_room_type_idx         on watches(room_type_id);
+create index if not exists ledger_ref_idx                on ledger(ref_type, ref_id);
+create index if not exists pledges_member_idx            on pledges(member_id);
+create index if not exists audit_actor_idx               on audit(actor_id);

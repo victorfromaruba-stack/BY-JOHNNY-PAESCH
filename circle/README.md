@@ -43,7 +43,103 @@ Short of something you want? Ask for it anyway — Victor quotes it and you acce
 points are there — or close the gap with a cash top-up, or have the Circle chip in. Moving
 between levels takes effect on your next contribution and changes nothing already held.
 
-**Everything in this build runs in the browser with seeded demo data.** Nothing real is
+## Signing in
+
+The club runs on its own Supabase project now, so accounts are real: one email and one
+password, working on your phone and Ian's and Vishnu's at the same time, against one shared
+database. There is no persona picker any more and no way to look at someone else's account.
+
+- **First time:** on the sign-in screen, put in the email Victor or Ian has for you and tap
+  *Set it up*. If that address is on the members list you choose a password — there is a
+  *make one up for me* button that generates sixteen characters from an alphabet with no
+  look-alikes, so it can be read off a screen without a mistake. An email nobody invited
+  gets nowhere.
+- **Forgot it:** *I forgot my password* sends a reset link, good for an hour. It lands on a
+  screen that sets a new one. Nobody, including Ian, can read your password back to you.
+- **Nothing is stored in this repository.** The publishable key in `config.js` is designed
+  to be public and row-level security does the guarding. The service-role key is never here.
+
+If the server cannot be reached the app says so and stops. It no longer falls back to demo
+data, because invented balances that look real are worse than an error message. Add
+`?preview=1` to the URL to see the seeded preview deliberately.
+
+## Where the deals come from — and what is honestly automatable
+
+Victor asked for a system that logs into Interval, RedWeek, Iberostar and Airbnb and watches
+for rooms. Most of that is not possible, and the parts that are possible are worth doing
+properly. This is what the research found:
+
+| Source | Can a robot watch it? | What the club does instead |
+|---|---|---|
+| **Interval International** | **No.** Membership terms clause (s) prohibits automated access and clause (k) restricts to personal, non-commercial use. Sharing a login is grounds for termination. No API exists. | Turn on **Getaway Alerts** in the Interval To Go app, and use **Ongoing Search** — Interval's own standing request, which is exactly "keep looking until it appears" and books it for you. Note it needs three resorts *or* three time periods, runs as an overnight batch, and auto-charges with 24 hours to cancel. |
+| **RedWeek** | **No.** Terms of service carry an explicit anti-scraping clause; they publish an `llms.txt` saying the same. No API. | Turn on **Posting Alerts** — RedWeek emails you when a matching posting appears. Sanctioned, and it is the fastest legitimate signal there is. |
+| **Marriott Vacation Club / Abound** | No API. | The owner-site **waitlist** emails you when inventory frees up. |
+| **Airbnb** | **No.** No public API; the Partner API is closed to operators this size; scraping is forbidden and has been litigated. | Vrbo through the Expedia Rapid partner API is the nearest legitimate equivalent, and needs an application. |
+| **Iberostar** | Employee and friends-and-family rates are a rate code, not a feed. | For a group, the **group desk** (10+ rooms) beats any published rate. Iberostar PRO is the agent channel; the affiliate feed is marketing content, not availability. |
+| **Real hotel APIs** | **Yes.** LiteAPI (Nuitée) has genuine self-signup and live availability. Expedia Rapid, RateHawk and Hotelbeds are partner APIs behind an application. | Any of these can be polled on a schedule without breaking anyone's terms. |
+
+So the design is: **the sites' own alerts do the watching, and the club turns those alerts
+into something everyone sees at once.**
+
+1. Victor and Ian switch on Getaway Alerts, RedWeek Posting Alerts and the MVC waitlist.
+2. Those emails forward to a club address. A free Cloudflare Email Worker parses each one and
+   POSTs it to `supabase/functions/ingest-deal`, which matches the property against the
+   catalog and puts the deal on the board.
+3. **The watch list** does the rest. A member says "a one-bedroom at the Ocean Club, some
+   week in March, not more than 220,000 points". When a deal arrives it is matched against
+   every open watch, and the people who asked for exactly that get it on their home screen
+   and a badge in the navigation — in the same minute the email landed.
+4. Anything the Desk finds by hand is **four fields and one tap**, and the posting screen
+   tells Victor who is about to hear about it before he posts.
+
+What the app does *not* do is pretend. It never asks for anyone's Interval or RedWeek
+password, and there is no scraper in this repository.
+
+**Deploying the ingest function**
+
+```
+supabase functions deploy ingest-deal --no-verify-jwt
+supabase secrets set INGEST_SECRET="$(openssl rand -hex 32)" DEAL_POSTER_MEMBER_ID="<victor's members.id>"
+```
+
+The email worker POSTs JSON — `{property, roomType, from, to, points | usd, source, sourceUrl, note}`
+— with an `x-ingest-secret` header. Property names are matched against the catalog, so
+"Marriott's Aruba Surf Club" in an email finds the right row.
+
+## The rooms
+
+Every property in the catalog now carries its real room types: 184 of them across the sixteen
+properties where an operator publishes the detail — name, square feet and metres, occupancy,
+bed configuration, bathrooms, whether there is no kitchen, a kitchenette or a full one, the
+view grade and what each type has that the others do not.
+
+Pricing works off one number per property. `rateFactor` says what a type costs relative to
+the room the property's seasonal rate is modelled on, so the Surf Club's studio is 0.39 and
+its oceanfront two-bedroom is 1.29 of the same rate. Negotiate a better rate in the Desk and
+every room in the property moves with it. A row marked *inferred* is one nobody publishes a
+size for; *aggregator* means it came from a booking site rather than the operator.
+
+Seven of the twenty-three Aruba properties have no room rows yet — Radisson Blu, Holiday Inn,
+Courtyard, Boardwalk, Amsterdam Manor, voco Surfside and Eagle Aruba. The app handles that:
+it simply does not offer the choice there.
+
+## Money that never went through the queue
+
+Someone hands Vishnu $300 in cash. **The Banker's inbox → Money came in** records it: pick the
+person, type the amount, and the sheet shows exactly what it mints before he commits — how
+much goes to the Circle, how much into the Reserve, how many points, and whether it earns a
+tier bonus. Two shapes:
+
+- **A month they missed** — it *is* that month's contribution and earns everything a normal
+  one does, bonus and streak included.
+- **An extra** — base points only at the plain rate. No tier bonus, no streak, and it does
+  not count as covering a month. It needs a written note, because the member reads it on
+  their ledger.
+
+Either way it is one transaction: the contribution, the ledger lines and the Reserve all move
+together, and it can be undone for a minute afterwards like any other confirmation.
+
+**Everything in this build runs in the browser with seeded demo data.** Nothing real is**Everything in this build runs in the browser with seeded demo data.** Nothing real is
 stored anywhere and no money moves. See *Going live* below for what has to happen first.
 
 ```

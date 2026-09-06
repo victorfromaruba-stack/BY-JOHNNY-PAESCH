@@ -11,12 +11,15 @@ import * as pub from './views/public.js';
 import * as member from './views/member.js';
 import * as catalog from './views/catalog.js';
 import * as officer from './views/officer.js';
+import * as dealsView from './views/deals.js';
+import { icon } from './ui/icons.js';
 
 const ROUTES = [
   { path: '/', view: pub.landing, title: `${VOCAB.clubName} — a private travel circle in Aruba`, chrome: false },
   { path: '/rules', view: pub.rules, title: 'How the Circle works' },
   { path: '/sign-in', view: pub.signIn, title: 'Sign in', chrome: false },
   { path: '/join/:code', view: pub.join, title: 'Your invitation', chrome: false },
+  { path: '/set-password', view: pub.setPassword, title: 'Choose a password', chrome: false },
   { path: '/home', view: member.home, title: 'Home', auth: true },
   { path: '/pay', view: member.pay, title: 'Send a contribution', auth: true },
   { path: '/ledger', view: member.ledger, title: 'Your ledger', auth: true },
@@ -30,6 +33,8 @@ const ROUTES = [
   { path: '/book/:id', view: catalog.book, title: 'Request', auth: true },
   { path: '/requests', view: catalog.requests, title: 'Your requests', auth: true },
   { path: '/requests/:id', view: catalog.requestDetail, title: 'Request', auth: true },
+  { path: '/deals', view: dealsView.deals, title: 'Deals', auth: true },
+  { path: '/watching', view: dealsView.watching, title: 'What you are watching', auth: true },
   { path: '/circle', view: officer.circle, title: 'The Circle', auth: true },
   { path: '/pool', view: officer.pool, title: 'The Pool', auth: true },
   { path: '/bank', view: officer.bank, title: 'The Banker’s inbox', auth: true, roles: ['treasurer', 'deputy'] },
@@ -43,21 +48,31 @@ const app = document.getElementById('app');
 const liveRegion = document.getElementById('route-live');
 let store, router, disposer;
 
+// Preview data is for a developer's machine and for anyone who deliberately asks for it.
+// On the real address the club is the club: if its server cannot be reached we say so,
+// rather than quietly showing invented balances that someone might believe.
+const wantsPreview = () => {
+  try {
+    if (new URLSearchParams(location.search).has('preview')) return true;
+    return ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+  } catch { return false; }
+};
+
 async function boot() {
-  if (CONFIG.backend === 'supabase' && CONFIG.supabaseUrl && CONFIG.supabaseKey) {
+  const live = CONFIG.backend === 'supabase' && CONFIG.supabaseUrl && CONFIG.supabaseKey;
+  if (live && !wantsPreview()) {
     try {
       const { SupabaseStore, loadSupabaseJs } = await import('./core/supabase-store.js');
       await loadSupabaseJs();
       store = await new SupabaseStore({ url: CONFIG.supabaseUrl, key: CONFIG.supabaseKey }).init();
     } catch (err) {
       console.error(err);
-      toast('Could not reach the club’s server, so this is the local demo.', { kind: 'bad', timeout: 6000 });
-      store = await localStore();
+      return offline(err);
     }
   } else {
     store = await localStore();
   }
-  window.__hunto = { store };            // demo hook: lets the smoke test switch persona
+  window.__hunto = { store };            // test hook: lets the smoke suite switch persona
   document.documentElement.dataset.mode = store.mode;
   store.subscribe((reason) => { if (reason !== 'render') render(); });
   router = new Router({ routes: ROUTES, notFound: NOT_FOUND, onChange: render });
@@ -66,6 +81,22 @@ async function boot() {
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* offline extras are optional */ });
   }
+}
+
+/** The club's server is unreachable. Say so plainly; never fall back to invented numbers. */
+function offline(err) {
+  document.documentElement.dataset.mode = 'offline';
+  app.innerHTML = `<section class="sec"><div class="wrap" style="max-width:540px;text-align:center">
+      <h1 style="margin-top:40px">The Circle is not answering</h1>
+      <p class="lede" style="margin-top:14px">Your points, the Reserve and every booking live on the club's own server, and this device cannot reach it right now. Nothing is lost — it is almost always the connection.</p>
+      <div class="row" style="justify-content:center;margin-top:24px">
+        <button class="btn" id="again">Try again</button>
+        <a class="btn ghost" href="?preview=1#/">Look around the preview instead</a>
+      </div>
+      <p class="small muted" style="margin-top:22px">The preview is invented data in this browser. Nothing in it is real, and nothing you do there touches the Circle.</p>
+      <p class="small muted" style="margin-top:10px">${String(err?.message || err || '').slice(0, 140)}</p>
+    </div></section>`;
+  app.querySelector('#again')?.addEventListener('click', () => location.reload());
 }
 
 async function localStore() {
@@ -134,12 +165,13 @@ function toggleTheme() {
   localStorage.setItem('hunto.theme', root.dataset.theme);
 }
 
+// The five that live in the thumb bar. Everything else is in the top bar.
 const NAV = [
-  { path: '/home', label: 'Home', icon: 'M4 11.5 12 4l8 7.5M6 10v9h12v-9' },
-  { path: '/stays', label: 'Stays', icon: 'M3 20h18M5 20V9l7-5 7 5v11M10 20v-5h4v5' },
-  { path: '/pay', label: 'Send', icon: 'M12 19V5m0 0-6 6m6-6 6 6' },
-  { path: '/trips', label: 'Trips', icon: 'M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18' },
-  { path: '/circle', label: 'Circle', icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 20a8 8 0 0 1 16 0' },
+  { path: '/home', label: 'Home', icon: 'home' },
+  { path: '/stays', label: 'Stays', icon: 'bed' },
+  { path: '/deals', label: 'Deals', icon: 'zap', badge: 'deals' },
+  { path: '/pay', label: 'Send', icon: 'arrowUp' },
+  { path: '/circle', label: 'Circle', icon: 'users' },
 ];
 
 function updateChrome(current) {
@@ -152,16 +184,24 @@ function updateChrome(current) {
   if (store.canConfirmMoney()) roleTabs.push({ path: '/bank', label: 'Bank' });
   if (store.hasRole('planner', 'comms', 'admin')) roleTabs.push({ path: '/desk', label: 'Desk' });
   if (store.hasRole('admin', 'treasurer')) roleTabs.push({ path: '/settings', label: 'Settings' });
-  const main = me ? [...NAV.map(n => ({ path: n.path, label: n.label })), { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }, ...roleTabs]
+  // How many deals answer something this member asked for and has not looked at yet.
+  const unseen = me ? (() => { try { return store.unseenMatches(me.id).length; } catch { return 0; } })() : 0;
+  const main = me ? [{ path: '/home', label: 'Home' }, { path: '/stays', label: 'Stays' }, { path: '/trips', label: 'Trips' },
+                     { path: '/deals', label: 'Deals', badge: unseen }, { path: '/pay', label: 'Send' },
+                     { path: '/circle', label: 'Circle' }, { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }, ...roleTabs]
                   : [{ path: '/rules', label: 'How it works' }];
-  tabs.innerHTML = main.map(n => `<a href="#${n.path}"${path === n.path ? ' aria-current="page"' : ''}>${escapeHtml(n.label)}</a>`).join('');
+  tabs.innerHTML = main.map(n => `<a href="#${n.path}"${path === n.path ? ' aria-current="page"' : ''}>${escapeHtml(n.label)}${
+    n.badge ? `<span class="nav-badge">${n.badge > 9 ? '9+' : n.badge}</span>` : ''}</a>`).join('');
   who.innerHTML = me
     ? `<a class="btn ghost sm" href="#/profile">${escapeHtml(me.name.split(' ')[0])}</a>`
     : `<a class="btn sm" href="#/sign-in">Sign in</a>`;
   document.getElementById('botnav').hidden = !me;
-  list.innerHTML = me ? NAV.map(n => `<li><a href="#${n.path}"${path === n.path ? ' aria-current="page"' : ''}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${n.icon}"/></svg>
-      ${escapeHtml(n.label)}</a></li>`).join('') : '';
+  list.innerHTML = me ? NAV.map(n => {
+    const count = n.badge === 'deals' ? unseen : 0;
+    return `<li><a href="#${n.path}"${path === n.path ? ' aria-current="page"' : ''}>
+      <span class="botnav-ico">${icon(n.icon, { size: 22, stroke: 1.6 })}${count ? `<span class="nav-dot" aria-hidden="true"></span>` : ''}</span>
+      ${escapeHtml(n.label)}${count ? `<span class="sr-only">, ${count} new</span>` : ''}</a></li>`;
+  }).join('') : '';
 }
 
 boot().catch((err) => {
