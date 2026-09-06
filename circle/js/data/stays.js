@@ -23,12 +23,33 @@ export const ARUBA_STAYS = [
     vibe: 'Eight overwater bungalows in a fishing village. Bali meets Aruba, and it sells out months ahead.',
     features: ['Overwater villas', 'Adults only', 'Tree house', 'Meal plans'], dealNote: 'Victor is watching this one — put requests in early.' },
   { id: 'stay_surfclub', kind: 'aruba', name: 'Marriott’s Aruba Surf Club', area: 'Palm Beach', country: 'Aruba', category: 4, house: true,
-    rates: { low: 285, high: 455, peak: 760 }, retailUsd: 850, minNights: 7, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: false,
+    // Repriced against what Victor can actually book, not against the published rate. An
+    // Interval Getaway week here came up at US$90.50 a night in September 2026, against the
+    // resort's own $850.
+    //
+    // Only Summer is anchored to that observation, and set above it on purpose — one week in
+    // deep low season is not a season. Winter and Peak are estimates: Getaways thin out and
+    // owners on RedWeek ask more, but nobody has watched a winter yet. Replace them with real
+    // numbers the first time Victor prices a January week.
+    rates: { low: 135, high: 310, peak: 580 }, retailUsd: 850, minNights: 7, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: false,
+    sources: {
+      best: 'interval',
+      interval: { seenUsd: 90.50, seenOn: '2026-09-06', nights: 7, note: 'A Getaway week, when one is there' },
+      redweek: { fromUsd: 150, seenOn: '2026-09-06', note: '1,725 owner rentals, $150 to $3,600 a night' },
+    },
     vibe: 'Aruba’s largest villa resort, at the north end of Palm Beach: 450 villas across the Lighthouse, Compass and Spyglass towers, wrapped around the lazy river, with a side gate onto the restaurant strip.',
     features: ['Villas sleep up to 8', 'Full kitchen', 'Washer-dryer in villa', 'Lazy river', 'On the sand'],
     dealNote: 'One of the four we keep coming back to. Owner weeks rent Saturday to Saturday, so this is a seven-night booking — but a two-bedroom villa sleeps eight, and split three or four ways it is the cheapest good week on Palm Beach. No resort fee; the 12.5% levy is already in the price.' },
   { id: 'stay_oceanclub', kind: 'aruba', name: 'Marriott’s Aruba Ocean Club', area: 'Palm Beach', country: 'Aruba', category: 4, house: true,
-    rates: { low: 300, high: 475, peak: 790 }, retailUsd: 875, minNights: 7, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: false,
+    // Same repricing, same caveat: Summer is anchored to Interval having this at US$167.50 the
+    // same week the Surf Club was at $90.50 — which is itself the reason to check both every
+    // time. Winter and Peak are still estimates.
+    rates: { low: 165, high: 340, peak: 620 }, retailUsd: 875, minNights: 7, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: false,
+    sources: {
+      best: 'interval',
+      interval: { seenUsd: 167.50, seenOn: '2026-09-10', nights: 7, note: 'A Getaway week, when one is there' },
+      redweek: { fromUsd: 150, seenOn: '2026-09-06', note: '607 owner rentals, $150 to $4,800 a night' },
+    },
     vibe: 'The original Marriott villas — 218 of them, a quarter the size of the Surf Club next door, quieter, and two minutes from the Stellaris casino and the whole strip.',
     features: ['Villas sleep 4–8', 'Full kitchen', 'Mandara Spa', 'Casino next door', 'On the sand'],
     dealNote: 'One of the four we keep coming back to. Seven nights, Saturday to Saturday, the same as the Surf Club. The 941 sq ft one-bedroom is the sweet spot for two; the 1,335 sq ft two-bedroom sleeps eight. No washer-dryer in the villas here — that is the Surf Club’s trick.' },

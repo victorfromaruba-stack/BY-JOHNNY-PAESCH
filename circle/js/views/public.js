@@ -16,6 +16,24 @@ export const stayStrip = (stay) => {
   return d;
 };
 
+
+/**
+ * Where a week at this place actually comes from. Interval's Getaway inventory is the
+ * cheapest most of the time — a Surf Club week at $90 a night against a published $850 — but
+ * it is surplus, so it is not always there, and an owner on RedWeek sometimes beats it. Both
+ * numbers below were seen on the real sites, on the date shown.
+ */
+export function sourceLine(stay) {
+  const src = stay.sources;
+  if (!src) return '';
+  const bits = [];
+  if (src.interval?.seenUsd) bits.push(`Interval from ${fmtUsd2(src.interval.seenUsd)}`);
+  if (src.redweek?.fromUsd) bits.push(`RedWeek from ${fmtUsd2(src.redweek.fromUsd)}`);
+  if (!bits.length) return '';
+  return `<span class="sourced">${icon('search', { size: 13 })}<span>${escapeHtml(bits.join(' · '))}
+    <em>a night, seen ${escapeHtml(fmtDay(src.interval?.seenOn || src.redweek?.seenOn))}</em></span></span>`;
+}
+
 /** A stay or trip card, used on the landing page and throughout the catalog. */
 export function stayCard(stay, { store, season = 'low', href = null, footer = '' } = {}) {
   const per = stay.kind === 'trip' ? stay.pointsPerSeat : seasonPoints(stay, season);
@@ -26,6 +44,7 @@ export function stayCard(stay, { store, season = 'low', href = null, footer = ''
         <span class="where">${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}${stay.kind === 'trip' ? ` · ${stay.nights} nights` : stay.onSand ? ' · on the sand' : ' · across the road'}</span>
         <span class="price"><b class="num">${escapeHtml(fmtPoints(per))}</b><small>${escapeHtml(stay.kind === 'trip' ? `a seat · ${fmtUsd2(per / 100)}` : `a night · ${fmtUsd2(per / 100)}`)}</small></span>
         <span class="flags">${stay.house ? '<span class="tag house">Where we stay</span>' : ''}${(stay.features || []).slice(0, stay.house ? 2 : 3).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</span>
+        ${sourceLine(stay)}
         ${footer}
       </span></a>`);
   node.querySelector('.strip').prepend(stayStrip(stay));

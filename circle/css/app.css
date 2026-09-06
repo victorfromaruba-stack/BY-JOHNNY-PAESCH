@@ -278,6 +278,15 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .job .small { margin: 0; max-width: 52ch; }
 @media (max-width: 760px) { .job { grid-template-columns: 1fr; gap: 6px; padding: 18px 0; } }
 
+/* Where a week here actually comes from. Quiet — it is provenance, not a headline. */
+.sourced { display: flex; gap: 5px; align-items: flex-start; margin-top: 8px; padding-top: 8px;
+  border-top: 1px dashed var(--hairline); font-size: .76rem; line-height: 1.35; color: var(--ink-2); }
+.sourced svg { width: 13px; height: 13px; flex: none; margin-top: 2px; opacity: .7; }
+.sourced em { display: block; font-style: normal; opacity: .75; }
+tr.best td { background: var(--good-soft); }
+tr.best td:first-child { border-radius: var(--r-chip) 0 0 var(--r-chip); }
+tr.best td:last-child { border-radius: 0 var(--r-chip) var(--r-chip) 0; }
+
 /* ---------- landing hero ---------- */
 /* The one photograph on the site. Everything else is drawn, but the first thing a person
    sees should be the actual water, not an illustration of it. */
