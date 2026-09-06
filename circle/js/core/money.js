@@ -58,7 +58,9 @@ export const reachOf = (stay) => (stay?.kind === 'trip' ? (stay.reach || 'region
 /** Points a level earns in a month, tier bonus included. */
 export function pointsPerMonth(settings, monthlyUsd) {
   const t = tierFor(settings, monthlyUsd);
-  return Math.round(monthlyUsd * (1 - settings.serviceRate) * settings.pointsPerDollar)
+  // Face value. Nothing is taken on the way in any more — the Circle's share is charged when
+  // points are spent on a room, so a dollar contributed is a dollar's worth of points held.
+  return Math.round(monthlyUsd * settings.pointsPerDollar)
        + Math.round(monthlyUsd * t.bonusRate * settings.pointsPerDollar);
 }
 /**
@@ -71,11 +73,17 @@ export function monthsToAfford(settings, points, monthlyUsd, alreadyHave = 0) {
   return Math.ceil(short / pointsPerMonth(settings, monthlyUsd));
 }
 
-/** Split money actually received into share, backing and points. Bonus only on a full tier month. */
+/**
+ * What money received turns into. Bonus only on a full tier month.
+ *
+ * `shareUsd` is zero and stays in the shape on purpose: the Circle takes nothing when points
+ * are bought, only when they are spent (see quoteStay). Screens that used to draw a split bar
+ * here should say that every dollar backs a point, because now it does.
+ */
 export function splitContribution(receivedUsd, settings = DEFAULT_SETTINGS, tier = null) {
   const amt = round2(Number(receivedUsd) || 0);
-  const shareUsd = round2(amt * settings.serviceRate);
-  const backingUsd = round2(amt - shareUsd);
+  const shareUsd = 0;
+  const backingUsd = amt;
   const basePoints = Math.round(backingUsd * settings.pointsPerDollar);
   const full = tier ? amt + 0.005 >= tier.monthlyUsd : true;
   const bonusRate = full ? (tier?.bonusRate || 0) : 0;
@@ -133,13 +141,23 @@ export function seasonFor(dateLike) {
 }
 export const isDushiSeason = (dateLike) => { const m = new Date(dateLike).getMonth() + 1; return m >= 9 && m <= 11; };
 
+/**
+ * What one night costs, all in — the room and the Circle's share together, because that is the
+ * number that comes off a member's balance. This is the same arithmetic quote_points() does in
+ * the database, a night at a time, so nightly × nights is exactly the quote and a member can
+ * check it by multiplying.
+ */
+const allIn = (usd, settings) => Math.round((Number(usd) || 0) * settings.pointsPerDollar * (1 + settings.serviceRate));
+/** The room on its own, without the Circle's share. For showing the split, never for charging. */
+export const roomOnlyPoints = (usd, settings = DEFAULT_SETTINGS) => Math.round((Number(usd) || 0) * settings.pointsPerDollar);
+
 export function nightlyPoints(stay, dateLike, settings = DEFAULT_SETTINGS) {
   const s = seasonFor(dateLike);
   const usd = stay.rates?.[s] ?? stay.rates?.high ?? stay.rates?.low ?? 0;
-  return Math.round(usd * settings.pointsPerDollar);
+  return allIn(usd, settings);
 }
 export function seasonPoints(stay, season, settings = DEFAULT_SETTINGS) {
-  return Math.round((stay.rates?.[season] ?? 0) * settings.pointsPerDollar);
+  return allIn(stay.rates?.[season] ?? 0, settings);
 }
 
 /**
@@ -147,26 +165,36 @@ export function seasonPoints(stay, season, settings = DEFAULT_SETTINGS) {
  * Indicative: Victor's binding quote may differ and is what the member accepts.
  */
 export function quoteStay(stay, checkIn, checkOut, settings = DEFAULT_SETTINGS, { seats = 1 } = {}) {
+  const seatsN = Math.max(1, seats);
   if (stay.kind === 'trip') {
     const nights = stay.nights || Math.max(1, Math.round((new Date(stay.dates.to) - new Date(stay.dates.from)) / 86400000));
-    const points = (stay.pointsPerSeat || 0) * Math.max(1, seats);
+    const basePoints = (stay.pointsPerSeat || 0) * seatsN;
+    const points = Math.round((stay.pointsPerSeat || 0) * (1 + settings.serviceRate)) * seatsN;
     const usd = points / settings.pointsPerDollar;
-    const retail = (stay.retailUsd || 0) * Math.max(1, seats);
-    return { nights, points, usd: round2(usd), breakdown: { low: 0, high: 0, peak: 0 }, minNights: nights, ok: true, retailUsd: retail, savingsPct: retail ? Math.round((1 - usd / retail) * 100) : 0, seats };
+    const retail = (stay.retailUsd || 0) * seatsN;
+    return { nights, points, basePoints, servicePoints: points - basePoints, usd: round2(usd),
+      breakdown: { low: 0, high: 0, peak: 0 }, minNights: nights, ok: true, retailUsd: retail,
+      savingsPct: retail ? Math.round((1 - usd / retail) * 100) : 0, seats: seatsN };
   }
   const start = new Date(checkIn), end = new Date(checkOut);
   const nights = Math.max(0, Math.round((end - start) / 86400000));
   const breakdown = { low: 0, high: 0, peak: 0 };
-  let points = 0, usd = 0;
+  // Night by night, exactly as quote_points() does it in the database. `points` is what comes
+  // off the balance; `basePoints` is the room alone, so a screen can show what the Circle took.
+  let points = 0, basePoints = 0, usd = 0;
   for (let i = 0; i < nights; i++) {
     const d = new Date(start); d.setDate(start.getDate() + i);
     const s = seasonFor(d); breakdown[s]++;
     const rate = stay.rates?.[s] ?? stay.rates?.high ?? 0;
-    usd += rate; points += Math.round(rate * settings.pointsPerDollar);
+    usd += rate;
+    basePoints += roomOnlyPoints(rate, settings);
+    points += allIn(rate, settings);
   }
   const minNights = breakdown.peak > 0 ? Math.max(stay.minNights || 1, stay.peakMinNights || stay.minNights || 1) : (stay.minNights || 1);
   const retail = nights * (stay.retailUsd || 0);
-  return { nights, points, usd: round2(usd), breakdown, minNights, ok: nights >= minNights && nights > 0, retailUsd: retail, savingsPct: retail ? Math.round((1 - usd / retail) * 100) : 0 };
+  return { nights, points, basePoints, servicePoints: points - basePoints, usd: round2(usd), breakdown, minNights,
+    ok: nights >= minNights && nights > 0, retailUsd: retail,
+    savingsPct: retail ? Math.round((1 - usd / retail) * 100) : 0 };
 }
 
 /** "You are 1.4 nights from Bucuti in Summer" */

@@ -49,15 +49,21 @@ export class SupabaseStore extends Store {
     this.subscribeRealtime();
   }
   async reload() {
-    const tables = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'pledges', 'announcements', 'audit', 'invitations', 'month_closes', 'promo_deferrals', 'room_types', 'watches', 'deals'];
+    const tables = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'pledges', 'announcements', 'audit', 'invitations', 'month_closes', 'promo_deferrals', 'room_types', 'watches', 'deals',
+      'standings', 'crews', 'crew_members', 'crew_messages', 'moments', 'moment_reactions'];
     // members comes from a view that leaves out auth_user_id and the officer's private notes;
     // it is security_invoker, so the members_read policy still decides which rows come back.
-    const source = { members: 'members_v' };
+    // standing_v answers for everybody — it returns a rank and a list of badges and nothing
+    // else, so one Insider seeing another's standing learns no amount and no date.
+    const source = { members: 'members_v', standings: 'standing_v' };
     const results = await Promise.all(tables.map(t => this.sb.from(source[t] || t).select('*')));
     results.forEach((r, i) => { if (!r.error) this.state[tables[i]] = (r.data || []).map(toCamel); });
     this.state.monthCloses = this.state.month_closes || this.state.monthCloses || [];
     this.state.promoDeferrals = this.state.promo_deferrals || this.state.promoDeferrals || [];
     this.state.roomTypes = this.state.room_types || this.state.roomTypes || [];
+    this.state.crewMembers = this.state.crew_members || this.state.crewMembers || [];
+    this.state.crewMessages = this.state.crew_messages || this.state.crewMessages || [];
+    this.state.momentReactions = this.state.moment_reactions || this.state.momentReactions || [];
     // The database calls them from_date/to_date because `from` and `to` are awkward in SQL;
     // the rest of the app calls them from/to. Bridge it here rather than everywhere else.
     // Column names the screens do not use: full_amount is read as `full`, the stored proof

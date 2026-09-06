@@ -7,21 +7,47 @@ import { VOCAB, tierName } from '../core/vocab.js';
  * The Split bar — wherever a dollar amount appears: backing (yours) | the Circle's share.
  * Same proportions everywhere, hairline exactly at the cut.
  */
-export function splitBar({ amountUsd, shareRate = 0.15, points = null, showLegend = true, animate = true }) {
+export function splitBar({ amountUsd, shareRate = 0, points = null, showLegend = true, animate = true }) {
   const share = Math.round(amountUsd * shareRate * 100) / 100;
   const backing = Math.round((amountUsd - share) * 100) / 100;
-  const pct = amountUsd ? (backing / amountUsd) * 100 : 85;
+  const pct = amountUsd ? (backing / amountUsd) * 100 : 100;
+  const whole = share <= 0;                          // nothing is taken when points are bought
   const el = document.createElement('div');
   el.innerHTML = `
     <div class="split${animate && !prefersReducedMotion() ? ' draw' : ' drawn'}" style="--cut:${pct.toFixed(2)}%" role="img"
-         aria-label="${escapeHtml(fmtUsd2(backing))} backs your points, ${escapeHtml(fmtUsd2(share))} is the Circle's share">
+         aria-label="${whole ? `all ${escapeHtml(fmtUsd2(backing))} backs your points`
+                             : `${escapeHtml(fmtUsd2(backing))} backs your points, ${escapeHtml(fmtUsd2(share))} is the Circle's share`}">
       <i style="transform-origin:left"></i></div>
     ${showLegend ? `<div class="split-legend">
-      <span><i style="background:var(--good)"></i>Backing <b>${escapeHtml(fmtUsd2(backing))}</b>${points != null ? ` <b>${escapeHtml(fmtPoints(points))}</b>` : ''}</span>
-      <span><i style="background:var(--share)"></i>${escapeHtml(VOCAB.share)} (15%) <b>${escapeHtml(fmtUsd2(share))}</b></span>
+      <span><i style="background:var(--good)"></i>${whole ? 'All of it backs your points' : 'Backing'} <b>${escapeHtml(fmtUsd2(backing))}</b>${points != null ? ` <b>${escapeHtml(fmtPoints(points))}</b>` : ''}</span>
+      ${whole ? '' : `<span><i style="background:var(--share)"></i>${escapeHtml(VOCAB.share)} <b>${escapeHtml(fmtUsd2(share))}</b></span>`}
     </div>` : ''}`;
   const bar = el.querySelector('.split');
   const fill = el.querySelector('.split i');
+  fill.style.width = `${pct}%`;
+  if (animate && !prefersReducedMotion()) requestAnimationFrame(() => { bar.classList.remove('draw'); bar.classList.add('drawn'); });
+  return el;
+}
+
+/**
+ * The other half of the same story, and the only place a fee now appears: what a stay costs,
+ * split into the room and the Circle's share of it. Shown at the quote, where the member is
+ * deciding to spend, rather than at the contribution, where they are only saving.
+ */
+export function quoteBar({ basePoints, servicePoints, settings, showLegend = true, animate = true }) {
+  const total = (basePoints || 0) + (servicePoints || 0);
+  const pct = total ? (basePoints / total) * 100 : 100;
+  const usd = (p) => fmtUsd2((p || 0) / (settings?.pointsPerDollar || 100));
+  const el = document.createElement('div');
+  el.innerHTML = `
+    <div class="split${animate && !prefersReducedMotion() ? ' draw' : ' drawn'}" style="--cut:${pct.toFixed(2)}%" role="img"
+         aria-label="${escapeHtml(fmtPoints(basePoints))} for the room, ${escapeHtml(fmtPoints(servicePoints))} the Circle's share">
+      <i style="transform-origin:left"></i></div>
+    ${showLegend ? `<div class="split-legend">
+      <span><i style="background:var(--good)"></i>The room <b>${escapeHtml(fmtPoints(basePoints))}</b> <span class="muted">${escapeHtml(usd(basePoints))}</span></span>
+      <span><i style="background:var(--share)"></i>${escapeHtml(VOCAB.share)} <b>${escapeHtml(fmtPoints(servicePoints))}</b> <span class="muted">${escapeHtml(usd(servicePoints))}</span></span>
+    </div>` : ''}`;
+  const bar = el.querySelector('.split'), fill = el.querySelector('.split i');
   fill.style.width = `${pct}%`;
   if (animate && !prefersReducedMotion()) requestAnimationFrame(() => { bar.classList.remove('draw'); bar.classList.add('drawn'); });
   return el;

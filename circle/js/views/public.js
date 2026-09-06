@@ -110,10 +110,10 @@ export function landing({ store, go }) {
   featured.forEach(st => hz.appendChild(stayCard(st, { store, season: 'low', href: blind ? '#/sign-in' : null })));
   wrap.appendChild(horizon);
 
-  // The split — the honest 85/15
+  // Where the money goes. Nothing is taken on the way in; the Circle is paid on the room.
   const split = el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><h2>Where every dollar goes</h2>
-      <p>The Circle takes 15% for setting this up and running it. The other 85% backs your points and stays yours until you spend it on a stay.</p></div></div>
+      <div class="sec-head"><div><h2>Every dollar backs a point</h2>
+      <p>Nothing is taken when you put money in. The Circle is paid 15% when you spend points on a room — on the thing it actually does, which is find the room and book it.</p></div></div>
       <div class="side">
         <div class="panel">
           <div class="choices" id="tier-choices" role="group" aria-label="Choose a monthly contribution"></div>
@@ -134,12 +134,12 @@ export function landing({ store, go }) {
     const slot = split.querySelector('#split-slot'); slot.replaceChildren(splitBar({ amountUsd: chosen, shareRate: s.serviceRate, points: sp.basePoints }));
     split.querySelector('#split-figures').innerHTML = `
       <div class="stat"><span class="k">Points credited</span><b class="num">${escapeHtml(fmtPoints(sp.points))}</b><span class="sub">${escapeHtml(fmtUsd2(sp.points / 100))} of hotel${sp.bonusPoints ? ` · includes a ${Math.round(tier.bonusRate * 100)}% ${escapeHtml(tierName(chosen))} bonus the Circle funds` : ''}</span></div>
-      <div class="stat"><span class="k">${escapeHtml(VOCAB.share)}</span><b class="num">${escapeHtml(fmtUsd2(sp.shareUsd))}</b><span class="sub">Runs the app and the Desk’s time. Not refundable.</span></div>`;
+      <div class="stat"><span class="k">Into the Reserve</span><b class="num">${escapeHtml(fmtUsd2(sp.backingUsd))}</b><span class="sub">All of it. Held in a named account until you spend it on a room.</span></div>`;
     const p12 = projectPoints(chosen, 12, s);
     split.querySelector('#projection').innerHTML = `
       <ul class="ledger" style="margin:0">
         <li><span class="what"><b>You send</b><span class="meta">12 × ${escapeHtml(fmtUsd2(chosen))}</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(p12.paidUsd))}</b></span></li>
-        <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta">15%, taken once, at the start</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(p12.shareUsd))}</b></span></li>
+        <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta">Nothing now — 15% when you book</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(0))}</b></span></li>
         <li><span class="what"><b>Points after a year</b><span class="meta">Includes the 6- and 12-month streak bonuses</span></span><span class="delta"><b>${escapeHtml(fmtPoints(p12.points))}</b><small>${escapeHtml(fmtUsd2(p12.points / 100))}</small></span></li>
       </ul>
       ${(() => {
@@ -242,7 +242,7 @@ export function landing({ store, go }) {
       <div class="grid g2">
         <ol class="stack" style="padding-left:1.1em">
           <li>100 points = $1.00 of hotel. That never changes.</li>
-          <li>The only fee is 15%, taken when you contribute and itemised on every line. There are never special assessments.</li>
+          <li>The only fee is 15%, and it is charged when you spend points on a room, never when you put money in. It is itemised on the quote before you accept it. There are never special assessments.</li>
           <li>Points appear only when Vishnu confirms the money arrived.</li>
         </ol>
         <ol class="stack" start="4" style="padding-left:1.1em">
@@ -263,14 +263,14 @@ export function rules({ store }) {
   const s = store.settings;
   const clauses = [
     ['100 points = $1.00 of backing, fixed forever.', 'The value of a point never changes, in either direction. Every balance in the app prints the dollar beside it so you never have to work it out.'],
-    ['The only fee is the Circle’s 15% share.', 'It is taken when you contribute, itemised on every row, and it funds the app, the Desk’s time and your tier bonus. The Circle never levies special assessments.'],
+    ['The only fee is the Circle’s 15% share.', 'It is charged when you spend points on a room, not when you put money in, and the quote shows it before you accept. Every dollar you contribute backs a point from the day it lands. The Circle never levies special assessments.'],
     ['Points are minted only when the Banker confirms money has arrived.', 'Marking a transfer as sent creates a pending row and nothing else. Vishnu matches it against the bank statement and confirms; the ledger line carries his name and the timestamp.'],
     ['Base points never expire while you are active or paused.', 'Promotional points — tier bonus, streak and founding — expire 24 months after they are issued, which shows on your statement as an expiry line and returns the matching cash to Operating.'],
-    ['No borrowing.', 'If a quote is more than your available points, you pay the difference as a top-up to the Banker. No 15% is taken on a top-up, and nothing is ever booked on credit.'],
+    ['No borrowing.', 'If a quote is more than your available points, you pay the difference as a top-up to the Banker at face value — the 15% is already inside the quote, so it is not charged twice. Nothing is ever booked on credit.'],
     ['A quote is locked for 72 hours; accepting it commits your points.', `Open requests at a time: ${s.tiers.map(t => `${t.holds} for ${tierName(t.monthlyUsd)}`).join(', ')}. An expired quote releases the points automatically.`],
     ['Cancellation mirrors the hotel’s terms, in points.', 'Whatever the hotel charges us is what comes off your points; the rest is restored. Any refund the hotel sends returns to the Reserve and re-credits points — never cash. You get a reminder seven days and two days before the hotel’s deadline.'],
     ['Pause for up to three consecutive months per year, with one tap.', 'Your streak freezes rather than resets and your points stay fully usable. Fifteen days late without contact auto-pauses you; three unpaid months makes you inactive, and you keep every point.'],
-    ['Leave any time.', `Thirty days’ notice, twelve months to use what you hold, then base points are refunded at face value minus $${s.exitFeeUsd} from the Reserve within thirty days. Promotional points are forfeited and the 15% is not refunded. In hardship or death the refund is immediate, at face value, with no fee.`],
+    ['Leave any time.', `Thirty days’ notice, twelve months to use what you hold, then base points are refunded at face value minus $${s.exitFeeUsd} from the Reserve within thirty days — at the full dollar, because nothing was taken on the way in. Promotional points are forfeited. In hardship or death the refund is immediate, at face value, with no fee.`],
     ['Household is always covered; guests use a certificate.', `Your partner and children travel on your points with no extra charge. Non-members use a guest certificate (${s.tiers.map(t => `${t.guestCerts} for ${tierName(t.monthlyUsd)}`).join(', ')} a year) or pay the same negotiated rate in cash.`],
     ['Points and bookings cannot be sold, transferred or advertised.', 'This is a private circle of friends. Reselling a booking ends a membership and returns the backing.'],
     ['The Circle is by invitation only.', `Every Insider is invited by someone already in and the club is capped at ${s.memberCap} seats. It is not advertised, there is no public sign-up, and nobody joins who Victor or Ian does not know. If you leave and want to come back later, you come back the same way.`],
@@ -286,7 +286,7 @@ export function rules({ store }) {
         ${clauses.map(([t, b]) => `<li style="margin-bottom:16px"><b>${escapeHtml(t)}</b><p class="small muted" style="margin-top:5px;max-width:72ch">${escapeHtml(b)}</p></li>`).join('')}
       </ol>
       <div class="notice" style="margin-top:24px"><b>The two accounts</b>
-        <p class="small">The <b>Reserve</b> holds the 85% that backs points; nothing leaves it except to pay a hotel for a confirmed booking or to refund someone who leaves. <b>Operating</b> holds the 15% and funds the bonuses. Coverage is the Reserve divided by everything the Circle owes in points, and it is on <a href="#/pool">the Pool page</a> for everyone to see.</p></div>
+        <p class="small">The <b>Reserve</b> holds every dollar contributed, so a point is backed by a full dollar from the day it is minted; nothing leaves it except to pay a hotel for a confirmed booking or to refund someone who leaves. <b>Operating</b> is paid its 15% out of each booking and funds the bonuses. Coverage is the Reserve divided by everything the Circle owes in points, and it is on <a href="#/pool">the Pool page</a> for everyone to see.</p></div>
       <p class="small muted" style="margin-top:20px">${escapeHtml(VOCAB.legal)} An Aruban accountant should review these rules before the first real contribution.</p>
     </div></section></div>`);
   return wrap;

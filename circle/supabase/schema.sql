@@ -598,8 +598,14 @@ begin
 end $$;
 
 -- The all-in points price for a stay over a range, plus the minimum that applies.
+-- What a room costs in points, all in: the room and the Circle's 15% together, because that is
+-- what comes off a member's balance. Priced a night at a time, so nightly × nights is exactly
+-- the quote and a member can check it by multiplying — applying the rate to the total instead
+-- would be off by a point or two on some rates, and a member who checks the arithmetic by hand
+-- and finds it wrong has every right to distrust the rest of the books.
 create or replace function quote_points(p_stay uuid, p_in date, p_out date, p_seats int default 1,
-  out points int, out min_nights int, out nights int, out seasons jsonb)
+  out points int, out base_points int, out service_points int,
+  out min_nights int, out nights int, out seasons jsonb)
 language plpgsql stable security definer set search_path = public as $$
 declare st stays; s settings; d date; sea text; rate numeric; n_low int := 0; n_high int := 0; n_peak int := 0;
 begin
@@ -607,20 +613,25 @@ begin
   if st.id is null then raise exception 'No such stay'; end if;
   select * into s from settings where id = 1;
   if st.kind = 'trip' then
-    points := st.points_per_seat * greatest(p_seats,1);
+    base_points := st.points_per_seat * greatest(p_seats,1);
+    points := round(st.points_per_seat * (1 + s.service_rate)) * greatest(p_seats,1);
+    service_points := points - base_points;
     nights := st.nights; min_nights := st.nights;
     seasons := '{}'::jsonb;
     return;
   end if;
-  points := 0; nights := p_out - p_in; d := p_in;
+  base_points := 0; points := 0; nights := p_out - p_in; d := p_in;
   while d < p_out loop
     sea := season_for(d);
     rate := case sea when 'peak' then st.rate_peak_usd when 'high' then st.rate_high_usd else st.rate_low_usd end;
-    points := points + round(rate * s.points_per_dollar);
+    base_points := base_points + round(rate * s.points_per_dollar);
+    points := points + round(rate * s.points_per_dollar * (1 + s.service_rate));
     if sea = 'peak' then n_peak := n_peak + 1; elsif sea = 'high' then n_high := n_high + 1; else n_low := n_low + 1; end if;
     d := d + 1;
   end loop;
-  min_nights := case when n_peak > 0 then greatest(st.min_nights, st.peak_min_nights) else st.min_nights end;
+  service_points := points - base_points;
+  min_nights := case when n_peak > 0 then greatest(coalesce(st.min_nights,1), coalesce(st.peak_min_nights, st.min_nights, 1))
+                     else coalesce(st.min_nights,1) end;
   seasons := jsonb_build_object('low', n_low, 'high', n_high, 'peak', n_peak);
 end $$;
 
@@ -632,8 +643,9 @@ end $$;
 create or replace function promo_room(p_month text) returns int
 language sql stable security definer set search_path = public as $$
   select greatest(0, floor(
-      coalesce((select sum(c.share_usd) from contributions c where c.for_month = p_month and c.status = 'confirmed'),0)
-        * (select points_per_dollar * promo_cap_rate from settings where id = 1)
+      coalesce((select sum(c.received_usd) from contributions c
+                 where c.for_month = p_month and c.status = 'confirmed'),0)
+        * (select service_rate * points_per_dollar * promo_cap_rate from settings where id = 1)
       - coalesce((select sum(l.points) from ledger l
                   join contributions c2 on c2.id = l.ref_id and l.ref_type = 'contribution'
                   where l.kind in ('bonus','streak','founding') and c2.for_month = p_month),0)
@@ -656,8 +668,11 @@ begin
   received := round(coalesce(p_received_usd, c.expected_usd), 2);
   if received <= 0 then raise exception 'Received amount must be positive'; end if;
 
-  share   := round(received * s.service_rate, 2);
-  backing := round(received - share, 2);
+  -- Nothing is taken here any more. Every dollar backs a point and goes to the Reserve; the
+  -- Circle's 15% is charged when points are spent on a room (see quote_points). share_usd stays
+  -- as a column, and stays at zero, so old rows and the treasury view keep meaning what they meant.
+  share   := 0;
+  backing := received;
   base_pts := round(backing * s.points_per_dollar);
 
   select t into tier from jsonb_array_elements(s.tiers) t where (t->>'monthlyUsd')::int = m.monthly_usd limit 1;
@@ -677,7 +692,9 @@ begin
                         || case when is_full then '' else ' · part of it' end end,
             current_member_id());
 
-  -- Promotional points are funded by the Circle out of its own share, and capped per month.
+  -- Promotional points are still the Circle's own money. The budget used to be a share of what
+  -- came in the door; there is no such share now, so it is the same fraction of the same
+  -- contributions — the margin those months will earn when the rooms are booked.
   if is_full and bonus_rate > 0 then
     bonus_pts := round(m.monthly_usd * bonus_rate * s.points_per_dollar);
     room := promo_room(c.for_month);
@@ -1083,19 +1100,35 @@ with confirmed as (select * from contributions where status = 'confirmed'),
      -- every booking the club has paid for, including ones later cancelled: whatever the
      -- hotel gave back comes in again as a refund line, so the two never double-count
      settled as (select * from redemptions where confirmed_at is not null),
-     s as (select * from settings where id = 1)
+     s as (select * from settings where id = 1),
+     parts as (
+       select round(coalesce((select sum(backing_usd) from confirmed),0),2) as backing,
+              round((select pts from promo) / (select points_per_dollar from s), 2) as promo_usd,
+              round(coalesce((select sum(top_up_usd) from settled where top_up_confirmed),0),2) as top_ups,
+              round(coalesce((select sum(coalesce(paid_usd,0)) from settled),0),2) as paid_out,
+              round(coalesce((select sum(points) from ledger where kind='refund'),0)::numeric / (select points_per_dollar from s),2) as refunded,
+              round(coalesce((select sum(points) from ledger where kind='adjust'),0)::numeric / (select points_per_dollar from s),2) as adjust,
+              round(-coalesce((select sum(points) from ledger where kind='expire'),0)::numeric / (select points_per_dollar from s),2) as expired,
+              round(coalesce((select sum(points) from ledger),0)::numeric / (select points_per_dollar from s),2) as liability)
 select
   round(coalesce((select sum(received_usd) from confirmed),0),2) as collected_usd,
   round(coalesce((select sum(share_usd) from confirmed),0),2)    as share_usd,
-  round(coalesce((select sum(backing_usd) from confirmed),0),2)  as backing_usd,
-  round((select pts from promo) / (select points_per_dollar from s), 2) as promo_usd,
-  round(coalesce((select sum(coalesce(paid_usd,0)) from settled),0),2) as paid_out_usd,
-  round(coalesce((select sum(top_up_usd) from settled where top_up_confirmed),0),2) as top_ups_usd,
-  round(coalesce((select sum(points) from ledger where kind='refund'),0)::numeric / (select points_per_dollar from s),2) as refunded_usd,
-  round(coalesce((select sum(points) from ledger where kind='adjust'),0)::numeric / (select points_per_dollar from s),2) as adjust_usd,
-  round(-coalesce((select sum(points) from ledger where kind='expire'),0)::numeric / (select points_per_dollar from s),2) as expired_usd,
+  p.backing   as backing_usd,
+  p.promo_usd as promo_usd,
+  p.paid_out  as paid_out_usd,
+  p.top_ups   as top_ups_usd,
+  p.refunded  as refunded_usd,
+  p.adjust    as adjust_usd,
+  p.expired   as expired_usd,
   coalesce((select sum(points) from ledger),0)::int as outstanding_points,
-  round(coalesce((select sum(points) from ledger),0)::numeric / (select points_per_dollar from s),2) as liability_usd;
+  p.liability as liability_usd,
+  -- The Circle's income: what the Reserve holds over and above what it owes. Every booking
+  -- hands back more in points than it takes out in cash, and the difference settles here.
+  -- True whatever any particular quote looked like, and it needs no history to be right.
+  round(p.backing + p.promo_usd + p.top_ups - p.paid_out + p.refunded + p.adjust - p.expired
+        - p.liability, 2) as service_earned_usd
+from parts p;
+
 
 create or replace function reserve_expected_usd() returns numeric
 language sql stable security definer set search_path = public as $$

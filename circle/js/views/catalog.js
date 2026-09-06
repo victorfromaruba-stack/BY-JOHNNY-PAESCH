@@ -236,7 +236,7 @@ export function stayDetail({ store, params, go }) {
     <div class="row" style="gap:14px;margin-top:12px;align-items:center"><span id="ring"></span>
       <div class="small"><b>${escapeHtml(fmtPoints(avail))}</b> available<br>
       <span class="muted">${canCover >= min ? `enough for ${Math.min(canCover, 14)} ${isTrip ? 'seat' : 'night'}${canCover === 1 ? '' : 's'}` : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of ${isTrip ? 'a seat' : `the ${min}-night minimum`}`}</span></div></div>
-    <p class="small muted" style="margin-top:14px">Short of it? Pay the difference as a top-up when Victor quotes you — no 15% is taken on a top-up, and nothing is booked on credit.</p>
+    <p class="small muted" style="margin-top:14px">Short of it? Pay the difference as a top-up when Victor quotes you — at face value, since the Circle's share is already in the quote. Nothing is booked on credit.</p>
     <p class="small muted" style="margin-top:8px">${escapeHtml(tierName(me.monthlyUsd))} can hold ${tier.holds} open request${tier.holds > 1 ? 's' : ''} and book ${tier.windowMonths} months ahead.</p>`;
   wrap.querySelector('#ring').replaceChildren(ring({ total: min, filled: Math.min(min, canCover), size: 76, label: String(Math.min(canCover, 99)), sub: isTrip ? 'seats' : 'nights' }));
   {
@@ -305,9 +305,10 @@ export function book({ store, params, go }) {
     const short = Math.max(0, q.points - avail);
     preview.className = `notice${q.ok ? '' : ' warn'}`;
     preview.innerHTML = q.ok
-      ? `<b>Indicative: ${escapeHtml(fmtPoints(q.points))} (${escapeHtml(fmtUsd2(q.usd))})</b>
+      ? `<b>Indicative: ${escapeHtml(fmtPoints(q.points))} (${escapeHtml(fmtUsd2(q.points / s.pointsPerDollar))})</b>
          <p class="small">${q.nights} night${q.nights > 1 ? 's' : ''}${isTrip ? '' : ` · ${Object.entries(q.breakdown).filter(([, n]) => n).map(([k, n]) => `${n} at ${SEASONS[k].label}`).join(', ')}`}.
-         ${short ? `You are ${escapeHtml(fmtPoints(short))} short — that would be a top-up of ${escapeHtml(fmtUsd2(short / s.pointsPerDollar))} in cash.` : 'Covered by the points you hold.'}
+         ${escapeHtml(fmtPoints(q.basePoints))} is the room and ${escapeHtml(fmtPoints(q.servicePoints))} is the Circle's 15% — the only fee there is, and this is where it is charged.
+         ${short ? `You are ${escapeHtml(fmtPoints(short))} short — that would be a top-up of ${escapeHtml(fmtUsd2(short / s.pointsPerDollar))} in cash, at face value.` : 'Covered by the points you hold.'}
          ${q.retailUsd ? ` Booked alone this runs about ${escapeHtml(fmtUsd2(q.retailUsd))}.` : ''}</p>`
       : `<b>${stay.name} needs at least ${q.minNights} nights for those dates</b>
          <p class="small">${q.breakdown.peak ? 'Peak weeks — 20 December to 3 January and Carnival — carry a longer minimum at most resorts.' : ''}</p>`;
@@ -425,7 +426,7 @@ export function requestDetail({ store, params, go, refresh }) {
       <li><span class="what"><b>${r.nights} night${r.nights > 1 ? 's' : ''} all-in</b>
         <span class="meta">${r.quoteStack ? Object.entries(r.quoteStack).map(([k, v]) => `${k} ${fmtUsd2(v)}`).join(' · ') : 'Room, levies, service and resort fees included'}</span></span>
         <span class="delta"><b>${escapeHtml(fmtPoints(pts))}</b><small>${escapeHtml(pointsUsd(pts, s.pointsPerDollar))}</small></span></li>
-      ${r.topUpUsd ? `<li><span class="what"><b>Top-up in cash</b><span class="meta">Beyond the points held. No 15% is taken on a top-up.</span></span>
+      ${r.topUpUsd ? `<li><span class="what"><b>Top-up in cash</b><span class="meta">Beyond the points held, at face value — the share is already in the quote.</span></span>
         <span class="delta"><b>${escapeHtml(fmtUsd2(r.topUpUsd))}</b><small>${r.topUpConfirmed ? 'received' : 'to the Banker'}</small></span></li>` : ''}
       ${r.retailUsd ? `<li><span class="what"><b>Booked on your own</b><span class="meta">Same room, public all-in rate</span></span>
         <span class="delta"><b>${escapeHtml(fmtUsd2(r.retailUsd))}</b><small>you save ${escapeHtml(fmtUsd2(Math.max(0, r.retailUsd - pts / s.pointsPerDollar)))}</small></span></li>` : ''}

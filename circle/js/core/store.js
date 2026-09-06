@@ -6,6 +6,7 @@
 import { uid, nowIso, sum, monthKey, fmtMonth, nightsBetween } from './util.js';
 import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, seasonPoints, pointsPerMonth } from './money.js';
 import { initialsOf, refFor } from './vocab.js';
+import { standingFrom, rankFor, RANKS } from './standing.js';
 
 export const CONTRIBUTION_STATUS = Object.freeze({ pending: 'pending', confirmed: 'confirmed', rejected: 'rejected', withdrawn: 'withdrawn', reversed: 'reversed' });
 export const REDEMPTION_STATUS = Object.freeze({ requested: 'requested', quoted: 'quoted', held: 'held', confirmed: 'confirmed', completed: 'completed', declined: 'declined', expired: 'expired', cancelled: 'cancelled' });
@@ -13,7 +14,7 @@ export const OPEN_REDEMPTION = [REDEMPTION_STATUS.requested, REDEMPTION_STATUS.q
 export const LEDGER_KIND = Object.freeze({ earn: 'earn', bonus: 'bonus', streak: 'streak', founding: 'founding', burn: 'burn', refund: 'refund', adjust: 'adjust', expire: 'expire', reverse: 'reverse' });
 export const PROMO_KINDS = [LEDGER_KIND.bonus, LEDGER_KIND.streak, LEDGER_KIND.founding];
 export const ROLES = Object.freeze(['member', 'treasurer', 'deputy', 'planner', 'comms', 'admin']);
-export const COLLECTIONS = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes', 'pledges'];
+export const COLLECTIONS = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes', 'pledges', 'standings', 'crews', 'crewMembers', 'crewMessages', 'moments', 'momentReactions'];
 /**
  * A complete, empty state. Every adapter starts from this — a missing collection is not a
  * missing feature, it is `[...undefined]` the first time any screen asks for it, which is
@@ -177,6 +178,27 @@ export class Store {
   // and must never turn up in a seat count, a co-signer list, or on the front page. Anything
   // about people uses this; only Settings, where Victor manages the thing, sees every row.
   people() { return this.state.members.filter(m => !m.bot); }
+
+  // ---------- standing ----------
+  /**
+   * Where a member stands. On the real backend this is read from standing_v, which answers for
+   * everybody without handing over anybody's money; in preview it is worked out from what this
+   * browser holds. Either way the shape is the same and the ladder is the same.
+   */
+  standing(memberId = this.session?.memberId) {
+    const id = memberId || this.session?.memberId;
+    if (!id) return null;
+    const fromServer = this.state.standings?.find(x => x.memberId === id);
+    if (fromServer) return { ...fromServer, badges: fromServer.badges || [] };
+    return standingFrom({
+      member: this.member(id), contributions: this.state.contributions, ledger: this.state.ledger,
+      redemptions: this.state.redemptions, pledges: this.state.pledges, deals: this.state.deals,
+      invitations: this.state.invitations, monthCloses: this.state.monthCloses,
+      members: this.state.members, settings: this.settings || {},
+    });
+  }
+  /** The rung itself, with its blurb and what it unlocks. */
+  rank(memberId) { const st = this.standing(memberId); return st ? RANKS[st.rankIndex] || RANKS[0] : RANKS[0]; }
   activeMembers() { return this.people().filter(m => m.status === 'active'); }
   expectedMembers(month) { return this.people().filter(m => (m.status === 'active' || (m.status === 'paused' && m.pausedUntil && m.pausedUntil < month)) && (m.joinedAt || '').slice(0, 7) <= month); }
   stay(id) { return this.state.stays.find(s => s.id === id) || null; }
@@ -329,7 +351,15 @@ export class Store {
       collected: round(collected), share: round(share), backing: round(backing), promoUsd: round(promoUsd),
       burnedUsd: round(burnedUsd), paidOutUsd: round(paidOutUsd), topUpsUsd: round(topUpsUsd),
       refundedUsd: round(refundedUsd), expiredUsd: round(expiredUsd),
-      operatingUsd: round(share - promoUsd + expiredUsd), reserveExpectedUsd, reserveUsd: round(reserveUsd),
+      // The Circle's income, now that nothing is taken at the door. Defined as what the Reserve
+      // holds over and above what it owes — which is what it is, and which needs no assumption
+      // about how any particular quote was priced. Every booking hands back more in points than
+      // it takes out in cash, and the difference settles here.
+      serviceEarnedUsd: round(reserveExpectedUsd - liabilityUsd),
+      // What Operating actually holds: that margin, less the bonuses the Circle fronted against
+      // it. Negative until the first booking, which is the true position, not a bug to round away.
+      operatingUsd: round(reserveExpectedUsd - liabilityUsd - promoUsd + expiredUsd),
+      reserveExpectedUsd, reserveUsd: round(reserveUsd),
       liabilityUsd, outstandingPoints, coverage: liabilityUsd ? reserveUsd / liabilityUsd : 1,
       verified, verifiedVarianceUsd, accountsConfigured,
       pendingCount: this.pendingContributions().length, pendingUsd: sum(this.pendingContributions(), c => c.expectedUsd),
@@ -498,7 +528,10 @@ export class Store {
     // Promotional points: tier bonus, streak, founding — all funded from the share, capped per month.
     const promoRoom = () => {
       const bucket = c.forMonth || at.slice(0, 7);
-      const monthShare = sum(this.state.contributions.filter(x => (x.forMonth || x.reviewedAt?.slice(0, 7)) === bucket && x.status === CONTRIBUTION_STATUS.confirmed), x => x.shareUsd) * s.pointsPerDollar * s.promoCapRate;
+      // The promo budget, rebased like promo_room() in SQL: nothing is taken at the door any
+    // more, so the same fraction of the same money, reckoned from what came in.
+    const monthShare = sum(this.state.contributions.filter(x => (x.forMonth || x.reviewedAt?.slice(0, 7)) === bucket && x.status === CONTRIBUTION_STATUS.confirmed), x => x.receivedUsd)
+      * s.serviceRate * s.pointsPerDollar * s.promoCapRate;
       const monthPromo = sum(this.state.ledger.filter(l => PROMO_KINDS.includes(l.kind) && this.contribution(l.refId)?.forMonth === c.forMonth), l => l.points);
       return Math.max(0, Math.floor(monthShare - monthPromo));
     };
@@ -946,7 +979,7 @@ export class Store {
     const t = this.treasury();
     const deferrals = this.state.promoDeferrals.filter(d => !d.mintedAt);
     const expiring = this.state.ledger.filter(l => PROMO_KINDS.includes(l.kind) && l.expiresAt && l.expiresAt.slice(0, 7) <= month);
-    return { month, rows, confirmedCount: rows.filter(r => r.status === 'confirmed').length, pendingCount: rows.filter(r => r.status === 'pending').length, missingCount: rows.filter(r => r.status === 'missing').length, grossUsd: round(sum(rows, r => r.receivedUsd || 0)), shareUsd: round(sum(rows, r => (r.receivedUsd || 0) * this.settings.serviceRate)), treasury: t, deferrals, expiring, alreadyClosed: this.state.monthCloses.find(c => c.month === month) || null };
+    return { month, rows, confirmedCount: rows.filter(r => r.status === 'confirmed').length, pendingCount: rows.filter(r => r.status === 'pending').length, missingCount: rows.filter(r => r.status === 'missing').length, grossUsd: round(sum(rows, r => r.receivedUsd || 0)), shareUsd: 0, treasury: t, deferrals, expiring, alreadyClosed: this.state.monthCloses.find(c => c.month === month) || null };
   }
   async closeMonth(month, actorId, { bankBalanceUsd, cosignerId, note = '' }) {
     if (!this.canConfirmMoney()) throw new Error('Only the Banker can close a month');

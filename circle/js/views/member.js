@@ -113,7 +113,7 @@ export function home({ store, go }) {
              <p class="small" style="margin-top:6px">At ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(g.perMonth))}, so that is
                <b>${g.months} more month${g.months === 1 ? '' : 's'}</b> — around ${escapeHtml(fmtMonth(shiftMonth(monthKey(), g.months)))}.</p>
              <ul class="stack" style="margin-top:10px;padding-left:1.1em;gap:6px">
-               <li class="small muted">${escapeHtml(fmtUsd2(g.topUpUsd))} as a cash top-up closes it today — no 15% is taken on a top-up</li>
+               <li class="small muted">${escapeHtml(fmtUsd2(g.topUpUsd))} as a cash top-up closes it today — at face value, the Circle's share is already in the quote</li>
                ${others.length ? `<li class="small muted">At ${escapeHtml(fmtUsd2(others[0].monthlyUsd))} a month it would be ${others[0].months} months instead of ${g.months} · <a href="#/profile">change your level</a></li>` : ''}
                <li class="small muted">Or ask for it anyway and open it to the Circle — others put their own points in</li>
              </ul>
@@ -332,7 +332,7 @@ export function pay({ store, go }) {
         <div id="split" style="margin-top:14px"></div>
         <div class="grid g3" style="margin-top:16px">
           <div class="stat"><span class="k">Backs your points</span><b class="num">${escapeHtml(fmtUsd2(sp.backingUsd))}</b><span class="sub">${escapeHtml(fmtPoints(sp.basePoints))}</span></div>
-          <div class="stat"><span class="k">${escapeHtml(VOCAB.share)}</span><b class="num">${escapeHtml(fmtUsd2(sp.shareUsd))}</b><span class="sub">15%, itemised, not refundable</span></div>
+          <div class="stat"><span class="k">Into the Reserve</span><b class="num">${escapeHtml(fmtUsd2(sp.backingUsd))}</b><span class="sub">All of it — the Circle is paid when you book</span></div>
           <div class="stat"><span class="k">${sp.bonusPoints ? escapeHtml(tierName(me.monthlyUsd)) + ' bonus' : 'Total credited'}</span><b class="num">${escapeHtml(sp.bonusPoints ? fmtPoints(sp.bonusPoints) : fmtPoints(sp.points))}</b><span class="sub">${sp.bonusPoints ? 'Funded by the Circle from its share' : 'When Vishnu confirms'}</span></div>
         </div>
       </div>
@@ -422,7 +422,7 @@ export function ledger({ store, params }) {
 
       <div class="grid g4" style="margin-top:20px">
         <div class="stat"><span class="k">Sent, lifetime</span><b class="num">${escapeHtml(fmtUsd2(lt.paidUsd))}</b><span class="sub">${escapeHtml(store.contributionsFor(me.id).filter(c => c.status === 'confirmed').length)} confirmed contributions</span></div>
-        <div class="stat"><span class="k">${escapeHtml(VOCAB.share)}</span><b class="num">${escapeHtml(fmtUsd2(lt.shareUsd))}</b><span class="sub">15%, taken once, up front</span></div>
+        <div class="stat"><span class="k">Into the Reserve</span><b class="num">${escapeHtml(fmtUsd2(lt.backingUsd ?? lt.paidUsd))}</b><span class="sub">Every dollar you have sent</span></div>
         <div class="stat"><span class="k">Backing + bonuses</span><b class="num">${escapeHtml(fmtUsd2(lt.backingUsd + lt.promoPoints / s.pointsPerDollar))}</b><span class="sub">${escapeHtml(fmtPoints(lt.promoPoints))} of that is bonus points</span></div>
         <div class="stat"><span class="k">Available now</span><b class="num">${escapeHtml(fmtPoints(lt.available))}</b><span class="sub">${escapeHtml(pointsUsd(lt.available, s.pointsPerDollar))}${lt.committed ? ` · ${fmtPoints(lt.committed)} committed` : ''}</span></div>
       </div>
@@ -447,7 +447,7 @@ export function ledger({ store, params }) {
       <td>${c.extra ? 'Extra' : escapeHtml(fmtMonth(c.forMonth))}<br><span class="small muted num">${escapeHtml(c.reference || (c.extra ? c.note || 'handed over' : '—'))}</span></td>
       <td class="num">${escapeHtml(fmtUsd2(c.expectedUsd))}</td>
       <td class="num">${c.receivedUsd == null ? '—' : escapeHtml(fmtUsd2(c.receivedUsd))}</td>
-      <td style="min-width:150px">${c.status === 'confirmed' ? `<div class="split drawn" style="--cut:85%"><i style="width:85%"></i></div><span class="small muted num">${escapeHtml(fmtUsd2(c.backingUsd))} + ${escapeHtml(fmtUsd2(c.shareUsd))}</span>` : '<span class="small muted">—</span>'}</td>
+      <td style="min-width:150px">${c.status === 'confirmed' ? `<div class="split drawn" style="--cut:100%"><i style="width:100%"></i></div><span class="small muted num">${escapeHtml(fmtUsd2(c.backingUsd))} to the Reserve</span>` : '<span class="small muted">—</span>'}</td>
       <td class="num">${c.points == null ? '—' : escapeHtml(fmtPoints(c.points))}</td>
       <td>${chip(c.status === 'rejected' ? 'rejected' : c.status)}${c.reason ? `<br><span class="small muted">${escapeHtml(c.reason)}</span>` : ''}
         ${c.reviewedAt && c.status === 'confirmed' ? `<br><span class="small muted">by ${escapeHtml(store.member(c.reviewedBy)?.name.split(' ')[0] || 'the Banker')} · ${escapeHtml(fmtDayTime(c.reviewedAt))}</span>` : ''}</td>
@@ -659,7 +659,7 @@ export function profile({ store, go, refresh }) {
   wrap.querySelector('#resume')?.addEventListener('click', async () => { await store.resumeMember(me.id, me.id); toast('Welcome back.', { kind: 'good' }); });
   wrap.querySelector('#leave').addEventListener('click', async () => {
     const yes = await confirmDialog({ title: 'Leave the Circle?', danger: true, confirmText: 'Give notice',
-      message: `You hold ${fmtPoints(exit.basePoints)} base points. You have twelve months to use them on stays; after that ${fmtUsd2(exit.refundUsd)} comes back to you. Bonus points and the 15% share are not refunded. Ian will be in touch.` });
+      message: `You hold ${fmtPoints(exit.basePoints)} base points. You have twelve months to use them on stays; after that ${fmtUsd2(exit.refundUsd)} comes back to you at face value. Bonus points are not refunded. Ian will be in touch.` });
     if (yes) { await store.leaveMember(me.id, me.id); toast('Notice given. Ian will be in touch this week.'); go('/home'); }
   });
   wrap.querySelector('#export').addEventListener('click', () => downloadText(`${VOCAB.clubName.toLowerCase()}-backup.json`, store.exportJson(), 'application/json'));

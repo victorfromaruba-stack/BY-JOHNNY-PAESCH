@@ -90,7 +90,7 @@ export function bank({ store, go }) {
               const usd = cur === 'AWG' ? Math.round((raw / s.awgPerUsd) * 100) / 100 : raw;
               const sp = splitContribution(usd, s, tierFor(s, m.monthlyUsd));
               prev.innerHTML = `<b>${escapeHtml(fmtPoints(sp.points))} (${escapeHtml(fmtUsd2(sp.points / s.pointsPerDollar))})</b>
-                <p class="small">${escapeHtml(fmtUsd2(usd))} received · ${escapeHtml(fmtUsd2(sp.shareUsd))} to the Circle · ${escapeHtml(fmtUsd2(sp.backingUsd))} to the Reserve${sp.full ? '' : ' · short of the tier, so no bonus this month'}</p>`;
+                <p class="small">${escapeHtml(fmtUsd2(usd))} received · all of it to the Reserve${sp.full ? '' : ' · short of the tier, so no bonus this month'}</p>`;
               return { usd, cur };
             };
             calc(); body.addEventListener('input', calc);
@@ -194,7 +194,7 @@ export async function recordMoneySheet({ store, go, memberId = null }) {
         body.querySelector('#prev').innerHTML = `
           <b>${escapeHtml(fmtPoints(p.points))} for ${escapeHtml(m.name.split(' ')[0])}</b>
           <p class="small" style="margin-top:6px">
-            ${escapeHtml(fmtUsd2(p.usd))} in · ${escapeHtml(fmtUsd2(p.shareUsd))} to the Circle · ${escapeHtml(fmtUsd2(p.backingUsd))} into the Reserve
+            ${escapeHtml(fmtUsd2(p.usd))} in · ${escapeHtml(fmtUsd2(p.backingUsd))} into the Reserve · nothing taken
             ${p.bonusPoints ? ` · ${escapeHtml(fmtPoints(p.bonusPoints))} tier bonus` : ''}
           </p>
           <p class="small muted" style="margin-top:6px">${p.extra
@@ -274,8 +274,7 @@ export function monthClose({ store, params, go }) {
             <p class="eyebrow">${icon('calendar')}The month</p>
             <ul class="ledger" style="margin-top:10px">
               <li><span class="what"><b>Collected</b></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.grossUsd))}</b></span></li>
-              <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta">to Operating</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.shareUsd))}</b></span></li>
-              <li><span class="what"><b>To the Reserve</b><span class="meta">backs points</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.grossUsd - p.shareUsd))}</b></span></li>
+              <li><span class="what"><b>To the Reserve</b><span class="meta">all of it — a point per dollar</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.grossUsd))}</b></span></li>
               <li><span class="what"><b>Coverage now</b><span class="meta">Reserve ÷ everything owed</span></span><span class="delta"><b>${escapeHtml(fmtPct(p.treasury.coverage))}</b></span></li>
             </ul>
           </div>
@@ -534,7 +533,7 @@ async function editStay(store, stay) {
       <p class="small muted" style="margin-bottom:12px">Type dollars or points — whichever you have in your head. The other follows, at ${s.pointsPerDollar} points to the dollar.</p>
       ${isTrip ? `<div class="grid g2">${moneyPair('seat', 'A seat, all in', stay.pointsPerSeat / s.pointsPerDollar, s)}
           <label class="field"><span>Guest price in cash US$</span><input name="guestCashUsd" type="number" step="1" value="${stay.guestCashUsd || 0}" inputmode="decimal">
-            <span class="hint">What a non-member pays the Banker. No 15% is taken on it.</span></label></div>`
+            <span class="hint">What a non-member pays the Banker, at face value.</span></label></div>`
         : `<div class="grid g3">
         ${moneyPair('low', 'Summer · Apr 6 – Dec 19', stay?.rates?.low ?? 250, s)}
         ${moneyPair('high', 'Winter · Jan 4 – Apr 5', stay?.rates?.high ?? 380, s)}
@@ -587,7 +586,7 @@ export function pool({ store }) {
         <div class="stat"><span class="k">Reserve, by the ledger</span><b class="num">${escapeHtml(fmtUsd2(t.reserveUsd))}</b><span class="sub">every dollar in, minus what has been paid out</span></div>
         <div class="stat"><span class="k">Owed in points</span><b class="num">${escapeHtml(fmtPoints(t.outstandingPoints))}</b><span class="sub">${escapeHtml(fmtUsd2(t.liabilityUsd))} of hotel</span></div>
         <div class="stat"><span class="k">Coverage</span><b class="num">${escapeHtml(fmtPct(t.coverage))}</b><span class="sub">Reserve ÷ what is owed</span></div>
-        <div class="stat"><span class="k">Operating</span><b class="num">${escapeHtml(fmtUsd2(t.operatingUsd))}</b><span class="sub">the 15%, minus the bonuses it funded</span></div>
+        <div class="stat"><span class="k">Operating</span><b class="num">${escapeHtml(fmtUsd2(t.operatingUsd))}</b><span class="sub">15% earned on bookings, less the bonuses fronted — negative until the first one</span></div>
       </div>
 
       <div class="notice ${t.verified && Math.abs(t.verifiedVarianceUsd || 0) < 0.005 ? 'good' : t.verified ? 'warn' : ''}" style="margin-top:18px">
@@ -601,9 +600,9 @@ export function pool({ store }) {
           <h2 style="font-size:1.1rem">Where the money has gone</h2>
           <ul class="ledger" style="margin-top:12px">
             <li><span class="what"><b>Collected from Insiders</b><span class="meta">every confirmed contribution</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.collected))}</b></span></li>
-            <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta">15%, to Operating</span></span><span class="delta"><b>−${escapeHtml(fmtUsd2(t.share))}</b></span></li>
+            <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta">15%, earned on settled bookings</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.serviceEarnedUsd))}</b></span></li>
             <li><span class="what"><b>Into the Reserve</b><span class="meta">the 85% that backs points</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.backing))}</b></span></li>
-            <li><span class="what"><b>Bonuses funded by the Circle</b><span class="meta">tier, streak and founding — paid out of the 15%, moved into the Reserve</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.promoUsd))}</b></span></li>
+            <li><span class="what"><b>Bonuses funded by the Circle</b><span class="meta">tier, streak and founding — fronted against the 15% still to be earned</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.promoUsd))}</b></span></li>
             ${t.topUpsUsd ? `<li><span class="what"><b>Cash top-ups received</b><span class="meta">paid straight on to the hotel; no 15% is taken</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.topUpsUsd))}</b></span></li>` : ''}
             <li><span class="what"><b>Paid to hotels</b><span class="meta">confirmed bookings, at the invoiced amount</span></span><span class="delta"><b>−${escapeHtml(fmtUsd2(t.paidOutUsd))}</b></span></li>
             <li><span class="what"><b>Reserve today</b></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.reserveExpectedUsd))}</b></span></li>

@@ -38,13 +38,13 @@ export function passPayload(member, store) {
         { key: 'code', label: 'Card', value: member.cardCode || '' },
       ],
       auxiliaryFields: [
-        { key: 'earning', label: 'Earning', value: `${Math.round(member.monthlyUsd * (1 - s.serviceRate) * s.pointsPerDollar).toLocaleString('en-US')} a month` },
+        { key: 'earning', label: 'Earning', value: `${Math.round(member.monthlyUsd * s.pointsPerDollar).toLocaleString('en-US')} a month` },
         ...(member.founding ? [{ key: 'founding', label: '', value: VOCAB.founding }] : []),
       ],
       backFields: [
         { key: 'points', label: 'Points held when this pass was made', value: `${lt.available.toLocaleString('en-US')} · $${(lt.available / s.pointsPerDollar).toFixed(2)}` },
         { key: 'howto', label: 'What this card is', value: `A membership card for ${VOCAB.clubName}, a private travel circle in Aruba. Show it to Victor or Ian; the code identifies you.` },
-        { key: 'money', label: 'The money', value: `${Math.round(s.serviceRate * 100)}% of every contribution runs the Circle; the rest backs your points at ${s.pointsPerDollar} points to the dollar and stays yours.` },
+        { key: 'money', label: 'The money', value: `Every dollar backs a point at ${s.pointsPerDollar} to the dollar and stays yours. The Circle's ${Math.round(s.serviceRate * 100)}% is charged on a room when you book one, never on the money going in.` },
         { key: 'leaving', label: 'Leaving', value: `Any time. Unused base points come back at face value minus $${s.exitFeeUsd} after a twelve-month window.` },
         { key: 'legal', label: '', value: VOCAB.legal },
       ],
