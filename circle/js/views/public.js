@@ -1,7 +1,7 @@
 // Public and entry screens: the landing page, the rules, sign-in, and the invitation.
 import { escapeHtml, html, raw, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, fmtDay, fmtPct, initials } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
-import { splitContribution, tierFor, projectPoints, seasonPoints, SEASONS, REACH } from '../core/money.js';
+import { splitContribution, tierFor, projectPoints, seasonPoints, SEASONS, REACH, pointsPerMonth, monthsToAfford } from '../core/money.js';
 import { splitBar, poolGauge, memberCard, ring } from '../ui/pieces.js';
 import { drawContours, treeSvg, starSvg } from '../ui/art.js';
 import { toast, setBusy } from '../ui/components.js';
@@ -97,20 +97,26 @@ export function landing({ store, go }) {
 
   // What each level is for
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><p class="eyebrow">What each level is for</p><h2>The island, the region, anywhere</h2>
-      <p>Stays on Aruba are open to every Insider — that is what most of us are here for. The bigger levels are for the people who want to leave the island with the group: Victor sources those trips too, and they cost the Circle more to hold.</p></div></div>
+      <div class="sec-head"><div><p class="eyebrow">What each level is for</p><h2>Everyone comes on everything</h2>
+      <p>No level shuts anyone out of a stay or a trip. What the level changes is how quickly the points build — and that is what decides, in practice, whether you are doing long weekends on the island or leaving it with the group.</p></div></div>
       <div class="grid g3">
-        ${s.tiers.map(t => `<div class="panel">
+        ${s.tiers.map(t => {
+          const perMonth = pointsPerMonth(s, t.monthlyUsd);
+          const aruba = store.stay('stay_amsterdam'), trip = store.stay('trip_cartagena'), far = store.stay('trip_lisbon');
+          const nights = 3;
+          return `<div class="panel">
           <div class="row-between"><div><p class="eyebrow" style="color:var(--ink-2)">$${t.monthlyUsd} a month</p>
             <h3 style="margin-top:6px">${escapeHtml(tierName(t.monthlyUsd))}</h3></div>${treeSvg(VOCAB.tierLean[t.monthlyUsd], { size: 26 })}</div>
-          <p class="small" style="margin-top:10px"><b>${escapeHtml(REACH[t.reach].label)}</b> — ${escapeHtml(REACH[t.reach].blurb.toLowerCase())}.</p>
+          <p class="small" style="margin-top:10px"><b>${escapeHtml(fmtPoints(perMonth))} a month</b>${t.bonusRate ? `, including a ${Math.round(t.bonusRate * 100)}% bonus the Circle funds` : ''} — ${escapeHtml(fmtUsd2(perMonth / s.pointsPerDollar))} of hotel.</p>
           <ul class="stack" style="margin-top:10px;padding-left:1.1em;gap:6px">
-            <li class="small muted">${escapeHtml(fmtPoints(Math.round(t.monthlyUsd * (1 - s.serviceRate) * s.pointsPerDollar) + Math.round(t.monthlyUsd * t.bonusRate * s.pointsPerDollar)))} a month${t.bonusRate ? `, including a ${Math.round(t.bonusRate * 100)}% bonus` : ''}</li>
-            <li class="small muted">${t.holds} open request${t.holds > 1 ? 's' : ''} at a time · ${t.windowMonths} months ahead</li>
-            <li class="small muted">${t.guestCerts} guest passes a year${t.firstLookHours ? ` · first look at a new trip ${t.firstLookHours}h early` : ''}</li>
-          </ul></div>`).join('')}
+            <li class="small muted">${monthsToAfford(s, seasonPoints(aruba, 'low', s) * nights, t.monthlyUsd)} months for a ${nights}-night weekend on Eagle Beach</li>
+            <li class="small muted">${monthsToAfford(s, trip.pointsPerSeat, t.monthlyUsd)} months for a seat in Cartagena</li>
+            <li class="small muted">${monthsToAfford(s, far.pointsPerSeat, t.monthlyUsd)} months for a week in Portugal</li>
+            <li class="small muted">${t.holds} open request${t.holds > 1 ? 's' : ''} · ${t.windowMonths} months ahead · ${t.guestCerts} guest passes${t.firstLookHours ? ` · first look ${t.firstLookHours}h early` : ''}</li>
+          </ul></div>`;
+        }).join('')}
       </div>
-      <p class="small muted" style="margin-top:16px">You can move between levels any month; it takes effect on your next contribution and nothing you already hold changes. If a trip is above your level and you want in, a member at that level can sponsor you — ask Ian.</p>
+      <p class="small muted" style="margin-top:16px">Move between levels any month; it starts on your next contribution and nothing you already hold changes. Short of a trip you want? Ask for it anyway — Victor quotes it and you accept when the points are there, or you close the gap with a cash top-up.</p>
       </div></section>`));
 
   // How a contribution becomes a stay
@@ -168,6 +174,7 @@ export function landing({ store, go }) {
         <ol class="stack" start="4" style="padding-left:1.1em">
           <li>Your points never expire while you are active. Bonus points expire after 24 months.</li>
           <li>Pause for up to three months a year with one tap; your streak freezes rather than resets.</li>
+          <li>Every Insider can ask for every stay and every trip; the level only changes how fast points build.</li>
           <li>Chip in to a friend's booking with your own points — each share burns from its own ledger.</li>
           <li>Leave whenever you like: unused base points come back at face value, minus $25, after a 12-month window.</li>
         </ol>
@@ -193,7 +200,7 @@ export function rules({ store }) {
     ['Household is always covered; guests use a certificate.', `Your partner and children travel on your points with no extra charge. Non-members use a guest certificate (${s.tiers.map(t => `${t.guestCerts} for ${tierName(t.monthlyUsd)}`).join(', ')} a year) or pay the same negotiated rate in cash.`],
     ['Points and bookings cannot be sold, transferred or advertised.', 'This is a private circle of friends. Reselling a booking ends a membership and returns the backing.'],
     ['The Circle is by invitation only.', `Every Insider is invited by someone already in and the club is capped at ${s.memberCap} seats. It is not advertised, there is no public sign-up, and nobody joins who Victor or Ian does not know. If you leave and want to come back later, you come back the same way.`],
-    ['Your level decides how far the trips go.', `Stays on Aruba are open to every Insider. ${tierName(150)} adds trips around the region — the other islands and the near mainland — and ${tierName(200)} adds anywhere else the group goes. Move between levels any month; it takes effect on your next contribution. A member at the higher level can sponsor a friend onto a trip.`],
+    ['Every Insider can ask for every stay and every trip.', `No level is a wall. What a level changes is how fast your points build — ${s.tiers.map(t => `${fmtUsd2(t.monthlyUsd)} earns ${fmtPoints(pointsPerMonth(s, t.monthlyUsd))} a month`).join(', ')} — and the perks: open requests at a time, how far ahead you can book, guest passes, and first look at a new trip. Move between levels any month; it takes effect on your next contribution and nothing you already hold changes.`],
     ['You can chip in to each other’s bookings.', 'Open a booking to the Circle and anyone can add their own points to it — for a room you are sharing, or as a gift. Their points are committed the moment they chip in and released if it falls through; when the hotel is paid, each person’s share burns from their own ledger. Nobody can chip in more than the booking still needs, and points never change hands as points.'],
     [`${VOCAB.clubName} is a private members’ club for prepaid, club-arranged travel.`, 'Points are not deposits and not an investment. There is no interest, no return, and no payout that depends on new members joining: your points are backed by your own money, held in the Reserve.'],
   ];

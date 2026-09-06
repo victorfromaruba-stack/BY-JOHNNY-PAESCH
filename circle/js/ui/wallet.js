@@ -38,7 +38,7 @@ export function passPayload(member, store) {
         { key: 'code', label: 'Card', value: member.cardCode || '' },
       ],
       auxiliaryFields: [
-        { key: 'reach', label: 'Covers', value: { aruba: 'Aruba', region: 'The region', world: 'Anywhere' }[(s.tiers.find(t => t.monthlyUsd === member.monthlyUsd) || {}).reach] || 'Aruba' },
+        { key: 'earning', label: 'Earning', value: `${Math.round(member.monthlyUsd * (1 - s.serviceRate) * s.pointsPerDollar).toLocaleString('en-US')} a month` },
         ...(member.founding ? [{ key: 'founding', label: '', value: VOCAB.founding }] : []),
       ],
       backFields: [

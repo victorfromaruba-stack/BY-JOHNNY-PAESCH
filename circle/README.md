@@ -9,17 +9,23 @@ money has arrived; only then are points minted. The club keeps 15% for running i
 other 85% backs the points, and points pay for stays on the island and trips the Desk
 organizes.
 
-**What a level is for.** Stays on Aruba are open to every Insider — that is what most
-people join for. The bigger levels are for leaving the island with the group:
+**What a level is for.** No level shuts anyone out of anything: every Insider can ask for
+every stay and every trip. What the level changes is how fast the points build — and that
+is what decides, in practice, whether you are doing long weekends on the island or leaving
+it with the group.
 
 | | Watapana · $100 | Fofoti · $150 | Kibrahacha · $200 |
 |---|---|---|---|
-| Reaches | Aruba | Aruba + the region | Anywhere the group goes |
-| Trips | — | Curaçao, Bonaire, Colombia | and Panama, Portugal, Mexico |
+| Earns a month | ✦ 8,500 | ✦ 13,050 | ✦ 17,800 |
+| 3 nights on Eagle Beach | 8 months | 6 months | 4 months |
+| A seat in Cartagena | 8 months | 5 months | 4 months |
+| A week in Portugal | 20 months | 13 months | 10 months |
+| Open requests · booked ahead | 1 · 10 months | 2 · 12 months | 2 · 13 months |
+| Guest passes · first look | 2 · — | 3 · 48h | 4 · 72h |
 
-A trip above your level is still visible, with what it would take to join it. Moving up
-takes effect on your next contribution and changes nothing you already hold, and a member
-at the higher level can sponsor a friend onto a trip.
+Short of something you want? Ask for it anyway — Victor quotes it and you accept when the
+points are there — or close the gap with a cash top-up, or have the Circle chip in. Moving
+between levels takes effect on your next contribution and changes nothing already held.
 
 **Everything in this build runs in the browser with seeded demo data.** Nothing real is
 stored anywhere and no money moves. See *Going live* below for what has to happen first.

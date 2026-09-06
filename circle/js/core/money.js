@@ -11,11 +11,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   serviceRate: 0.15,
   pointsPerDollar: 100,
   awgPerUsd: 1.79,
-  // `reach` is what a level is for: the island, the region, or anywhere Victor goes.
+  // Every Insider can ask for every stay and every trip. What a level changes is how
+  // fast the points build, and the perks — how far ahead you can book, how many open
+  // requests you can hold, guest passes, and first look at a new trip.
   tiers: [
-    { id: 't100', monthlyUsd: 100, bonusRate: 0.00, holds: 1, guestCerts: 2, windowMonths: 10, firstLookHours: 0, reach: 'aruba' },
-    { id: 't150', monthlyUsd: 150, bonusRate: 0.02, holds: 2, guestCerts: 3, windowMonths: 12, firstLookHours: 48, reach: 'region' },
-    { id: 't200', monthlyUsd: 200, bonusRate: 0.04, holds: 2, guestCerts: 4, windowMonths: 13, firstLookHours: 72, reach: 'world' },
+    { id: 't100', monthlyUsd: 100, bonusRate: 0.00, holds: 1, guestCerts: 2, windowMonths: 10, firstLookHours: 0 },
+    { id: 't150', monthlyUsd: 150, bonusRate: 0.02, holds: 2, guestCerts: 3, windowMonths: 12, firstLookHours: 48 },
+    { id: 't200', monthlyUsd: 200, bonusRate: 0.04, holds: 2, guestCerts: 4, windowMonths: 13, firstLookHours: 72 },
   ],
   streakBonuses: { 6: 1000, 12: 2500, 24: 5000 },
   foundingBonus: 2000,
@@ -43,23 +45,30 @@ export function tierFor(settings, monthlyUsd) {
   return settings.tiers.find(t => t.monthlyUsd === Number(monthlyUsd)) || settings.tiers[0];
 }
 
-// What each level reaches. A stay on Aruba is open to everyone; trips off the island
-// are what the bigger levels are for, and a trip says which level it needs.
+// How far a trip goes. This is a label on the trip, not a rule about who may come —
+// anyone in the Circle can ask for anything. It is here so the board can be filtered
+// and so a member can see at a glance what they are looking at.
 export const REACH = Object.freeze({
-  aruba: { id: 'aruba', rank: 0, label: 'Aruba', blurb: 'Stays anywhere on the island' },
-  region: { id: 'region', rank: 1, label: 'The region', blurb: 'Aruba, plus trips around the Caribbean and northern South America' },
-  world: { id: 'world', rank: 2, label: 'Anywhere', blurb: 'Aruba, the region, and wherever else Victor takes the group' },
+  aruba: { id: 'aruba', label: 'On the island', blurb: 'A stay here on Aruba' },
+  region: { id: 'region', label: 'The region', blurb: 'The other islands and the near mainland' },
+  world: { id: 'world', label: 'Long haul', blurb: 'Further afield, wherever the group goes' },
 });
-export const reachRank = (id) => REACH[id]?.rank ?? 0;
-/** The level a member would need for this stay or trip. */
 export const reachOf = (stay) => (stay?.kind === 'trip' ? (stay.reach || 'region') : 'aruba');
-export function canReach(settings, monthlyUsd, stay) {
-  return reachRank(tierFor(settings, monthlyUsd).reach) >= reachRank(reachOf(stay));
+
+/** Points a level earns in a month, tier bonus included. */
+export function pointsPerMonth(settings, monthlyUsd) {
+  const t = tierFor(settings, monthlyUsd);
+  return Math.round(monthlyUsd * (1 - settings.serviceRate) * settings.pointsPerDollar)
+       + Math.round(monthlyUsd * t.bonusRate * settings.pointsPerDollar);
 }
-/** The cheapest level that reaches this trip. */
-export function tierNeededFor(settings, stay) {
-  const want = reachRank(reachOf(stay));
-  return settings.tiers.find(t => reachRank(t.reach) >= want) || settings.tiers[settings.tiers.length - 1];
+/**
+ * How long something takes to save for at each level — the honest version of a tier
+ * difference. Nobody is turned away; the bigger levels simply get there sooner.
+ */
+export function monthsToAfford(settings, points, monthlyUsd, alreadyHave = 0) {
+  const short = Math.max(0, points - alreadyHave);
+  if (!short) return 0;
+  return Math.ceil(short / pointsPerMonth(settings, monthlyUsd));
 }
 
 /** Split money actually received into share, backing and points. Bonus only on a full tier month. */

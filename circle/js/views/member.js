@@ -1,7 +1,7 @@
 // The member's own screens: home, sending a contribution, the ledger, the card, the profile.
 import { escapeHtml, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDay, fmtDayTime, fmtMonth, fmtPct, monthKey, countdownTo, initials, toCsv, downloadText } from '../core/util.js';
 import { VOCAB, tierName, refFor } from '../core/vocab.js';
-import { splitContribution, tierFor, seasonPoints, SEASONS, isDushiSeason, REACH } from '../core/money.js';
+import { splitContribution, tierFor, seasonPoints, SEASONS, isDushiSeason, pointsPerMonth } from '../core/money.js';
 import { splitBar, poolGauge, ring, memberCard } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel } from '../ui/components.js';
@@ -394,7 +394,7 @@ export function card({ store, go }) {
       <div class="panel" style="margin-top:16px">
         <div class="row-between"><span class="small muted">Available</span><b class="num">${escapeHtml(fmtPoints(lt.available))}</b></div>
         <div class="row-between" style="margin-top:8px"><span class="small muted">Worth</span><b class="num">${escapeHtml(pointsUsd(lt.available, s.pointsPerDollar))}</b></div>
-        <div class="row-between" style="margin-top:8px"><span class="small muted">Your level covers</span><b>${escapeHtml(REACH[tier.reach].label)}</b></div>
+        <div class="row-between" style="margin-top:8px"><span class="small muted">Earning</span><b class="num">${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))} a month</b></div>
         <div class="row-between" style="margin-top:8px"><span class="small muted">Insider since</span><b class="num">${escapeHtml(fmtDay(me.joinedAt))}</b></div>
         <div class="row-between" style="margin-top:8px"><span class="small muted">Card code</span><b class="num">${escapeHtml(me.cardCode || '—')}</b></div>
       </div>
@@ -474,7 +474,7 @@ export function profile({ store, go, refresh }) {
 
       <div class="panel" style="margin-top:22px">
         <h2>Your contribution level</h2>
-        <p class="small muted" style="margin-top:6px">A change takes effect on your next contribution and nothing you already hold is affected. The level also decides how far the trips go: stays on Aruba are open to everyone, ${escapeHtml(tierName(150))} adds the region, ${escapeHtml(tierName(200))} adds anywhere.</p>
+        <p class="small muted" style="margin-top:6px">A change takes effect on your next contribution and nothing you already hold is affected. Every level can ask for every stay and every trip — what changes is how fast the points build, and the perks.</p>
         <div class="choices" id="tiers" style="margin-top:14px"></div>
       </div>
 
@@ -520,7 +520,7 @@ export function profile({ store, go, refresh }) {
 
   wrap.querySelector('#tiers').innerHTML = s.tiers.map(t => `<button type="button" class="choice" aria-pressed="${t.monthlyUsd === me.monthlyUsd}" data-amt="${t.monthlyUsd}">
       <span class="amt">$${t.monthlyUsd}</span><span class="tier">${escapeHtml(tierName(t.monthlyUsd))} ${treeSvg(VOCAB.tierLean[t.monthlyUsd], { size: 14 })}</span>
-      <span class="tiny muted">${escapeHtml(REACH[t.reach].label)} · ${t.holds} open request${t.holds > 1 ? 's' : ''} · ${t.guestCerts} guest passes</span></button>`).join('');
+      <span class="tiny muted">${escapeHtml(fmtPoints(pointsPerMonth(s, t.monthlyUsd)))} a month · ${t.holds} open request${t.holds > 1 ? 's' : ''} · ${t.guestCerts} guest passes</span></button>`).join('');
   wrap.querySelector('#tiers').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-amt]'); if (!b) return;
     const amt = Number(b.dataset.amt); if (amt === me.monthlyUsd) return;

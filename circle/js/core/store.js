@@ -4,7 +4,7 @@
 // Business rules live here so the demo and the real club produce identical numbers.
 
 import { uid, nowIso, sum, monthKey, fmtMonth } from './util.js';
-import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, canReach, reachOf, tierNeededFor, REACH } from './money.js';
+import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford } from './money.js';
 import { initialsOf } from './vocab.js';
 
 export const CONTRIBUTION_STATUS = Object.freeze({ pending: 'pending', confirmed: 'confirmed', rejected: 'rejected', withdrawn: 'withdrawn', reversed: 'reversed' });
@@ -95,12 +95,12 @@ export class Store {
   /** Everything covered so far on a booking: the requester's points plus every pledge. */
   coveredPoints(r) { return (r.points || 0) + sum(r.pledges || [], p => p.points); }
   pledgesOn(redemptionId) { return this.redemption(redemptionId)?.pledges || []; }
-  /** Can this member ask for this stay or trip at their level? */
-  canReachStay(stay, memberId = this.session?.memberId) {
-    const m = this.member(memberId); if (!m || !stay) return false;
-    return canReach(this.settings, m.monthlyUsd, stay);
+  /** How many months of contributions this would still take, at each level. */
+  monthsToAfford(points, memberId = this.session?.memberId) {
+    const m = this.member(memberId); if (!m) return null;
+    const have = Math.max(0, this.availablePoints(m.id));
+    return this.settings.tiers.map(t => ({ tier: t, months: monthsToAfford(this.settings, points, t.monthlyUsd, have), mine: t.monthlyUsd === m.monthlyUsd }));
   }
-  tierNeededFor(stay) { return tierNeededFor(this.settings, stay); }
   /** Bookings anyone in the Circle can still chip in to. */
   openToChipIn() {
     this.releaseExpired();
@@ -353,10 +353,6 @@ export class Store {
     const q = quoteStay(stay, isTrip ? stay.dates.from : checkIn, isTrip ? stay.dates.to : checkOut, this.settings, { seats });
     if (!isTrip && q.nights < 1) throw new Error('Check-out must be after check-in');
     if (!q.ok) throw new Error(`Minimum ${q.minNights} nights for these dates`);
-    if (!canReach(this.settings, m.monthlyUsd, stay)) {
-      const needed = tierNeededFor(this.settings, stay);
-      throw new Error(`${stay.name} is a ${tierName(this.settings, needed.monthlyUsd)} trip. Your level covers ${REACH[tier.reach].label}; move up to $${needed.monthlyUsd} a month from your next contribution and you are in.`);
-    }
     if (this.openHolds(memberId) >= tier.holds) throw new Error(`${tierName(this.settings, m.monthlyUsd)} allows ${tier.holds} open request${tier.holds > 1 ? 's' : ''} at a time`);
     if (isTrip && this.seatsHeld(stayId) + seats > (stay.seats || 99)) throw new Error('Not enough seats left on this trip');
     if (!isTrip) {

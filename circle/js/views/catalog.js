@@ -1,18 +1,13 @@
 // Stays, trips, requesting one, and the life of a request.
 import { escapeHtml, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, countdownTo, initials, nightsBetween } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
-import { quoteStay, seasonPoints, SEASONS, seasonFor, tierFor, isDushiSeason, REACH, reachOf } from '../core/money.js';
+import { quoteStay, seasonPoints, SEASONS, seasonFor, tierFor, isDushiSeason, REACH, reachOf, pointsPerMonth } from '../core/money.js';
 import { ring } from '../ui/pieces.js';
 import { stayCard, stayStrip } from './public.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
 import { shareText } from '../core/share.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
-/** Points a month at a given level, bonus included. */
-const splitPreview = (monthlyUsd, s) => {
-  const t = tierFor(s, monthlyUsd);
-  return Math.round(monthlyUsd * (1 - s.serviceRate) * s.pointsPerDollar) + Math.round(monthlyUsd * t.bonusRate * s.pointsPerDollar);
-};
 const AREAS = ['Palm Beach', 'Eagle Beach', 'Druif Beach', 'Oranjestad', 'Malmok', 'Savaneta', 'Noord'];
 
 export function stays({ store, query, go }) {
@@ -73,8 +68,8 @@ export function trips({ store }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <div class="sec-head"><div><p class="eyebrow">Sourced by Victor, run with Ian</p><h1>Trips</h1>
         <p>A seat covers the hotel and everything listed. Flights are extra unless the note says otherwise. Guests can come at the same rate, in cash.</p></div></div>
-      <div class="notice" style="margin-bottom:18px"><b>What your level reaches</b>
-        <p class="small">Stays on Aruba are open to everyone. ${escapeHtml(tierName(150))} adds trips around the region — the other islands and the near mainland — and ${escapeHtml(tierName(200))} adds everywhere else Victor takes the group. You are ${escapeHtml(tierName(me.monthlyUsd))}: ${escapeHtml(REACH[tier.reach].blurb.toLowerCase())}. <a href="#/profile">Change your level</a> any month; it takes effect on your next contribution.</p></div>
+      <div class="notice" style="margin-bottom:18px"><b>Everyone can come on everything</b>
+        <p class="small">There is no level that shuts you out of a trip. What your level changes is how quickly the points build — at ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))}, so a seat further afield takes longer to save for — and the perks: ${tier.holds} open request${tier.holds > 1 ? 's' : ''} at a time, ${tier.windowMonths} months ahead${tier.firstLookHours ? `, and first look at a new trip ${tier.firstLookHours} hours early` : ''}. <a href="#/profile">Change your level</a> any month; it starts on your next contribution.</p></div>
       <div class="grid g3" id="list"></div>
       ${all.length ? '' : '<div class="empty"><b>No trips on the board</b><p class="small muted">Victor posts them as he sources them. Ian sends a note when one goes live.</p></div>'}
     </div></section></div>`);
@@ -84,13 +79,12 @@ export function trips({ store }) {
     const mine = store.state.redemptions.some(r => r.memberId === me.id && r.stayId === t.id && ['requested', 'quoted', 'held', 'confirmed', 'completed'].includes(r.status));
     const canAfford = avail >= t.pointsPerSeat;
     const firstLook = t.isDrop && tier.firstLookHours > 0;
-    const reachable = store.canReachStay(t);
-    const needed = store.tierNeededFor(t);
-    const footer = `<span class="small muted" style="margin-top:4px">${escapeHtml(fmtDay(t.dates.from))} – ${escapeHtml(fmtDay(t.dates.to))} · ${held} of ${t.seats} seats held${mine ? ' · you are in' : canAfford ? '' : ' · you are short'}</span>
+    const months = canAfford ? 0 : Math.ceil((t.pointsPerSeat - Math.max(0, avail)) / pointsPerMonth(s, me.monthlyUsd));
+    const footer = `<span class="small muted" style="margin-top:4px">${escapeHtml(fmtDay(t.dates.from))} – ${escapeHtml(fmtDay(t.dates.to))} · ${held} of ${t.seats} seats held${mine ? ' · you are in' : ''}</span>
+      <span class="small muted" style="margin-top:2px">${mine ? 'Your seat is held' : canAfford ? 'You can cover a seat now' : `About ${months} more month${months === 1 ? '' : 's'} of contributions`}</span>
       <span class="flags" style="margin-top:6px">
         ${t.isDrop ? `<span class="tag" style="background:var(--flight-soft);border-color:transparent">Drop${firstLook ? ` · your first look` : ''}</span>` : ''}
         <span class="tag">${escapeHtml(REACH[reachOf(t)].label)}</span>
-        ${reachable ? '' : `<span class="tag" style="background:var(--raised)">${escapeHtml(tierName(needed.monthlyUsd))} and up</span>`}
       </span>`;
     return stayCard(t, { store, footer });
   }));
@@ -117,9 +111,7 @@ export function stayDetail({ store, params, go }) {
       </div>
       <div id="reach-note"></div>
       <div class="row" style="margin-top:20px">
-        ${store.canReachStay(stay)
-          ? `<a class="btn" href="#/book/${escapeHtml(stay.id)}">${isTrip ? 'Ask for a seat' : 'Ask Victor for dates'}</a>`
-          : `<a class="btn" href="#/profile">Move up to ${escapeHtml(tierName(store.tierNeededFor(stay).monthlyUsd))}</a>`}
+        <a class="btn" href="#/book/${escapeHtml(stay.id)}">${isTrip ? 'Ask for a seat' : 'Ask Victor for dates'}</a>
         <button class="btn ghost" id="share">Share</button>
       </div>
     </div></section></div>`);
@@ -160,14 +152,20 @@ export function stayDetail({ store, params, go }) {
     <p class="small muted" style="margin-top:14px">Short of it? Pay the difference as a top-up when Victor quotes you — no 15% is taken on a top-up, and nothing is booked on credit.</p>
     <p class="small muted" style="margin-top:8px">${escapeHtml(tierName(me.monthlyUsd))} can hold ${tier.holds} open request${tier.holds > 1 ? 's' : ''} and book ${tier.windowMonths} months ahead.</p>`;
   wrap.querySelector('#ring').replaceChildren(ring({ total: min, filled: Math.min(min, canCover), size: 76, label: String(Math.min(canCover, 99)), sub: isTrip ? 'seats' : 'nights' }));
-  if (!store.canReachStay(stay)) {
-    const needed = store.tierNeededFor(stay);
-    const nextUp = splitPreview(needed.monthlyUsd, s);
-    wrap.querySelector('#reach-note').innerHTML = `<div class="notice" style="margin-top:18px">
-      <b>This one is for ${escapeHtml(tierName(needed.monthlyUsd))} and up</b>
-      <p class="small">Trips off the island are what the bigger levels are for. You are ${escapeHtml(tierName(me.monthlyUsd))} at ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month — ${escapeHtml(REACH[tier.reach].blurb.toLowerCase())}.
-      At ${escapeHtml(fmtUsd2(needed.monthlyUsd))} you would earn ${escapeHtml(fmtPoints(nextUp))} a month instead, and this trip opens to you from your next contribution. Nothing you already hold changes.</p>
-      <p class="small muted" style="margin-top:6px">If the dates are sooner than that, ask Ian — a ${escapeHtml(tierName(needed.monthlyUsd))} Insider can sponsor you onto a trip.</p></div>`;
+  {
+    // Nobody is turned away from a trip. If it is more than they hold, say plainly how
+    // long it takes at their level — and how long it would take at the others.
+    const price = isTrip ? stay.pointsPerSeat : seasonPoints(stay, 'low', s) * (stay.minNights || 1);
+    const pace = store.monthsToAfford(price);
+    const mineRow = pace?.find(x => x.mine);
+    if (mineRow && mineRow.months > 0) {
+      const faster = pace.filter(x => !x.mine && x.months < mineRow.months);
+      wrap.querySelector('#reach-note').innerHTML = `<div class="notice" style="margin-top:18px">
+        <b>About ${mineRow.months} more month${mineRow.months === 1 ? '' : 's'} at your level</b>
+        <p class="small">You hold ${escapeHtml(fmtPoints(Math.max(0, store.availablePoints(me.id))))} and ${isTrip ? 'a seat' : `${stay.minNights} night${stay.minNights > 1 ? 's' : ''}`} here is ${escapeHtml(fmtPoints(price))}. At ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))}.
+        ${faster.length ? `At ${faster.map(f => `${escapeHtml(fmtUsd2(f.tier.monthlyUsd))} it would be ${f.months}`).join(', and at ')}.` : ''}
+        You can ask for it now either way — Victor quotes it, and you accept when the points are there. Or ${escapeHtml(fmtUsd2((price - Math.max(0, store.availablePoints(me.id))) / s.pointsPerDollar))} as a cash top-up closes the gap.</p></div>`;
+    }
   }
   wrap.querySelector('#share').addEventListener('click', () => shareText({
     title: stay.name, text: `${stay.name} — ${fmtPoints(per)} ${isTrip ? 'a seat' : 'a night'} through the ${VOCAB.clubName}.`,
@@ -183,13 +181,6 @@ export function book({ store, params, go }) {
   const isTrip = stay.kind === 'trip';
   const avail = store.availablePoints(me.id);
   const tier = tierFor(s, me.monthlyUsd);
-  if (!store.canReachStay(stay)) {
-    const needed = store.tierNeededFor(stay);
-    return el(`<div class="wrap sec" style="max-width:640px"><p class="eyebrow">${escapeHtml(stay.area)}</p>
-      <h1>${escapeHtml(stay.name)} is a ${escapeHtml(tierName(needed.monthlyUsd))} trip</h1>
-      <p class="lede" style="margin-top:12px">Your level covers ${escapeHtml(REACH[tier.reach].blurb.toLowerCase())}. Move up to ${escapeHtml(fmtUsd2(needed.monthlyUsd))} a month and this opens from your next contribution — or ask Ian, since a ${escapeHtml(tierName(needed.monthlyUsd))} Insider can sponsor you onto a trip.</p>
-      <div class="row" style="margin-top:20px"><a class="btn" href="#/profile">Change my level</a><a class="btn ghost" href="#/trips">Back to the trips</a></div></div>`);
-  }
   const today = new Date(); const soon = new Date(today); soon.setMonth(soon.getMonth() + 2);
   const d = (x) => x.toISOString().slice(0, 10);
   const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:720px">
