@@ -16,7 +16,7 @@ export function stays({ store, query, go }) {
   const avail = store.availablePoints(me.id);
   const state = { season: query.season || 'low', area: '', house: false, onSand: false, adultsOnly: false, allInclusive: false, affordable: false };
   const wrap = el(`<div><section class="sec"><div class="wrap">
-      <div class="sec-head"><div><p class="eyebrow">Twenty-three places on the island</p><h1>Stays in Aruba</h1>
+      <div class="sec-head"><div><p class="eyebrow">${icon('palm')}Twenty-three places on the island</p><h1>Stays in Aruba</h1>
         <p>Every price is the Circle’s all-in rate per night — room, the 12.5% tourist levy, service charge, resort fee and the environmental levy. Your binding quote comes from Victor and is usually better.</p>
         <p class="small muted" style="margin-top:8px">Four of these are where we actually end up: the Marriott villas at the <a href="#/stays/stay_oceanclub">Ocean Club</a> and the <a href="#/stays/stay_surfclub">Surf Club</a>, the <a href="#/stays/stay_divi">Divi</a> on Druif, and the <a href="#/stays/stay_renaissance">Renaissance</a> in town. The rest of the list is here because Victor can get them, not because we have been.</p></div></div>
       <div class="row no-print" id="filters" style="margin-bottom:18px" role="group" aria-label="Filter stays"></div>
@@ -51,7 +51,7 @@ export function stays({ store, query, go }) {
         : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of the ${min}-night minimum`}</span>`;
       return stayCard(st, { store, season: state.season, footer });
     }));
-    if (!items.length) list.replaceChildren(el(`<div class="empty"><b>Nothing matches those filters</b><p class="small muted">Try a different area, or turn off “I can afford it now” to see everything.</p></div>`));
+    if (!items.length) list.replaceChildren(el(`<div class="empty">${icon('search', { size: 28, cls: 'ico-muted' })}<b style="display:block;margin-top:10px">Nothing matches those filters</b><p class="small muted">Try a different area, or turn off “I can afford it now” to see everything.</p></div>`));
   };
   draw();
   filters.addEventListener('click', (e) => {
@@ -69,13 +69,13 @@ export function trips({ store }) {
   const tier = tierFor(s, me.monthlyUsd);
   const all = store.trips();
   const wrap = el(`<div><section class="sec"><div class="wrap">
-      <div class="sec-head"><div><p class="eyebrow">Sourced by Victor, run with Ian</p><h1>Trips</h1>
+      <div class="sec-head"><div><p class="eyebrow">${icon('plane')}Sourced by Victor, run with Ian</p><h1>Trips</h1>
         <p>A seat covers the hotels, every internal transfer and everything else listed. Flights to and from Aruba are extra unless the note says otherwise. Guests can come at the same rate, in cash.</p>
         <p class="small muted" style="margin-top:8px">Three countries this cycle: the Dominican Republic in March, Mexico in February, Japan the December after. Read the notes — Victor writes down what the journey actually costs you in days, not just in points.</p></div></div>
       <div class="notice" style="margin-bottom:18px"><b>Everyone can come on everything</b>
         <p class="small">There is no level that shuts you out of a trip. What your level changes is how quickly the points build — at ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))}, so a seat further afield takes longer to save for — and the perks: ${tier.holds} open request${tier.holds > 1 ? 's' : ''} at a time, ${tier.windowMonths} months ahead${tier.firstLookHours ? `, and first look at a new trip ${tier.firstLookHours} hours early` : ''}. <a href="#/profile">Change your level</a> any month; it starts on your next contribution.</p></div>
       <div class="grid g3" id="list"></div>
-      ${all.length ? '' : '<div class="empty"><b>No trips on the board</b><p class="small muted">Victor posts them as he sources them. Ian sends a note when one goes live.</p></div>'}
+      ${all.length ? '' : `<div class="empty">${icon('plane', { size: 28, cls: 'ico-muted' })}<b style="display:block;margin-top:10px">No trips on the board</b><p class="small muted">Victor posts them as he sources them. Ian sends a note when one goes live.</p></div>`}
     </div></section></div>`);
   const list = wrap.querySelector('#list');
   list.replaceChildren(...all.map(t => {
@@ -116,8 +116,8 @@ export function stayDetail({ store, params, go }) {
       <div id="rooms"></div>
       <div id="reach-note"></div>
       <div class="row" style="margin-top:20px">
-        <a class="btn" href="#/book/${escapeHtml(stay.id)}">${isTrip ? 'Ask for a seat' : 'Ask Victor for dates'}</a>
-        <button class="btn ghost" id="share">Share</button>
+        <a class="btn" href="#/book/${escapeHtml(stay.id)}">${icon('send', { size: 17 })}${isTrip ? 'Ask for a seat' : 'Ask Victor for dates'}</a>
+        <button class="btn ghost" id="share">${icon('share', { size: 16 })}Share</button>
       </div>
     </div></section></div>`);
   wrap.querySelector('.strip').prepend(stayStrip(stay));
@@ -207,7 +207,7 @@ export function stayDetail({ store, params, go }) {
   const min = isTrip ? 1 : (stay.minNights || 1);
   const canCover = Math.floor(avail / per);
   wrap.querySelector('#afford').innerHTML = `
-    <p class="eyebrow">Against your points</p>
+    <p class="eyebrow">${icon('spark')}Against your points</p>
     <div class="row" style="gap:14px;margin-top:12px;align-items:center"><span id="ring"></span>
       <div class="small"><b>${escapeHtml(fmtPoints(avail))}</b> available<br>
       <span class="muted">${canCover >= min ? `enough for ${Math.min(canCover, 14)} ${isTrip ? 'seat' : 'night'}${canCover === 1 ? '' : 's'}` : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of ${isTrip ? 'a seat' : `the ${min}-night minimum`}`}</span></div></div>
@@ -374,14 +374,14 @@ export function requestDetail({ store, params, go, refresh }) {
         <div class="stack">
           <div class="panel" id="money"></div>
           <div id="chipin"></div>
-          ${r.note ? `<div class="panel flat"><p class="eyebrow">What they asked for</p><p class="small" style="margin-top:8px">${escapeHtml(r.note)}</p></div>` : ''}
+          ${r.note ? `<div class="panel flat"><p class="eyebrow">${icon('user')}What they asked for</p><p class="small" style="margin-top:8px">${escapeHtml(r.note)}</p></div>` : ''}
           ${r.decision ? `<div class="notice ${['declined', 'cancelled', 'expired'].includes(r.status) ? 'bad' : ''}">
             <b>${escapeHtml(['declined'].includes(r.status) ? 'Declined by ' : 'Note from ')}${escapeHtml(store.member(r.decidedBy || r.quotedBy)?.name.split(' ')[0] || 'the Desk')}</b>
             <p class="small">${escapeHtml(r.decision)}</p></div>` : ''}
           <div class="panel" id="actions"></div>
         </div>
         <div class="panel flat">
-          <p class="eyebrow">What happened when</p>
+          <p class="eyebrow">${icon('history')}What happened when</p>
           <ul class="timeline" style="margin-top:12px">
             ${steps.filter(st2 => st2.at || order.indexOf(st2.key) <= Math.max(at, 0)).map(st2 => `<li class="${st2.at ? 'done' : order.indexOf(st2.key) === at + 1 ? 'now' : ''}">
               <b>${escapeHtml(st2.label)}</b><br><span class="when">${st2.at ? escapeHtml(fmtDayTime(st2.at)) : 'not yet'}${st2.who ? ` · ${escapeHtml(st2.who.split(' ')[0])}` : ''}</span></li>`).join('')}
@@ -478,7 +478,7 @@ export function requestDetail({ store, params, go, refresh }) {
   if (canPay && topUpOwed) buttons.push('<button class="btn" data-act="topup">Mark the top-up received</button>');
   if (store.hasRole('planner', 'admin') && r.status === 'confirmed') buttons.push('<button class="btn ghost" data-act="complete">Mark as stayed</button><button class="btn danger" data-act="cancelPaid">Cancel the booking</button>');
   actions.innerHTML = buttons.length
-    ? `<p class="eyebrow">What you can do</p><div class="row" style="margin-top:12px">${buttons.join('')}</div>
+    ? `<p class="eyebrow">${icon('zap')}What you can do</p><div class="row" style="margin-top:12px">${buttons.join('')}</div>
        ${topUpOwed ? `<p class="small" style="margin-top:12px;color:var(--flag)">The hotel cannot be paid until the ${escapeHtml(fmtUsd2(r.topUpUsd))} top-up has reached the Banker. Nothing is ever booked on credit.</p>` : ''}
        ${r.status === 'quoted' && mine ? `<p class="small muted" style="margin-top:12px">Accepting moves ${escapeHtml(fmtPoints(Math.min(pts, avail)))} into Committed. They are still yours and still counted in the Circle’s coverage until the hotel is paid.</p>` : ''}`
     : '';
