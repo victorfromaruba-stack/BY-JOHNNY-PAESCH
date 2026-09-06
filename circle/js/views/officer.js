@@ -52,7 +52,8 @@ export function bank({ store, go }) {
           <div class="row" style="gap:12px">
             ${avatar(m, 40)}
             <div><b>${escapeHtml(m.name)}</b> · ${escapeHtml(tierName(m.monthlyUsd))}
-              <br><span class="small muted">${c.extra ? 'Extra, not a monthly' : escapeHtml(fmtMonth(c.forMonth))} · sent ${escapeHtml(fmtDay(c.submittedAt))} · ${escapeHtml(c.bank || c.method || 'bank transfer')}${c.proofName ? ' · screenshot attached' : ''}${c.recordedBy ? ' · entered by the Banker' : ''}</span></div>
+              <br><span class="small muted">${c.extra ? 'Extra, not a monthly' : escapeHtml(fmtMonth(c.forMonth))} · sent ${escapeHtml(fmtDay(c.submittedAt))} · ${escapeHtml(c.bank || c.method || 'bank transfer')}${c.recordedBy ? ' · entered by the Banker' : ''}</span>
+              ${(c.proofName || c.proofPath || c.proofDataUrl) ? `<br><button class="btn quiet sm" data-proof="${escapeHtml(c.id)}" style="padding-inline:0;min-height:26px">${icon('eye', { size: 14 })}See the screenshot</button>` : ''}</div>
           </div>
           <div style="text-align:right"><b class="num" style="font-size:1.2rem">${escapeHtml(fmtUsd2(c.expectedUsd))}</b>
             <br><span class="small muted num">${escapeHtml(fmtAfl2(c.expectedUsd, s.awgPerUsd))}</span></div>
@@ -108,6 +109,28 @@ export function bank({ store, go }) {
     queue.appendChild(row);
   }
   wrap.querySelector('#record')?.addEventListener('click', () => recordMoneySheet({ store, go }));
+
+  // The screenshot is what the Banker actually confirms the money against. On the real
+  // backend it lives in private storage and needs a signed URL; in preview it is a data URL
+  // on the row itself.
+  wrap.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-proof]'); if (!btn) return;
+    const c = store.contribution(btn.dataset.proof);
+    if (!c) return;
+    setBusy(btn, true, 'Opening…');
+    try {
+      const src = c.proofDataUrl || (c.proofPath ? await store.proofUrl(c.proofPath) : null);
+      if (!src) throw new Error('That screenshot is no longer stored.');
+      await sheet({ title: c.proofName || 'The screenshot', render: (body, close) => {
+        body.innerHTML = `<img src="${escapeHtml(src)}" alt="The transfer screenshot as it was sent"
+            style="width:100%;border-radius:var(--r-input);border:1px solid var(--hairline)">
+          <div class="sheet-actions"><button class="btn ghost" data-close>Close</button>
+            <a class="btn" href="${escapeHtml(src)}" target="_blank" rel="noopener">${icon('external', { size: 16 })}Open it full size</a></div>`;
+        body.querySelector('[data-close]').addEventListener('click', () => close());
+      } });
+    } catch (err) { toast(err.message, { kind: 'bad', timeout: 6000 }); }
+    finally { setBusy(btn, false); }
+  });
   wrap.querySelector('#confirm-all')?.addEventListener('click', async () => {
     const yes = await confirmDialog({ title: `Confirm all ${pending.length}?`, confirmText: 'Confirm them', message: 'Only do this once you have matched every reference on the bank statement. Each one can still be undone for a minute afterwards.' });
     if (!yes) return;

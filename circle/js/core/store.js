@@ -142,6 +142,8 @@ export class Store {
   arubaStays() { return this.state.stays.filter(s => s.kind === 'aruba' && s.active); }
   trips() { return this.state.stays.filter(s => s.kind === 'trip' && s.active); }
   contribution(id) { return this.state.contributions.find(c => c.id === id) || null; }
+  /** Where to find a transfer screenshot. Here it is on the row; Supabase signs a URL. */
+  async proofUrl(_path) { return null; }
   redemption(id) { return this.state.redemptions.find(r => r.id === id) || null; }
   contributionsFor(memberId) { return this.state.contributions.filter(c => c.memberId === memberId).sort(desc('submittedAt')); }
   redemptionsFor(memberId) { this.releaseExpired(); return this.state.redemptions.filter(r => r.memberId === memberId).sort(desc('requestedAt')); }
