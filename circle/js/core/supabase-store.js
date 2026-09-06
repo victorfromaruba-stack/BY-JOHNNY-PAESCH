@@ -15,7 +15,7 @@ export function loadSupabaseJs() {
   });
 }
 
-import { Store } from './store.js';
+import { Store, emptyState } from './store.js';
 import { DEFAULT_SETTINGS } from './money.js';
 
 const camel = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
@@ -28,12 +28,13 @@ export class SupabaseStore extends Store {
     super(null);
     // Implicit flow: tokens arrive in the URL fragment and are consumed before the hash router starts.
     this.sb = client || window.supabase.createClient(url, key, { auth: { flowType: 'implicit', detectSessionInUrl: true, persistSession: true } });
-    this.state = { settings: { ...DEFAULT_SETTINGS }, members: [], contributions: [], ledger: [], stays: [], redemptions: [], announcements: [], audit: [], session: null };
+    this.state = { ...emptyState(), settings: { ...DEFAULT_SETTINGS } };
     this.mode = 'supabase';
   }
   async init() {
     const { data: { session } } = await this.sb.auth.getSession();
     if (session) await this.afterSignIn();
+    else await this.reload().catch(() => {});
     this.sb.auth.onAuthStateChange(async (_evt, s) => { if (s) { await this.afterSignIn(); } else { this.state.session = null; this.notify('session'); } });
     return this;
   }
@@ -47,9 +48,9 @@ export class SupabaseStore extends Store {
     const tables = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'pledges', 'announcements', 'audit', 'invitations', 'month_closes', 'promo_deferrals', 'room_types', 'watches', 'deals'];
     const results = await Promise.all(tables.map(t => this.sb.from(t).select('*')));
     results.forEach((r, i) => { if (!r.error) this.state[tables[i]] = (r.data || []).map(toCamel); });
-    this.state.monthCloses = this.state.month_closes || [];
-    this.state.promoDeferrals = this.state.promo_deferrals || [];
-    this.state.roomTypes = this.state.room_types || [];
+    this.state.monthCloses = this.state.month_closes || this.state.monthCloses || [];
+    this.state.promoDeferrals = this.state.promo_deferrals || this.state.promoDeferrals || [];
+    this.state.roomTypes = this.state.room_types || this.state.roomTypes || [];
     // The database calls them from_date/to_date because `from` and `to` are awkward in SQL;
     // the rest of the app calls them from/to. Bridge it here rather than everywhere else.
     const dated = (r) => ({ ...r, from: r.fromDate, to: r.toDate });
@@ -64,6 +65,15 @@ export class SupabaseStore extends Store {
       rates: { low: Number(s.rateLowUsd), high: Number(s.rateHighUsd), peak: Number(s.ratePeakUsd) },
       retailUsd: Number(s.retailUsd || 0),
       dates: s.startsOn ? { from: s.startsOn, to: s.endsOn } : undefined }));
+    // Nobody signed in can read the stays table — every policy is `to authenticated`, on
+    // purpose. But the public page still has to show what the Circle is for, and the same
+    // catalog is already inside the JavaScript this browser just downloaded, so falling
+    // back to it exposes nothing new and keeps the front page from being a blank frame.
+    if (!this.state.session && !this.state.stays.length) {
+      const { ARUBA_STAYS, WORLD_TRIPS } = await import('../data/stays.js');
+      this.state.stays = [...ARUBA_STAYS, ...WORLD_TRIPS].map(x => ({ ...x, active: true }));
+      this.publicOnly = true;
+    }
     const { data: s } = await this.sb.from('settings').select('*').eq('id', 1).maybeSingle();
     if (s) this.state.settings = { ...DEFAULT_SETTINGS, serviceRate: Number(s.service_rate), pointsPerDollar: Number(s.points_per_dollar), awgPerUsd: Number(s.awg_per_usd), tiers: s.tiers, streakBonuses: s.streak_bonuses, foundingBonus: s.founding_bonus, memberCap: s.member_cap, exitFeeUsd: Number(s.exit_fee_usd), quoteHours: s.quote_hours, bankerSlaHours: s.banker_sla_hours, reserveAccount: s.reserve_account, operatingAccount: s.operating_account, reserveVerified: s.reserve_verified, wallet: s.wallet, clubName: s.club_name };
     this.notify('reload');
@@ -284,4 +294,15 @@ export class SupabaseStore extends Store {
   }
   log() { /* server writes audit */ }
   async reset() { throw new Error('Reset is only available in local mode'); }
+  // Restoring a JSON backup rewrites the local copy only, and the next reload throws it
+  // away. Saying "Restored." while nothing happened is worse than refusing.
+  async importJson() {
+    throw new Error('Restoring a backup has to be done in Supabase, not from here. The file you downloaded is a record, not a restore point.');
+  }
+  // There is no way to accept an invitation from a signed-out browser: the invitations
+  // table is readable by admins only, by design. Someone joins by being put on the list
+  // and then setting their own password, which is what the sign-in screen offers.
+  async acceptInvitation() {
+    throw new Error('Ask Victor or Ian to put you on the list, then open sign in and tap "First time here? Set it up" with the email they have for you.');
+  }
 }

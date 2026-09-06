@@ -35,6 +35,10 @@ export function stayCard(stay, { store, season = 'low', href = null, footer = ''
 export function landing({ store, go }) {
   const s = store.settings;
   const t = store.treasury();
+  // Signed out on the real backend, row-level security hands this browser nothing — so the
+  // seat count is 0 and coverage is unverifiable, neither of which is true. Say what we
+  // cannot see instead of publishing a number we did not read.
+  const blind = !!store.publicOnly;
   const wrap = el('<div></div>');
   const featured = ['stay_oceanclub', 'stay_surfclub', 'stay_divi', 'stay_renaissance', 'trip_japan'].map(id => store.stay(id)).filter(Boolean);
 
@@ -44,7 +48,7 @@ export function landing({ store, go }) {
         <p class="eyebrow enter">${escapeHtml(VOCAB.subtitle)} · by invitation</p>
         <h1 class="enter" style="--d:40ms;max-width:15ch">A private travel circle in Aruba.</h1>
         <p class="lede enter" style="--d:80ms;margin-top:14px">${escapeHtml(VOCAB.tagline)} You put in $100, $150 or $200 a month. Vishnu confirms the money has landed, and only then do your points appear — 100 points to the dollar, fixed forever.</p>
-        <p class="lede enter" style="--d:100ms;margin-top:12px">This is not a business and it is not open to the public. Every Insider is someone Victor or Ian knows, and you join because one of them asked you. ${escapeHtml(store.activeMembers().length)} of ${s.memberCap} seats are taken.</p>
+        <p class="lede enter" style="--d:100ms;margin-top:12px">This is not a business and it is not open to the public. Every Insider is someone Victor or Ian knows, and you join because one of them asked you. ${blind ? `There are ${s.memberCap} seats in all.` : `${escapeHtml(store.activeMembers().length)} of ${s.memberCap} seats are taken.`}</p>
         <div class="row enter" style="--d:120ms;margin-top:22px">
           <a class="btn" href="#/sign-in">${icon('key', { size: 17 })}I have an invitation</a>
           <a class="btn ghost" href="#/rules">${icon('compass', { size: 17 })}How the Circle works</a>
@@ -58,16 +62,18 @@ export function landing({ store, go }) {
         <figcaption>${icon('mapPin', { size: 14 })}The west coast — every place on the list is on this water or ten minutes from it.</figcaption>
       </figure>
       <div class="hero-gauge enter" style="--d:180ms">
-        <div id="gauge-slot"></div>
+        <div id="gauge-slot">${blind ? `<p class="eyebrow">${icon('shield', { size: 14 })}Proof of reserves</p>
+          <p class="small muted" style="margin-top:4px;max-width:46ch">Every point is backed by money in a Reserve account that is checked against the bank
+          and published inside the Circle. Sign in to see the current figure.</p>` : ''}</div>
         <div class="hero-facts">
           <div><p class="eyebrow">${icon('users', { size: 14 })}Seats</p>
-            <p><b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of ${s.memberCap} taken · by invitation only</p></div>
+            <p>${blind ? `<b class="num">${s.memberCap}</b> in all · by invitation only` : `<b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of ${s.memberCap} taken · by invitation only`}</p></div>
           <div><p class="eyebrow">${icon('bed', { size: 14 })}On the list</p>
             <p><b class="num">${escapeHtml(String(store.stays.filter(x => x.kind !== 'trip').length))}</b> places · <b class="num">${escapeHtml(String(store.stays.filter(x => x.kind === "trip").length))}</b> trips</p></div>
         </div>
       </div>
     </div></section>`));
-  wrap.querySelector('#gauge-slot').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, configured: t.accountsConfigured, size: 'full' }));
+  if (!blind) wrap.querySelector('#gauge-slot').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, configured: t.accountsConfigured, size: 'full' }));
 
   // Horizon — the dream, before the ledger
   const horizon = el(`<section class="sec"><div class="wrap">
@@ -457,6 +463,26 @@ export function setPassword({ store, go }) {
 /** The invitation: choose a tier, watch the card mint, accept the rules. */
 export function join({ store, params, go }) {
   const s = store.settings;
+  // On the real backend an invitation cannot be read by a signed-out browser — the
+  // invitations table is admin-only, deliberately — so the code in the link tells us
+  // nothing. Rather than "that invitation is not valid", say what actually happens next.
+  if (store.mode === 'supabase') {
+    return el(`<div class="wrap sec" style="max-width:620px">
+      <p class="eyebrow">${icon('key', { size: 14 })}You were invited</p>
+      <h1>One step to get in</h1>
+      <p class="lede" style="margin-top:14px">Victor or Ian has put you on the list. Nothing was emailed to you and there is
+        no code to type — you choose your own password, and nobody here ever sees it.</p>
+      <ol class="stack small" style="margin-top:20px;line-height:1.6">
+        <li>Open the sign-in screen.</li>
+        <li>Tap <b>First time here? Set it up</b>.</li>
+        <li>Put in the email address they have for you, and pick a password.</li>
+      </ol>
+      <p class="row" style="margin-top:22px">
+        <a class="btn" href="#/sign-in">${icon('key', { size: 17 })}Go to sign in</a>
+        <a class="btn ghost" href="#/rules">How the Circle works</a></p>
+      <p class="small muted" style="margin-top:18px">If it says it does not know that address, they have you under a different
+        one — ask them which, or ask them to change it.</p></div>`);
+  }
   const inv = store.invitation(params.code);
   const demo = String(params.code).toUpperCase() === 'DEMO';
   if (!inv && !demo) {

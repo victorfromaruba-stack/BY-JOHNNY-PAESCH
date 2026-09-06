@@ -777,7 +777,8 @@ export function settings({ store, go }) {
           <div class="row">${isAdmin ? `<button class="btn sm" id="add-member">${icon('plus', { size: 16 })}Add an Insider</button>` : ''}
             <button class="btn ghost sm" id="invite">${icon('link', { size: 15 })}Make an invitation link</button></div></div>
         <p class="small muted" style="margin-top:6px">Adding someone puts them on the list. They then open the site, tap
-          <b>Set it up</b> with the same email, and choose their own password — you never see it and you never touch the database.</p>
+          <b>Set it up</b> with the same email, and choose their own password — you never see it and you never touch the database.
+          Being on the list <em>is</em> the invitation; the link below is just the way in.</p>
         <div class="tablewrap" style="margin-top:14px;border:0"><table>
           <thead><tr><th>Name</th><th>Tier</th><th>Roles</th><th>State</th><th class="num">Points</th><th></th></tr></thead>
           <tbody>${store.members.map(m => `<tr>
@@ -908,9 +909,14 @@ export function settings({ store, go }) {
     } });
     if (out?.name) {
       const inv = await store.createInvitation({ ...out, sponsorId: me.id }, me.id);
-      const url = `${location.origin}${location.pathname}#/join/${inv.code}`;
+      const live = store.mode === 'supabase';
+      // A /join/CODE link cannot be read by a signed-out browser on the real backend, so
+      // it would hand them a dead end. The way in there is the sign-in screen.
+      const url = `${location.origin}${location.pathname}#/${live ? 'sign-in' : `join/${inv.code}`}`;
       await copyText(url);
-      toast(`Invitation created and the link is copied: ${inv.code}`, { kind: 'good', timeout: 7000 });
+      toast(live
+        ? `Link copied. Add ${out.name} as an Insider with that same email, then send it — they tap "Set it up".`
+        : `Invitation created and the link is copied: ${inv.code}`, { kind: 'good', timeout: 8000 });
     }
   });
   // Editing someone — above all, giving them the email they sign in with. Without this the

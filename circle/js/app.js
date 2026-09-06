@@ -55,7 +55,11 @@ let store, router, disposer;
 // rather than quietly showing invented balances that someone might believe.
 const wantsPreview = () => {
   try {
-    if (new URLSearchParams(location.search).has('preview')) return true;
+    const q = new URLSearchParams(location.search);
+    // ?live forces the real backend from a local checkout, which is the only way to walk
+    // the signed-out path a stranger actually meets. ?preview forces the other direction.
+    if (q.has('live')) return false;
+    if (q.has('preview')) return true;
     return ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   } catch { return false; }
 };
