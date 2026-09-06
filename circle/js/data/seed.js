@@ -51,7 +51,8 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
   let n = 0; const uid = (p) => `${p}_s${(++n).toString(36).padStart(4, '0')}`;
 
   const members = PEOPLE.map(p => ({
-    id: p.id, name: p.name, email: `${p.name.split(' ')[0].toLowerCase().replace(/[^a-z]/g, '')}@example.aw`,
+    id: p.id, name: p.name, username: p.name.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, ''),
+    email: `${p.name.split(' ')[0].toLowerCase().replace(/[^a-z]/g, '')}@example.aw`,
     phone: `+297 000 ${String(1000 + Math.floor(rand() * 8999))}`, roles: p.roles, status: 'active', monthlyUsd: p.tier,
     hue: p.hue, home: p.home, title: p.title || '', joinedAt: iso(new Date(`${p.since}-05T12:00:00Z`)),
     founding: !!p.founding, cardCode: initialsOf(p.name) + String(1000 + Math.floor(rand() * 8999)),

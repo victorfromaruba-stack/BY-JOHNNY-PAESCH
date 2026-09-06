@@ -272,37 +272,24 @@ export function rules({ store }) {
 
 export function signIn({ store, go, refresh }) {
   const live = store.mode === 'supabase';
-  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:520px">
-      <p class="eyebrow">${icon('lock')}<span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span> · ${escapeHtml(VOCAB.pap.welcome[1])} back</p>
+  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:480px">
       <h1>Sign in</h1>
-      <p class="lede" style="margin-top:10px">The Circle is invitation only. If Victor or Ian sent you a link to join, open that one instead — it sets up your account and your card.</p>
+      <p class="lede" style="margin-top:10px">Victor or Ian gives you a username and a password. Nothing is emailed to you.</p>
 
       <form id="pw" class="panel" style="margin-top:20px" autocomplete="on">
-        <label class="field"><span>Email</span>
-          <input type="email" name="email" autocomplete="username" inputmode="email" placeholder="you@example.aw" required autofocus></label>
+        <label class="field"><span>Username</span>
+          <input type="text" name="username" autocomplete="username" autocapitalize="none"
+                 spellcheck="false" placeholder="victor" required autofocus></label>
         <label class="field"><span>Password</span>
-          <span class="pw-wrap"><input type="password" name="password" autocomplete="current-password" required minlength="8">
+          <span class="pw-wrap"><input type="password" name="password" autocomplete="current-password" required>
           <button type="button" class="pw-peek" id="peek" aria-label="Show the password">${icon('eye', { size: 18 })}</button></span></label>
-        <div class="row" style="margin-top:4px">
-          <button class="btn" type="submit">${icon('unlock', { size: 18 })}Sign in</button>
-          <button class="btn quiet sm" type="button" id="forgot">I forgot my password</button>
-        </div>
+        <button class="btn block" type="submit" style="margin-top:4px">${icon('unlock', { size: 18 })}Sign in</button>
       </form>
 
-      <div class="panel" style="margin-top:14px">
-        <div class="row-between" style="gap:12px;align-items:flex-start">
-          <div><b>${icon('key', { size: 16, cls: 'ico-muted' })} First time here?</b>
-            <p class="small muted" style="margin-top:6px">If Victor or Ian has put you on the list, set your password now with the same email they used.</p></div>
-          <button class="btn ghost sm" type="button" id="claim" style="flex:none">Set it up</button>
-        </div>
-      </div>
-
-      <div class="panel flat" style="margin-top:14px">
-        <p class="small muted">${icon('shield', { size: 16, cls: 'ico-muted' })} ${live
-          ? 'Your password is held by the club’s own server and never by this page. Ian can reset it for you, but nobody — including him — can read it.'
-          : 'This browser is running on preview data, so the password locks this browser only. Connect the backend and the same email and password work on every device.'}</p>
-      </div>
-      <p class="small muted" style="margin-top:16px">Not an Insider yet? The Circle is capped at ${store.settings.memberCap} seats and everyone in it was asked personally. <a href="#/">What it is</a>.</p>
+      <p class="small muted" style="margin-top:16px">${icon('shield', { size: 15, cls: 'ico-muted' })}
+        Forgotten it? Ask Victor or Ian — they set you a new one and tell you what it is. Nobody,
+        them included, can read the one you are using now.</p>
+      <p class="small muted" style="margin-top:10px">Not an Insider yet? The Circle is capped at ${store.settings.memberCap} seats and everyone in it was asked personally. <a href="#/">What it is</a>.</p>
     </div></section></div>`);
 
   const form = wrap.querySelector('#pw');
@@ -316,10 +303,11 @@ export function signIn({ store, go, refresh }) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = form.querySelector('button[type=submit]');
-    const email = form.email.value, password = form.password.value;
+    const username = form.username.value.trim().toLowerCase();
     setBusy(btn, true, 'Signing in…');
     try {
-      await store.signInWithPassword(email, password);
+      await store.signInWithUsername(username, form.password.value);
+      if (store.me?.mustChangePassword) { go('/set-password'); return; }
       toast(`${VOCAB.pap.welcome[0]}, ${store.me?.name.split(' ')[0] || ''}.`, { kind: 'good' });
       go('/home');
     } catch (err) {
@@ -329,103 +317,17 @@ export function signIn({ store, go, refresh }) {
       toast(err.message, { kind: 'bad', timeout: 6000 });
     }
   });
-
-  wrap.querySelector('#claim').addEventListener('click', async () => {
-    const email = form.email.value.trim();
-    if (!email) { form.email.focus(); toast('Put the email they have for you in first.'); return; }
-    if (!live) {
-      const m = store.memberByEmail(email);
-      if (!m) { toast('No Insider with that email in this browser.', { kind: 'bad' }); return; }
-      if (store.hasPassword(m.id)) { toast('That one already has a password. Sign in, or reset it.', { kind: 'bad' }); return; }
-      const { generatePassword } = await import('../core/passwords.js');
-      const pw = generatePassword();
-      await store.setPasswordFor(m.id, pw);
-      await showGeneratedPassword(pw, m);
-      form.password.value = pw;
-      toast('Set. Sign in with it now.', { kind: 'good' });
-      return;
-    }
-    const known = await store.lookupInvite(email);
-    if (known?.claimed) { toast('That account already exists — sign in, or reset the password.', { kind: 'bad', timeout: 6000 }); return; }
-    const out = await sheet({ title: 'Set up your account', render: (body, close) => {
-      body.innerHTML = `<p class="sheet-text">Choose a password for <b>${escapeHtml(email)}</b>. Twelve characters at least — longer beats complicated.</p>
-        <label class="field"><span>Password</span><input name="pw" type="password" autocomplete="new-password" minlength="12" required></label>
-        <div class="row"><button class="btn ghost sm" type="button" data-gen>${icon('sparkles', { size: 16 })}Make one up for me</button></div>
-        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Create it</button></div>`;
-      body.querySelector('[data-gen]').addEventListener('click', async () => {
-        const { generatePassword } = await import('../core/passwords.js');
-        const pw = generatePassword();
-        body.querySelector('[name=pw]').value = pw;
-        body.querySelector('[name=pw]').type = 'text';
-        const ok = await copyText(pw);
-        toast(ok ? 'Made one up and copied it. Save it before you continue.' : `Your password: ${pw}`, { kind: 'good', timeout: 9000 });
-      });
-      body.querySelector('[data-ok]').addEventListener('click', () => close(body.querySelector('[name=pw]').value));
-    } });
-    if (!out) return;
-    try {
-      const r = await store.signUpWithPassword(email, out);
-      if (r.confirmNeeded) toast('Almost. Open the link we just emailed you, then sign in.', { kind: 'good', timeout: 9000 });
-      else { toast(`${VOCAB.pap.welcome[0]}, ${store.me?.name.split(' ')[0] || ''}.`, { kind: 'good' }); go('/home'); }
-    } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
-  });
-
-  wrap.querySelector('#forgot').addEventListener('click', async () => {
-    const email = form.email.value.trim();
-    if (!email) { form.email.focus(); toast('Put your email in first, then tap it again.'); return; }
-    if (live) {
-      try {
-        await store.sendPasswordReset(email);
-        toast('If that address is an Insider’s, a reset link is on its way. It lasts an hour.', { kind: 'good', timeout: 7000 });
-      } catch (err) { toast(err.message, { kind: 'bad', timeout: 6000 }); }
-      return;
-    }
-    // Preview mode has no mail server, so the honest thing is to say so and offer the
-    // only reset that can work here: generate a new one for this browser, shown once.
-    const m = store.memberByEmail(email);
-    if (!m) { toast('No Insider with that email in this browser.', { kind: 'bad' }); return; }
-    const { generatePassword } = await import('../core/passwords.js');
-    const fresh = generatePassword();
-    await store.setPasswordFor(m.id, fresh);
-    await showGeneratedPassword(fresh, m, { reset: true });
-    form.password.value = '';
-  });
   return wrap;
 }
 
-/**
- * A generated password, shown once. Deliberately not emailed, not logged, and not written
- * anywhere it could be committed — the person copies it now or resets it again later.
- */
-export async function showGeneratedPassword(password, member, { reset = false } = {}) {
-  return sheet({
-    title: reset ? 'A new password for this browser' : `${member.name.split(' ')[0]}’s password`,
-    render: (body, close) => {
-      body.innerHTML = `
-        <p class="sheet-text">${reset ? 'Your old one is gone.' : 'This is the only time it is shown.'}
-        Copy it into your password manager now — nobody can read it back to you, and the only way out is to reset it again.</p>
-        <div class="copyline pw-reveal" style="margin-top:14px">
-          <code class="num" style="font-size:1.35rem;letter-spacing:.06em">${escapeHtml(password)}</code>
-          <button class="btn sm" data-copy="${escapeHtml(password)}">${icon('copy', { size: 16 })}Copy</button>
-        </div>
-        <p class="small muted" style="margin-top:12px">${icon('shield', { size: 15, cls: 'ico-muted' })} Sixteen characters from an alphabet with no look-alikes, so it can be read off a screen without a mistake.</p>
-        <div class="sheet-actions"><button class="btn" data-ok>I have saved it</button></div>`;
-      body.addEventListener('click', async (e) => {
-        const c = e.target.closest('[data-copy]');
-        if (c) { const ok = await copyText(c.dataset.copy); toast(ok ? 'Copied. Paste it somewhere safe.' : 'Select it and copy by hand.'); }
-        if (e.target.closest('[data-ok]')) close(true);
-      });
-    },
-  });
-}
-
-/** Where an emailed reset link lands: set a new password, then straight into the Circle. */
 export function setPassword({ store, go }) {
   const live = store.mode === 'supabase';
-  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:520px">
-      <p class="eyebrow">${icon('key')}Your account</p>
-      <h1>Choose a password</h1>
-      <p class="lede" style="margin-top:10px">Twelve characters at least. Longer beats complicated — three unrelated words and a number will outlast anything with a $ in it.</p>
+  const forced = !!store.me?.mustChangePassword;
+  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:480px">
+      <h1>${forced ? 'Choose your own password' : 'Choose a password'}</h1>
+      <p class="lede" style="margin-top:10px">${forced
+        ? 'The one you just used was handed to you. Pick your own now — it is the last thing between your points and anyone else.'
+        : 'Twelve characters at least. Longer beats complicated — three unrelated words will outlast anything with a $ in it.'}</p>
       <form id="set" class="panel" style="margin-top:20px">
         <label class="field"><span>New password</span>
           <input type="password" name="password" autocomplete="new-password" minlength="12" required autofocus></label>
@@ -466,13 +368,8 @@ export function setPassword({ store, go }) {
     if (form.password.value !== form.again.value) { toast('Those two do not match.', { kind: 'bad' }); form.again.focus(); return; }
     setBusy(btn, true, 'Saving…');
     try {
-      if (live) await store.setPassword(form.password.value);
-      else {
-        const me = store.me;
-        if (!me) throw new Error('Sign in first, then change it from your profile.');
-        await store.setPasswordFor(me.id, form.password.value);
-      }
-      toast('Password set. That is the one from now on.', { kind: 'good' });
+      await store.setPassword(form.password.value);
+      toast(forced ? 'That is your password now. Nobody else has it.' : 'Password set. That is the one from now on.', { kind: 'good' });
       go(store.me ? '/home' : '/sign-in');
     } catch (err) { setBusy(btn, false); toast(err.message, { kind: 'bad', timeout: 6000 }); }
   });
@@ -489,18 +386,18 @@ export function join({ store, params, go }) {
     return el(`<div class="wrap sec" style="max-width:620px">
       <p class="eyebrow">${icon('key', { size: 14 })}You were invited</p>
       <h1>One step to get in</h1>
-      <p class="lede" style="margin-top:14px">Victor or Ian has put you on the list. Nothing was emailed to you and there is
-        no code to type — you choose your own password, and nobody here ever sees it.</p>
+      <p class="lede" style="margin-top:14px">Victor or Ian has put you on the list. There is no code in this link to type
+        and nothing to confirm — they give you a username and a password directly.</p>
       <ol class="stack small" style="margin-top:20px;line-height:1.6">
-        <li>Open the sign-in screen.</li>
-        <li>Tap <b>First time here? Set it up</b>.</li>
-        <li>Put in the email address they have for you, and pick a password.</li>
+        <li>Ask them for your username and password — they have it, and they will send it to you.</li>
+        <li>Open the sign-in screen and put both in.</li>
+        <li>Choose your own password. The app will ask you to, before anything else.</li>
       </ol>
       <p class="row" style="margin-top:22px">
         <a class="btn" href="#/sign-in">${icon('key', { size: 17 })}Go to sign in</a>
         <a class="btn ghost" href="#/rules">How the Circle works</a></p>
-      <p class="small muted" style="margin-top:18px">If it says it does not know that address, they have you under a different
-        one — ask them which, or ask them to change it.</p></div>`);
+      <p class="small muted" style="margin-top:18px">Nothing is emailed to you at any point. If the username and password
+        do not work, ask them to set you a new one — it takes them ten seconds.</p></div>`);
   }
   const inv = store.invitation(params.code);
   const demo = String(params.code).toUpperCase() === 'DEMO';

@@ -76,6 +76,13 @@ create table if not exists members (
   founding       boolean not null default false,
   sponsor_id     uuid references members(id),
   card_code      text unique,
+  -- People sign in with a username, never an email. Supabase authenticates against an email
+  -- address, so one is derived from this and never shown: victor -> victor@members.hunto.aw.
+  -- Nothing is ever sent there; there is no confirmation step and no reset mail.
+  username       text,
+  -- True while the password in use is one an admin generated. Every screen stays closed until
+  -- it is replaced: a password somebody else chose is a password somebody else knows.
+  must_change_password boolean not null default false,
   household      jsonb not null default '[]',
   preferences    jsonb not null default '{}',
   standing_order boolean not null default false,
@@ -87,6 +94,7 @@ create table if not exists members (
   left_at        timestamptz,
   notes          text
 );
+create unique index if not exists members_username_lower_key on members (lower(username)) where username is not null;
 
 -- ---------- invitations ----------
 create table if not exists invitations (
@@ -435,6 +443,77 @@ begin
   where lower(email) = lower((select email from auth.users where id = auth.uid()))
     and (auth_user_id is null or auth_user_id = auth.uid())
   returning * into m;
+  return m;
+end $$;
+
+
+-- What a username may be, so it can live in an email address and be typed on a phone.
+create or replace function valid_username(p text) returns boolean
+language sql immutable set search_path = public as $$
+  select p ~ '^[a-z0-9][a-z0-9._-]{1,28}[a-z0-9]$'
+$$;
+
+/**
+ * Give a member a way in. Admin only. Creates the account if it does not exist, or resets the
+ * password if it does, and marks it so the first sign-in forces a change.
+ *
+ * The account is written straight into auth.users already confirmed, which is what takes the
+ * inbox out of the story: no confirmation mail to click, no reset mail to wait for. Victor
+ * generates a password, the app shows it once, and he passes it on himself.
+ */
+create or replace function admin_set_login(p_member uuid, p_username text, p_password text)
+returns members language plpgsql security definer set search_path = public as $$
+declare m members; u text; e text; v_uid uuid; existing uuid;
+begin
+  if not has_role('admin') then raise exception 'Only an admin can hand out a login'; end if;
+  u := lower(trim(p_username));
+  if not valid_username(u) then
+    raise exception 'A username is 3 to 30 characters, letters and numbers, and may contain . _ or -';
+  end if;
+  if length(coalesce(p_password, '')) < 12 then raise exception 'That password is too short — twelve characters at least'; end if;
+  if exists (select 1 from members where lower(username) = u and id <> p_member) then
+    raise exception 'Someone else already uses the username %', u;
+  end if;
+  e := u || '@members.hunto.aw';
+
+  select id into existing from auth.users where lower(email) = e;
+  if existing is null then
+    v_uid := gen_random_uuid();
+    insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+                            raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+    values ('00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated', e,
+            extensions.crypt(p_password, extensions.gen_salt('bf')), now(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            jsonb_build_object('sub', v_uid::text, 'email', e, 'email_verified', true, 'phone_verified', false),
+            now(), now());
+    insert into auth.identities (id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at)
+    values (gen_random_uuid(), v_uid, v_uid::text, 'email',
+            jsonb_build_object('sub', v_uid::text, 'email', e, 'email_verified', true, 'phone_verified', false),
+            now(), now(), now());
+  else
+    v_uid := existing;
+    update auth.users set encrypted_password = extensions.crypt(p_password, extensions.gen_salt('bf')),
+                          email_confirmed_at = coalesce(email_confirmed_at, now()), updated_at = now()
+     where id = v_uid;
+  end if;
+
+  update members set username = u, auth_user_id = v_uid, must_change_password = true,
+                     status = case when status = 'invited' then 'active' else status end
+   where id = p_member returning * into m;
+  if m.id is null then raise exception 'No such member'; end if;
+  perform log_audit('member.login_set','member',p_member::text, jsonb_build_object('username', u));
+  return m;
+end $$;
+
+-- Called after the person changed their own password through Supabase, which needs a live
+-- session and so proves it was them. This only clears the flag that forces the prompt.
+create or replace function password_changed()
+returns members language plpgsql security definer set search_path = public as $$
+declare m members;
+begin
+  if current_member_id() is null then raise exception 'Not a member'; end if;
+  update members set must_change_password = false where id = current_member_id() returning * into m;
+  perform log_audit('member.password_changed','member', m.id::text, '{}'::jsonb);
   return m;
 end $$;
 
@@ -1299,8 +1378,9 @@ create policy members_read on members for select to authenticated using (current
 -- screens. A member who opts out is hidden in the app but their row is still readable. For a
 -- forty-seat club of people who know each other that is a fair line, but it is a convention
 -- rather than a guarantee.
-create or replace view members_v with (security_invoker = on) as
-  select id, email, name, phone, roles, status, monthly_usd, hue, home, title, joined_at,
+drop view if exists members_v;
+create view members_v with (security_invoker = on) as
+  select id, email, name, username, must_change_password, phone, roles, status, monthly_usd, hue, home, title, joined_at,
          founding, sponsor_id, card_code, household, preferences, standing_order,
          show_on_rollcall, paused_until, paused_months, dream_stay_id, goal, left_at,
          (auth_user_id is not null) as claimed
@@ -1310,7 +1390,7 @@ create or replace view members_v with (security_invoker = on) as
 -- expression reads it; the view does not return it, so nothing the app passes around carries
 -- it. `notes` is granted to nobody.
 revoke select on members from authenticated, anon;
-grant select (id, auth_user_id, email, name, phone, roles, status, monthly_usd, hue, home,
+grant select (id, auth_user_id, email, name, username, must_change_password, phone, roles, status, monthly_usd, hue, home,
               title, joined_at, founding, sponsor_id, card_code, household, preferences,
               standing_order, show_on_rollcall, paused_until, paused_months, dream_stay_id,
               goal, left_at)
@@ -1642,7 +1722,7 @@ declare
     'ledger_balance','ledger_is_append_only','log_audit','mark_watches_seen','my_matches',
     'pay_redemption','pledge_to_redemption','post_deal','promo_room','quote_points',
     'quote_redemption','record_direct_contribution','reject_contribution','release_expired_quotes',
-    'update_club_rules',
+    'update_club_rules','admin_set_login','password_changed',
     'remove_watch','request_redemption','reserve_expected_usd','retire_deal','reverse_contribution',
     'season_for','set_my_goal','set_my_status','update_my_profile','upsert_room_type',
     'withdraw_contribution','withdraw_pledge','set_updated_at'
@@ -1677,7 +1757,7 @@ begin
        'log_audit','ledger_is_append_only','set_updated_at',
        'ledger_balance','committed_points','available_points','covered_points','consecutive_months',
        'promo_room','quote_points','reserve_expected_usd','season_for','easter_sunday',
-       'deal_matches_watch')
+       'deal_matches_watch','valid_username')
      -- NOT has_role or current_member_id: eighteen and sixteen row-level security policies
      -- call them, and a policy expression is evaluated as the querying user, so revoking
      -- those would make every policy in the database fail and lock everyone out.

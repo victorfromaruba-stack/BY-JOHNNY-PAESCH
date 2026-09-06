@@ -799,18 +799,19 @@ export function settings({ store, go }) {
         <div class="row-between"><h2 style="font-size:1.1rem">Insiders</h2>
           <div class="row">${isAdmin ? `<button class="btn sm" id="add-member">${icon('plus', { size: 16 })}Add an Insider</button>` : ''}
             ${isAdmin ? `<button class="btn ghost sm" id="invite">${icon('link', { size: 15 })}Make an invitation link</button>` : ''}</div></div>
-        <p class="small muted" style="margin-top:6px">Adding someone puts them on the list. They then open the site, tap
-          <b>Set it up</b> with the same email, and choose their own password — you never see it and you never touch the database.
-          Being on the list <em>is</em> the invitation; the link below is just the way in.</p>
+        <p class="small muted" style="margin-top:6px">Adding someone puts them on the list. Then <b>Give a login</b> makes them a username
+          and a password, shown once, which you pass on however you like — a message, a phone call, in person. Nothing is emailed
+          to anybody, and the first thing the app makes them do is choose their own.</p>
         <div class="tablewrap" style="margin-top:14px;border:0"><table>
           <thead><tr><th>Name</th><th>Tier</th><th>Roles</th><th>State</th><th class="num">Points</th><th></th></tr></thead>
           <tbody>${store.members.map(m => `<tr>
-            <td><b>${escapeHtml(m.name)}</b><br><span class="small ${m.email ? 'muted' : ''}" ${m.email ? '' : 'style="color:var(--flag)"'}>${escapeHtml(m.email || 'no email yet — they cannot sign in')}</span></td>
+            <td><b>${escapeHtml(m.name)}</b><br><span class="small ${m.username ? 'muted mono' : ''}" ${m.username ? '' : 'style="color:var(--flag)"'}>${escapeHtml(m.username ? `@${m.username}${m.mustChangePassword ? ' · has not changed their password yet' : ''}` : 'no login yet — they cannot sign in')}</span></td>
             <td>${escapeHtml(tierName(m.monthlyUsd))}</td>
             <td class="small">${escapeHtml(m.roles.join(', '))}</td>
             <td>${chip(m.status === 'active' ? 'active' : m.status)}</td>
             <td class="num">${escapeHtml(fmtPoints(store.availablePoints(m.id)))}</td>
             <td><div class="row nowrap" style="gap:6px;justify-content:flex-end;flex-wrap:nowrap">
+              ${isAdmin ? `<button class="btn ghost sm" data-login="${m.id}">${icon('key', { size: 15 })}${m.username ? 'New password' : 'Give a login'}</button>` : ''}
               ${isAdmin ? `<button class="btn ghost sm" data-edit="${m.id}">${icon('edit', { size: 15 })}Edit</button>` : ''}
               ${isAdmin ? `<button class="btn quiet sm" data-adjust="${m.id}">Adjust</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>
       </div>
@@ -909,11 +910,11 @@ export function settings({ store, go }) {
     try {
       const m = await store.addMember(out, me.id);
       const url = `${location.origin}${location.pathname}`;
-      const msg = `Bon dia ${out.name.split(' ')[0]} — you are on the list for ${VOCAB.clubName}.\n\n`
-        + `Open ${url} , tap Sign in, put in ${out.email || 'your email'} and tap "Set it up". `
-        + `Choose a password and you are in.`;
+      const msg = `Bon dia ${out.name.split(' ')[0]} — you are on the list for ${VOCAB.clubName}.\n\n${url}`;
       const copied = await copyText(msg);
-      toast(copied ? `${out.name} is on the list. The message to send them is copied.` : `${out.name} is on the list.`,
+      toast(copied
+        ? `${out.name} is on the list. Now tap "Give a login" on their row to make them a password.`
+        : `${out.name} is on the list. Tap "Give a login" on their row next.`,
         { kind: 'good', timeout: 8000 });
       go('/settings');
     } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
@@ -944,6 +945,53 @@ export function settings({ store, go }) {
         : `Invitation created and the link is copied: ${inv.code}`, { kind: 'good', timeout: 8000 });
     } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
   });
+  // Handing someone a way in. No email is sent and none is needed: the password is generated
+  // here, shown once, and Victor passes it on however he likes. They must change it the first
+  // time they use it, so a password that travelled through WhatsApp stops mattering.
+  wrap.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-login]'); if (!b) return;
+    const m = store.member(b.dataset.login); if (!m) return;
+    const { generatePassword } = await import('../core/passwords.js');
+    const suggested = (m.username || m.name.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '')).slice(0, 30);
+    const out = await sheet({ title: m.username ? `New password for ${m.name}` : `Give ${m.name} a login`, render: (body, close) => {
+      body.innerHTML = `
+        <p class="sheet-text">They sign in with this username and this password. Nothing is emailed —
+          you hand it over yourself, and the first thing the app makes them do is change it.</p>
+        <label class="field"><span>Username</span>
+          <input name="username" value="${escapeHtml(suggested)}" autocapitalize="none" spellcheck="false"
+                 pattern="[a-z0-9][a-z0-9._-]{1,28}[a-z0-9]" required${m.username ? ' readonly' : ''}>
+          <span class="hint">${m.username ? 'Their username stays the same.' : 'Lower case. Letters, numbers, and . _ - in the middle.'}</span></label>
+        <label class="field"><span>Password</span>
+          <input name="password" class="mono" value="${escapeHtml(generatePassword())}" required></label>
+        <div class="row"><button class="btn ghost sm" type="button" data-again>${icon('refresh', { size: 15 })}Another one</button></div>
+        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button>
+          <button class="btn" data-ok>${icon('key', { size: 16 })}Set it</button></div>`;
+      body.querySelector('[data-again]').addEventListener('click', () => { body.querySelector('[name=password]').value = generatePassword(); });
+      body.querySelector('[data-ok]').addEventListener('click', () => close({
+        username: body.querySelector('[name=username]').value.trim().toLowerCase(),
+        password: body.querySelector('[name=password]').value,
+      }));
+    } });
+    if (!out?.username || !out.password) return;
+    try {
+      await store.setMemberLogin(m.id, out.username, out.password);
+      await copyText(`${out.username}\n${out.password}`);
+      await sheet({ title: `${m.name} can sign in`, render: (body, close) => {
+        body.innerHTML = `
+          <p class="sheet-text">Send them these two lines. This is the only time the password is shown —
+            it is stored scrambled, so nobody, you included, can read it back.</p>
+          <div class="panel flat" style="margin-top:12px">
+            <p class="eyebrow">Username</p><p class="mono" style="font-size:1.1rem">${escapeHtml(out.username)}</p>
+            <p class="eyebrow" style="margin-top:12px">Password</p><p class="mono" style="font-size:1.1rem;word-break:break-all">${escapeHtml(out.password)}</p>
+          </div>
+          <p class="small muted" style="margin-top:12px">Both are on your clipboard already. The app will make them choose their own the first time they sign in.</p>
+          <div class="sheet-actions"><button class="btn" data-close>Done</button></div>`;
+        body.querySelector('[data-close]').addEventListener('click', () => close());
+      } });
+      go('/settings');
+    } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
+  });
+
   // Editing someone — above all, giving them the email they sign in with. Without this the
   // only way to fix a missing address is the table editor, which is how we got two Ians.
   wrap.addEventListener('click', async (e) => {

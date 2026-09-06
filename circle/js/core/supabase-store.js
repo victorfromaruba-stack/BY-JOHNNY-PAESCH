@@ -135,6 +135,35 @@ export class SupabaseStore extends Store {
     if (error) return null;
     return data ? { name: data.name, claimed: !!data.claimed } : null;
   }
+  /**
+   * Sign in with a username. Supabase authenticates against an email address, so one is
+   * derived from the username — victor becomes victor@members.hunto.aw — and nothing is ever
+   * sent there. Members never see it and never type it.
+   */
+  static LOGIN_DOMAIN = '@members.hunto.aw';
+  async signInWithUsername(username, password) {
+    const u = String(username || '').trim().toLowerCase();
+    if (!u) throw new Error('Put your username in.');
+    try {
+      await this.signInWithPassword(u + SupabaseStore.LOGIN_DOMAIN, password);
+    } catch (err) {
+      // Never say which half was wrong — that tells a stranger which usernames exist.
+      if (/not on the Circle|Invalid login|password|credentials/i.test(err.message)) {
+        throw new Error('That username and password do not go together. Ask Victor or Ian if you are stuck.');
+      }
+      throw err;
+    }
+  }
+  /** Change your own password. Supabase requires a live session, which is the proof it is you. */
+  async setPassword(password) {
+    if (String(password).length < 12) throw new Error('Use at least twelve characters');
+    const { error } = await this.sb.auth.updateUser({ password });
+    if (error) throw new Error(this.authMessage(error));
+    await this.rpc('password_changed', {});
+  }
+  async setMemberLogin(memberId, username, password) {
+    return this.rpc('admin_set_login', { p_member: memberId, p_username: username, p_password: password });
+  }
   async signInWithPassword(email, password) {
     const { error } = await this.sb.auth.signInWithPassword({ email: String(email).trim().toLowerCase(), password });
     if (error) throw new Error(this.authMessage(error));
@@ -148,12 +177,6 @@ export class SupabaseStore extends Store {
   async sendPasswordReset(email) {
     const { error } = await this.sb.auth.resetPasswordForEmail(String(email).trim().toLowerCase(), { redirectTo: this.authRedirect });
     if (error && !/not found|invalid/i.test(error.message)) throw new Error(this.authMessage(error));
-  }
-  /** Set a new password. Works while signed in, and in the recovery session an emailed link opens. */
-  async setPassword(password) {
-    if (String(password).length < 12) throw new Error('Use at least twelve characters');
-    const { error } = await this.sb.auth.updateUser({ password });
-    if (error) throw new Error(this.authMessage(error));
   }
   /** True when the page was opened from a password-reset link and can set a new one. */
   async inRecovery() {
@@ -336,6 +359,6 @@ export class SupabaseStore extends Store {
   // table is readable by admins only, by design. Someone joins by being put on the list
   // and then setting their own password, which is what the sign-in screen offers.
   async acceptInvitation() {
-    throw new Error('Ask Victor or Ian to put you on the list, then open sign in and tap "First time here? Set it up" with the email they have for you.');
+    throw new Error('Ask Victor or Ian for a username and a password — they hand it to you directly, nothing is emailed.');
   }
 }

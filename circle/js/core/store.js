@@ -112,6 +112,12 @@ export class Store {
     const e = String(email || '').trim().toLowerCase();
     return this.state.members.find(m => (m.email || '').toLowerCase() === e && m.status !== 'left') || null;
   }
+  /** The signed-in member changing their own. Mirrors the live backend's setPassword(). */
+  async setPassword(password) {
+    const me = this.me; if (!me) throw new Error('Sign in first.');
+    await this.setPasswordFor(me.id, password);
+    if (me.mustChangePassword) await this._writeMember(me.id, { mustChangePassword: false }, me.id);
+  }
   async setPasswordFor(memberId, password) {
     const { hashPassword, passwordStrength } = await import('./passwords.js');
     const s = passwordStrength(password);
@@ -121,6 +127,30 @@ export class Store {
     await this.commit('credentials');
   }
   /** Sign in by email and password. Wrong either way gives the same answer, on purpose. */
+  /**
+   * Preview equivalent of the real backend's username login. The live one derives an email
+   * from the username and lets Supabase check the password; here the hash is in this browser.
+   */
+  async signInWithUsername(username, password) {
+    const u = String(username || '').trim().toLowerCase();
+    const m = this.state.members.find(x => (x.username || '').toLowerCase() === u);
+    if (!m) throw new Error('That username and password do not go together.');
+    const { verifyPassword } = await import('./passwords.js');
+    const rec = this.credentials()[m.id];
+    if (!rec || !(await verifyPassword(password, rec))) throw new Error('That username and password do not go together.');
+    await this.signIn(m.id);
+    return m;
+  }
+  async setMemberLogin(memberId, username, password, actorId) {
+    if (!this.hasRole('admin')) throw new Error('Only an admin can hand out a login');
+    const u = String(username || '').trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9._-]{1,28}[a-z0-9]$/.test(u)) throw new Error('A username is 3 to 30 characters, letters and numbers, and may contain . _ or -');
+    if (String(password || '').length < 12) throw new Error('That password is too short — twelve characters at least');
+    const clash = this.state.members.find(x => x.id !== memberId && (x.username || '').toLowerCase() === u);
+    if (clash) throw new Error(`Someone else already uses the username ${u}`);
+    await this.setPasswordFor(memberId, password);
+    return this._writeMember(memberId, { username: u, mustChangePassword: true, status: 'active' }, actorId);
+  }
   async signInWithPassword(email, password) {
     const { verifyPassword } = await import('./passwords.js');
     const m = this.memberByEmail(email);

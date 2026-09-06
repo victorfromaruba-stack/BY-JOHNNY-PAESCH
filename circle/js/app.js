@@ -125,6 +125,11 @@ function render(current = router?.current) {
   if (!current) return;
   const { route } = current;
   if (route.auth && !store.session) { router.go('/sign-in', { replace: true }); return; }
+  // A password somebody else chose is a password somebody else knows. Nothing else opens
+  // until it has been replaced — including the back button.
+  if (store.session && store.me?.mustChangePassword && current.path !== '/set-password') {
+    router.go('/set-password', { replace: true }); return;
+  }
   if (route.roles && !store.hasRole(...route.roles, 'admin')) {
     app.replaceChildren(pub.denied(ctx(current)));
     return;
