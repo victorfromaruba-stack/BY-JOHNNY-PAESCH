@@ -3,7 +3,7 @@
 import { countdownTo, downloadText, escapeHtml, fmtAfl2, fmtDay, fmtDayTime, fmtMonth, fmtPct, fmtPoints, fmtUsd2, initials, monthKey, pointsUsd, safeUrl, sum, toCsv } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, seasonPoints, SEASONS } from '../core/money.js';
-import { splitBar, poolGauge, ring } from '../ui/pieces.js';
+import { poolGauge, rankCrest, ring, splitBar } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel, avatar } from '../ui/components.js';
 import { columns, tableFor, sparkline } from '../ui/charts.js';
@@ -661,13 +661,18 @@ export function circle({ store }) {
   let tab = 'people';
   const draw = () => {
     if (tab === 'people') {
+      const paintCrests = (root) => root.querySelectorAll('[data-crest]').forEach((slot) => {
+        // Standing beside the name, at the size it is actually read: a mark, not a picture.
+        slot.replaceChildren(rankCrest(store.standingOf(slot.dataset.crest), { size: 30, withName: false }));
+      });
       panel.replaceChildren(el(`<div class="grid g3">${roster.map(m => {
         const named = m.showOnRollcall || m.id === me.id || m.roles.some(r => r !== 'member');
         const streak = store.streak(m.id);
         return `<div class="panel"><div class="row" style="gap:12px">
             ${avatar(m, 40)}
-            <div><b>${escapeHtml(named ? m.name : initials(m.name))}</b>
+            <div style="min-width:0"><b>${escapeHtml(named ? m.name : initials(m.name))}</b>
               <br><span class="small muted">${escapeHtml(m.title || `${tierName(m.monthlyUsd)} · since ${fmtDay(m.joinedAt)}`)}</span></div>
+            <span style="margin-left:auto;flex:none" data-crest="${m.id}"></span>
           </div>
           <div class="row" style="margin-top:12px;gap:8px">
             ${treeSvg(VOCAB.tierLean[m.monthlyUsd], { size: 18 })}
@@ -677,6 +682,7 @@ export function circle({ store }) {
             ${streak >= 6 ? `<span class="tag">${streak} in a row</span>` : ''}
           </div></div>`;
       }).join('')}</div>`));
+      paintCrests(panel);
     } else if (tab === 'chipin') {
       const open = store.openToChipIn();
       const avail = store.availablePoints(me.id);

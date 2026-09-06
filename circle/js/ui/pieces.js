@@ -30,6 +30,29 @@ export function splitBar({ amountUsd, shareRate = 0, points = null, showLegend =
 }
 
 /**
+ * A rank crest with its name. The emblems live as SVG in circle/assets/ranks and are drawn by
+ * .claude/skills/circle-images/scripts/crests.py, so the five stay a family — change the shield
+ * once and all of them change.
+ *
+ * `size` is the emblem's width. At 28 it sits beside a name; at 96 it is the thing you are
+ * looking at. Standing is deliberately not the tier: the crest says how long, the tree says
+ * how much, and a member can hold a high one of either.
+ */
+export function rankCrest(standing, { size = 28, withName = true, sub = '' } = {}) {
+  const KEY = ['seated', 'steady', 'anchor', 'oldguard', 'pillar'];
+  const i = Math.max(0, Math.min(KEY.length - 1, standing?.rankIndex ?? 0));
+  const el = document.createElement('span');
+  el.className = 'rank-crest';
+  el.innerHTML = `<img src="assets/ranks/${KEY[i]}.svg" width="${size}" height="${size}" alt=""
+      loading="lazy" decoding="async" style="flex:none;display:block">
+    ${withName ? `<span style="min-width:0"><b>${escapeHtml(standing?.rankName || 'Seated')}</b>${
+      sub ? `<br><span class="small muted">${escapeHtml(sub)}</span>` : ''}</span>` : ''}`;
+  el.style.cssText = 'display:inline-flex;align-items:center;gap:10px;min-width:0';
+  if (!withName) el.title = standing?.rankName || 'Seated';
+  return el;
+}
+
+/**
  * The other half of the same story, and the only place a fee now appears: what a stay costs,
  * split into the room and the Circle's share of it. Shown at the quote, where the member is
  * deciding to spend, rather than at the contribution, where they are only saving.

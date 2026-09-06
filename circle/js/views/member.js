@@ -1,8 +1,9 @@
 // The member's own screens: home, sending a contribution, the ledger, the card, the profile.
 import { escapeHtml, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDay, fmtDayTime, fmtMonth, fmtPct, monthKey, countdownTo, initials, toCsv, downloadText } from '../core/util.js';
+import { RANKS, nextRank } from '../core/standing.js';
 import { VOCAB, tierName, refFor } from '../core/vocab.js';
 import { splitContribution, tierFor, seasonPoints, SEASONS, isDushiSeason, pointsPerMonth } from '../core/money.js';
-import { splitBar, poolGauge, ring, memberCard } from '../ui/pieces.js';
+import { memberCard, poolGauge, rankCrest, ring, splitBar } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel, avatar } from '../ui/components.js';
 import { sparkline, columns, tableFor } from '../ui/charts.js';
@@ -198,8 +199,15 @@ export function home({ store, go }) {
   left.appendChild(ledgerPanel);
 
   // right column — streak, roll call, coverage, the note from Ian
+  const myStanding = store.standingOf(me.id);
+  const nextUp = nextRank(myStanding?.monthsHeld ?? 0);
   right.appendChild(el(`<div class="panel">
       <p class="eyebrow">${icon('crown')}Your standing</p>
+      <div id="crest-slot" style="margin-top:10px"></div>
+      <p class="small muted" style="margin-top:8px">${escapeHtml(
+        nextUp ? `${nextUp.months - (myStanding?.monthsHeld ?? 0)} more month${nextUp.months - (myStanding?.monthsHeld ?? 0) === 1 ? '' : 's'} to ${nextUp.name}.`
+               : 'Nothing above this one.')} ${escapeHtml(RANKS[myStanding?.rankIndex ?? 0].unlocks)}</p>
+      <hr class="rule" style="margin:14px 0">
       <div class="row" style="gap:11px;margin-top:10px;align-items:flex-start;flex-wrap:nowrap">
         <span style="flex:none;margin-top:-4px">${treeSvg(VOCAB.tierLean[me.monthlyUsd], { size: 30 })}</span>
         <div style="min-width:0"><b>${escapeHtml(tierName(me.monthlyUsd))}</b> · ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month
@@ -208,6 +216,8 @@ export function home({ store, go }) {
       <p class="small" style="margin-top:14px"><b class="num">${streak}</b> consecutive contribution${streak === 1 ? '' : 's'}${next ? ` · ${next - streak} more to the ${next}-month bonus of ${fmtPoints(s.streakBonuses[next])}` : ''}.</p>
       <div style="margin-top:12px">${sparkSlot()}</div>
     </div>`));
+  right.querySelector('#crest-slot')?.replaceChildren(
+    rankCrest(myStanding, { size: 54, sub: `${myStanding?.monthsHeld ?? 0} month${(myStanding?.monthsHeld ?? 0) === 1 ? '' : 's'} in the Circle` }));
   {
     const series = store.balanceSeries(me.id).map(p => p.points);
     right.querySelector('.spark-slot')?.replaceChildren(sparkline(series.length ? series : [0, 0], { height: 46 }));

@@ -181,11 +181,14 @@ export class Store {
 
   // ---------- standing ----------
   /**
-   * Where a member stands. On the real backend this is read from standing_v, which answers for
+   * Where a member stands. Named standingOf() because standing() was already taken, further
+   * down, by the balance-and-streak summary — and a silent collision there had the crest
+   * quietly reading a rank off an object that has never had one.
+   * On the real backend this is read from standing_v, which answers for
    * everybody without handing over anybody's money; in preview it is worked out from what this
    * browser holds. Either way the shape is the same and the ladder is the same.
    */
-  standing(memberId = this.session?.memberId) {
+  standingOf(memberId = this.session?.memberId) {
     const id = memberId || this.session?.memberId;
     if (!id) return null;
     const fromServer = this.state.standings?.find(x => x.memberId === id);
@@ -198,7 +201,7 @@ export class Store {
     });
   }
   /** The rung itself, with its blurb and what it unlocks. */
-  rank(memberId) { const st = this.standing(memberId); return st ? RANKS[st.rankIndex] || RANKS[0] : RANKS[0]; }
+  rank(memberId) { const st = this.standingOf(memberId); return st ? RANKS[st.rankIndex] || RANKS[0] : RANKS[0]; }
   activeMembers() { return this.people().filter(m => m.status === 'active'); }
   expectedMembers(month) { return this.people().filter(m => (m.status === 'active' || (m.status === 'paused' && m.pausedUntil && m.pausedUntil < month)) && (m.joinedAt || '').slice(0, 7) <= month); }
   stay(id) { return this.state.stays.find(s => s.id === id) || null; }
