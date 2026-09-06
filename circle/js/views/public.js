@@ -4,7 +4,9 @@ import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, projectPoints, seasonPoints, SEASONS, REACH, pointsPerMonth, monthsToAfford } from '../core/money.js';
 import { splitBar, poolGauge, memberCard, ring } from '../ui/pieces.js';
 import { drawContours, treeSvg, starSvg } from '../ui/art.js';
-import { toast, setBusy } from '../ui/components.js';
+import { toast, setBusy, sheet } from '../ui/components.js';
+import { icon } from '../ui/icons.js';
+import { copyText } from '../core/share.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 export const stayStrip = (stay) => {
@@ -225,59 +227,211 @@ export function rules({ store }) {
 }
 
 export function signIn({ store, go, refresh }) {
-  const demo = store.mode === 'local';
-  const people = store.members.filter(m => m.status !== 'left');
-  const officers = ['mem_victor', 'mem_ian', 'mem_vishnu'].map(id => store.member(id)).filter(Boolean);
-  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:640px">
-      <p class="eyebrow"><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span> · ${escapeHtml(VOCAB.pap.welcome[1])} back</p>
+  const live = store.mode === 'supabase';
+  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:520px">
+      <p class="eyebrow">${icon('lock')}<span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span> · ${escapeHtml(VOCAB.pap.welcome[1])} back</p>
       <h1>Sign in</h1>
-      <p class="lede" style="margin-top:10px">The Circle is invitation only. If you were asked to join and have a link from Victor or Ian, open that instead — it sets up your card.</p>
-      <form id="magic" class="panel" style="margin-top:20px">
+      <p class="lede" style="margin-top:10px">The Circle is invitation only. If Victor or Ian sent you a link to join, open that one instead — it sets up your account and your card.</p>
+
+      <form id="pw" class="panel" style="margin-top:20px" autocomplete="on">
         <label class="field"><span>Email</span>
-          <input type="email" name="email" autocomplete="email" placeholder="you@example.aw" required>
-          <span class="hint">We send a link that is valid for one hour, or a six-digit code if you prefer. Ask Ian if it does not arrive.</span></label>
-        <div class="row"><button class="btn" type="submit">Send the link</button><button class="btn ghost" type="button" id="code">I’d rather type a code</button></div>
+          <input type="email" name="email" autocomplete="username" inputmode="email" placeholder="you@example.aw" required autofocus></label>
+        <label class="field"><span>Password</span>
+          <span class="pw-wrap"><input type="password" name="password" autocomplete="current-password" required minlength="8">
+          <button type="button" class="pw-peek" id="peek" aria-label="Show the password">${icon('eye', { size: 18 })}</button></span></label>
+        <div class="row" style="margin-top:4px">
+          <button class="btn" type="submit">${icon('unlock', { size: 18 })}Sign in</button>
+          <button class="btn quiet sm" type="button" id="forgot">I forgot my password</button>
+        </div>
       </form>
-      ${demo ? `<div class="panel" style="margin-top:18px">
-        <h3>Or look around as someone</h3>
-        <p class="small muted" style="margin-top:6px">This is the demo. Everything lives in this browser, and each tab can be a different person — open the Banker in a second tab and confirm a transfer to watch it land.</p>
-        <div class="grid g3" style="margin-top:14px" id="personas"></div>
-        <details style="margin-top:14px"><summary class="small">Every Insider</summary><div class="row" style="margin-top:10px" id="everyone"></div></details>
-        <div class="row" style="margin-top:16px"><button class="btn ghost sm" id="reset">Reset the demo</button>
-          <a class="btn quiet sm" href="#/join/DEMO">See the invitation flow</a></div>
-      </div>` : ''}
+
+      <div class="panel" style="margin-top:14px">
+        <div class="row-between" style="gap:12px;align-items:flex-start">
+          <div><b>${icon('key', { size: 16, cls: 'ico-muted' })} First time here?</b>
+            <p class="small muted" style="margin-top:6px">If Victor or Ian has put you on the list, set your password now with the same email they used.</p></div>
+          <button class="btn ghost sm" type="button" id="claim" style="flex:none">Set it up</button>
+        </div>
+      </div>
+
+      <div class="panel flat" style="margin-top:14px">
+        <p class="small muted">${icon('shield', { size: 16, cls: 'ico-muted' })} ${live
+          ? 'Your password is held by the club’s own server and never by this page. Ian can reset it for you, but nobody — including him — can read it.'
+          : 'This browser is running on preview data, so the password locks this browser only. Connect the backend and the same email and password work on every device.'}</p>
+      </div>
+      <p class="small muted" style="margin-top:16px">Not an Insider yet? The Circle is capped at ${store.settings.memberCap} seats and everyone in it was asked personally. <a href="#/">What it is</a>.</p>
     </div></section></div>`);
 
-  wrap.querySelector('#magic').addEventListener('submit', async (e) => {
+  const form = wrap.querySelector('#pw');
+  wrap.querySelector('#peek').addEventListener('click', () => {
+    const i = form.password;
+    i.type = i.type === 'password' ? 'text' : 'password';
+    wrap.querySelector('#peek').innerHTML = icon(i.type === 'password' ? 'eye' : 'x', { size: 18 });
+    i.focus();
+  });
+
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const email = new FormData(e.target).get('email');
-    if (store.mode === 'supabase') {
-      try { await store.signInWithEmail(email); toast('Check your email for the link.', { kind: 'good' }); }
-      catch (err) { toast(err.message, { kind: 'bad' }); }
-    } else {
-      const m = store.members.find(x => x.email.toLowerCase() === String(email).toLowerCase());
-      if (m) { await store.signIn(m.id); go('/home'); }
-      else toast('No Insider with that email in the demo. Pick a person below instead.', { kind: 'bad', timeout: 5000 });
+    const btn = form.querySelector('button[type=submit]');
+    const email = form.email.value, password = form.password.value;
+    setBusy(btn, true, 'Signing in…');
+    try {
+      await store.signInWithPassword(email, password);
+      toast(`${VOCAB.pap.welcome[0]}, ${store.me?.name.split(' ')[0] || ''}.`, { kind: 'good' });
+      go('/home');
+    } catch (err) {
+      setBusy(btn, false);
+      form.password.value = '';
+      form.password.focus();
+      toast(err.message, { kind: 'bad', timeout: 6000 });
     }
   });
-  wrap.querySelector('#code')?.addEventListener('click', () => toast('The six-digit code arrives by email once the club is live on its own server.'));
-  if (demo) {
-    const list = wrap.querySelector('#personas');
-    const cards = [...officers, store.member('mem_sasha')];
-    list.innerHTML = cards.map(m => `<button class="choice" data-id="${m.id}" type="button">
-        <span class="row" style="gap:10px"><span class="avatar" style="--h:${m.hue};width:34px;height:34px;font-size:.8rem">${escapeHtml(initials(m.name))}</span>
-        <b>${escapeHtml(m.name.split(' ')[0])}</b></span>
-        <span class="tier">${escapeHtml(m.title || `${tierName(m.monthlyUsd)} Insider`)}</span></button>`).join('');
-    wrap.querySelector('#everyone').innerHTML = people.map(m => `<button class="btn quiet sm" data-id="${m.id}" type="button">${escapeHtml(m.name)}</button>`).join('');
-    wrap.addEventListener('click', async (e) => {
-      const b = e.target.closest('[data-id]'); if (!b) return;
-      await store.signIn(b.dataset.id); go('/home');
-    });
-    wrap.querySelector('#reset').addEventListener('click', async () => {
-      const { seed } = await import('../data/seed.js');
-      await store.reset(seed); toast('The demo is back to how it started.'); go('/');
-    });
-  }
+
+  wrap.querySelector('#claim').addEventListener('click', async () => {
+    const email = form.email.value.trim();
+    if (!email) { form.email.focus(); toast('Put the email they have for you in first.'); return; }
+    if (!live) {
+      const m = store.memberByEmail(email);
+      if (!m) { toast('No Insider with that email in this browser.', { kind: 'bad' }); return; }
+      if (store.hasPassword(m.id)) { toast('That one already has a password. Sign in, or reset it.', { kind: 'bad' }); return; }
+      const { generatePassword } = await import('../core/passwords.js');
+      const pw = generatePassword();
+      await store.setPasswordFor(m.id, pw);
+      await showGeneratedPassword(pw, m);
+      form.password.value = pw;
+      toast('Set. Sign in with it now.', { kind: 'good' });
+      return;
+    }
+    const known = await store.lookupInvite(email);
+    if (known?.claimed) { toast('That account already exists — sign in, or reset the password.', { kind: 'bad', timeout: 6000 }); return; }
+    const out = await sheet({ title: 'Set up your account', render: (body, close) => {
+      body.innerHTML = `<p class="sheet-text">Choose a password for <b>${escapeHtml(email)}</b>. Twelve characters at least — longer beats complicated.</p>
+        <label class="field"><span>Password</span><input name="pw" type="password" autocomplete="new-password" minlength="12" required></label>
+        <div class="row"><button class="btn ghost sm" type="button" data-gen>${icon('sparkles', { size: 16 })}Make one up for me</button></div>
+        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Create it</button></div>`;
+      body.querySelector('[data-gen]').addEventListener('click', async () => {
+        const { generatePassword } = await import('../core/passwords.js');
+        const pw = generatePassword();
+        body.querySelector('[name=pw]').value = pw;
+        body.querySelector('[name=pw]').type = 'text';
+        const ok = await copyText(pw);
+        toast(ok ? 'Made one up and copied it. Save it before you continue.' : `Your password: ${pw}`, { kind: 'good', timeout: 9000 });
+      });
+      body.querySelector('[data-ok]').addEventListener('click', () => close(body.querySelector('[name=pw]').value));
+    } });
+    if (!out) return;
+    try {
+      const r = await store.signUpWithPassword(email, out);
+      if (r.confirmNeeded) toast('Almost. Open the link we just emailed you, then sign in.', { kind: 'good', timeout: 9000 });
+      else { toast(`${VOCAB.pap.welcome[0]}, ${store.me?.name.split(' ')[0] || ''}.`, { kind: 'good' }); go('/home'); }
+    } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
+  });
+
+  wrap.querySelector('#forgot').addEventListener('click', async () => {
+    const email = form.email.value.trim();
+    if (!email) { form.email.focus(); toast('Put your email in first, then tap it again.'); return; }
+    if (live) {
+      try {
+        await store.sendPasswordReset(email);
+        toast('If that address is an Insider’s, a reset link is on its way. It lasts an hour.', { kind: 'good', timeout: 7000 });
+      } catch (err) { toast(err.message, { kind: 'bad', timeout: 6000 }); }
+      return;
+    }
+    // Preview mode has no mail server, so the honest thing is to say so and offer the
+    // only reset that can work here: generate a new one for this browser, shown once.
+    const m = store.memberByEmail(email);
+    if (!m) { toast('No Insider with that email in this browser.', { kind: 'bad' }); return; }
+    const { generatePassword } = await import('../core/passwords.js');
+    const fresh = generatePassword();
+    await store.setPasswordFor(m.id, fresh);
+    await showGeneratedPassword(fresh, m, { reset: true });
+    form.password.value = '';
+  });
+  return wrap;
+}
+
+/**
+ * A generated password, shown once. Deliberately not emailed, not logged, and not written
+ * anywhere it could be committed — the person copies it now or resets it again later.
+ */
+export async function showGeneratedPassword(password, member, { reset = false } = {}) {
+  return sheet({
+    title: reset ? 'A new password for this browser' : `${member.name.split(' ')[0]}’s password`,
+    render: (body, close) => {
+      body.innerHTML = `
+        <p class="sheet-text">${reset ? 'Your old one is gone.' : 'This is the only time it is shown.'}
+        Copy it into your password manager now — nobody can read it back to you, and the only way out is to reset it again.</p>
+        <div class="copyline pw-reveal" style="margin-top:14px">
+          <code class="num" style="font-size:1.35rem;letter-spacing:.06em">${escapeHtml(password)}</code>
+          <button class="btn sm" data-copy="${escapeHtml(password)}">${icon('copy', { size: 16 })}Copy</button>
+        </div>
+        <p class="small muted" style="margin-top:12px">${icon('shield', { size: 15, cls: 'ico-muted' })} Sixteen characters from an alphabet with no look-alikes, so it can be read off a screen without a mistake.</p>
+        <div class="sheet-actions"><button class="btn" data-ok>I have saved it</button></div>`;
+      body.addEventListener('click', async (e) => {
+        const c = e.target.closest('[data-copy]');
+        if (c) { const ok = await copyText(c.dataset.copy); toast(ok ? 'Copied. Paste it somewhere safe.' : 'Select it and copy by hand.'); }
+        if (e.target.closest('[data-ok]')) close(true);
+      });
+    },
+  });
+}
+
+/** Where an emailed reset link lands: set a new password, then straight into the Circle. */
+export function setPassword({ store, go }) {
+  const live = store.mode === 'supabase';
+  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:520px">
+      <p class="eyebrow">${icon('key')}Your account</p>
+      <h1>Choose a password</h1>
+      <p class="lede" style="margin-top:10px">Twelve characters at least. Longer beats complicated — three unrelated words and a number will outlast anything with a $ in it.</p>
+      <form id="set" class="panel" style="margin-top:20px">
+        <label class="field"><span>New password</span>
+          <input type="password" name="password" autocomplete="new-password" minlength="12" required autofocus></label>
+        <div id="meter" class="pw-meter" aria-live="polite"></div>
+        <label class="field"><span>And again</span>
+          <input type="password" name="again" autocomplete="new-password" minlength="12" required></label>
+        <div class="row">
+          <button class="btn" type="submit">${icon('check', { size: 18 })}Set it</button>
+          <button class="btn ghost sm" type="button" id="gen">${icon('sparkles', { size: 16 })}Make one up for me</button>
+        </div>
+      </form>
+      ${live ? '' : '<p class="small muted" style="margin-top:14px">Preview mode: this locks this browser only.</p>'}
+    </div></section></div>`);
+  const form = wrap.querySelector('#set'), meter = wrap.querySelector('#meter');
+
+  const draw = async () => {
+    const { passwordStrength } = await import('../core/passwords.js');
+    const s = passwordStrength(form.password.value);
+    meter.innerHTML = form.password.value
+      ? `<div class="pw-bar"><span style="width:${Math.round(s.score * 100)}%;background:${s.ok ? 'var(--good)' : 'var(--flag)'}"></span></div>
+         <span class="small ${s.ok ? 'muted' : ''}">${escapeHtml(s.label)}</span>` : '';
+  };
+  form.addEventListener('input', draw);
+
+  wrap.querySelector('#gen').addEventListener('click', async () => {
+    const { generatePassword } = await import('../core/passwords.js');
+    const pw = generatePassword();
+    form.password.value = pw; form.again.value = pw;
+    form.password.type = 'text';
+    await draw();
+    const ok = await copyText(pw);
+    toast(ok ? 'Made one up and copied it. Save it before you set it.' : `Your password: ${pw}`, { kind: 'good', timeout: 8000 });
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = form.querySelector('button[type=submit]');
+    if (form.password.value !== form.again.value) { toast('Those two do not match.', { kind: 'bad' }); form.again.focus(); return; }
+    setBusy(btn, true, 'Saving…');
+    try {
+      if (live) await store.setPassword(form.password.value);
+      else {
+        const me = store.me;
+        if (!me) throw new Error('Sign in first, then change it from your profile.');
+        await store.setPasswordFor(me.id, form.password.value);
+      }
+      toast('Password set. That is the one from now on.', { kind: 'good' });
+      go(store.me ? '/home' : '/sign-in');
+    } catch (err) { setBusy(btn, false); toast(err.message, { kind: 'bad', timeout: 6000 }); }
+  });
   return wrap;
 }
 

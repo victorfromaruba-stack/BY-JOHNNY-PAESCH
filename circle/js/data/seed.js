@@ -8,6 +8,7 @@
 
 import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay } from '../core/money.js';
 import { ARUBA_STAYS, WORLD_TRIPS } from './stays.js';
+import { ROOM_TYPES } from './rooms.js';
 import { VOCAB, initialsOf } from '../core/vocab.js';
 
 function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
@@ -140,6 +141,7 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
   const stays = [...ARUBA_STAYS.map(s => ({ ...s })), ...WORLD_TRIPS.map(t => ({ ...t }))]
     .map(s => ({ ...s, active: s.draft ? false : true, createdAt: '2026-01-10T12:00:00Z', curatedBy: 'mem_victor' }));
   const stayById = Object.fromEntries(stays.map(s => [s.id, s]));
+  const roomTypes = ROOM_TYPES.map(r => ({ ...r, active: true }));
 
   // --- requests -------------------------------------------------------------
   const add = (r) => { redemptions.push(r); log(r.memberId, 'redemption.request', 'redemption', r.id, { stay: stayById[r.stayId]?.name }, r.requestedAt); return r; };
@@ -261,5 +263,5 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
   const burnedAll = -ledger.filter(l => l.kind === 'burn').reduce((s2, l) => s2 + l.points, 0) / settings.pointsPerDollar;
   settings.reserveVerified = { balanceUsd: Math.round((backingAll + promoAll - burnedAll) * 100) / 100, at: '2026-09-04T18:00:00Z', byId: 'mem_vishnu' };
 
-  return { version: 2, seededAt: iso(now), settings, members, contributions, ledger, stays, redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, session: null };
+  return { version: 2, seededAt: iso(now), settings, members, contributions, ledger, stays, roomTypes, watches: [], deals: [], redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, session: null };
 }

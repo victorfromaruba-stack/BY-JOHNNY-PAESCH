@@ -72,16 +72,76 @@ export class SupabaseStore extends Store {
   async commit(reason) { this.notify(reason); }
 
   // ---------- auth ----------
+  // Where Supabase sends you back to after an email link. It must be an exact match for one
+  // of the Redirect URLs configured on the project, so it is built from the app's own URL.
+  get authRedirect() { return `${location.origin}${location.pathname}#/set-password`; }
+
+  /**
+   * First time in. The email must already be on the members list — Victor or Ian put it
+   * there — and the account is linked to that row by claim_membership() the moment it
+   * exists. An email nobody invited gets an account with nothing behind it and no way in.
+   */
+  async signUpWithPassword(email, password) {
+    const clean = String(email).trim().toLowerCase();
+    const { data, error } = await this.sb.auth.signUp({ email: clean, password, options: { emailRedirectTo: this.authRedirect } });
+    if (error) throw new Error(this.authMessage(error));
+    // With email confirmation on there is no session yet: they have to open the link first.
+    if (!data.session) return { confirmNeeded: true };
+    const m = await this.rpc('claim_membership', {});
+    if (!m) { await this.sb.auth.signOut(); throw new Error('That email is not on the Circle’s list. Ask Ian to add it first.'); }
+    await this.afterSignIn();
+    return { confirmNeeded: false };
+  }
+  /** Is this email one the club is expecting, and does it already have an account? */
+  async lookupInvite(email) {
+    const clean = String(email).trim().toLowerCase();
+    const { data, error } = await this.sb.from('members').select('id, name, auth_user_id').ilike('email', clean).maybeSingle();
+    // Signed-out visitors cannot read members at all, which is the point — so a failure
+    // here is expected and simply means "we cannot tell you".
+    if (error) return null;
+    return data ? { name: data.name, claimed: !!data.auth_user_id } : null;
+  }
+  async signInWithPassword(email, password) {
+    const { error } = await this.sb.auth.signInWithPassword({ email: String(email).trim().toLowerCase(), password });
+    if (error) throw new Error(this.authMessage(error));
+  }
+  /** Send the reset email. Deliberately silent about whether the address is one of ours. */
+  async sendPasswordReset(email) {
+    const { error } = await this.sb.auth.resetPasswordForEmail(String(email).trim().toLowerCase(), { redirectTo: this.authRedirect });
+    if (error && !/not found|invalid/i.test(error.message)) throw new Error(this.authMessage(error));
+  }
+  /** Set a new password. Works while signed in, and in the recovery session an emailed link opens. */
+  async setPassword(password) {
+    if (String(password).length < 12) throw new Error('Use at least twelve characters');
+    const { error } = await this.sb.auth.updateUser({ password });
+    if (error) throw new Error(this.authMessage(error));
+  }
+  /** True when the page was opened from a password-reset link and can set a new one. */
+  async inRecovery() {
+    const { data: { session } } = await this.sb.auth.getSession();
+    return !!session;
+  }
   async signInWithEmail(email) {
-    const { error } = await this.sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
-    if (error) throw error;
+    const { error } = await this.sb.auth.signInWithOtp({ email, options: { emailRedirectTo: this.authRedirect } });
+    if (error) throw new Error(this.authMessage(error));
   }
   /** 6-digit code path, for installed home-screen apps on iOS where the link would open Safari. */
   async verifyEmailCode(email, token) {
     const { error } = await this.sb.auth.verifyOtp({ email, token, type: 'email' });
-    if (error) throw error;
+    if (error) throw new Error(this.authMessage(error));
   }
-  async signIn() { throw new Error('Use signInWithEmail in Supabase mode'); }
+  /** Supabase's messages are for developers. These are for Insiders. */
+  authMessage(error) {
+    const m = String(error?.message || '');
+    if (/invalid login credentials/i.test(m)) return 'That email and password do not match. Try again, or reset your password below.';
+    if (/email not confirmed/i.test(m)) return 'Your email is not confirmed yet — open the link Ian sent you first.';
+    if (/rate limit|too many/i.test(m)) return 'Too many tries. Wait a minute and go again.';
+    if (/should be different/i.test(m)) return 'That is the password you already had. Pick a different one.';
+    if (/weak|at least/i.test(m)) return 'That password is too easy. Use at least twelve characters.';
+    if (/failed to fetch|network/i.test(m)) return 'Could not reach the Circle. Check your connection and try again.';
+    return m || 'Something went wrong signing you in.';
+  }
+  async signIn() { throw new Error('Sign in with your email and password'); }
   async signOut() { await this.sb.auth.signOut(); this.state.session = null; this.notify('session'); }
 
   // ---------- members ----------

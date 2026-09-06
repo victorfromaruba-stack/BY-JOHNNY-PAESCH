@@ -9,6 +9,7 @@ import { toast, sheet, confirmDialog, setBusy, chip, statusLabel, avatar } from 
 import { columns, tableFor, sparkline } from '../ui/charts.js';
 import { waLink, TEMPLATES, copyText, shareText } from '../core/share.js';
 import { quoteSheet } from './catalog.js';
+import { icon } from '../ui/icons.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 
@@ -21,7 +22,9 @@ export function bank({ store, go }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <div class="row-between">
         <div><p class="eyebrow">${escapeHtml(VOCAB.treasurerTitle)}</p><h1>The inbox</h1></div>
-        <div class="row no-print"><a class="btn ghost sm" href="#/bank/close/${month}">Close ${escapeHtml(fmtMonth(month))}</a></div>
+        <div class="row no-print">
+          <button class="btn sm" id="record">${icon('banknote', { size: 16 })}Money came in</button>
+          <a class="btn ghost sm" href="#/bank/close/${month}">${icon('lock', { size: 16 })}Close ${escapeHtml(fmtMonth(month))}</a></div>
       </div>
       <div class="grid g4" style="margin-top:20px">
         <div class="stat"><span class="k">Waiting for you</span><b class="num">${pending.length}</b><span class="sub">${escapeHtml(fmtUsd2(t.pendingUsd))} marked as sent</span></div>
@@ -49,7 +52,7 @@ export function bank({ store, go }) {
           <div class="row" style="gap:12px">
             ${avatar(m, 40)}
             <div><b>${escapeHtml(m.name)}</b> · ${escapeHtml(tierName(m.monthlyUsd))}
-              <br><span class="small muted">${escapeHtml(fmtMonth(c.forMonth))} · sent ${escapeHtml(fmtDay(c.submittedAt))} · ${escapeHtml(c.bank || 'bank transfer')}${c.proofName ? ' · screenshot attached' : ''}</span></div>
+              <br><span class="small muted">${c.extra ? 'Extra, not a monthly' : escapeHtml(fmtMonth(c.forMonth))} · sent ${escapeHtml(fmtDay(c.submittedAt))} · ${escapeHtml(c.bank || c.method || 'bank transfer')}${c.proofName ? ' · screenshot attached' : ''}${c.recordedBy ? ' · entered by the Banker' : ''}</span></div>
           </div>
           <div style="text-align:right"><b class="num" style="font-size:1.2rem">${escapeHtml(fmtUsd2(c.expectedUsd))}</b>
             <br><span class="small muted num">${escapeHtml(fmtAfl2(c.expectedUsd, s.awgPerUsd))}</span></div>
@@ -104,6 +107,7 @@ export function bank({ store, go }) {
     });
     queue.appendChild(row);
   }
+  wrap.querySelector('#record')?.addEventListener('click', () => recordMoneySheet({ store, go }));
   wrap.querySelector('#confirm-all')?.addEventListener('click', async () => {
     const yes = await confirmDialog({ title: `Confirm all ${pending.length}?`, confirmText: 'Confirm them', message: 'Only do this once you have matched every reference on the bank statement. Each one can still be undone for a minute afterwards.' });
     if (!yes) return;
@@ -117,6 +121,85 @@ export function bank({ store, go }) {
         ${escapeHtml(m2.name)} · ${escapeHtml(fmtUsd2(m2.monthlyUsd))}</a>`).join('')
     : '<span class="small muted">Everyone has sent this month.</span>';
   return wrap;
+}
+
+/**
+ * Money that never went through the queue: cash across a table, a transfer the Banker
+ * matched himself, someone catching up a month they missed. He types the amount, sees
+ * exactly what it mints before he commits, and it lands in the ledger with his name on it.
+ */
+export async function recordMoneySheet({ store, go, memberId = null }) {
+  const s = store.settings;
+  const people = store.members.filter(m => m.status !== 'left').sort((a, b) => a.name.localeCompare(b.name));
+  const out = await sheet({
+    title: 'Money came in',
+    render: (body, close) => {
+      body.innerHTML = `
+        <p class="sheet-text">Use this when the money reached you outside the app — cash in your hand, a transfer you spotted on the statement, or someone paying for a month they missed. It mints the points the same way a normal contribution does, and it shows up on their ledger with your name on it.</p>
+        <label class="field"><span>From whom</span>
+          <select name="memberId" required>${people.map(m => `<option value="${escapeHtml(m.id)}"${m.id === memberId ? ' selected' : ''}>${escapeHtml(m.name)} · ${escapeHtml(fmtUsd2(m.monthlyUsd))} a month</option>`).join('')}</select></label>
+        <div class="grid g3">
+          <label class="field"><span>Amount</span><input name="amount" type="number" step="0.01" min="0.01" inputmode="decimal" placeholder="300" required autofocus></label>
+          <label class="field"><span>Currency</span><select name="currency"><option value="USD">US dollars</option><option value="AWG">Aruban florin</option></select></label>
+          <label class="field"><span>How it came</span><select name="method">
+            <option value="cash">Cash</option><option value="bank">Bank transfer</option>
+            <option value="card">Card</option><option value="other">Some other way</option></select></label>
+        </div>
+        <label class="field"><span>What is it for</span>
+          <select name="forMonth"><option value="">Extra — on top of their monthly</option></select>
+          <span class="hint" id="month-hint"></span></label>
+        <label class="field"><span>Note for their ledger</span>
+          <input name="note" placeholder="Cash at the shop, 6 September." required></label>
+        <div id="prev" class="notice"></div>
+        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button>
+          <button class="btn good" data-ok>${icon('check', { size: 16 })}Record it</button></div>`;
+
+      const v = (n) => body.querySelector(`[name=${n}]`);
+      const fillMonths = () => {
+        const open = store.openMonthsFor(v('memberId').value);
+        v('forMonth').innerHTML = `<option value="">Extra — on top of their monthly</option>`
+          + open.map(m => `<option value="${m}">${escapeHtml(fmtMonth(m))} — a month they have not paid</option>`).join('');
+        body.querySelector('#month-hint').textContent = open.length
+          ? 'A month earns the tier bonus and can extend a streak. An extra buys points at the plain rate.'
+          : 'They are up to date, so anything now is an extra: points at the plain rate, no bonus, no streak.';
+      };
+      const draw = () => {
+        const m = store.member(v('memberId').value);
+        const p = store.previewDirect(v('memberId').value, Number(v('amount').value) || 0,
+          { forMonth: v('forMonth').value || null, currency: v('currency').value });
+        if (!p.usd) { body.querySelector('#prev').innerHTML = '<b>Type the amount</b><p class="small">Nothing is minted until you tap Record.</p>'; return; }
+        body.querySelector('#prev').innerHTML = `
+          <b>${escapeHtml(fmtPoints(p.points))} for ${escapeHtml(m.name.split(' ')[0])}</b>
+          <p class="small" style="margin-top:6px">
+            ${escapeHtml(fmtUsd2(p.usd))} in · ${escapeHtml(fmtUsd2(p.shareUsd))} to the Circle · ${escapeHtml(fmtUsd2(p.backingUsd))} into the Reserve
+            ${p.bonusPoints ? ` · ${escapeHtml(fmtPoints(p.bonusPoints))} tier bonus` : ''}
+          </p>
+          <p class="small muted" style="margin-top:6px">${p.extra
+            ? 'An extra: base points only, no tier bonus, no streak, and it does not cover a month.'
+            : p.full ? 'The whole tier amount, so it earns the bonus and counts towards their streak.'
+                     : 'Short of their tier amount, so no bonus this month and the streak does not extend.'}</p>`;
+      };
+      body.addEventListener('input', draw);
+      body.addEventListener('change', (e) => { if (e.target.name === 'memberId') fillMonths(); draw(); });
+      fillMonths(); draw();
+
+      body.querySelector('[data-ok]').addEventListener('click', () => {
+        if (!v('note').value.trim()) { v('note').focus(); toast('A note, so they know what it was.', { kind: 'bad' }); return; }
+        close({ memberId: v('memberId').value, amountUsd: Number(v('amount').value),
+          currency: v('currency').value, method: v('method').value,
+          forMonth: v('forMonth').value || null, note: v('note').value.trim() });
+      });
+    },
+  });
+  if (!out) return null;
+  try {
+    const usd = out.currency === 'AWG' ? Math.round((out.amountUsd / s.awgPerUsd) * 100) / 100 : out.amountUsd;
+    const c = await store.recordDirectContribution({ ...out, amountUsd: usd }, store.me.id);
+    const m = store.member(out.memberId);
+    toast(`${VOCAB.pap.thanks[0]} · ${fmtPoints(c.points)} minted for ${m.name.split(' ')[0]}.`, { kind: 'good' });
+    undoToast(store, c.id, store.me.id);
+    return c;
+  } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); return null; }
 }
 
 async function confirmOne(store, c, m) {
@@ -209,6 +292,8 @@ export function desk({ store, go }) {
       <h1>The Desk</h1>
       <div class="row no-print" style="margin-top:16px" role="tablist" id="tabs">
         <button class="btn sm" data-tab="requests" aria-pressed="true">Requests${open.length ? ` · ${open.length}` : ''}</button>
+        <button class="btn quiet sm" data-tab="wanted" aria-pressed="false">${icon('bell', { size: 15 })}Wanted${store.watches().length ? ` · ${store.watches().length}` : ''}</button>
+        <button class="btn quiet sm" data-tab="deals" aria-pressed="false">${icon('zap', { size: 15 })}Deals${store.liveDeals().length ? ` · ${store.liveDeals().length}` : ''}</button>
         <button class="btn quiet sm" data-tab="catalog" aria-pressed="false">Stays &amp; trips</button>
         <button class="btn quiet sm" data-tab="notes" aria-pressed="false">Notes</button>
       </div>
@@ -216,6 +301,69 @@ export function desk({ store, go }) {
     </div></section></div>`);
   const panel = wrap.querySelector('#panel');
   let tab = 'requests';
+
+  /** What the Circle has asked to be told about — this is the shopping list. */
+  const drawWanted = () => {
+    const rows = store.demand();
+    panel.replaceChildren(el(`<div>
+      <div class="notice" style="margin-bottom:16px">
+        <b>${icon('compass', { size: 16 })} This is what to go and look for</b>
+        <p class="small">Every line is an Insider who said they would take it if it appeared. Find one, post it, and they hear in the same minute you do — no group chat, no chasing.</p>
+      </div>
+      ${rows.length ? `<div class="stack">${rows.map(r => {
+        const stay = r.stay;
+        const names = [...r.members].map(id => store.member(id)?.name.split(' ')[0]).filter(Boolean);
+        const room = store.roomType(r.roomTypeId);
+        const windows = r.watches.map(w => `${fmtDay(w.from)} – ${fmtDay(w.to)}${w.nights ? ` · ${w.nights}n` : ''}`);
+        return `<div class="panel">
+          <div class="row-between" style="align-items:flex-start;gap:14px">
+            <div>
+              <h3 style="font-size:1.05rem">${escapeHtml(stay?.name || 'Anywhere on the island')}${room ? ` · ${escapeHtml(room.name)}` : ''}</h3>
+              <p class="small muted" style="margin-top:6px">${icon('users', { size: 14, cls: 'ico-muted' })}
+                ${r.count} ${r.count === 1 ? 'Insider' : 'Insiders'}: ${escapeHtml(names.join(', '))}</p>
+              <p class="small muted" style="margin-top:4px">${icon('calendar', { size: 14, cls: 'ico-muted' })} ${escapeHtml(windows.join(' · '))}</p>
+            </div>
+            <div class="row" style="flex:none">
+              ${r.matched ? `<span class="tag" style="background:var(--good-soft);color:var(--good-text);border-color:transparent">${icon('check', { size: 13 })}on the board</span>` : ''}
+              ${stay ? `<button class="btn sm" data-post="${escapeHtml(stay.id)}" data-room="${escapeHtml(r.roomTypeId || '')}">${icon('plus', { size: 15 })}Post one</button>` : ''}
+            </div>
+          </div></div>`;
+      }).join('')}</div>`
+      : `<div class="empty">${icon('bell', { size: 30, cls: 'ico-muted' })}
+          <b style="display:block;margin-top:10px">Nobody is watching for anything yet</b>
+          <p class="small muted">When Insiders start adding watches, this becomes the list of what to hunt for.</p></div>`}
+    </div>`));
+  };
+
+  const drawDeals = () => {
+    const live = store.liveDeals();
+    panel.replaceChildren(el(`<div>
+      <div class="row" style="margin-bottom:16px"><button class="btn sm" id="post-deal">${icon('plus', { size: 16 })}Post a deal</button>
+        <a class="btn ghost sm" href="#/deals">${icon('eye', { size: 15 })}See it as a member does</a></div>
+      ${live.length ? `<div class="stack">${live.map(d => {
+        const stay = store.stay(d.stayId);
+        const hits = store.matchesForDeal(d.id);
+        return `<div class="panel" data-deal="${escapeHtml(d.id)}">
+          <div class="row-between" style="align-items:flex-start;gap:14px">
+            <div>
+              <h3 style="font-size:1.02rem">${escapeHtml(d.title || stay?.name || '')}</h3>
+              <p class="small muted" style="margin-top:5px">${escapeHtml(fmtDay(d.from))} – ${escapeHtml(fmtDay(d.to))} · ${d.nights} nights · ${escapeHtml(fmtPoints(d.pointsTotal))}
+                · from ${escapeHtml(d.source)}</p>
+              <p class="small" style="margin-top:6px;color:${hits.length ? 'var(--good-text)' : 'var(--ink-3)'}">
+                ${icon(hits.length ? 'bellRing' : 'bell', { size: 14 })}
+                ${hits.length ? `${hits.length} ${hits.length === 1 ? 'Insider was' : 'Insiders were'} waiting for this` : 'Nobody was watching for this one'}</p>
+            </div>
+            <div class="row" style="flex:none">
+              ${d.sourceUrl ? `<a class="btn ghost sm" href="${escapeHtml(d.sourceUrl)}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}</a>` : ''}
+              <button class="btn quiet sm" data-retire="${escapeHtml(d.id)}">${icon('x', { size: 15 })}Gone</button>
+            </div>
+          </div></div>`;
+      }).join('')}</div>`
+      : `<div class="empty">${icon('zap', { size: 30, cls: 'ico-muted' })}
+          <b style="display:block;margin-top:10px">Nothing on the board</b>
+          <p class="small muted">Post the moment you see something — a good week goes within hours.</p></div>`}
+    </div>`));
+  };
 
   const drawRequests = () => {
     const rows = open;
@@ -308,8 +456,25 @@ export function desk({ store, go }) {
     });
   };
 
-  const draw = () => { ({ requests: drawRequests, catalog: drawCatalog, notes: drawNotes })[tab](); };
+  const draw = () => { ({ requests: drawRequests, wanted: drawWanted, deals: drawDeals, catalog: drawCatalog, notes: drawNotes })[tab](); };
   draw();
+  // Posting a deal, and taking one down, from either of the two new tabs.
+  panel.addEventListener('click', async (e) => {
+    const post = e.target.closest('[data-post]') || e.target.closest('#post-deal');
+    if (post) {
+      const { postDealSheet } = await import('./deals.js');
+      const prefill = post.dataset?.post ? { stayId: post.dataset.post, roomTypeId: post.dataset.room || null } : {};
+      const d = await postDealSheet({ store, prefill });
+      if (d) draw();
+      return;
+    }
+    const retire = e.target.closest('[data-retire]');
+    if (retire) {
+      const yes = await confirmDialog({ title: 'Take it off the board?', confirmText: 'It is gone',
+        message: 'It stays in the record, but nobody sees it as available any more.' });
+      if (yes) { try { await store.retireDeal(retire.dataset.retire, store.me.id, 'Taken'); toast('Off the board.'); draw(); } catch (err) { toast(err.message, { kind: 'bad' }); } }
+    }
+  });
   wrap.querySelector('#tabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-tab]'); if (!b) return;
     tab = b.dataset.tab;
