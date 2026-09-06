@@ -1,0 +1,112 @@
+# The Circle's watcher
+
+Checks RedWeek and Interval for weeks at the places the Circle uses, and puts anything that
+undercuts our own rate on the board — so Victor and Ian can book it the same day.
+
+Runs on Victor's VPS. Nothing about it lives in this repository except the code: every
+credential is read from `.env` on that machine.
+
+## What it does
+
+**RedWeek** needs no login. Each listing carries its own data attributes — check-in, check-out,
+nights, bedrooms, sleeps, view, price — so this reads structured values rather than guessing at
+text. One request per resort, 2.5 seconds apart, identifying itself in the user agent.
+
+**Interval** is Victor's account. Signing in is a form POST (`j_username` / `j_password` to
+`/web/my/auth/login` — it is a Spring application) and the session is a cookie, so no browser
+is needed. The Getaway search sits behind that login and could not be read from outside it;
+see *Finishing Interval* below.
+
+**Posting** happens as an ordinary account calling the same `post_deal` the Desk calls. There
+is no service key on the VPS, and the account holds no role at all — `post_deal` lets a member
+marked as a robot through on its own account. If the `.env` on the VPS were ever read by
+somebody else, that password could post a deal, read the catalog and the board, read the member
+list, and file a contribution in its own name that a human still has to confirm. It could not
+mint a point, move money, change a member, or touch the catalog.
+
+## Setting it up
+
+```sh
+git clone https://github.com/victorfromaruba-stack/BY-JOHNNY-PAESCH.git
+cd BY-JOHNNY-PAESCH/circle/watcher
+cp .env.example .env && nano .env          # fill it in
+node index.mjs --once --dry                # find things, post nothing
+```
+
+Run the `--dry` pass first and read what it found.
+
+Make the watcher an account before that: in the app, **Settings → Add an Insider**, name it
+"Watcher", username `watcher`, and tick **This is a robot, not a person** — that one checkbox is
+what keeps it out of the forty seats, out of the month close and off the front page, and what
+lets it post a deal. Give it no roles.
+Put the password it shows you straight into `CIRCLE_PASS` — a robot is not asked to change its
+password on first use, because there would be nobody to ask.
+
+One already exists on the live Circle, so this is only if you ever want a second.
+
+Then, for real:
+
+```sh
+node index.mjs --once                      # one pass, posts what it finds
+node index.mjs                             # every WATCH_EVERY_MIN minutes, forever
+```
+
+## Keeping it running
+
+```ini
+# /etc/systemd/system/hunto-watcher.service
+[Unit]
+Description=Hunto Circle watcher
+After=network-online.target
+
+[Service]
+Type=simple
+User=hunto
+WorkingDirectory=/home/hunto/BY-JOHNNY-PAESCH/circle/watcher
+ExecStart=/usr/bin/node index.mjs
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```sh
+sudo systemctl enable --now hunto-watcher
+journalctl -u hunto-watcher -f
+```
+
+Needs Node 20 or newer. No packages to install — it uses nothing but the standard library.
+
+## Finishing Interval
+
+The Getaway search form is behind the login, so its exact shape is not in this code yet. Run
+this once on the VPS:
+
+```sh
+node index.mjs --dump
+```
+
+It signs in, saves the pages that session lands on into `watcher/dump/`, and stops. Those are
+ordinary HTML pages and **no password appears in them**. Send them over and
+`INTERVAL_SEARCH_PATH` and `INTERVAL_SEARCH_FIELDS` get filled in for good.
+
+Until then the watcher runs RedWeek only and says so in the log.
+
+## What it will and will not post
+
+`WATCH_MUST_BEAT_OURS=true` means it only speaks up about a week that undercuts the Circle's
+own rate by at least `WATCH_BEAT_BY_PCT`. Without it, RedWeek alone finds around a hundred
+open weeks a day at our resorts, which is a list rather than news.
+
+One consequence worth knowing: now that the Marriott villa rates are set against what Interval
+charges, RedWeek rarely beats them. That is the point — but it means most of what this finds
+at the Surf Club and Ocean Club will come from Interval, and RedWeek will earn its keep at the
+resorts where our published rate is higher.
+
+A week it cannot price against the catalog is not posted either. "We could not work out what
+this is worth" is not a reason to put something in front of forty people.
+
+It never posts the same week twice. Each find carries a `source_ref` — RedWeek's own posting
+id, not the price, so a listing that drops a dollar is still the same week — and that is checked
+against **every** deal on the board, not only the live ones. A deal you take down stays down.

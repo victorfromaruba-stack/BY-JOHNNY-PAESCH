@@ -11,6 +11,19 @@ export function escapeHtml(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/**
+ * A URL safe to put in an href. Empty string for anything else.
+ *
+ * escapeHtml stops a value breaking out of the attribute, but it does nothing about the scheme:
+ * `javascript:…` survives it intact and becomes a working link. Deal links come in from the
+ * paste parser, the email ingest and the watcher, so they are not ours to trust — and the one
+ * place they are shown is a big "Go and book it" button in front of an officer.
+ */
+export function safeUrl(url) {
+  const u = String(url ?? '').trim();
+  return /^https?:\/\/[^\s<>"]+$/i.test(u) ? u : '';
+}
+
 // Tagged template that escapes interpolations unless wrapped with raw().
 export function html(strings, ...values) {
   return strings.reduce((out, s, i) => {

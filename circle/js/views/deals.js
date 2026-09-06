@@ -5,7 +5,7 @@
 // exact thing has it on their home screen. Nothing here books anything — a deal turns into
 // a request, and a request goes through the same quote the rest of the app uses.
 
-import { escapeHtml, fmtUsd2, fmtPoints, fmtDay, fmtRelative, pointsUsd, nightsBetween } from '../core/util.js';
+import { escapeHtml, fmtDay, fmtPoints, fmtRelative, fmtUsd2, nightsBetween, pointsUsd, safeUrl } from '../core/util.js';
 import { VOCAB } from '../core/vocab.js';
 import { seasonPoints } from '../core/money.js';
 import { icon } from '../ui/icons.js';
@@ -64,7 +64,7 @@ export function dealCard(deal, { store, match = null, canEdit = false } = {}) {
           You are ${escapeHtml(fmtPoints(match.short))} short — ask anyway and close the gap with a top-up, or open it to the Circle.</p>` : ''}
         <div class="row" style="margin-top:14px">
           <a class="btn sm" href="#/book/${escapeHtml(deal.stayId)}?from=${escapeHtml(deal.from)}&to=${escapeHtml(deal.to)}&deal=${escapeHtml(deal.id)}">${icon('send', { size: 16 })}Ask for it</a>
-          ${canEdit && deal.sourceUrl ? `<a class="btn ghost sm" href="${escapeHtml(deal.sourceUrl)}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 16 })}Go and book it</a>` : ''}
+          ${canEdit && safeUrl(deal.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(deal.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 16 })}Go and book it</a>` : ''}
           ${canEdit ? `<button class="btn quiet sm" data-act="retire">${icon('x', { size: 16 })}Gone</button>` : ''}
         </div>
       </div>
@@ -76,7 +76,7 @@ export function dealCard(deal, { store, match = null, canEdit = false } = {}) {
 /** The board: everything live, with the things you asked for pinned to the top. */
 export function deals({ store, go }) {
   const me = store.me;
-  const canEdit = store.canPlan() || store.hasRole('comms');
+  const canEdit = store.canPostDeals();
   const mine = store.matchesForMember(me.id);
   const mineIds = new Set(mine.map(m => m.deal.id));
   const rest = store.liveDeals().filter(d => !mineIds.has(d.id));

@@ -1,6 +1,6 @@
 // The officers' screens — the Banker's inbox and month close, the Desk, settings —
 // plus the two everyone can see: the Circle and the Pool.
-import { escapeHtml, fmtUsd2, fmtAfl2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, fmtMonth, fmtPct, monthKey, countdownTo, initials, toCsv, downloadText, sum } from '../core/util.js';
+import { countdownTo, downloadText, escapeHtml, fmtAfl2, fmtDay, fmtDayTime, fmtMonth, fmtPct, fmtPoints, fmtUsd2, initials, monthKey, pointsUsd, safeUrl, sum, toCsv } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, seasonPoints, SEASONS } from '../core/money.js';
 import { splitBar, poolGauge, ring } from '../ui/pieces.js';
@@ -153,7 +153,7 @@ export function bank({ store, go }) {
  */
 export async function recordMoneySheet({ store, go, memberId = null }) {
   const s = store.settings;
-  const people = store.members.filter(m => m.status !== 'left').sort((a, b) => a.name.localeCompare(b.name));
+  const people = store.people().filter(m => m.status !== 'left').sort((a, b) => a.name.localeCompare(b.name));
   const out = await sheet({
     title: 'Money came in',
     render: (body, close) => {
@@ -243,7 +243,9 @@ export function monthClose({ store, params, go }) {
   const me = store.me, s = store.settings;
   const month = params.month || monthKey();
   const p = store.closePreview(month);
-  const others = store.members.filter(m => m.id !== me.id && m.roles.some(r => ['planner', 'comms', 'admin', 'treasurer', 'deputy'].includes(r)));
+  // people(), not members(): the watcher holds the Voice role so it can post a deal, and a
+  // robot must never be offered as the second signature on a month close.
+  const others = store.people().filter(m => m.id !== me.id && m.roles.some(r => ['planner', 'comms', 'admin', 'treasurer', 'deputy'].includes(r)));
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <p class="eyebrow">${icon('lock')}Month close</p>
       <h1>${escapeHtml(fmtMonth(month))}</h1>
@@ -377,7 +379,7 @@ export function desk({ store, go }) {
                 ${hits.length ? `${hits.length} ${hits.length === 1 ? 'Insider was' : 'Insiders were'} waiting for this` : 'Nobody was watching for this one'}</p>
             </div>
             <div class="row" style="flex:none">
-              ${d.sourceUrl ? `<a class="btn ghost sm" href="${escapeHtml(d.sourceUrl)}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}</a>` : ''}
+              ${safeUrl(d.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(d.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}</a>` : ''}
               <button class="btn quiet sm" data-retire="${escapeHtml(d.id)}">${icon('x', { size: 15 })}Gone</button>
             </div>
           </div></div>`;
@@ -642,7 +644,7 @@ export function pool({ store }) {
 // ---------------------------------------------------------------- the Circle
 export function circle({ store }) {
   const me = store.me, s = store.settings;
-  const roster = store.members.filter(m => m.status !== 'left');
+  const roster = store.people().filter(m => m.status !== 'left');
   const t = store.treasury();
   const notes = store.announcements();
   const wrap = el(`<div><section class="sec"><div class="wrap">
@@ -822,8 +824,8 @@ export function settings({ store, go }) {
         <div class="tablewrap" style="margin-top:14px;border:0"><table>
           <thead><tr><th>Name</th><th>Tier</th><th>Roles</th><th>State</th><th class="num">Points</th><th></th></tr></thead>
           <tbody>${store.members.map(m => `<tr>
-            <td><b>${escapeHtml(m.name)}</b><br><span class="small ${m.username ? 'muted mono' : ''}" ${m.username ? '' : 'style="color:var(--flag)"'}>${escapeHtml(m.username ? `@${m.username}${m.mustChangePassword ? ' · has not changed their password yet' : ''}` : 'no login yet — they cannot sign in')}</span></td>
-            <td>${escapeHtml(tierName(m.monthlyUsd))}</td>
+            <td><b>${escapeHtml(m.name)}</b>${m.bot ? ' <span class="chip chip-muted">robot</span>' : ''}<br><span class="small ${m.username ? 'muted mono' : ''}" ${m.username ? '' : 'style="color:var(--flag)"'}>${escapeHtml(m.username ? `@${m.username}${m.mustChangePassword ? ' · has not changed their password yet' : ''}` : 'no login yet — they cannot sign in')}</span></td>
+            <td>${m.bot ? '<span class="small muted">no seat, pays nothing</span>' : escapeHtml(tierName(m.monthlyUsd))}</td>
             <td class="small">${escapeHtml(m.roles.join(', '))}</td>
             <td>${chip(m.status === 'active' ? 'active' : m.status)}</td>
             <td class="num">${escapeHtml(fmtPoints(store.availablePoints(m.id)))}</td>
@@ -918,6 +920,11 @@ export function settings({ store, go }) {
             <input type="checkbox" name="role" value="${r.id}"${r.id === 'member' ? ' checked' : ''} style="width:19px;height:19px;margin-top:2px">
             <span><b class="small">${escapeHtml(r.label)}</b><br><span class="small muted">${escapeHtml(r.note)}</span></span></label>`).join('')}
         </div>
+        <label class="row" style="gap:10px;align-items:flex-start;margin-top:14px">
+          <input type="checkbox" name="bot" style="width:19px;height:19px;margin-top:2px">
+          <span><b class="small">This is a robot, not a person</b><br><span class="small muted">For the watcher on the VPS.
+            It takes no seat, owes nothing, is never counted or chased, and may post what it finds to the board.
+            Leave every box above unticked — it needs nothing else.</span></span></label>
         <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button>
           <button class="btn" data-ok>${icon('plus', { size: 16 })}Add them</button></div>`;
       const nameEl = body.querySelector('[name=name]'), userEl = body.querySelector('[name=username]');
@@ -937,6 +944,7 @@ export function settings({ store, go }) {
           title: body.querySelector('[name=title]').value.trim(),
           monthlyUsd: Number(body.querySelector('[name=monthlyUsd]').value),
           roles: roles.length ? roles : ['member'],
+          bot: body.querySelector('[name=bot]').checked,
         });
       });
     } });

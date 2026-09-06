@@ -74,6 +74,10 @@ create table if not exists members (
   title          text,
   joined_at      timestamptz not null default now(),
   founding       boolean not null default false,
+  -- A machine account, not a person: the watcher that posts deals from the VPS. It holds no
+  -- seat against the cap, owes nothing, and is not chased at the close. Everything that counts
+  -- Insiders has to say so out loud, because for the first year every row here was a human.
+  bot            boolean not null default false,
   sponsor_id     uuid references members(id),
   card_code      text unique,
   -- People sign in with a username, never an email. Supabase authenticates against an email
@@ -479,13 +483,19 @@ begin
   select id into existing from auth.users where lower(email) = e;
   if existing is null then
     v_uid := gen_random_uuid();
+    -- Those eight token columns must be '' and never NULL. GoTrue scans them into a Go string,
+    -- and a NULL fails the scan on the way past — so the row looks perfect in psql and every
+    -- sign-in dies with "Database error querying schema". The defaults do not cover an insert
+    -- that names its columns, so they are named here.
     insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
-                            raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+                            raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+                            confirmation_token, recovery_token, email_change_token_new, email_change,
+                            email_change_token_current, phone_change, phone_change_token, reauthentication_token)
     values ('00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated', e,
             extensions.crypt(p_password, extensions.gen_salt('bf')), now(),
             '{"provider":"email","providers":["email"]}'::jsonb,
             jsonb_build_object('sub', v_uid::text, 'email', e, 'email_verified', true, 'phone_verified', false),
-            now(), now());
+            now(), now(), '', '', '', '', '', '', '', '');
     insert into auth.identities (id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at)
     values (gen_random_uuid(), v_uid, v_uid::text, 'email',
             jsonb_build_object('sub', v_uid::text, 'email', e, 'email_verified', true, 'phone_verified', false),
@@ -497,7 +507,11 @@ begin
      where id = v_uid;
   end if;
 
-  update members set username = u, auth_user_id = v_uid, must_change_password = true,
+  update members set username = u, auth_user_id = v_uid,
+                     -- A person is made to replace a password somebody else chose. A robot has
+                     -- nobody to replace it with, and it signs in over the API where no screen
+                     -- could ask, so it is never flagged.
+                     must_change_password = not bot,
                      status = case when status = 'invited' then 'active' else status end
    where id = p_member returning * into m;
   if m.id is null then raise exception 'No such member'; end if;
@@ -1089,6 +1103,25 @@ language sql stable security definer set search_path = public as $$
   from treasury
 $$;
 
+-- Who may put the second signature on the books. The close only ever checked that the co-signer
+-- was not the person closing — not that they were an officer, a member, or a person at all, so
+-- the second name on the club's accounts could have been the watcher or any id whatsoever.
+create or replace function assert_cosigner(p_cosigner uuid) returns void
+language plpgsql stable security definer set search_path = public as $$
+declare c members;
+begin
+  if p_cosigner is null or p_cosigner = current_member_id() then
+    raise exception 'A second officer must co-sign the close';
+  end if;
+  select * into c from members where id = p_cosigner;
+  if c.id is null then raise exception 'That co-signer is not on the list'; end if;
+  if c.bot then raise exception 'A robot cannot co-sign the books'; end if;
+  if c.status not in ('active','paused') then raise exception '% has left the Circle', c.name; end if;
+  if not (c.roles && array['treasurer','deputy','planner','comms','admin']::member_role[]) then
+    raise exception '% is not an officer', c.name;
+  end if;
+end $$;
+
 create or replace function close_month(p_month text, p_bank_balance_usd numeric, p_cosigner uuid, p_note text default '')
 returns month_closes language plpgsql security definer set search_path = public as $$
 declare s settings; expected_reserve numeric; variance numeric; c month_closes; t treasury%rowtype;
@@ -1096,7 +1129,7 @@ declare s settings; expected_reserve numeric; variance numeric; c month_closes; 
 begin
   if not has_role('treasurer','deputy','admin') then raise exception 'Only the Banker can close a month'; end if;
   if exists (select 1 from month_closes where month = p_month) then raise exception '% is already closed', p_month; end if;
-  if p_cosigner is null or p_cosigner = current_member_id() then raise exception 'A second officer must co-sign the close'; end if;
+  perform assert_cosigner(p_cosigner);
   select count(*) into pending_count from contributions where for_month = p_month and status = 'pending';
   if pending_count > 0 then
     raise exception '% sent contribution(s) are still waiting — confirm or return them first', pending_count;
@@ -1136,7 +1169,7 @@ begin
             (select coalesce(sum(received_usd),0) from contributions where for_month=p_month and status='confirmed'),
             (select coalesce(sum(share_usd),0) from contributions where for_month=p_month and status='confirmed'),
             (select count(*) from contributions where for_month=p_month and status='confirmed'),
-            (select count(*) from members mm where mm.status in ('active','paused')
+            (select count(*) from members mm where mm.status in ('active','paused') and not mm.bot
                and not exists (select 1 from contributions cc where cc.member_id=mm.id and cc.for_month=p_month and cc.status='confirmed')),
             p_note)
     returning * into c;
@@ -1163,6 +1196,8 @@ begin
   if not has_role('treasurer','deputy','admin') then raise exception 'Only the Banker can record money that arrived'; end if;
   select * into m from members where id = p_member;
   if m.id is null then raise exception 'No such member'; end if;
+  -- A robot sends no money. A row against one would sit in the queue and wedge the close.
+  if m.bot then raise exception '% is a robot, not a member who pays', m.name; end if;
   usd := round(p_amount, 2);
   if usd <= 0 then raise exception 'Enter the amount that actually arrived'; end if;
   is_extra := p_for_month is null;
@@ -1254,6 +1289,33 @@ begin
 end $$;
 
 -- ---------- deals ----------
+-- A link the board can safely offer. The board renders source_url as a "Go and book it" button
+-- in front of an officer, and links arrive from the paste parser, the email ingest and the
+-- watcher — none of them ours to trust. Escaping stops a value breaking out of the attribute
+-- but does nothing about the scheme, so `javascript:` would have been a working button.
+-- Refused loudly rather than dropped quietly, so a mistake is visible.
+create or replace function clean_link(p_url text) returns text
+language plpgsql immutable set search_path = public as $$
+declare u text := nullif(trim(coalesce(p_url, '')), '');
+begin
+  if u is null then return null; end if;
+  if u !~* '^https?://[^\s<>"]+$' then
+    raise exception 'A link has to start with http:// or https:// — got %', left(u, 40);
+  end if;
+  return u;
+end $$;
+
+-- The watcher on the VPS needs to post a deal and must be able to do nothing else. Giving it
+-- the Voice role was the obvious way and the wrong one: stays_write and announcements_write are
+-- both `all` to comms, so a password sitting in a plain file on a rented machine could re-price
+-- the entire catalog or rewrite the club's announcements. It gets this instead, and no role.
+-- Only post_deal calls it, and that is security definer, so nobody is granted execute.
+create or replace function current_is_bot() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from members where auth_user_id = auth.uid() and bot and status = 'active')
+$$;
+revoke all on function current_is_bot() from public, anon, authenticated;
+
 create or replace function post_deal(
   p_stay uuid, p_from date, p_to date, p_points int,
   p_room_type uuid default null, p_title text default null, p_nights int default null,
@@ -1263,7 +1325,10 @@ create or replace function post_deal(
 returns deals language plpgsql security definer set search_path = public as $$
 declare d deals; st stays; n int;
 begin
-  if not has_role('planner','comms','admin') then raise exception 'Only Victor or Ian can post a deal'; end if;
+  -- Victor, Ian, or a robot that does nothing else.
+  if not (has_role('planner','comms','admin') or current_is_bot()) then
+    raise exception 'Only Victor or Ian can post a deal';
+  end if;
   select * into st from stays where id = p_stay;
   if st.id is null then raise exception 'Pick a place from the catalog'; end if;
   if p_from is null or p_to is null then raise exception 'A deal needs the dates it is for'; end if;
@@ -1274,7 +1339,7 @@ begin
                     points_per_night, retail_usd, source, source_url, source_ref, units, note, posted_by, expires_at)
     values (p_stay, p_room_type, case when st.kind = 'trip' then 'trip' else 'aruba' end,
             coalesce(nullif(trim(p_title), ''), st.name), p_from, p_to, n, p_points,
-            round(p_points::numeric / n), p_retail_usd, p_source, nullif(trim(p_source_url), ''),
+            round(p_points::numeric / n), p_retail_usd, p_source, clean_link(p_source_url),
             nullif(trim(p_source_ref), ''), greatest(1, p_units), nullif(trim(p_note), ''),
             current_member_id(), p_expires_at)
     returning * into d;
@@ -1380,7 +1445,7 @@ create policy members_read on members for select to authenticated using (current
 -- rather than a guarantee.
 drop view if exists members_v;
 create view members_v with (security_invoker = on) as
-  select id, email, name, username, must_change_password, phone, roles, status, monthly_usd, hue, home, title, joined_at,
+  select id, email, name, username, must_change_password, bot, phone, roles, status, monthly_usd, hue, home, title, joined_at,
          founding, sponsor_id, card_code, household, preferences, standing_order,
          show_on_rollcall, paused_until, paused_months, dream_stay_id, goal, left_at,
          (auth_user_id is not null) as claimed
@@ -1390,7 +1455,7 @@ create view members_v with (security_invoker = on) as
 -- expression reads it; the view does not return it, so nothing the app passes around carries
 -- it. `notes` is granted to nobody.
 revoke select on members from authenticated, anon;
-grant select (id, auth_user_id, email, name, username, must_change_password, phone, roles, status, monthly_usd, hue, home,
+grant select (id, auth_user_id, email, name, username, must_change_password, bot, phone, roles, status, monthly_usd, hue, home,
               title, joined_at, founding, sponsor_id, card_code, household, preferences,
               standing_order, show_on_rollcall, paused_until, paused_months, dream_stay_id,
               goal, left_at)
@@ -1484,6 +1549,9 @@ begin
     status      = coalesce((p_patch->>'status')::member_status, status),
     monthly_usd = coalesce((p_patch->>'monthlyUsd')::int, monthly_usd),
     founding    = coalesce((p_patch->>'founding')::boolean, founding),
+    -- Ticking "this is a robot" on a person by mistake had no undo: nothing here wrote the
+    -- column, so the row stayed uncounted and unchased with no way back short of SQL.
+    bot         = coalesce((p_patch->>'bot')::boolean, bot),
     title       = coalesce(p_patch->>'title', title),
     notes       = coalesce(p_patch->>'notes', notes)
   where id = p_id returning * into m;
@@ -1504,7 +1572,11 @@ declare m members; s settings; wanted member_role[]; r text;
 begin
   if not has_role('admin') then raise exception 'Only an admin can add a member'; end if;
   select * into s from settings where id = 1;
-  if (select count(*) from members where status in ('active','paused')) >= s.member_cap then
+  -- A machine account does not sit in one of the forty seats: it is not counted against the
+  -- cap, and the cap does not stand in its way either. Only counting was fixed the first time,
+  -- which meant that on the day the club filled up a second robot could no longer be added.
+  if not coalesce((p_patch->>'bot')::boolean, false)
+     and (select count(*) from members where status in ('active','paused') and not bot) >= s.member_cap then
     raise exception 'The Circle is capped at % Insiders', s.member_cap;
   end if;
   if coalesce(trim(p_patch->>'name'), '') = '' then raise exception 'They need a name'; end if;
@@ -1526,12 +1598,14 @@ begin
   end if;
   if array_length(wanted, 1) is null then wanted := '{member}'; end if;
 
-  insert into members(email, name, phone, monthly_usd, roles, status, founding, home, title, card_code)
+  insert into members(email, name, phone, monthly_usd, roles, status, founding, home, title, card_code, bot)
     values (nullif(trim(p_patch->>'email'), ''), trim(p_patch->>'name'), nullif(trim(p_patch->>'phone'), ''),
             coalesce((p_patch->>'monthlyUsd')::int, 100), wanted, 'invited',
-            coalesce((p_patch->>'founding')::boolean, (select count(*) from members) < s.founding_seats),
+            coalesce((p_patch->>'founding')::boolean,
+                     (select count(*) from members where not bot) < s.founding_seats),
             nullif(trim(p_patch->>'home'), ''), nullif(trim(p_patch->>'title'), ''),
-            upper(substr(md5(random()::text), 1, 6)))
+            upper(substr(md5(random()::text), 1, 6)),
+            coalesce((p_patch->>'bot')::boolean, false))
     returning * into m;
   perform log_audit('member.add','member',m.id::text,
                     jsonb_build_object('name', m.name, 'roles', to_jsonb(m.roles)));
@@ -1550,7 +1624,10 @@ create policy contributions_read on contributions for select to authenticated
 drop policy if exists contributions_insert on contributions;
 create policy contributions_insert on contributions for insert to authenticated
   with check (member_id = current_member_id() and status = 'pending' and reviewed_by is null
-              and points is null and share_usd is null and received_usd is null);
+              and points is null and share_usd is null and received_usd is null
+              -- A robot has no money to send, and one pending row against it would wedge
+              -- every future close, which waits for the queue to be empty.
+              and not exists (select 1 from members m where m.id = member_id and m.bot));
 
 drop policy if exists ledger_read on ledger;
 create policy ledger_read on ledger for select to authenticated
@@ -1757,7 +1834,7 @@ begin
        'log_audit','ledger_is_append_only','set_updated_at',
        'ledger_balance','committed_points','available_points','covered_points','consecutive_months',
        'promo_room','quote_points','reserve_expected_usd','season_for','easter_sunday',
-       'deal_matches_watch','valid_username')
+       'deal_matches_watch','valid_username','current_is_bot','assert_cosigner','clean_link')
      -- NOT has_role or current_member_id: eighteen and sixteen row-level security policies
      -- call them, and a policy expression is evaluated as the querying user, so revoking
      -- those would make every policy in the database fail and lock everyone out.

@@ -92,6 +92,10 @@ export class Store {
   isOfficer() { return this.hasRole('treasurer', 'deputy', 'planner', 'comms', 'admin'); }
   canConfirmMoney() { return this.hasRole('treasurer', 'deputy'); }
   canPlan() { return this.hasRole('planner', 'admin'); }
+  // The board is the Voice's job as much as the Planner's, and post_deal on the server has
+  // always said so. The client said planner-or-admin, so Ian was refused here for something
+  // the database would have allowed him.
+  canPostDeals() { return this.hasRole('planner', 'comms', 'admin'); }
   canQuote(redemption) { const s = this.stay(redemption?.stayId); return this.hasRole('planner', 'admin') || (this.hasRole('comms') && s?.kind === 'trip'); }
   async signIn(memberId) {
     const m = this.member(memberId); if (!m) throw new Error('No such member');
@@ -149,7 +153,10 @@ export class Store {
     const clash = this.state.members.find(x => x.id !== memberId && (x.username || '').toLowerCase() === u);
     if (clash) throw new Error(`Someone else already uses the username ${u}`);
     await this.setPasswordFor(memberId, password);
-    return this._writeMember(memberId, { username: u, mustChangePassword: true, status: 'active' }, actorId);
+    // A robot has nobody to choose a new password, and signs in over the API where no screen
+    // could ask it to. Same rule as admin_set_login().
+    const isBot = !!this.member(memberId)?.bot;
+    return this._writeMember(memberId, { username: u, mustChangePassword: !isBot, status: 'active' }, actorId);
   }
   async signInWithPassword(email, password) {
     const { verifyPassword } = await import('./passwords.js');
@@ -165,8 +172,13 @@ export class Store {
   get settings() { return this.state.settings; }
   member(id) { return this.state.members.find(m => m.id === id) || null; }
   get members() { return this.state.members; }
-  activeMembers() { return this.state.members.filter(m => m.status === 'active'); }
-  expectedMembers(month) { return this.state.members.filter(m => (m.status === 'active' || (m.status === 'paused' && m.pausedUntil && m.pausedUntil < month)) && (m.joinedAt || '').slice(0, 7) <= month); }
+  // Everyone the club counts as a person. The watcher that runs on the VPS is a member row like
+  // any other — it has to be, to sign in and post a deal — but it holds no seat, owes nothing,
+  // and must never turn up in a seat count, a co-signer list, or on the front page. Anything
+  // about people uses this; only Settings, where Victor manages the thing, sees every row.
+  people() { return this.state.members.filter(m => !m.bot); }
+  activeMembers() { return this.people().filter(m => m.status === 'active'); }
+  expectedMembers(month) { return this.people().filter(m => (m.status === 'active' || (m.status === 'paused' && m.pausedUntil && m.pausedUntil < month)) && (m.joinedAt || '').slice(0, 7) <= month); }
   stay(id) { return this.state.stays.find(s => s.id === id) || null; }
   get stays() { return this.state.stays; }
   arubaStays() { return this.state.stays.filter(s => s.kind === 'aruba' && s.active); }
@@ -378,7 +390,7 @@ export class Store {
     const m = {
       id: uid('mem'), name: name.trim(), email: email || inv?.email || '', phone, roles: ['member'], status: 'active', monthlyUsd: Number(monthlyUsd || inv?.monthlyUsd || 100),
       hue: Math.floor(Math.random() * 360), home: '', title: '', joinedAt: nowIso(), sponsorId: inv?.sponsorId || null,
-      founding: this.state.members.length < this.settings.foundingSeats, cardCode: Math.random().toString(36).slice(2, 8).toUpperCase(),
+      founding: this.people().length < this.settings.foundingSeats, cardCode: Math.random().toString(36).slice(2, 8).toUpperCase(),
       household, preferences, standingOrder, showOnRollcall, dreamStayId: this.arubaStays()[0]?.id || null, notes: '',
     };
     this.state.members.push(m);
@@ -396,7 +408,8 @@ export class Store {
     if (!name) throw new Error('They need a name');
     const email = String(data.email || '').trim();
     if (email && this.memberByEmail(email)) throw new Error('Someone is already on the list with that email');
-    if (this.state.members.filter(x => ['active', 'paused'].includes(x.status)).length >= this.settings.memberCap) {
+    // A machine account does not sit in one of the forty seats, so the cap does not apply to it.
+    if (!data.bot && this.people().filter(x => ['active', 'paused'].includes(x.status)).length >= this.settings.memberCap) {
       throw new Error(`The Circle is capped at ${this.settings.memberCap} Insiders`);
     }
     const roles = (Array.isArray(data.roles) && data.roles.length ? data.roles : ['member']);
@@ -839,7 +852,7 @@ export class Store {
   }
   async postDeal({ stayId, roomTypeId = null, title = '', from, to, nights = null, pointsTotal = null, pointsPerNight = null,
                    retailUsd = null, source = 'other', sourceUrl = '', sourceRef = '', units = 1, expiresAt = null, note = '' }, actorId) {
-    if (!this.canPlan()) throw new Error('Only Victor or Ian can post a deal');
+    if (!this.canPostDeals()) throw new Error('Only Victor or Ian can post a deal');
     const stay = this.stay(stayId); if (!stay) throw new Error('Pick a place from the catalog');
     if (!from || !to) throw new Error('A deal needs the dates it is for');
     if (from > to) throw new Error('Those dates are the wrong way round');
@@ -859,7 +872,7 @@ export class Store {
   }
   async retireDeal(id, actorId, reason = '') {
     const d = this.deal(id); if (!d) throw new Error('No such deal');
-    if (!this.canPlan()) throw new Error('Only Victor or Ian can take a deal down');
+    if (!this.canPostDeals()) throw new Error('Only Victor or Ian can take a deal down');
     d.status = 'gone'; d.retiredAt = nowIso(); d.retiredReason = reason;
     this.log(actorId, 'deal.retire', 'deal', id, { reason }); await this.commit('deals'); return d;
   }

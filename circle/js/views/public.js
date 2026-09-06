@@ -228,7 +228,7 @@ export function landing({ store, go }) {
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>Three people, three jobs</h2></div></div>
       <div class="jobs">${JOBS.map(({ role, job, what }) => {
-        const m = store.members.find(x => (x.roles || []).includes(role) && x.status !== 'left');
+        const m = store.people().find(x => (x.roles || []).includes(role) && x.status !== 'left');
         return `<div class="job">
           <h3>${escapeHtml(job)}</h3>
           <p class="job-who">${m ? `${avatar(m, 30)}<span>${escapeHtml(m.name)}</span>` : '<span class="muted">not yet filled</span>'}</p>

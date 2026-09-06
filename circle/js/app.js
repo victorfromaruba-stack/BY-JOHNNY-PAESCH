@@ -125,8 +125,14 @@ function render(current = router?.current) {
   if (!current) return;
   const { route } = current;
   if (route.auth && !store.session) { router.go('/sign-in', { replace: true }); return; }
-  // A password somebody else chose is a password somebody else knows. Nothing else opens
-  // until it has been replaced — including the back button.
+  // A password somebody else chose is a password somebody else knows. No screen opens until it
+  // has been replaced — including by the back button.
+  //
+  // Being plain about what this is: it is the app refusing to show anything, not the database
+  // refusing to answer. Somebody holding a handed-out password and willing to call the API
+  // directly is not stopped by it. That is a fair line here — the password is a fresh random
+  // one that reaches the person and nobody else, and it is replaced the first time they open
+  // the app — but it is a nudge with teeth, not a lock.
   if (store.session && store.me?.mustChangePassword && current.path !== '/set-password') {
     router.go('/set-password', { replace: true }); return;
   }
