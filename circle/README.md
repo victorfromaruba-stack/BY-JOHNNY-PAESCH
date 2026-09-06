@@ -63,6 +63,30 @@ If the server cannot be reached the app says so and stops. It no longer falls ba
 data, because invented balances that look real are worse than an error message. Add
 `?preview=1` to the URL to see the seeded preview deliberately.
 
+### One step Victor has to do by hand
+
+Supabase sends the confirmation and reset emails, and it will only send people back to a URL
+on its allow-list. The default is `http://localhost:3000`, which would make every link in
+those emails dead. There is no API for this, so it has to be set in the dashboard once:
+
+**Authentication → URL Configuration**
+
+- **Site URL:** `https://victorfromaruba-stack.github.io/BY-JOHNNY-PAESCH/circle/`
+- **Redirect URLs:** add `https://victorfromaruba-stack.github.io/BY-JOHNNY-PAESCH/circle/**`
+
+Until that is done, nobody can finish signing up. Everything else is already configured.
+
+Two things worth knowing while you are in there:
+
+- Supabase's built-in mail server is rate-limited to a handful of messages an hour and often
+  lands in spam. Fine for three people setting up once; if the Circle grows past a dozen,
+  put a real SMTP provider in **Authentication → Emails**.
+- **Authentication → Policies** has a *Leaked password protection* switch that checks new
+  passwords against HaveIBeenPwned. It is off. Turn it on — it costs nothing.
+
+Ian and Vishnu have no email address on their member rows yet. Add theirs from
+**Settings → Insiders** and they can set themselves up the same way.
+
 ## Where the deals come from — and what is honestly automatable
 
 Victor asked for a system that logs into Interval, RedWeek, Iberostar and Airbnb and watches

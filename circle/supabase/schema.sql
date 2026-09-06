@@ -1439,6 +1439,15 @@ create policy proofs_read on storage.objects for select to authenticated
 do $$ begin
   alter publication supabase_realtime add table contributions, redemptions, pledges, ledger, announcements;
 exception when others then null; end $$;
+-- Deals are the reason this channel earns its keep: something posted at eleven at night has
+-- to reach everyone's phone without them refreshing. Added separately so that a database
+-- where the line above already ran still picks these up.
+do $$ begin
+  alter publication supabase_realtime add table deals;
+exception when others then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table watches;
+exception when others then null; end $$;
 
 -- =====================================================================
 --  Row-level security for room types, the watch list and deals
