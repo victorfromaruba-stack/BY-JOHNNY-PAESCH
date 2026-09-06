@@ -48,9 +48,9 @@ export function home({ store, go }) {
       </div>
       <div id="balbar" style="margin-top:16px"></div>
       <div class="row" style="margin-top:16px">
-        <a class="btn" href="#/pay">Send a contribution</a>
-        <a class="btn ghost" href="#/stays">Request a stay</a>
-        <a class="btn quiet sm" href="#/ledger">Statement</a>
+        <a class="btn" href="#/pay">${icon('arrowUp', { size: 17 })}Send a contribution</a>
+        <a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Request a stay</a>
+        <a class="btn quiet sm" href="#/ledger">${icon('receipt', { size: 16 })}Statement</a>
       </div>
     </div>`);
   left.appendChild(top);
@@ -188,7 +188,7 @@ export function home({ store, go }) {
 
   // right column — streak, roll call, coverage, the note from Ian
   right.appendChild(el(`<div class="panel">
-      <p class="eyebrow">Your standing</p>
+      <p class="eyebrow">${icon('crown')}Your standing</p>
       <div class="row" style="gap:12px;margin-top:10px;align-items:center">
         ${treeSvg(VOCAB.tierLean[me.monthlyUsd], { size: 30 })}
         <div><b>${escapeHtml(tierName(me.monthlyUsd))}</b> · ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month
@@ -202,14 +202,14 @@ export function home({ store, go }) {
     right.querySelector('.spark-slot')?.replaceChildren(sparkline(series.length ? series : [0, 0], { height: 46 }));
   }
   right.appendChild(el(`<div class="panel">
-      <p class="eyebrow">This month in the Circle</p>
+      <p class="eyebrow">${icon('users')}This month in the Circle</p>
       <div class="row" style="gap:14px;margin-top:12px;align-items:center">
         <span id="rollcall"></span>
         <div class="small"><b>${t.confirmedThisMonth} of ${t.expectedThisMonth}</b> contributions confirmed for ${escapeHtml(fmtMonth(month))}.
         <br><span class="muted">Names stay private unless an Insider opts in.</span></div>
       </div></div>`));
   right.querySelector('#rollcall').replaceChildren(ring({ total: t.expectedThisMonth, filled: t.confirmedThisMonth, size: 76 }));
-  const cov = el(`<div class="panel"><p class="eyebrow">Proof of reserves</p><div id="cov" style="margin-top:12px"></div>
+  const cov = el(`<div class="panel"><p class="eyebrow">${icon('shield')}Proof of reserves</p><div id="cov" style="margin-top:12px"></div>
       <p class="small muted" style="margin-top:10px"><a href="#/pool">The whole Pool</a></p></div>`);
   cov.querySelector('#cov').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, configured: t.accountsConfigured }));
   right.appendChild(cov);
@@ -304,7 +304,7 @@ export function pay({ store, go }) {
             <div class="copyline"><code class="num">${escapeHtml(s.reserveAccount.number)}</code><button class="btn quiet sm" data-copy="${escapeHtml(s.reserveAccount.number)}">Copy</button></div>
           </div>
           <div class="stack">
-            <div><p class="eyebrow">Put this in the description</p>
+            <div><p class="eyebrow">${icon('tag')}Put this in the description</p>
               <div class="copyline" style="margin-top:6px"><code class="num" style="font-size:1.05rem">${escapeHtml(reference)}</code><button class="btn quiet sm" data-copy="${escapeHtml(reference)}">Copy</button></div></div>
             <p class="small muted">It is how Vishnu matches your transfer against the statement in seconds. Same reference every month, with the month on the end.</p>
           </div>
@@ -339,7 +339,7 @@ export function pay({ store, go }) {
             <label class="field"><span>Anything Vishnu should know</span><textarea name="note" rows="2" placeholder="Optional — for example, my wife sent it from her account."></textarea></label>
             <label class="field"><span>Screenshot of the transfer (optional)</span><input name="proof" type="file" accept="image/*" style="padding:10px">
               <span class="hint">Helpful, never required. The bank statement is what actually matches.</span></label>
-            <div class="row"><button class="btn" type="submit">I sent it</button>
+            <div class="row"><button class="btn" type="submit">${icon('send', { size: 17 })}I sent it</button>
               <a class="btn ghost" id="wa" target="_blank" rel="noopener" href="${escapeHtml(waLink(store.member('mem_vishnu')?.phone || '', TEMPLATES.transferSent({ member: me, amountUsd: me.monthlyUsd, month, reference })))}">Message Vishnu</a></div>
           </form>`}
       </div>
@@ -470,13 +470,13 @@ export function card({ store, go }) {
       <p class="small muted" style="margin-top:12px">Tap the card to turn it over. The face carries no numbers — a card someone can read your balance off is a card you cannot leave on a table.</p>
 
       <div class="panel" style="margin-top:20px;display:grid;gap:14px;justify-items:center">
-        <p class="eyebrow">Scan to identify you</p>
+        <p class="eyebrow">${icon('idCard')}Scan to identify you</p>
         <div class="qr-holder" id="qr"></div>
         <p class="tiny muted" style="text-align:center;max-width:34ch">Any phone camera reads it. It opens your entry in the Circle, so Victor or Ian can pull you up at a hotel desk without asking your surname twice.</p>
       </div>
 
       <div class="panel" style="margin-top:16px">
-        <p class="eyebrow">Keep it on your phone</p>
+        <p class="eyebrow">${icon('wallet')}Keep it on your phone</p>
         <div class="stack" style="margin-top:12px">
           <button class="btn block" id="wallet">Add to Apple Wallet</button>
           <button class="btn ghost block" id="save">Save the card as an image</button>

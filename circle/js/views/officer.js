@@ -21,7 +21,7 @@ export function bank({ store, go }) {
   const month = monthKey();
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <div class="row-between">
-        <div><p class="eyebrow">${escapeHtml(VOCAB.treasurerTitle)}</p><h1>The inbox</h1></div>
+        <div><p class="eyebrow">${icon('inbox')}${escapeHtml(VOCAB.treasurerTitle)}</p><h1>The inbox</h1></div>
         <div class="row no-print">
           <button class="btn sm" id="record">${icon('banknote', { size: 16 })}Money came in</button>
           <a class="btn ghost sm" href="#/bank/close/${month}">${icon('lock', { size: 16 })}Close ${escapeHtml(fmtMonth(month))}</a></div>
@@ -44,7 +44,7 @@ export function bank({ store, go }) {
     </div></section></div>`);
 
   const queue = wrap.querySelector('#queue');
-  if (!pending.length) queue.appendChild(el(`<div class="empty"><b>Nothing waiting</b><p class="small muted">Every transfer marked as sent has been confirmed or returned. ${escapeHtml(VOCAB.pap.thanks[0])}.</p></div>`));
+  if (!pending.length) queue.appendChild(el(`<div class="empty">${icon('checkCircle', { size: 28, cls: 'ico-muted' })}<b style="display:block;margin-top:10px">Nothing waiting</b><p class="small muted">Every transfer marked as sent has been confirmed or returned. ${escapeHtml(VOCAB.pap.thanks[0])}.</p></div>`));
   for (const c of pending) {
     const m = store.member(c.memberId);
     const row = el(`<div class="panel" data-id="${c.id}">
@@ -61,9 +61,9 @@ export function bank({ store, go }) {
           <button class="btn quiet sm" data-copy="${escapeHtml(c.reference || '')}">Copy</button></div>
         ${c.note ? `<p class="small muted" style="margin-top:10px">“${escapeHtml(c.note)}”</p>` : ''}
         <div class="row" style="margin-top:14px">
-          <button class="btn good" data-act="confirm">Confirm ${escapeHtml(fmtUsd2(c.expectedUsd))}</button>
-          <button class="btn ghost" data-act="partial">A different amount arrived</button>
-          <button class="btn danger" data-act="return">Return it</button>
+          <button class="btn good" data-act="confirm">${icon('check', { size: 16 })}Confirm ${escapeHtml(fmtUsd2(c.expectedUsd))}</button>
+          <button class="btn ghost" data-act="partial">${icon('scale', { size: 16 })}A different amount arrived</button>
+          <button class="btn danger" data-act="return">${icon('refresh', { size: 16 })}Return it</button>
         </div>
       </div>`);
     row.addEventListener('click', async (e) => {
@@ -222,7 +222,7 @@ export function monthClose({ store, params, go }) {
   const p = store.closePreview(month);
   const others = store.members.filter(m => m.id !== me.id && m.roles.some(r => ['planner', 'comms', 'admin', 'treasurer', 'deputy'].includes(r)));
   const wrap = el(`<div><section class="sec"><div class="wrap">
-      <p class="eyebrow">Month close</p>
+      <p class="eyebrow">${icon('lock')}Month close</p>
       <h1>${escapeHtml(fmtMonth(month))}</h1>
       ${p.alreadyClosed ? `<div class="notice good" style="margin-top:16px"><b>Already closed and sealed</b>
         <p class="small">Closed by ${escapeHtml(store.member(p.alreadyClosed.closedBy)?.name || '')} on ${escapeHtml(fmtDayTime(p.alreadyClosed.closedAt))}, co-signed by ${escapeHtml(store.member(p.alreadyClosed.cosignedBy)?.name || '')}. Reserve at close ${escapeHtml(fmtUsd2(p.alreadyClosed.bankBalanceUsd))}, coverage ${escapeHtml(fmtPct(p.alreadyClosed.coverage))}.</p></div>` : ''}
@@ -246,7 +246,7 @@ export function monthClose({ store, params, go }) {
         </div>
         <div class="stack">
           <div class="panel flat">
-            <p class="eyebrow">The month</p>
+            <p class="eyebrow">${icon('calendar')}The month</p>
             <ul class="ledger" style="margin-top:10px">
               <li><span class="what"><b>Collected</b></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.grossUsd))}</b></span></li>
               <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta">to Operating</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.shareUsd))}</b></span></li>
@@ -288,7 +288,7 @@ export function desk({ store, go }) {
   const me = store.me, s = store.settings;
   const open = store.openRedemptions();
   const wrap = el(`<div><section class="sec"><div class="wrap">
-      <p class="eyebrow">Victor and Ian</p>
+      <p class="eyebrow">${icon('clipboard')}Victor and Ian</p>
       <h1>The Desk</h1>
       <div class="row no-print" style="margin-top:16px" role="tablist" id="tabs">
         <button class="btn sm" data-tab="requests" aria-pressed="true">Requests${open.length ? ` · ${open.length}` : ''}</button>
@@ -554,7 +554,7 @@ export function pool({ store }) {
   const t = store.treasury();
   const series = store.monthlySeries(9);
   const wrap = el(`<div><section class="sec"><div class="wrap">
-      <p class="eyebrow">Proof of reserves</p>
+      <p class="eyebrow">${icon('shield')}Proof of reserves</p>
       <h1>The Pool</h1>
       <p class="lede" style="margin-top:12px">Every point the Circle owes has a dollar sitting behind it in the Reserve. This page is the arithmetic, open to every Insider.</p>
       <div id="gauge" style="margin-top:20px"></div>
@@ -725,11 +725,11 @@ export function settings({ store, go }) {
         <h2 style="font-size:1.1rem">The two accounts</h2>
         <p class="small muted" style="margin-top:6px">Coverage can only be verified when the Reserve and Operating are two different accounts. Be honest about who holds them.</p>
         <div class="grid g2" style="margin-top:12px">
-          <div><p class="eyebrow">Reserve · backs the points</p>
+          <div><p class="eyebrow">${icon('vault')}Reserve · backs the points</p>
             <label class="field"><span>Bank</span><input name="rBank" value="${escapeHtml(s.reserveAccount.bank || '')}"></label>
             <label class="field"><span>Held by</span><input name="rHolder" value="${escapeHtml(s.reserveAccount.holder || '')}" placeholder="Held by Vishnu on behalf of the Circle"></label>
             <label class="field"><span>Account number</span><input name="rNumber" class="mono" value="${escapeHtml(s.reserveAccount.number || '')}"></label></div>
-          <div><p class="eyebrow">Operating · the 15%</p>
+          <div><p class="eyebrow">${icon('scale')}Operating · the 15%</p>
             <label class="field"><span>Bank</span><input name="oBank" value="${escapeHtml(s.operatingAccount.bank || '')}"></label>
             <label class="field"><span>Held by</span><input name="oHolder" value="${escapeHtml(s.operatingAccount.holder || '')}"></label>
             <label class="field"><span>Account number</span><input name="oNumber" class="mono" value="${escapeHtml(s.operatingAccount.number || '')}"></label></div>
