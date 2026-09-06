@@ -1,9 +1,25 @@
 # Hunto — the Inner Circle
 
-A private travel club for a group of friends in Aruba. Members contribute $100, $150 or
-$200 a month by bank transfer. The Banker confirms the money has arrived; only then are
-points minted. The club keeps 15% for running it, the other 85% backs the points, and
-points pay for stays on the island and trips the Desk organizes.
+A private travel club for a group of friends in Aruba. It is invitation only: every
+Insider is someone Victor or Ian knows, there is no public sign-up, and the club is
+capped at 40 seats.
+
+Members contribute $100, $150 or $200 a month by bank transfer. The Banker confirms the
+money has arrived; only then are points minted. The club keeps 15% for running it, the
+other 85% backs the points, and points pay for stays on the island and trips the Desk
+organizes.
+
+**What a level is for.** Stays on Aruba are open to every Insider — that is what most
+people join for. The bigger levels are for leaving the island with the group:
+
+| | Watapana · $100 | Fofoti · $150 | Kibrahacha · $200 |
+|---|---|---|---|
+| Reaches | Aruba | Aruba + the region | Anywhere the group goes |
+| Trips | — | Curaçao, Bonaire, Colombia | and Panama, Portugal, Mexico |
+
+A trip above your level is still visible, with what it would take to join it. Moving up
+takes effect on your next contribution and changes nothing you already hold, and a member
+at the higher level can sponsor a friend onto a trip.
 
 **Everything in this build runs in the browser with seeded demo data.** Nothing real is
 stored anywhere and no money moves. See *Going live* below for what has to happen first.
@@ -139,6 +155,10 @@ The demo is deliberately self-contained. To run this for real:
 5. Which resorts have actually been negotiated so far?
 6. The club is named **Hunto** — Papiamento for "together". The name lives in
    `js/core/vocab.js`; change it there and every screen, reference and message follows.
+7. Is the reach right — $100 the island, $150 the region, $200 anywhere? And should a
+   lower-level member be able to buy into a single trip, or only move up for the year?
+8. Wallet passes: pay Apple the $99 so the pass says Hunto, or use a free shared
+   certificate and accept someone else's name on it?
 
 ## The back office
 
@@ -158,11 +178,63 @@ Everything the club charges is editable, and always in both units:
 - **Settings → Insiders** — invite someone (it makes a code and copies the link), change
   roles or tiers, and write a correcting line into anyone's ledger with a reason attached.
 
+## The membership card
+
+Every Insider has a card with their name, their level and a QR code. The QR is generated
+in the app itself (`js/ui/qrcode.js` — byte mode, error correction M, versions 1–10,
+checked module-for-module against a reference implementation and decoded back in the
+tests) so there is no CDN script and no external dependency. It encodes a link to the
+member's entry, which any phone camera opens.
+
+Four ways to keep the card, in the order they cost anything:
+
+1. **Save it as an image** — works on every phone today. Credit-card proportions at
+   300dpi with the QR on it, so it is scannable on its own.
+2. **Print it, card sized** — the print dialog is set to 85.6 × 53.98 mm, so it comes out
+   as a card rather than a card floating on A4.
+3. **Add the app to the home screen** — one tap to the card. On iPhone this is the Share
+   button in Safari, then *Add to Home Screen*; iOS gives no way for a page to offer it.
+4. **Add to Apple Wallet** — needs a signed pass, which needs a certificate. See below.
+
+### Getting the card into Apple Wallet
+
+A `.pkpass` is a zip containing `pass.json`, a `manifest.json` of SHA-1 hashes, a
+detached PKCS#7 `signature`, and the images. The signature has to be made with a
+certificate Apple issues, which means it cannot happen in the browser — the private key
+would be sitting in the page. `supabase/functions/issue-pass/` does it on the server and
+`js/ui/wallet.js` calls it; paste the function's URL into *Settings → Apple Wallet
+passes* and the button appears on every member's card.
+
+Three ways to get there, honestly compared:
+
+| | Cost | Whose name is on the pass | Worth it when |
+|---|---|---|---|
+| **Apple developer account** | $99 a year | Hunto's | You want the club to own its pass and control updates |
+| **A shared-certificate service** (PassSource is free; WalletWallet has a free tier well above 40 members) | $0 | Theirs | You want a pass in Wallet this weekend |
+| **QR and a saved image only** | $0 | — | Honestly, this is fine for a club that meets in person |
+
+The paid path, end to end: enrol at developer.apple.com as an **Individual** (an
+organisation enrolment wants a D-U-N-S number and a company website, which a friends'
+club does not have); create a Pass Type ID (`pass.aw.hunto.card`); generate a certificate
+for it and export it as a `.p12`; download the **WWDR G4** intermediate from
+`apple.com/certificateauthority/AppleWWDRCAG4.cer` and convert it to PEM; then:
+
+```sh
+supabase secrets set PASS_TYPE_ID=pass.aw.hunto.card TEAM_ID=XXXXXXXXXX \
+  PASS_CERT_P12_BASE64="$(base64 -i pass.p12)" PASS_CERT_PASSWORD=... \
+  WWDR_PEM="$(cat AppleWWDRCAG4.pem)" CLUB_URL=https://…/circle/
+supabase functions deploy issue-pass
+```
+
+Google Wallet is deliberately not built: it has no iPhone app, and the club is
+iPhone-first. If enough members end up on Android it is the same Edge Function with a
+different signature.
+
 ## Notes on the build
 
-- No framework, no bundler, no dependencies to install. Two libraries load lazily from a
-  CDN when they are needed: `@supabase/supabase-js` (only in Supabase mode) and
-  `qrcodejs` (only on the card screen).
+- No framework, no bundler, no dependencies to install, and one lazily-loaded library:
+  `@supabase/supabase-js`, only in Supabase mode. Everything else — the QR encoder, the
+  charts, the card artwork — is in the repository.
 - The service worker caches the shell but never Supabase traffic.
 - A strict `Content-Security-Policy` is set in `index.html`; there are no inline scripts.
 - The demo lives in `localStorage`, so on iOS Safari it is cleared after about a week of

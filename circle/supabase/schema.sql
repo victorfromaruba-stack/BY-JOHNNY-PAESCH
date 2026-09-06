@@ -52,6 +52,7 @@ create table if not exists settings (
   operating_account jsonb not null default '{}',
   reserve_verified  jsonb,                          -- {balanceUsd, at, byId} — set at each month close
   whatsapp_group_url text,
+  wallet            jsonb not null default '{}',      -- {url, token} for the pass service
   rules_version     text not null default '1.0',
   rules_date        date not null default '2026-09-05',
   updated_at        timestamptz not null default now()

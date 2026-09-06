@@ -59,7 +59,7 @@ export class SupabaseStore extends Store {
       retailUsd: Number(s.retailUsd || 0),
       dates: s.startsOn ? { from: s.startsOn, to: s.endsOn } : undefined }));
     const { data: s } = await this.sb.from('settings').select('*').eq('id', 1).maybeSingle();
-    if (s) this.state.settings = { ...DEFAULT_SETTINGS, serviceRate: Number(s.service_rate), pointsPerDollar: Number(s.points_per_dollar), awgPerUsd: Number(s.awg_per_usd), tiers: s.tiers, treasurerBank: s.treasurer_bank, clubName: s.club_name };
+    if (s) this.state.settings = { ...DEFAULT_SETTINGS, serviceRate: Number(s.service_rate), pointsPerDollar: Number(s.points_per_dollar), awgPerUsd: Number(s.awg_per_usd), tiers: s.tiers, streakBonuses: s.streak_bonuses, foundingBonus: s.founding_bonus, memberCap: s.member_cap, exitFeeUsd: Number(s.exit_fee_usd), quoteHours: s.quote_hours, bankerSlaHours: s.banker_sla_hours, reserveAccount: s.reserve_account, operatingAccount: s.operating_account, reserveVerified: s.reserve_verified, wallet: s.wallet, clubName: s.club_name };
     this.notify('reload');
   }
   subscribeRealtime() {
@@ -170,7 +170,7 @@ export class SupabaseStore extends Store {
     const row = {};
     const map = { serviceRate: 'service_rate', pointsPerDollar: 'points_per_dollar', memberCap: 'member_cap',
       quoteHours: 'quote_hours', bankerSlaHours: 'banker_sla_hours', exitFeeUsd: 'exit_fee_usd',
-      tiers: 'tiers', reserveAccount: 'reserve_account', operatingAccount: 'operating_account', clubName: 'club_name' };
+      tiers: 'tiers', reserveAccount: 'reserve_account', operatingAccount: 'operating_account', clubName: 'club_name', wallet: 'wallet' };
     for (const [k, v] of Object.entries(patch)) if (map[k]) row[map[k]] = v;
     const { error } = await this.sb.from('settings').update({ ...row, updated_at: new Date().toISOString() }).eq('id', 1);
     if (error) throw new Error(error.message); await this.reload();

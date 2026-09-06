@@ -1,7 +1,7 @@
 // Public and entry screens: the landing page, the rules, sign-in, and the invitation.
 import { escapeHtml, html, raw, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, fmtDay, fmtPct, initials } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
-import { splitContribution, tierFor, projectPoints, seasonPoints, SEASONS } from '../core/money.js';
+import { splitContribution, tierFor, projectPoints, seasonPoints, SEASONS, REACH } from '../core/money.js';
 import { splitBar, poolGauge, memberCard, ring } from '../ui/pieces.js';
 import { drawContours, treeSvg, starSvg } from '../ui/art.js';
 import { toast, setBusy } from '../ui/components.js';
@@ -37,9 +37,10 @@ export function landing({ store, go }) {
 
   wrap.appendChild(el(`<section class="sec">
     <div class="wrap">
-      <p class="eyebrow enter">${escapeHtml(VOCAB.subtitle)}</p>
+      <p class="eyebrow enter">${escapeHtml(VOCAB.subtitle)} · by invitation</p>
       <h1 class="enter" style="--d:40ms;max-width:16ch">A private travel circle in Aruba.</h1>
       <p class="lede enter" style="--d:80ms;margin-top:14px">${escapeHtml(VOCAB.tagline)} You put in $100, $150 or $200 a month. Vishnu confirms the money has landed, and only then do your points appear — 100 points to the dollar, fixed forever.</p>
+      <p class="lede enter" style="--d:100ms;margin-top:12px">This is not a business and it is not open to the public. Every Insider is someone Victor or Ian knows, and you join because one of them asked you. ${escapeHtml(store.activeMembers().length)} of ${s.memberCap} seats are taken.</p>
       <div class="row enter" style="--d:120ms;margin-top:22px">
         <a class="btn" href="#/sign-in">I have an invitation</a>
         <a class="btn ghost" href="#/rules">How the Circle works</a>
@@ -93,6 +94,24 @@ export function landing({ store, go }) {
   };
   draw();
   choices.addEventListener('click', (e) => { const b = e.target.closest('[data-amt]'); if (!b) return; chosen = Number(b.dataset.amt); draw(); });
+
+  // What each level is for
+  wrap.appendChild(el(`<section class="sec"><div class="wrap">
+      <div class="sec-head"><div><p class="eyebrow">What each level is for</p><h2>The island, the region, anywhere</h2>
+      <p>Stays on Aruba are open to every Insider — that is what most of us are here for. The bigger levels are for the people who want to leave the island with the group: Victor sources those trips too, and they cost the Circle more to hold.</p></div></div>
+      <div class="grid g3">
+        ${s.tiers.map(t => `<div class="panel">
+          <div class="row-between"><div><p class="eyebrow" style="color:var(--ink-2)">$${t.monthlyUsd} a month</p>
+            <h3 style="margin-top:6px">${escapeHtml(tierName(t.monthlyUsd))}</h3></div>${treeSvg(VOCAB.tierLean[t.monthlyUsd], { size: 26 })}</div>
+          <p class="small" style="margin-top:10px"><b>${escapeHtml(REACH[t.reach].label)}</b> — ${escapeHtml(REACH[t.reach].blurb.toLowerCase())}.</p>
+          <ul class="stack" style="margin-top:10px;padding-left:1.1em;gap:6px">
+            <li class="small muted">${escapeHtml(fmtPoints(Math.round(t.monthlyUsd * (1 - s.serviceRate) * s.pointsPerDollar) + Math.round(t.monthlyUsd * t.bonusRate * s.pointsPerDollar)))} a month${t.bonusRate ? `, including a ${Math.round(t.bonusRate * 100)}% bonus` : ''}</li>
+            <li class="small muted">${t.holds} open request${t.holds > 1 ? 's' : ''} at a time · ${t.windowMonths} months ahead</li>
+            <li class="small muted">${t.guestCerts} guest passes a year${t.firstLookHours ? ` · first look at a new trip ${t.firstLookHours}h early` : ''}</li>
+          </ul></div>`).join('')}
+      </div>
+      <p class="small muted" style="margin-top:16px">You can move between levels any month; it takes effect on your next contribution and nothing you already hold changes. If a trip is above your level and you want in, a member at that level can sponsor you — ask Ian.</p>
+      </div></section>`));
 
   // How a contribution becomes a stay
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
@@ -173,13 +192,15 @@ export function rules({ store }) {
     ['Leave any time.', `Thirty days’ notice, twelve months to use what you hold, then base points are refunded at face value minus $${s.exitFeeUsd} from the Reserve within thirty days. Promotional points are forfeited and the 15% is not refunded. In hardship or death the refund is immediate, at face value, with no fee.`],
     ['Household is always covered; guests use a certificate.', `Your partner and children travel on your points with no extra charge. Non-members use a guest certificate (${s.tiers.map(t => `${t.guestCerts} for ${tierName(t.monthlyUsd)}`).join(', ')} a year) or pay the same negotiated rate in cash.`],
     ['Points and bookings cannot be sold, transferred or advertised.', 'This is a private circle of friends. Reselling a booking ends a membership and returns the backing.'],
+    ['The Circle is by invitation only.', `Every Insider is invited by someone already in and the club is capped at ${s.memberCap} seats. It is not advertised, there is no public sign-up, and nobody joins who Victor or Ian does not know. If you leave and want to come back later, you come back the same way.`],
+    ['Your level decides how far the trips go.', `Stays on Aruba are open to every Insider. ${tierName(150)} adds trips around the region — the other islands and the near mainland — and ${tierName(200)} adds anywhere else the group goes. Move between levels any month; it takes effect on your next contribution. A member at the higher level can sponsor a friend onto a trip.`],
     ['You can chip in to each other’s bookings.', 'Open a booking to the Circle and anyone can add their own points to it — for a room you are sharing, or as a gift. Their points are committed the moment they chip in and released if it falls through; when the hotel is paid, each person’s share burns from their own ledger. Nobody can chip in more than the booking still needs, and points never change hands as points.'],
     [`${VOCAB.clubName} is a private members’ club for prepaid, club-arranged travel.`, 'Points are not deposits and not an investment. There is no interest, no return, and no payout that depends on new members joining: your points are backed by your own money, held in the Reserve.'],
   ];
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <p class="eyebrow">Version ${escapeHtml(s.rulesVersion)} · ${escapeHtml(fmtDay(s.rulesDate))}</p>
       <h1>How the Circle works</h1>
-      <p class="lede" style="margin-top:12px">Twelve clauses, in plain words. Everything the app does follows from these, and nothing here changes without telling you first.</p>
+      <p class="lede" style="margin-top:12px">In plain words. Everything the app does follows from these, and nothing here changes without telling you first.</p>
       <ol class="stack" style="margin-top:26px;padding-left:1.2em">
         ${clauses.map(([t, b]) => `<li style="margin-bottom:16px"><b>${escapeHtml(t)}</b><p class="small muted" style="margin-top:5px;max-width:72ch">${escapeHtml(b)}</p></li>`).join('')}
       </ol>
@@ -197,6 +218,7 @@ export function signIn({ store, go, refresh }) {
   const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:640px">
       <p class="eyebrow"><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span> · ${escapeHtml(VOCAB.pap.welcome[1])} back</p>
       <h1>Sign in</h1>
+      <p class="lede" style="margin-top:10px">The Circle is invitation only. If you were asked to join and have a link from Victor or Ian, open that instead — it sets up your card.</p>
       <form id="magic" class="panel" style="margin-top:20px">
         <label class="field"><span>Email</span>
           <input type="email" name="email" autocomplete="email" placeholder="you@example.aw" required>

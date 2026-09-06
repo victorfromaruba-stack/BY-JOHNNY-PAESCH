@@ -11,10 +11,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   serviceRate: 0.15,
   pointsPerDollar: 100,
   awgPerUsd: 1.79,
+  // `reach` is what a level is for: the island, the region, or anywhere Victor goes.
   tiers: [
-    { id: 't100', monthlyUsd: 100, bonusRate: 0.00, holds: 1, guestCerts: 2, windowMonths: 10, firstLookHours: 0 },
-    { id: 't150', monthlyUsd: 150, bonusRate: 0.02, holds: 2, guestCerts: 3, windowMonths: 12, firstLookHours: 48 },
-    { id: 't200', monthlyUsd: 200, bonusRate: 0.04, holds: 2, guestCerts: 4, windowMonths: 13, firstLookHours: 72 },
+    { id: 't100', monthlyUsd: 100, bonusRate: 0.00, holds: 1, guestCerts: 2, windowMonths: 10, firstLookHours: 0, reach: 'aruba' },
+    { id: 't150', monthlyUsd: 150, bonusRate: 0.02, holds: 2, guestCerts: 3, windowMonths: 12, firstLookHours: 48, reach: 'region' },
+    { id: 't200', monthlyUsd: 200, bonusRate: 0.04, holds: 2, guestCerts: 4, windowMonths: 13, firstLookHours: 72, reach: 'world' },
   ],
   streakBonuses: { 6: 1000, 12: 2500, 24: 5000 },
   foundingBonus: 2000,
@@ -33,12 +34,32 @@ export const DEFAULT_SETTINGS = Object.freeze({
   operatingAccount: { bank: '', holder: '', number: '' },
   reserveVerified: null,      // { balanceUsd, at, byId } entered by the Banker at Month Close
   whatsappGroupUrl: '',
+  wallet: { url: '', token: '' },   // the Edge Function that signs Apple Wallet passes
   rulesVersion: '1.0',
   rulesDate: '2026-09-05',
 });
 
 export function tierFor(settings, monthlyUsd) {
   return settings.tiers.find(t => t.monthlyUsd === Number(monthlyUsd)) || settings.tiers[0];
+}
+
+// What each level reaches. A stay on Aruba is open to everyone; trips off the island
+// are what the bigger levels are for, and a trip says which level it needs.
+export const REACH = Object.freeze({
+  aruba: { id: 'aruba', rank: 0, label: 'Aruba', blurb: 'Stays anywhere on the island' },
+  region: { id: 'region', rank: 1, label: 'The region', blurb: 'Aruba, plus trips around the Caribbean and northern South America' },
+  world: { id: 'world', rank: 2, label: 'Anywhere', blurb: 'Aruba, the region, and wherever else Victor takes the group' },
+});
+export const reachRank = (id) => REACH[id]?.rank ?? 0;
+/** The level a member would need for this stay or trip. */
+export const reachOf = (stay) => (stay?.kind === 'trip' ? (stay.reach || 'region') : 'aruba');
+export function canReach(settings, monthlyUsd, stay) {
+  return reachRank(tierFor(settings, monthlyUsd).reach) >= reachRank(reachOf(stay));
+}
+/** The cheapest level that reaches this trip. */
+export function tierNeededFor(settings, stay) {
+  const want = reachRank(reachOf(stay));
+  return settings.tiers.find(t => reachRank(t.reach) >= want) || settings.tiers[settings.tiers.length - 1];
 }
 
 /** Split money actually received into share, backing and points. Bonus only on a full tier month. */

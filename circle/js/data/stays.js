@@ -95,33 +95,36 @@ export const ARUBA_STAYS = [
 ];
 
 // Trips Victor and Ian organize. A seat covers the hotel, transfers and whatever is
-// listed — flights are extra unless the note says otherwise; two sharing a double. Guests pay `guestCashUsd` to the Banker (no 15% on that).
+// listed — flights are extra unless the note says otherwise; two sharing a double.
+//
+// `reach` says which level a trip is for. Watapana is the island; Fofoti adds the
+// region — the other islands and the near mainland; Kibrahacha adds everywhere else. Guests pay `guestCashUsd` to the Banker (no 15% on that).
 export const WORLD_TRIPS = [
-  { id: 'trip_cartagena', kind: 'trip', name: 'Cartagena, inside the walls', area: 'Cartagena', country: 'Colombia', dates: { from: '2026-10-15', to: '2026-10-19' }, nights: 4,
+  { id: 'trip_cartagena', kind: 'trip', reach: 'region', name: 'Cartagena, inside the walls', area: 'Cartagena', country: 'Colombia', dates: { from: '2026-10-15', to: '2026-10-19' }, nights: 4,
     pointsPerSeat: 64000, guestCashUsd: 640, retailUsd: 880, seats: 10, holdDeadline: '2026-09-20', isDrop: true,
     vibe: 'A boutique casa inside the old city, rooftop pool, and a long dinner in Getsemaní.',
     features: ['Group trip', 'Boutique casa', 'Four nights'], dealNote: 'Flights not included. Victor holds the block until 20 September.' },
-  { id: 'trip_curacao', kind: 'trip', name: 'Curaçao, Pietermaai weekend', area: 'Willemstad', country: 'Curaçao', dates: { from: '2026-11-20', to: '2026-11-23' }, nights: 3,
+  { id: 'trip_curacao', kind: 'trip', reach: 'region', name: 'Curaçao, Pietermaai weekend', area: 'Willemstad', country: 'Curaçao', dates: { from: '2026-11-20', to: '2026-11-23' }, nights: 3,
     pointsPerSeat: 42000, guestCashUsd: 420, retailUsd: 560, seats: 12, holdDeadline: '2026-10-25', isDrop: false,
     vibe: 'A pastel townhouse hotel in Pietermaai, twenty-five minutes across the water.',
     features: ['Group trip', 'Short flight', 'Dive day optional'], dealNote: 'Ian is organising; group fare on Divi Divi Air.' },
-  { id: 'trip_medellin', kind: 'trip', name: 'Medellín in January', area: 'Medellín', country: 'Colombia', dates: { from: '2027-01-14', to: '2027-01-19' }, nights: 5,
+  { id: 'trip_medellin', kind: 'trip', reach: 'region', name: 'Medellín in January', area: 'Medellín', country: 'Colombia', dates: { from: '2027-01-14', to: '2027-01-19' }, nights: 5,
     pointsPerSeat: 70000, guestCashUsd: 700, retailUsd: 950, seats: 10, holdDeadline: '2026-11-30', isDrop: false,
     vibe: 'A design hotel in Provenza, the Comuna 13 walk, and a day out at Guatapé.',
     features: ['Group trip', 'City break', 'Cool climate'], dealNote: '' },
-  { id: 'trip_bonaire', kind: 'trip', name: 'Bonaire dive & shore week', area: 'Kralendijk', country: 'Bonaire', dates: { from: '2027-05-06', to: '2027-05-11' }, nights: 5,
+  { id: 'trip_bonaire', kind: 'trip', reach: 'region', name: 'Bonaire dive & shore week', area: 'Kralendijk', country: 'Bonaire', dates: { from: '2027-05-06', to: '2027-05-11' }, nights: 5,
     pointsPerSeat: 78000, guestCashUsd: 780, retailUsd: 1020, seats: 8, holdDeadline: '2027-03-15', isDrop: false,
     vibe: 'Oceanfront apartments, unlimited shore diving, and a pickup truck per pair.',
     features: ['Group trip', 'Dive package', 'Truck included'], dealNote: '' },
-  { id: 'trip_panama', kind: 'trip', name: 'Panama City & Casco Viejo', area: 'Panama City', country: 'Panama', dates: { from: '2027-03-04', to: '2027-03-09' }, nights: 5,
+  { id: 'trip_panama', kind: 'trip', reach: 'world', name: 'Panama City & Casco Viejo', area: 'Panama City', country: 'Panama', dates: { from: '2027-03-04', to: '2027-03-09' }, nights: 5,
     pointsPerSeat: 82000, guestCashUsd: 820, retailUsd: 1080, seats: 10, holdDeadline: '2027-01-15', isDrop: false, draft: true,
     vibe: 'Casco Viejo rooftops, the canal at first light, and a day on the islands.',
     features: ['Group trip', 'City break'], dealNote: 'Still a draft — Victor is negotiating the hotel block.' },
-  { id: 'trip_lisbon', kind: 'trip', name: 'Lisbon & Porto', area: 'Lisbon', country: 'Portugal', dates: { from: '2027-05-08', to: '2027-05-15' }, nights: 7,
+  { id: 'trip_lisbon', kind: 'trip', reach: 'world', name: 'Lisbon & Porto', area: 'Lisbon', country: 'Portugal', dates: { from: '2027-05-08', to: '2027-05-15' }, nights: 7,
     pointsPerSeat: 165000, guestCashUsd: 1650, retailUsd: 2100, seats: 12, holdDeadline: '2027-02-01', isDrop: false,
     vibe: 'Chiado for four nights, then the Douro; one train, two cities.',
     features: ['Europe', 'Group trip', 'Two cities'], dealNote: 'Via Amsterdam with a KLM group fare.' },
-  { id: 'trip_mexico', kind: 'trip', name: 'Mexico City', area: 'Ciudad de México', country: 'Mexico', dates: { from: '2027-06-18', to: '2027-06-23' }, nights: 5,
+  { id: 'trip_mexico', kind: 'trip', reach: 'world', name: 'Mexico City', area: 'Ciudad de México', country: 'Mexico', dates: { from: '2027-06-18', to: '2027-06-23' }, nights: 5,
     pointsPerSeat: 88000, guestCashUsd: 880, retailUsd: 1150, seats: 10, holdDeadline: '2027-04-20', isDrop: false, draft: true,
     vibe: 'Roma Norte, Teotihuacán at sunrise, and the best week of eating of your year.',
     features: ['Group trip', 'City break'], dealNote: 'Still a draft.' },

@@ -570,6 +570,15 @@ export function settings({ store, go }) {
         <button class="btn" type="submit">Save the accounts</button>
       </form>
 
+      <form class="panel" id="wallet-form" style="margin-top:16px">
+        <h2 style="font-size:1.1rem">Apple Wallet passes</h2>
+        <p class="small muted" style="margin-top:6px">A Wallet pass has to be signed with a certificate Apple issues to the club, so a browser cannot make one. Deploy the <code>issue-pass</code> function (it is in <code>supabase/functions/</code>, and the README walks through the certificate), then paste its URL here. Until then, members can still save the card as an image and add the app to their home screen.</p>
+        <label class="field" style="margin-top:12px"><span>Pass service URL</span>
+          <input name="walletUrl" value="${escapeHtml(s.wallet?.url || '')}" placeholder="https://xxxx.supabase.co/functions/v1/issue-pass" class="mono"></label>
+        <button class="btn" type="submit">Save</button>
+        <p class="small muted" style="margin-top:10px">${s.wallet?.url ? 'Members see “Add to Apple Wallet” on their card screen.' : 'Members are told plainly that this is not set up yet.'}</p>
+      </form>
+
       <div class="panel" style="margin-top:16px">
         <h2 style="font-size:1.1rem">Dollars and points</h2>
         <p class="small muted" style="margin-top:6px">${s.pointsPerDollar} points = $1.00. Type either side to check a price before you put it in the catalog.</p>
@@ -637,6 +646,11 @@ export function settings({ store, go }) {
     pt.addEventListener('input', () => { u.value = ((Number(pt.value) || 0) / s.pointsPerDollar).toFixed(2); say(); });
     say();
   }
+  wrap.querySelector('#wallet-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await store.updateSettings({ wallet: { url: new FormData(e.target).get('walletUrl').trim(), token: '' } }, me.id);
+    toast('Saved.', { kind: 'good' });
+  });
   wrap.querySelector('#accounts').addEventListener('submit', async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
     await store.updateSettings({

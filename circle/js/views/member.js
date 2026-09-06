@@ -1,12 +1,12 @@
 // The member's own screens: home, sending a contribution, the ledger, the card, the profile.
 import { escapeHtml, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDay, fmtDayTime, fmtMonth, fmtPct, monthKey, countdownTo, initials, toCsv, downloadText } from '../core/util.js';
 import { VOCAB, tierName, refFor } from '../core/vocab.js';
-import { splitContribution, tierFor, seasonPoints, SEASONS, isDushiSeason } from '../core/money.js';
+import { splitContribution, tierFor, seasonPoints, SEASONS, isDushiSeason, REACH } from '../core/money.js';
 import { splitBar, poolGauge, ring, memberCard } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel } from '../ui/components.js';
 import { sparkline, columns, tableFor } from '../ui/charts.js';
-import { waLink, TEMPLATES, copyText } from '../core/share.js';
+import { waLink, TEMPLATES, copyText, shareText } from '../core/share.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 const KIND_LABEL = { earn: 'Contribution', bonus: 'Tier bonus', streak: 'Streak bonus', founding: 'Founding bonus', burn: 'Stay', refund: 'Refund', adjust: 'Adjustment', expire: 'Expired', reverse: 'Reversal' };
@@ -363,32 +363,104 @@ export function ledger({ store, params }) {
   return wrap;
 }
 
-export function card({ store }) {
+export function card({ store, go }) {
   const me = store.me, s = store.settings;
   const lt = store.lifetime(me.id);
+  const tier = tierFor(s, me.monthlyUsd);
   const wrap = el(`<div class="nocturne" style="background:var(--ground);color:var(--ink);min-height:100vh">
-    <section class="sec"><div class="wrap" style="max-width:520px">
+    <section class="sec"><div class="wrap" style="max-width:560px">
       <p class="eyebrow">${escapeHtml(tierName(me.monthlyUsd))} · ${escapeHtml(VOCAB.clubName)}</p>
       <h1 style="font-size:1.6rem;margin-top:6px">Your card</h1>
       <div id="card" style="margin-top:20px"></div>
-      <p class="small muted" style="margin-top:12px">Tap the card to turn it over. The face carries no numbers — everything else is in the app.</p>
-      <div class="panel" style="margin-top:20px">
+      <p class="small muted" style="margin-top:12px">Tap the card to turn it over. The face carries no numbers — a card someone can read your balance off is a card you cannot leave on a table.</p>
+
+      <div class="panel" style="margin-top:20px;display:grid;gap:14px;justify-items:center">
+        <p class="eyebrow">Scan to identify you</p>
+        <div class="qr-holder" id="qr"></div>
+        <p class="tiny muted" style="text-align:center;max-width:34ch">Any phone camera reads it. It opens your entry in the Circle, so Victor or Ian can pull you up at a hotel desk without asking your surname twice.</p>
+      </div>
+
+      <div class="panel" style="margin-top:16px">
+        <p class="eyebrow">Keep it on your phone</p>
+        <div class="stack" style="margin-top:12px">
+          <button class="btn block" id="wallet">Add to Apple Wallet</button>
+          <button class="btn ghost block" id="save">Save the card as an image</button>
+          <button class="btn ghost block" id="print">Print it, card sized</button>
+        <button class="btn ghost block" id="share">Send it to someone</button>
+        </div>
+        <p class="small muted" id="wallet-note" style="margin-top:12px"></p>
+      </div>
+
+      <div class="panel" style="margin-top:16px">
         <div class="row-between"><span class="small muted">Available</span><b class="num">${escapeHtml(fmtPoints(lt.available))}</b></div>
         <div class="row-between" style="margin-top:8px"><span class="small muted">Worth</span><b class="num">${escapeHtml(pointsUsd(lt.available, s.pointsPerDollar))}</b></div>
+        <div class="row-between" style="margin-top:8px"><span class="small muted">Your level covers</span><b>${escapeHtml(REACH[tier.reach].label)}</b></div>
         <div class="row-between" style="margin-top:8px"><span class="small muted">Insider since</span><b class="num">${escapeHtml(fmtDay(me.joinedAt))}</b></div>
         <div class="row-between" style="margin-top:8px"><span class="small muted">Card code</span><b class="num">${escapeHtml(me.cardCode || '—')}</b></div>
-      </div>
-      <div class="panel" style="margin-top:16px;display:grid;gap:12px;justify-items:center">
-        <p class="eyebrow">For the Desk</p>
-        <div class="qr-holder" id="qr"></div>
-        <p class="tiny muted" style="text-align:center">Victor and Ian scan this to pull up your account at a hotel desk.</p>
       </div>
       <p style="margin-top:18px"><a class="btn ghost" href="#/home">Back</a></p>
     </div></section></div>`);
   wrap.querySelector('#card').appendChild(memberCard(me, { store }));
-  import('../ui/qr.js').then(({ renderQr }) => {
-    renderQr(wrap.querySelector('#qr'), `${location.origin}${location.pathname}#/circle?c=${encodeURIComponent(me.cardCode || me.id)}`, { size: 148 });
-  }).catch(() => { wrap.querySelector('#qr').textContent = me.cardCode || ''; });
+
+  import('../ui/wallet.js').then(async (W) => {
+    import('../ui/qr.js').then(({ renderQr }) => renderQr(wrap.querySelector('#qr'), W.cardUrl(me), { size: 224 }))
+      .catch(() => { wrap.querySelector('#qr').textContent = me.cardCode || ''; });
+
+    const note = wrap.querySelector('#wallet-note');
+    const walletBtn = wrap.querySelector('#wallet');
+    const configured = !!store.walletConfig?.()?.url;
+    note.innerHTML = configured
+      ? 'Adding it puts the card in Wallet with the same QR, and it updates itself when your level changes.'
+      : `Wallet passes have to be signed with a certificate Apple issues to the club — it is a $99-a-year developer account and about an hour of setup, and it is written down in the README. Until Victor does that, saving the card as an image works on every phone, and adding this app to your home screen puts the card one tap away.${W.isIOS() ? ' On iPhone: the share button in Safari, then Add to Home Screen.' : ''}`;
+
+    walletBtn.addEventListener('click', async () => {
+      if (!configured) { toast('The club has not set up Wallet passes yet — the README says how.', { timeout: 6000 }); return; }
+      setBusy(walletBtn, true, 'Making your pass…');
+      try {
+        const blob = await W.fetchApplePass(store, me);
+        if (!blob) throw new Error('No pass came back.');
+        const url = URL.createObjectURL(blob);
+        const a = Object.assign(document.createElement('a'), { href: url, download: `${VOCAB.clubName.toLowerCase()}-${me.cardCode || 'card'}.pkpass` });
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+        toast('Wallet should offer to add it. If nothing happens, open this page in Safari.', { kind: 'good', timeout: 7000 });
+      } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
+      setBusy(walletBtn, false);
+    });
+
+    wrap.querySelector('#save').addEventListener('click', async () => {
+      const blob = await W.cardImage(me);
+      const file = new File([blob], `${VOCAB.clubName.toLowerCase()}-card.png`, { type: 'image/png' });
+      // On iOS the share object must contain nothing but `files`, or the sheet never opens.
+      if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file] }); return; } catch { /* fall through to a download */ } }
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement('a'), { href: url, download: file.name });
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast(W.isIOS() ? 'Long-press the image to save it to your photos.' : 'Saved.', { kind: 'good' });
+    });
+
+    wrap.querySelector('#print').addEventListener('click', async () => {
+      const blob = await W.cardImage(me);
+      const url = URL.createObjectURL(blob);
+      const frame = document.createElement('iframe');
+      frame.setAttribute('aria-hidden', 'true');
+      frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+      frame.srcdoc = `<style>@page{size:85.6mm 53.98mm;margin:0}html,body{margin:0;padding:0}
+        img{width:85.6mm;height:53.98mm;display:block}</style><img src="${url}" alt="">`;
+      frame.addEventListener('load', () => {
+        frame.contentWindow.focus(); frame.contentWindow.print();
+        setTimeout(() => { frame.remove(); URL.revokeObjectURL(url); }, 30000);
+      });
+      document.body.appendChild(frame);
+    });
+
+    wrap.querySelector('#share').addEventListener('click', () => shareText({
+      title: `${VOCAB.clubName} · ${me.name}`,
+      text: `${me.name} — ${tierName(me.monthlyUsd)} Insider of the ${VOCAB.clubName}, card ${me.cardCode || ''}.`,
+      url: W.cardUrl(me),
+    }));
+  });
   return wrap;
 }
 
@@ -402,7 +474,7 @@ export function profile({ store, go, refresh }) {
 
       <div class="panel" style="margin-top:22px">
         <h2>Your contribution level</h2>
-        <p class="small muted" style="margin-top:6px">A change takes effect on your next contribution. Nothing you already hold is affected.</p>
+        <p class="small muted" style="margin-top:6px">A change takes effect on your next contribution and nothing you already hold is affected. The level also decides how far the trips go: stays on Aruba are open to everyone, ${escapeHtml(tierName(150))} adds the region, ${escapeHtml(tierName(200))} adds anywhere.</p>
         <div class="choices" id="tiers" style="margin-top:14px"></div>
       </div>
 
@@ -448,7 +520,7 @@ export function profile({ store, go, refresh }) {
 
   wrap.querySelector('#tiers').innerHTML = s.tiers.map(t => `<button type="button" class="choice" aria-pressed="${t.monthlyUsd === me.monthlyUsd}" data-amt="${t.monthlyUsd}">
       <span class="amt">$${t.monthlyUsd}</span><span class="tier">${escapeHtml(tierName(t.monthlyUsd))} ${treeSvg(VOCAB.tierLean[t.monthlyUsd], { size: 14 })}</span>
-      <span class="tiny muted">${t.holds} open request${t.holds > 1 ? 's' : ''} · ${t.guestCerts} guest passes · ${t.windowMonths} months ahead</span></button>`).join('');
+      <span class="tiny muted">${escapeHtml(REACH[t.reach].label)} · ${t.holds} open request${t.holds > 1 ? 's' : ''} · ${t.guestCerts} guest passes</span></button>`).join('');
   wrap.querySelector('#tiers').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-amt]'); if (!b) return;
     const amt = Number(b.dataset.amt); if (amt === me.monthlyUsd) return;
