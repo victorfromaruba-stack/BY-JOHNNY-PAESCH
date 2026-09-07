@@ -832,7 +832,20 @@ export function profile({ store, go, refresh }) {
       <h1>${escapeHtml(me.name)}</h1>
       <p class="lede" style="margin-top:10px">${escapeHtml(me.title || `${fmtUsd2(me.monthlyUsd)} a month · joined ${fmtDay(me.joinedAt)}`)}</p>
 
-      <div class="panel" style="margin-top:22px">
+      <!-- Seven unrelated panels on one scroll — level, details, badges, your corner, jobs,
+           pausing, data — ran to 5.4 screens on a phone. Same shape as Settings had, so the
+           same answer: four rooms, and you land on the level, which is the thing anyone comes
+           here to change. Every pane stays in the DOM and is only hidden, so the forms below
+           keep the handlers they are given at build time. -->
+      <div class="segmented no-print" role="group" aria-label="Profile sections" id="tabs">
+        <button type="button" data-tab="level" aria-pressed="true">Level</button>
+        <button type="button" data-tab="details" aria-pressed="false">Details</button>
+        <button type="button" data-tab="badges" aria-pressed="false">Badges</button>
+        <button type="button" data-tab="account" aria-pressed="false">Account</button>
+      </div>
+
+      <div data-pane="level">
+      <div class="panel" style="margin-top:20px">
         <h2>Your contribution level</h2>
         <p class="small muted" style="margin-top:6px">A change takes effect on your next contribution and nothing you already hold is affected. Every level can ask for every stay and every trip — what changes is how fast the points build, and the perks.</p>
         <div class="choices" id="tiers" style="margin-top:14px"></div>
@@ -840,7 +853,10 @@ export function profile({ store, go, refresh }) {
         <div style="margin-top:10px">${tierLadder(s, { mine: me.monthlyUsd })}</div>
       </div>
 
-      <div class="panel" style="margin-top:16px">
+      </div>
+
+      <div data-pane="details" hidden>
+      <div class="panel" style="margin-top:20px">
         <h2>Details</h2>
         <form id="details" style="margin-top:12px">
           <div class="grid g2">
@@ -858,9 +874,14 @@ export function profile({ store, go, refresh }) {
         </form>
       </div>
 
-      <div class="panel" style="margin-top:16px" id="badges-panel"></div>
-      <div class="panel" style="margin-top:16px" id="corner-panel"></div>
+      </div>
 
+      <div data-pane="badges" hidden>
+      <div class="panel" style="margin-top:20px" id="badges-panel"></div>
+      <div class="panel" style="margin-top:16px" id="corner-panel"></div>
+      </div>
+
+      <div data-pane="account" hidden>
       ${jobsPanel(store)}
 
       <div class="panel" style="margin-top:16px">
@@ -882,10 +903,21 @@ export function profile({ store, go, refresh }) {
           : 'This is a preview running in your browser, and Safari clears it after about a week of not visiting. Keep a copy if you want it to survive.'}</p>
         <div class="row" style="margin-top:12px">
           <button class="btn ghost sm" id="export">Export everything as JSON</button>
-          <button class="btn quiet sm" id="signout">Sign out</button>
+          <button class="btn ghost sm" id="signout">Sign out</button>
         </div>
       </div>
+      </div>
     </div></section></div>`);
+
+  {
+    const tabs = wrap.querySelector('#tabs');
+    const panes = [...wrap.querySelectorAll('[data-pane]')];
+    tabs.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-tab]'); if (!b) return;
+      tabs.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      panes.forEach(p => { p.hidden = p.dataset.pane !== b.dataset.tab; });
+    });
+  }
 
   wrap.querySelector('#tiers').innerHTML = s.tiers.map(t => `<button type="button" class="choice" aria-pressed="${t.monthlyUsd === me.monthlyUsd}" data-amt="${t.monthlyUsd}">
       <span class="amt">$${t.monthlyUsd}</span><span class="tier">${escapeHtml(tierName(t.monthlyUsd))} ${treeSvg(VOCAB.tierLean[t.monthlyUsd], { size: 14 })}</span>
