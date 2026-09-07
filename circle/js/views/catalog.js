@@ -3,6 +3,7 @@ import { escapeHtml, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, countdow
 import { VOCAB, tierName } from '../core/vocab.js';
 import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth } from '../core/money.js';
 import { ring, versusLine } from '../ui/pieces.js';
+import { effectiveTier } from '../core/standing.js';
 import { stayCard, stayStrip, photoFor } from './public.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
 import { shareText } from '../core/share.js';
@@ -67,13 +68,17 @@ export function trips({ store }) {
   const me = store.me, s = store.settings;
   const avail = store.availablePoints(me.id);
   const tier = tierFor(s, me.monthlyUsd);
+  // What this member may actually do — their level plus what standing has added. The screen and
+  // the Desk now read the same number; they used to disagree by exactly the amount the home
+  // screen was promising.
+  const look = effectiveTier(tier, store.standing(me.id));
   const all = store.trips();
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <div class="sec-head"><div><p class="eyebrow">${icon('plane')}Sourced by Victor, run with Ian</p><h1>Trips</h1>
         <p>A seat covers the hotels, every internal transfer and everything else listed. Flights to and from Aruba are extra unless the note says otherwise. Guests can come at the same rate, in cash.</p>
         <p class="small muted" style="margin-top:8px">Three countries this cycle: the Dominican Republic in March, Mexico in February, Japan the December after. Read the notes — Victor writes down what the journey actually costs you in days, not just in points.</p></div></div>
       <div class="notice" style="margin-bottom:18px"><b>Everyone can come on everything</b>
-        <p class="small">There is no level that shuts you out of a trip. What your level changes is how quickly the points build — at ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))}, so a seat further afield takes longer to save for — and the perks: ${tier.holds} open request${tier.holds > 1 ? 's' : ''} at a time, ${tier.windowMonths} months ahead${tier.firstLookHours ? `, and first look at a new trip ${tier.firstLookHours} hours early` : ''}. <a href="#/profile">Change your level</a> any month; it starts on your next contribution.</p></div>
+        <p class="small">There is no level that shuts you out of a trip. What your level changes is how quickly the points build — at ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))}, so a seat further afield takes longer to save for — and the perks: ${look.holds} open request${look.holds > 1 ? 's' : ''} at a time, ${look.windowMonths} months ahead${look.firstLookHours ? `, and first look at a new trip ${look.firstLookHours} hours early` : ''}${look.fromStanding.extraHolds || look.fromStanding.extraFirstLookHours ? ' — your standing is in those numbers' : ''}. <a href="#/profile">Change your level</a> any month; it starts on your next contribution.</p></div>
       <div class="grid g3" id="list"></div>
       ${all.length ? '' : `<div class="empty">${icon('plane', { size: 28, cls: 'ico-muted' })}<b style="display:block;margin-top:10px">No trips on the board</b><p class="small muted">Victor posts them as he sources them. Ian sends a note when one goes live.</p></div>`}
     </div></section></div>`);
@@ -83,7 +88,7 @@ export function trips({ store }) {
     const mine = store.state.redemptions.some(r => r.memberId === me.id && r.stayId === t.id && ['requested', 'quoted', 'held', 'confirmed', 'completed'].includes(r.status));
     const seat = seatPoints(t, s);
     const canAfford = avail >= seat;
-    const firstLook = t.isDrop && tier.firstLookHours > 0;
+    const firstLook = t.isDrop && look.firstLookHours > 0;
     const months = canAfford ? 0 : Math.ceil((seat - Math.max(0, avail)) / pointsPerMonth(s, me.monthlyUsd));
     const footer = `<span class="small muted" style="margin-top:4px">${escapeHtml(fmtDay(t.dates.from))} – ${escapeHtml(fmtDay(t.dates.to))} · ${held} of ${t.seats} seats held${mine ? ' · you are in' : ''}</span>
       <span class="small muted" style="margin-top:2px">${mine ? 'Your seat is held' : canAfford ? 'You can cover a seat now' : `About ${months} more month${months === 1 ? '' : 's'} of contributions`}</span>

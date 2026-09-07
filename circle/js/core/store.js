@@ -6,7 +6,7 @@
 import { uid, nowIso, sum, monthKey, fmtMonth, nightsBetween } from './util.js';
 import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, fromPoints, seatPoints, pointsPerMonth } from './money.js';
 import { initialsOf, refFor } from './vocab.js';
-import { standingFrom, rankFor, RANKS } from './standing.js';
+import { standingFrom, rankFor, RANKS, effectiveTier } from './standing.js';
 
 export const CONTRIBUTION_STATUS = Object.freeze({ pending: 'pending', confirmed: 'confirmed', rejected: 'rejected', withdrawn: 'withdrawn', reversed: 'reversed' });
 export const REDEMPTION_STATUS = Object.freeze({ requested: 'requested', quoted: 'quoted', held: 'held', confirmed: 'confirmed', completed: 'completed', declined: 'declined', expired: 'expired', cancelled: 'cancelled' });
@@ -1017,7 +1017,14 @@ export class Store {
     const q = quoteStay(stay, isTrip ? stay.dates.from : checkIn, isTrip ? stay.dates.to : checkOut, this.settings, { seats });
     if (!isTrip && q.nights < 1) throw new Error('Check-out must be after check-in');
     if (!q.ok) throw new Error(`Minimum ${q.minNights} nights for these dates`);
-    if (this.openHolds(memberId) >= tier.holds) throw new Error(`${tierName(this.settings, m.monthlyUsd)} allows ${tier.holds} open request${tier.holds > 1 ? 's' : ''} at a time`);
+    // Standing counts here, not just on the home screen. Anchor promises one more open request
+    // than your level allows and the Desk was refusing it — the cap read tier.holds alone.
+    const allow = effectiveTier(tier, this.standing(memberId));
+    if (this.openHolds(memberId) >= allow.holds) {
+      throw new Error(allow.fromStanding.extraHolds
+        ? `That is ${allow.holds} open requests — ${tier.holds} for ${tierName(this.settings, m.monthlyUsd)} and ${allow.fromStanding.extraHolds} for your standing. Close one and ask again.`
+        : `${tierName(this.settings, m.monthlyUsd)} allows ${tier.holds} open request${tier.holds > 1 ? 's' : ''} at a time`);
+    }
     if (isTrip && this.seatsHeld(stayId) + seats > (stay.seats || 99)) throw new Error('Not enough seats left on this trip');
     if (!isTrip) {
       const maxAhead = new Date(); maxAhead.setMonth(maxAhead.getMonth() + tier.windowMonths);

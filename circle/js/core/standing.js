@@ -25,6 +25,40 @@ export const RANKS = Object.freeze([
 ]);
 
 /**
+ * What standing actually adds to your level, as numbers rather than as a sentence.
+ *
+ * The three unlocks above were printed on every member's home screen and enforced nowhere: the
+ * hold cap read tier.holds alone, the first-look gate read tier.firstLookHours alone, and
+ * guestCerts was only ever displayed, never counted. Anchor has been promising "two things in
+ * front of the Desk at once instead of one" to anybody nine months in, and the Desk has been
+ * refusing the second one.
+ *
+ * Keeping it here, beside the strings that promise it, is the point — the next person to edit
+ * an `unlocks` line can see there is a number under it that has to move too. Mirrored by
+ * rank_perks() in SQL for the same reason the ladder is.
+ */
+export function rankPerks(rankIndex = 0) {
+  const i = Math.max(0, Math.min(RANKS.length - 1, Number(rankIndex) || 0));
+  return {
+    extraHolds:          i >= 2 ? 1 : 0,    // Anchor
+    extraFirstLookHours: i >= 3 ? 12 : 0,   // Old Guard
+    extraGuestCerts:     i >= 4 ? 1 : 0,    // Pillar
+  };
+}
+
+/** A member's real allowance: what they pay for, plus what they have earned by staying. */
+export function effectiveTier(tier, standing) {
+  const p = rankPerks(standing?.rankIndex ?? 0);
+  return {
+    ...tier,
+    holds: (tier?.holds || 1) + p.extraHolds,
+    firstLookHours: (tier?.firstLookHours || 0) + p.extraFirstLookHours,
+    guestCerts: (tier?.guestCerts || 0) + p.extraGuestCerts,
+    fromStanding: p,
+  };
+}
+
+/**
  * Badges are the other half: things done, not time served. Every one of them is a fact the
  * club already records, so none of them is anybody's to award or withhold.
  */

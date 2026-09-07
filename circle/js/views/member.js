@@ -3,7 +3,7 @@ import { escapeHtml, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDa
 import { RANKS, nextRank } from '../core/standing.js';
 import { VOCAB, tierName, refFor } from '../core/vocab.js';
 import { splitContribution, tierFor, fromPoints, seatPoints, pointsPerMonth } from '../core/money.js';
-import { memberCard, poolGauge, rankCrest, ring, splitBar, tierLadder, badgeMark, badgeRow } from '../ui/pieces.js';
+import { memberCard, poolGauge, rankCrest, ring, tierLadder, badgeMark, badgeRow } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel, avatar } from '../ui/components.js';
 import { sparkline, columns, tableFor } from '../ui/charts.js';
@@ -410,12 +410,9 @@ export function pay({ store, go }) {
 
       <div class="panel" style="margin-top:16px">
         <h2>2 · What it becomes</h2>
-        <div id="split" style="margin-top:14px"></div>
-        <div class="grid g3" style="margin-top:16px">
-          <div class="stat"><span class="k">Backs your points</span><b class="num">${escapeHtml(fmtUsd2(sp.backingUsd))}</b><span class="sub">${escapeHtml(fmtPoints(sp.basePoints))}</span></div>
-          <div class="stat"><span class="k">Into the Reserve</span><b class="num">${escapeHtml(fmtUsd2(sp.backingUsd))}</b><span class="sub">All of it — the Circle is paid when you book</span></div>
-          <div class="stat"><span class="k">${sp.bonusPoints ? escapeHtml(tierName(me.monthlyUsd)) + ' bonus' : 'Total credited'}</span><b class="num">${escapeHtml(sp.bonusPoints ? fmtPoints(sp.bonusPoints) : fmtPoints(sp.points))}</b><span class="sub">${sp.bonusPoints ? 'Funded by the Circle from its share' : 'When Vishnu confirms'}</span></div>
-        </div>
+        <p class="big-figure num" style="margin-top:12px">${escapeHtml(fmtPoints(sp.points))}</p>
+        <p class="lede" style="margin-top:4px">${escapeHtml(fmtUsd2(sp.points / s.pointsPerDollar))} of hotel.</p>
+        <p class="small muted" style="margin-top:12px;max-width:56ch">All ${escapeHtml(fmtUsd2(sp.backingUsd))} of it goes into the Reserve and stays there until you spend it on a room${sp.bonusPoints ? ` — and the ${escapeHtml(fmtPoints(sp.bonusPoints))} on top is your ${escapeHtml(tierName(me.monthlyUsd))} bonus, which the Circle funds out of its own share` : ''}. Nothing is taken on the way in; the Circle is paid 15% when you book.</p>
       </div>
 
       <div class="panel" style="margin-top:16px">
@@ -442,7 +439,6 @@ export function pay({ store, go }) {
 
       <p class="small muted" style="margin-top:18px">Prefer not to think about it? Set a standing order for the ${s.dueDay}th — Aruba Bank and Banco di Caribe both do it free, online — and put the reference in the description once. <a href="#/profile">Mark yourself on autopilot</a>.</p>
     </div></section></div>`);
-  wrap.querySelector('#split').appendChild(splitBar({ amountUsd: me.monthlyUsd, shareRate: 0, points: sp.points }));
   wrap.addEventListener('click', async (e) => {
     const c = e.target.closest('[data-copy]');
     if (c) { const ok = await copyText(c.dataset.copy); toast(ok ? 'Copied.' : 'Select and copy it by hand.'); return; }
@@ -483,7 +479,6 @@ export function ledger({ store, params }) {
   const rows = month ? all.filter(l => l.at.slice(0, 7) === month) : all;
   const closed = month ? store.state.monthCloses.find(c => c.month === month) : null;
   const months = [...new Set(all.map(l => l.at.slice(0, 7)))].sort().reverse();
-  const effective = lt.paidUsd ? (lt.balance / s.pointsPerDollar + lt.burnedPoints / s.pointsPerDollar) / lt.paidUsd : 0;
 
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <div class="row-between">
@@ -507,7 +502,7 @@ export function ledger({ store, params }) {
         <div class="stat"><span class="k">Backing + bonuses</span><b class="num">${escapeHtml(fmtUsd2(lt.backingUsd + lt.promoPoints / s.pointsPerDollar))}</b><span class="sub">${escapeHtml(fmtPoints(lt.promoPoints))} of that is bonus points</span></div>
         <div class="stat"><span class="k">Available now</span><b class="num">${escapeHtml(fmtPoints(lt.available))}</b><span class="sub">${escapeHtml(pointsUsd(lt.available, s.pointsPerDollar))}${lt.committed ? ` · ${fmtPoints(lt.committed)} committed` : ''}</span></div>
       </div>
-      <p class="small muted" style="margin-top:12px">You have turned ${escapeHtml(fmtUsd2(lt.paidUsd))} into ${escapeHtml(fmtUsd2(lt.balance / s.pointsPerDollar + lt.burnedPoints / s.pointsPerDollar))} of hotel so far — ${escapeHtml(fmtPct(effective, 1))} of everything you sent. Committed points still count against the Circle’s coverage until they are burned.</p>
+      <p class="small muted" style="margin-top:12px">You have turned ${escapeHtml(fmtUsd2(lt.paidUsd))} into ${escapeHtml(fmtUsd2(lt.balance / s.pointsPerDollar + lt.burnedPoints / s.pointsPerDollar))} of hotel so far — every dollar backed a point, and the bonuses are on top. Committed points still count against the Circle’s coverage until they are burned.</p>
 
       <div class="panel" style="margin-top:20px">
         <div class="row-between"><h2 style="font-size:1.1rem">Contributions</h2></div>
