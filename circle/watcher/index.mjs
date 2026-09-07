@@ -128,9 +128,21 @@ async function pass(circle) {
   found.push(...rw);
 
   if (process.env.INTERVAL_USER) {
+    let iv = null;
     try {
-      log('Interval: signing in');
-      const iv = new Interval({ username: process.env.INTERVAL_USER, password: process.env.INTERVAL_PASS });
+      // Interval needs a real browser and RedWeek does not. Two of the three things standing
+      // between us and the Getaway pages — the script that moves the session to the VIP host,
+      // and the Radware challenge that mints the __uzm cookies — only happen in a page. Set
+      // WATCH_INTERVAL_MODE=fetch to use the old plain-HTTP client, which is kept because its
+      // anonymous fetches are what the dump compares against.
+      const mode = process.env.WATCH_INTERVAL_MODE || 'browser';
+      log(`Interval: signing in (${mode})`);
+      if (mode === 'browser') {
+        const { IntervalBrowser } = await import('./interval-browser.mjs');
+        iv = new IntervalBrowser({ username: process.env.INTERVAL_USER, password: process.env.INTERVAL_PASS });
+      } else {
+        iv = new Interval({ username: process.env.INTERVAL_USER, password: process.env.INTERVAL_PASS });
+      }
       if (DUMP) {
         const dir = join(HERE, 'dump');
         mkdirSync(dir, { recursive: true });
@@ -163,7 +175,14 @@ async function pass(circle) {
       found.push(...got.map(g => ({ ...g, stayId: null, ourName: g.resortName || null })));
     } catch (err) {
       if (err.needsDump) log(`  Interval: ${err.message}`);
-      else log(`  Interval failed: ${err.message}`);
+      else if (err.needsBrowser) {
+        log(`  Interval needs a browser: ${err.message}`);
+        log('  Install it with: npx playwright install firefox   (or set WATCH_INTERVAL_MODE=fetch)');
+      } else log(`  Interval failed: ${err.message}`);
+    } finally {
+      // A browser left running would hold memory on a small VPS for as long as the watcher
+      // lives, and the watcher lives for months.
+      await iv?.close?.().catch(() => {});
     }
   } else {
     log('Interval: no INTERVAL_USER set, skipping');

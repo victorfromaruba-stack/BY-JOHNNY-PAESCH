@@ -94,6 +94,36 @@ for good.
 
 Until then the watcher runs RedWeek only and says so in the log.
 
+### Interval needs a browser. RedWeek does not.
+
+Three things stand between a plain `fetch()` and the Getaway pages, each read off the live
+site rather than guessed:
+
+1. **The login answer has no `Location` header.** It has a script:
+   `window.location.replace("https://vip.intervalworld.com/web/cs?a=0")`. A browser runs it.
+2. **`JSESSIONID` is host-only, `path=/web`, set separately on `www` and on `vip`.** The
+   session made at the front door is not the one the VIP host wants, and no correct cookie jar
+   will send it there. Something has to establish a session on `vip`, and that something runs
+   in the page.
+3. **`__uzma`/`__uzmb`/`__uzmc`/`__uzmd`/`__uzme` are Radware Bot Manager**, normally minted by
+   a JavaScript challenge. A client that never runs the challenge never earns them — which is
+   exactly the symptom: a polite `200` carrying the signed-out page instead of an honest `401`.
+
+Two of those need a JavaScript engine. So **Interval is driven by Playwright**
+(`interval-browser.mjs`) and **RedWeek stays on plain fetch** (`redweek.mjs`) — it needs no
+login and already works, finding around 138 open weeks a pass.
+
+```sh
+WATCH_BROWSER=firefox        # or chromium; whichever is installed
+WATCH_INTERVAL_MODE=browser  # the default. `fetch` uses the old plain-HTTP client.
+```
+
+If Playwright is missing the watcher says so and carries on with RedWeek rather than dying.
+
+`interval.mjs` is kept, and not as a fallback that will work: its anonymous fetches are what
+the dump compares against, and its parser is shared. It cannot hold an Interval session, and
+its tests now say so out loud rather than pretending otherwise.
+
 ### Victor's account is served from a different host
 
 Signing in happens at `www.intervalworld.com`. The answer to the login POST carries **no
@@ -142,10 +172,19 @@ silently as you type, so if `INTERVAL_PASS` is longer than 14 characters the sit
 been shown that string. The watcher reads those limits off the form and refuses with a plain
 message rather than reporting a wrong password.
 
-`node session.test.mjs` covers all of this with stubs — no network, no credentials. 41
-assertions, including a two-host stub that reproduces the www→vip move end to end, and the
-ones that matter most: a refused login that still redirects to a normal page is reported as
-refused, and a redirect off Interval is never followed.
+Two suites, both stub-driven, no network and no credentials:
+
+```sh
+node session.test.mjs    # 48 assertions — the fetch client, cookie scoping, the host guard
+node browser.test.mjs    # 10 assertions — the browser client end to end (skips if no Playwright)
+```
+
+The ones that matter most: a refused login that still redirects to a normal page is reported
+as **refused**; a redirect off Interval is never followed; `www`'s session cookie is never
+sent to `vip`; and the password appears in none of the dumped files.
+
+What no stub can prove is the Radware challenge, which only the real site issues. That is why
+the first real run still has to happen on the VPS.
 
 ## What it will and will not post
 

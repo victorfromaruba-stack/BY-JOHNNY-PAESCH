@@ -1,4 +1,5 @@
-// Interval International: signing in and reading Getaways.
+// Interval International over plain HTTP — kept for its parser and its anonymous control
+// fetches, NOT because it can sign in. It cannot: see interval-browser.mjs for why.
 //
 // Victor's account, Victor's machine. Credentials come from the environment on his VPS and
 // are never written down anywhere else. Plain HTTP with a cookie jar rather than a browser —
@@ -27,9 +28,23 @@ const PROBE = process.env.INTERVAL_PROBE_PATH || '/web/my/home';
 const UA = process.env.WATCH_UA
   || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 
-/** A cookie jar small enough to read, because a session is the whole game here. */
+/**
+ * A cookie jar, scoped the way a browser scopes them.
+ *
+ * It was keyed on name alone, which was wrong twice over once the session started moving
+ * between hosts. Read off the live site, both www and vip set:
+ *
+ *   JSESSIONID   host-only, path=/web      <- a SEPARATE session per host
+ *   serverName   domain=.intervalworld.com <- the only thing genuinely shared
+ *   __uzm[a-e]   host-only                 <- Radware Bot Manager
+ *   BIGIP-EXT/INT host-only
+ *
+ * So a name-keyed jar sends www's JSESSIONID to vip, which no browser would do, and then
+ * lets vip's JSESSIONID overwrite www's, so neither session survives the round trip. Keyed
+ * on name+domain+path instead, and only cookies that match the request are sent.
+ */
 export function jar() {
-  const store = new Map();
+  const store = new Map();                       // "name\ndomain\npath" -> {name, value, domain, path, hostOnly}
   /** A Set-Cookie that clears the cookie rather than setting one. */
   const isDeletion = (value, attrs) => {
     if (!value) return true;                       // servers clear a cookie by sending it empty
@@ -41,22 +56,50 @@ export function jar() {
     }
     return false;
   };
+  /** RFC 6265 domain-match: the exact host, or a subdomain of a Domain= cookie. */
+  const domainMatch = (host, c) =>
+    (c.hostOnly ? host === c.domain : host === c.domain || host.endsWith(`.${c.domain}`));
+  /** RFC 6265 path-match, which is why a /web cookie does not go to /. */
+  const pathMatch = (path, cookiePath) =>
+    path === cookiePath || (path.startsWith(cookiePath)
+      && (cookiePath.endsWith('/') || path[cookiePath.length] === '/'));
   return {
-    header: () => [...store].map(([k, v]) => `${k}=${v}`).join('; '),
-    absorb(res) {
+    header(url) {
+      // Called without a URL only by the tests and the trace; then it is everything held.
+      let host = null, path = '/';
+      if (url) { try { const u = new URL(url); host = u.hostname; path = u.pathname || '/'; } catch { /* fall through */ } }
+      return [...store.values()]
+        .filter(c => !host || (domainMatch(host, c) && pathMatch(path, c.path)))
+        .map(c => `${c.name}=${c.value}`).join('; ');
+    },
+    absorb(res, url) {
+      let host = '', base = '/';
+      try { const u = new URL(url || res.url); host = u.hostname; base = u.pathname || '/'; } catch { /* no url to scope to */ }
       for (const line of res.headers.getSetCookie?.() ?? []) {
         const [pair, ...attrs] = line.split(';');
         const i = pair.indexOf('=');
         if (i <= 0) continue;
         const name = pair.slice(0, i).trim(), value = pair.slice(i + 1).trim();
+        let domain = host, hostOnly = true, path = base.replace(/\/[^/]*$/, '') || '/';
+        for (const a of attrs) {
+          const [k, v = ''] = a.split('=');
+          const key = k.trim().toLowerCase();
+          if (key === 'domain' && v.trim()) { domain = v.trim().replace(/^\./, '').toLowerCase(); hostOnly = false; }
+          if (key === 'path' && v.trim()) path = v.trim();
+        }
+        // A cookie may not be set for a domain it does not belong to. Interval would never try
+        // it, but a jar that accepts Domain=com from anybody is a jar worth not writing.
+        if (!hostOnly && host && !(host === domain || host.endsWith(`.${domain}`))) continue;
+        const key = `${name}\n${domain}\n${path}`;
         // RFC 6265 says a cleared cookie is REMOVED, not stored as an empty string. Storing it
         // would send `JSESSIONID=` on every later request, which is worse than sending nothing.
-        if (isDeletion(value, attrs)) store.delete(name);
-        else store.set(name, value);
+        if (isDeletion(value, attrs)) store.delete(key);
+        else store.set(key, { name, value, domain, path, hostOnly });
       }
     },
-    names: () => [...store.keys()],
-    has: (k) => store.has(k),
+    // Names only, never values — these end up in a dump file that gets sent around.
+    names: () => [...new Set([...store.values()].map(c => c.name))],
+    has: (name) => [...store.values()].some(c => c.name === name),
     size: () => store.size,
   };
 }
@@ -205,7 +248,8 @@ export class Interval {
   async req(path, { method = 'GET', body = null, redirect = 'manual', hops = 0, timeoutMs = 30000, referer = null } = {}) {
     const url = path.startsWith('http') ? path : this.origin + path;
     const headers = { 'user-agent': UA, accept: 'text/html,application/xhtml+xml', 'accept-language': 'en-US,en;q=0.9' };
-    if (this.jar.size()) headers.cookie = this.jar.header();
+    const cookie = this.jar.header(url);
+    if (cookie) headers.cookie = cookie;
     // A browser posting a form always says where the form was. Sending it costs nothing and
     // removes one more way for this to look like something other than a person at a keyboard.
     if (referer) { headers.referer = referer; headers.origin = new URL(referer).origin; }
@@ -218,7 +262,7 @@ export class Interval {
     try { res = await this.fetch(url, { method, headers, body, redirect, signal: ctrl.signal }); }
     finally { clearTimeout(timer); }
     const setCookies = (res.headers.getSetCookie?.() ?? []).map(l => l.split('=')[0].trim());
-    this.jar.absorb(res);
+    this.jar.absorb(res, url);
     this.trace.push({ method, url: url.replace(ORIGIN, ''), status: res.status,
       to: (res.headers.get('location') || '').replace(ORIGIN, ''),
       setCookies, jarAfter: this.jar.names() });
