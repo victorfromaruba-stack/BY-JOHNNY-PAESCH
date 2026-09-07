@@ -1,20 +1,29 @@
--- !! THIS FILE IS BEHIND THE LIVE DATABASE. DO NOT RUN IT AGAINST THE LIVE PROJECT. !!
+-- Brought level with the live database on 2026-09-07, checked object by object against project
+-- cdkopyphjvfxjqhasrae: every table, view, column and function that exists live now exists here,
+-- and the three stale bodies have been replaced with what is actually running.
 --
--- It is the record of how the schema was built, not the current state of it. Verified against
--- project cdkopyphjvfxjqhasrae, these exist live and are absent or stale here:
+-- What had drifted, and why it mattered:
 --
---   functions only live:   buy_badge, pin_badges, rank_ladder, standing_of, months_held
---   views only live:       standing_v
---   columns only live:     members.about, members.accent, members.cover
---   stale here:            update_my_profile (the live one also writes about / accent / cover)
+--   create_crew        the file held the OLD, UNGATED two-argument version. Adding the approval
+--                      gate meant adding a third argument, and in Postgres that creates a second
+--                      function rather than replacing the first — so the ungated one was still
+--                      live and callable by any member until it was dropped in production on
+--                      2026-09-07. Running this file as it stood would have recreated it.
+--   update_my_profile  older body, without about / accent / cover, so members would silently
+--                      stop being able to save their profile.
+--   request_redemption older body, without the standing perks, so the hold cap ignored rank.
+--   missing entirely   badge_catalog, member_badges, tax_rates, standing_v, seven functions
+--                      (months_held, rank_ladder, rank_perks, standing_of, buy_badge,
+--                      grant_badge, pin_badges) and eleven columns.
 --
--- `create or replace function` does not merge — running this file replaces the live
--- update_my_profile with the older one and members silently stop being able to save their
--- profile, which is exactly the bug an audit reported against this file and which turned out
--- not to exist in production at all.
+-- `create or replace function` does not merge, and changing a function's arity does not replace
+-- it — it overloads it. Both are how this file went wrong before. When you change the live
+-- schema, write a migration against it and then bring this file forward in the same sitting.
 --
--- To change the live schema, write a migration against it and then bring this file forward.
--- The tiers default below is now correct; the rest of the drift above is not yet closed.
+-- One thing this file is NOT: the whole database. Project cdkopyphjvfxjqhasrae also hosts an
+-- unrelated bookkeeping application (businesses, transactions, receipts, quickbooks_*, vendor_*)
+-- whose tables, policies and helper functions — current_business_id() among them — are not
+-- described here and must not be dropped by anything derived from this file.
 
 -- =====================================================================
 --  Hunto — the Inner Circle
@@ -78,8 +87,15 @@ create table if not exists settings (
   wallet            jsonb not null default '{}',      -- {url, token} for the pass service
   rules_version     text not null default '1.0',
   rules_date        date not null default '2026-09-05',
-  updated_at        timestamptz not null default now()
+  updated_at        timestamptz not null default now(),
+  -- Photos and clips in a crew are off until the club decides it wants them. The moments_post
+  -- policy reads this, so the column has to exist by the time that policy is created — which is
+  -- why it lives here in the table rather than in the alters at the foot of the file.
+  moments_on        boolean not null default false
 );
+-- A column added to a table that already exists is not created by `create table if not exists`,
+-- so an older database needs this too.
+alter table settings add column if not exists moments_on boolean not null default false;
 insert into settings (id) values (1) on conflict do nothing;
 
 -- ---------- members ----------
@@ -842,7 +858,8 @@ create or replace function request_redemption(p_stay uuid, p_check_in date, p_ch
   p_guests int default 2, p_seats int default 1, p_note text default '', p_flex int default 0,
   p_shared boolean default false)
 returns redemptions language plpgsql security definer set search_path = public as $$
-declare st stays; s settings; m members; tier jsonb; me uuid; q record; r redemptions; open_count int; window_months int;
+declare st stays; s settings; m members; tier jsonb; me uuid; q record; r redemptions;
+        open_count int; window_months int; allow int; extra int;
 begin
   me := current_member_id();
   if me is null then raise exception 'Not a member'; end if;
@@ -856,10 +873,22 @@ begin
   if q.nights < 1 then raise exception 'Check-out must be after check-in'; end if;
   if q.nights < q.min_nights then raise exception 'Minimum % nights for these dates', q.min_nights; end if;
 
+  -- The hold cap is the tier's, plus whatever standing has earned. A member who has been here
+  -- long enough to reach Anchor gets one more open request than the tier alone allows, and the
+  -- message says which half of the number came from where — otherwise "you can hold 2" reads
+  -- like a bug to someone whose tier says 1.
   select count(*) into open_count from redemptions
     where member_id = me and status in ('requested','quoted','held');
-  if open_count >= coalesce((tier->>'holds')::int, 1) then
-    raise exception 'You can hold % open request(s) at a time', coalesce((tier->>'holds')::int, 1);
+  select rp.extra_holds into extra
+    from standing_of(me) so, rank_perks(so.rank_index) rp;
+  allow := coalesce((tier->>'holds')::int, 1) + coalesce(extra, 0);
+  if open_count >= allow then
+    if coalesce(extra, 0) > 0 then
+      raise exception 'That is % open requests — % for your level and % for your standing. Close one and ask again.',
+        allow, coalesce((tier->>'holds')::int, 1), extra;
+    else
+      raise exception 'You can hold % open request(s) at a time', allow;
+    end if;
   end if;
 
   window_months := coalesce((tier->>'windowMonths')::int, 10);
@@ -1544,10 +1573,24 @@ revoke insert, update, delete on members from authenticated;
 
 create or replace function update_my_profile(p_patch jsonb)
 returns members language plpgsql security definer set search_path = public as $$
-declare m members; me uuid;
+declare m members; me uuid; want_accent text; want_cover text;
 begin
   me := current_member_id();
   if me is null then raise exception 'Not a member'; end if;
+
+  -- Only accents that exist in the palette, only covers the club ships. Anything else is
+  -- refused rather than stored, so a bad value can never reach a page.
+  want_accent := nullif(btrim(coalesce(p_patch->>'accent','')), '');
+  if want_accent is not null and want_accent not in ('good','flight','flag','ink','sea','sand') then
+    raise exception '% is not one of the Circle''s colours', want_accent;
+  end if;
+  want_cover := nullif(btrim(coalesce(p_patch->>'cover','')), '');
+  if want_cover is not null and want_cover not in
+     ('hero','band-how','band-pool','band-circle','band-open','band-rules',
+      'season-summer','season-winter','season-peak','season-carnival','signin') then
+    raise exception 'That is not one of the Circle''s covers';
+  end if;
+
   update members set
     name             = coalesce(p_patch->>'name', name),
     phone            = coalesce(p_patch->>'phone', phone),
@@ -1557,7 +1600,11 @@ begin
     standing_order   = coalesce((p_patch->>'standingOrder')::boolean, standing_order),
     dream_stay_id    = coalesce((p_patch->>'dreamStayId')::uuid, dream_stay_id),
     goal             = case when p_patch ? 'goal' then p_patch->'goal' else goal end,
-    monthly_usd      = coalesce((p_patch->>'monthlyUsd')::int, monthly_usd)
+    monthly_usd      = coalesce((p_patch->>'monthlyUsd')::int, monthly_usd),
+    -- 200 characters. Long enough to say something, short enough that nobody writes an essay.
+    about            = case when p_patch ? 'about'  then left(nullif(btrim(p_patch->>'about'),''), 200) else about end,
+    accent           = case when p_patch ? 'accent' then want_accent else accent end,
+    cover            = case when p_patch ? 'cover'  then want_cover  else cover  end
   where id = me returning * into m;
   perform log_audit('member.update','member',me::text, p_patch);
   return m;
@@ -2106,33 +2153,57 @@ create policy reactions_own on moment_reactions for all to authenticated
 -- that crew's messages, because in_crew() is what gates them. Checked, with admin removed: a
 -- stranger still cannot walk into someone else's crew, cannot make themselves its lead, and
 -- reads none of its messages before or after trying.
-create or replace function create_crew(p_name text, p_about text default null)
+-- A circle is born from a room the Desk has approved. That is the whole point of one: it exists
+-- so the people sharing a booking can talk about it, so there is nothing to talk about until
+-- there is a booking.
+--
+-- The gate was added by giving this function a third argument, and in Postgres that does NOT
+-- replace the two-argument version — it creates a second function beside it. The old ungated
+-- one stayed live, SECURITY DEFINER, executable by every authenticated member, and it inserted
+-- a crew with no check at all. The app never called it (the client always sends p_redemption),
+-- but the publishable key is public by design, so a member could call the 2-arg form from the
+-- browser console and get a circle with no approved room behind it. Dropped in production
+-- 2026-09-07; the drop below is what keeps a fresh build from recreating the hole.
+drop function if exists create_crew(text, text);
+
+create or replace function create_crew(p_name text, p_about text, p_redemption uuid default null)
 returns uuid
 language plpgsql security definer set search_path = public as $$
-declare
-  me uuid := current_member_id();
-  mine int;
-  newid uuid;
+declare me uuid; c uuid; r redemptions; nm text;
 begin
-  if me is null then raise exception 'You are not on the Circle''s list'; end if;
-  if length(btrim(coalesce(p_name,''))) < 2 then raise exception 'A crew needs a name'; end if;
-  if length(btrim(p_name)) > 40 then raise exception 'That name is too long — 40 characters at most'; end if;
+  me := current_member_id();
+  if me is null then raise exception 'Not a member'; end if;
 
-  select count(*) into mine from crews c
-    where c.created_by = me and c.archived_at is null;
-  if mine >= 25 then
-    raise exception 'You have 25 crews already. Archive one before starting another.';
+  nm := btrim(coalesce(p_name, ''));
+  if length(nm) < 2  then raise exception 'A circle needs a name'; end if;
+  if length(nm) > 40 then raise exception 'That name is too long — 40 characters at most'; end if;
+
+  if p_redemption is null then
+    raise exception 'Start a circle from a room the Desk has approved — that is what the circle is for';
   end if;
 
-  insert into crews (name, about, created_by)
-    values (btrim(p_name), nullif(btrim(coalesce(p_about,'')), ''), me)
-    returning id into newid;
-  insert into crew_members (crew_id, member_id, role) values (newid, me, 'lead');
-  return newid;
+  select * into r from redemptions where id = p_redemption;
+  if not found then raise exception 'No such booking'; end if;
+  if r.member_id <> me then raise exception 'That booking is not yours'; end if;
+  if r.status = 'quoted' then
+    raise exception 'Accept the quote first — once the points are committed the room is yours and the circle can start.';
+  end if;
+  if r.status not in ('held','confirmed','completed') then
+    raise exception 'That room is not approved yet — it is %. Once the Desk quotes it and you accept, you can start the circle around it.', r.status;
+  end if;
+
+  insert into crews (name, about, created_by, redemption_id)
+  values (nm, nullif(btrim(coalesce(p_about, '')), ''), me, p_redemption)
+  returning id into c;
+
+  insert into crew_members (crew_id, member_id, role) values (c, me, 'lead');
+  perform log_audit('crew.create', 'crew', c::text,
+    jsonb_build_object('name', nm, 'redemption', p_redemption));
+  return c;
 end $$;
 
-revoke all on function create_crew(text, text) from public, anon;
-grant execute on function create_crew(text, text) to authenticated;
+revoke all on function create_crew(text, text, uuid) from public, anon;
+grant execute on function create_crew(text, text, uuid) to authenticated;
 
 revoke all on function in_crew(uuid), leads_crew(uuid) from public, anon;
 grant execute on function in_crew(uuid), leads_crew(uuid) to authenticated;
@@ -2171,3 +2242,307 @@ create policy moments_file_write on storage.objects for insert to authenticated
 drop policy if exists moments_file_own on storage.objects;
 create policy moments_file_own on storage.objects for delete to authenticated
   using (bucket_id = 'moments' and (storage.foldername(name))[1] = current_member_id()::text);
+
+-- =====================================================================
+--  Standing, badges and provenance
+--
+--  Everything below was built as a migration against the live project and is reproduced here so
+--  that a rebuild from this file lands on the same schema. The order matters: the columns and
+--  tables come first, then the functions that read them, then the view — a view resolves its
+--  references at creation time, so standing_v cannot be declared before standing_of exists.
+-- =====================================================================
+
+-- ---------- columns added after the first build ----------
+-- A member's own page: a line about themselves, an accent from the palette, a cover.
+alter table members add column if not exists avatar_path text;
+alter table members add column if not exists bio         text;
+alter table members add column if not exists badge_pins  text[] not null default '{}';
+alter table members add column if not exists about       text;
+alter table members add column if not exists accent      text;
+alter table members add column if not exists cover       text;
+
+-- Where a price was actually seen, and the property's own booking page. Both exist so that no
+-- number on the board is unattributable: sources holds what Interval and RedWeek were asking
+-- and when anyone last looked, site is the page the Desk books from.
+alter table stays add column if not exists sources jsonb;
+alter table stays add column if not exists site    text;
+
+-- What the member was looking at when they asked, so the Desk can open the same page.
+alter table redemptions add column if not exists source_url   text;
+alter table redemptions add column if not exists source_label text;
+
+-- The approved room a circle was started from. Not nullable in spirit — create_crew refuses a
+-- null — but nullable in the column so the crews that predate the rule survive a rebuild.
+alter table crews add column if not exists redemption_id uuid references redemptions(id);
+
+-- ---------- badges ----------
+-- Three kinds. 'founder' is held by name and never granted twice, 'earned' is a query against
+-- what the club already records, and 'bought' costs points. The check keeps price and kind
+-- honest: exactly the bought ones carry a price.
+create table if not exists badge_catalog (
+  key          text primary key,
+  name         text not null,
+  blurb        text not null,
+  kind         text not null check (kind in ('earned','bought','founder')),
+  price_points int check (price_points is null or price_points > 0),
+  mark         text,
+  sort         int not null default 100,
+  active       boolean not null default true,
+  check ((kind = 'bought') = (price_points is not null))
+);
+
+create table if not exists member_badges (
+  member_id   uuid not null references members(id) on delete cascade,
+  badge_key   text not null references badge_catalog(key) on delete cascade,
+  paid_points int,
+  granted_by  uuid references members(id),
+  at          timestamptz not null default now(),
+  primary key (member_id, badge_key)
+);
+
+-- Aruba's three turnover taxes, kept as rows rather than constants so a rate change is an
+-- insert with a date on it and every old quote still reprices correctly.
+create table if not exists tax_rates (
+  id             uuid primary key default gen_random_uuid(),
+  name           text not null,
+  rate           numeric(6,4) not null,
+  effective_from date not null,
+  effective_to   date,
+  created_at     timestamptz not null default now()
+);
+
+alter table badge_catalog enable row level security;
+alter table member_badges enable row level security;
+alter table tax_rates     enable row level security;
+
+drop policy if exists badge_catalog_read on badge_catalog;
+create policy badge_catalog_read on badge_catalog for select to authenticated using (true);
+drop policy if exists badge_catalog_admin on badge_catalog;
+create policy badge_catalog_admin on badge_catalog for all to authenticated
+  using (has_role('admin')) with check (has_role('admin'));
+-- Read-only to the browser: a badge is only ever written by buy_badge or grant_badge, both
+-- definer, so nobody awards themselves the Founder's crown with an insert.
+drop policy if exists member_badges_read on member_badges;
+create policy member_badges_read on member_badges for select to authenticated
+  using (current_member_id() is not null);
+drop policy if exists tax_rates_select_all on tax_rates;
+create policy tax_rates_select_all on tax_rates for select to authenticated using (true);
+
+grant select on badge_catalog, member_badges, tax_rates to authenticated;
+revoke all on badge_catalog, member_badges, tax_rates from anon;
+
+insert into badge_catalog (key, name, blurb, kind, price_points, mark, sort) values
+  ('founder_victor','The Founder','Started the Circle and books every room in it.','founder',null,'crown',1),
+  ('founder_ian','The Voice','Wrote the first note and every one since.','founder',null,'quill',2),
+  ('founder_vishnu','The Banker','Holds the money and has never once been out by a cent.','founder',null,'vault',3),
+  ('founding','Founding Insider','One of the first twenty seats.','earned',null,'star',10),
+  ('autopilot','On Autopilot','A standing order, running six months or more.','earned',null,'repeat',11),
+  ('twelve','Twelve Straight','Twelve consecutive contributions.','earned',null,'twelve',12),
+  ('twentyfour','Twenty-four Straight','Twenty-four consecutive contributions.','earned',null,'tf',13),
+  ('earlybird','Before the Fifth','Six contributions sent before they were due.','earned',null,'sunrise',14),
+  ('morethanasked','More Than Asked','Three contributions beyond the monthly amount.','earned',null,'plus',15),
+  ('chippedin','Chipped In','Points put into three different Insiders'' bookings.','earned',null,'hands',16),
+  ('together','Booked It Together','A booking of yours that two or more people chipped into.','earned',null,'ring',17),
+  ('sponsor','Sponsor','You put a name forward and they are still here.','earned',null,'door',18),
+  ('foundit','Found It First','A deal you posted that the Circle went on to book.','earned',null,'eye',19),
+  ('fiveplaces','Five Places','Stays completed at five different places.','earned',null,'pin',20),
+  ('longhaul','Long Haul','You left the island with the Circle.','earned',null,'plane',21),
+  ('secondsignature','Second Signature','Six months co-signed shut.','earned',null,'pen',22),
+  ('nightowl','Night Owl','For the one who books at two in the morning.','bought',1000,'moon',30),
+  ('firstin','First In','You want it known that you were early.','bought',1500,'flag',31),
+  ('saltwater','Saltwater','In the sea before breakfast, every trip.','bought',1500,'wave',32),
+  ('kitchen','Cooks','The one who does the cooking in the villa.','bought',2000,'pot',33),
+  ('driver','Drives','Always ends up with the keys.','bought',2000,'wheel',34),
+  ('photo','Takes the Photos','Every album is yours.','bought',2000,'camera',35),
+  ('late','Never On Time','Owned, at least.','bought',2500,'clock',36),
+  ('planner','Makes the Plan','Someone has to, and it is you.','bought',3000,'map',37)
+on conflict (key) do nothing;
+
+insert into tax_rates (name, rate, effective_from) values
+  ('BBO','0.0250','2023-01-01'), ('BAVP','0.0150','2023-01-01'), ('BAZV','0.0300','2023-01-01')
+on conflict do nothing;
+
+-- ---------- standing: how long you have been here, and what you have done ----------
+-- Months since joining, whether or not any of them were paid.
+create or replace function months_held(p_member uuid)
+returns int language sql stable security definer set search_path = public as $$
+  select greatest(0, (extract(year from age(now(), m.joined_at)) * 12
+                    + extract(month from age(now(), m.joined_at)))::int)
+    from members m where m.id = p_member
+$$;
+
+-- The ladder is data, not a chain of if-statements, so the app and the database read the same
+-- five rungs from one place.
+create or replace function rank_ladder()
+returns jsonb language sql immutable set search_path = public as $$
+  select '[
+    {"i":0,"name":"Seated",   "months":0,  "blurb":"Forty seats, and one of them has your name on it."},
+    {"i":1,"name":"Steady",   "months":3,  "blurb":"Three months in, nothing outstanding."},
+    {"i":2,"name":"Anchor",   "months":9,  "blurb":"Nine months. The Circle can count on your line in the book."},
+    {"i":3,"name":"Old Guard","months":18, "blurb":"A year and a half. You were here before most of them."},
+    {"i":4,"name":"Pillar",   "months":36, "blurb":"Three years. Forty people hold this up, and you are one."}
+  ]'::jsonb
+$$;
+
+-- What a rung is actually worth. Kept beside the ladder so a perk can never be claimed in the
+-- app that the database does not also enforce — request_redemption reads this for the hold cap.
+create or replace function rank_perks(p_rank int)
+returns table(extra_holds int, extra_first_look_hours int, extra_guest_certs int)
+language sql immutable set search_path = public as $$
+  select case when p_rank >= 2 then 1 else 0 end,
+         case when p_rank >= 3 then 12 else 0 end,
+         case when p_rank >= 4 then 1 else 0 end;
+$$;
+
+-- A member's standing, computed rather than stored: months here, months paid, months owing,
+-- the rung that follows from them, and the badges the record already earns.
+create or replace function standing_of(p_member uuid)
+returns table(member_id uuid, months_held int, months_paid int, owing int,
+              rank_index int, rank_name text, badges jsonb)
+language plpgsql stable security definer set search_path = public as $$
+declare m members; s settings; held int; paid int; due int; r jsonb; b text[] := '{}';
+begin
+  select * into m from members where id = p_member;
+  if m.id is null then return; end if;
+  select * into s from settings where id = 1;
+  held := months_held(p_member);
+  select count(*)::int into paid from contributions c
+    where c.member_id = p_member and c.status = 'confirmed' and not c.extra;
+  -- Months since joining that are neither paid nor formally paused.
+  due := greatest(0, held - paid - coalesce(array_length(m.paused_months, 1), 0));
+
+  -- The rank: the highest rung whose months you have reached. From Steady up it also wants
+  -- nothing owing, so nobody climbs while dormant. Falling behind drops you back; catching
+  -- up puts you straight back. It is a state, not a history.
+  select jsonb_agg(x order by (x->>'months')::int) into r
+    from jsonb_array_elements(rank_ladder()) x
+   where (x->>'months')::int <= held and ((x->>'i')::int = 0 or due = 0);
+  rank_index := coalesce((r -> (jsonb_array_length(r) - 1) ->> 'i')::int, 0);
+  rank_name  := coalesce(r -> (jsonb_array_length(r) - 1) ->> 'name', 'Seated');
+
+  -- Badges. Things done, not time served. Each one is a query against what the club already
+  -- records — nothing here needs a new table or anybody's say-so.
+  if m.founding then b := array_append(b, 'founding'); end if;
+  if m.standing_order and consecutive_months(p_member, to_char(now(),'YYYY-MM')) >= 6
+    then b := array_append(b, 'autopilot'); end if;
+  if exists (select 1 from ledger l where l.member_id = p_member and l.kind='streak'
+               and l.note = '12 consecutive contributions') then b := array_append(b, 'twelve'); end if;
+  if exists (select 1 from ledger l where l.member_id = p_member and l.kind='streak'
+               and l.note = '24 consecutive contributions') then b := array_append(b, 'twentyfour'); end if;
+  if (select count(*) from contributions c2 where c2.member_id = p_member and c2.status='confirmed'
+        and c2.sent_on is not null and extract(day from c2.sent_on) <= s.due_day) >= 6
+    then b := array_append(b, 'earlybird'); end if;
+  if (select count(*) from contributions c3 where c3.member_id = p_member and c3.status='confirmed' and c3.extra) >= 3
+    then b := array_append(b, 'morethanasked'); end if;
+  if (select count(distinct r2.member_id) from pledges p join redemptions r2 on r2.id = p.redemption_id
+        where p.member_id = p_member and r2.member_id <> p_member and r2.confirmed_at is not null) >= 3
+    then b := array_append(b, 'chippedin'); end if;
+  if exists (select 1 from redemptions r3 where r3.member_id = p_member and r3.shared
+               and r3.confirmed_at is not null
+               and (select count(*) from pledges p2 where p2.redemption_id = r3.id and p2.member_id <> p_member) >= 2)
+    then b := array_append(b, 'together'); end if;
+  if exists (select 1 from invitations i join members mm on mm.id = i.accepted_member_id
+               where i.sponsor_id = p_member and mm.status = 'active') then b := array_append(b, 'sponsor'); end if;
+  if exists (select 1 from deals d where d.posted_by = p_member and d.status = 'booked')
+    then b := array_append(b, 'foundit'); end if;
+  if (select count(distinct r4.stay_id) from redemptions r4
+        where r4.member_id = p_member and r4.status = 'completed') >= 5 then b := array_append(b, 'fiveplaces'); end if;
+  if exists (select 1 from redemptions r5 join stays st on st.id = r5.stay_id
+               where r5.member_id = p_member and r5.status='completed' and st.kind = 'trip')
+    then b := array_append(b, 'longhaul'); end if;
+  if (select count(*) from month_closes mc where mc.cosigned_by = p_member) >= 6
+    then b := array_append(b, 'secondsignature'); end if;
+
+  months_held := held; months_paid := paid; owing := due;
+  member_id := p_member; badges := to_jsonb(b);
+  return next;
+end $$;
+
+-- Buying a badge spends available points, not the balance: points already promised to a
+-- booking are not yours to spend twice.
+create or replace function buy_badge(p_key text)
+returns member_badges language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := current_member_id();
+  b badge_catalog;
+  have int;
+  out_row member_badges;
+begin
+  if me is null then raise exception 'You are not on the Circle''s list'; end if;
+  select * into b from badge_catalog where key = p_key and active;
+  if b.key is null then raise exception 'No such badge'; end if;
+  if b.kind <> 'bought' then
+    raise exception '% is not for sale — it is %', b.name,
+      case b.kind when 'founder' then 'held by name' else 'earned' end;
+  end if;
+  if exists (select 1 from member_badges mb where mb.member_id = me and mb.badge_key = p_key) then
+    raise exception 'You already have %', b.name;
+  end if;
+
+  have := available_points(me);
+  if have < b.price_points then
+    raise exception 'That is % points and you have % available', b.price_points, have;
+  end if;
+
+  insert into ledger (member_id, kind, points, usd, ref_type, note, by_id)
+    values (me, 'badge', -b.price_points,
+            round(b.price_points::numeric / (select points_per_dollar from settings where id = 1), 2),
+            'badge', b.name, me);
+  insert into member_badges (member_id, badge_key, paid_points)
+    values (me, p_key, b.price_points) returning * into out_row;
+  return out_row;
+end $$;
+
+-- The founder marks and anything else not for sale. Admin only, and it refuses to hand out a
+-- badge that is supposed to be bought.
+create or replace function grant_badge(p_member uuid, p_key text)
+returns member_badges language plpgsql security definer set search_path = public as $$
+declare b badge_catalog; out_row member_badges;
+begin
+  if not has_role('admin') then raise exception 'Only an admin may grant a badge'; end if;
+  select * into b from badge_catalog where key = p_key and active;
+  if b.key is null then raise exception 'No such badge'; end if;
+  if b.kind = 'bought' then raise exception '% is bought with points, not granted', b.name; end if;
+  insert into member_badges (member_id, badge_key, granted_by)
+    values (p_member, p_key, current_member_id())
+    on conflict (member_id, badge_key) do nothing returning * into out_row;
+  return out_row;
+end $$;
+
+-- Three at most, and only ones you actually hold.
+create or replace function pin_badges(p_keys text[])
+returns members language plpgsql security definer set search_path = public as $$
+declare me uuid := current_member_id(); k text; m members;
+begin
+  if me is null then raise exception 'You are not on the Circle''s list'; end if;
+  if coalesce(array_length(p_keys, 1), 0) > 3 then raise exception 'Three at most'; end if;
+  foreach k in array coalesce(p_keys, '{}'::text[]) loop
+    if not exists (select 1 from member_badges mb where mb.member_id = me and mb.badge_key = k) then
+      raise exception 'You do not have that badge';
+    end if;
+  end loop;
+  update members set badge_pins = coalesce(p_keys, '{}') where id = me returning * into m;
+  return m;
+end $$;
+
+-- Standing for everyone at once, for the roll-call. Robots are not on the ladder.
+create or replace view standing_v as
+  select m.id as member_id, st.months_held, st.months_paid, st.owing,
+         st.rank_index, st.rank_name, st.badges
+    from members m
+    cross join lateral standing_of(m.id) st
+   where not m.bot;
+
+grant select on standing_v to authenticated;
+revoke all on standing_v from anon;
+
+revoke all on function months_held(uuid), rank_ladder(), rank_perks(int), standing_of(uuid),
+  buy_badge(text), grant_badge(uuid, text), pin_badges(text[]) from public, anon;
+grant execute on function months_held(uuid), rank_ladder(), rank_perks(int), standing_of(uuid),
+  buy_badge(text), grant_badge(uuid, text), pin_badges(text[]) to authenticated;
+
+-- quote_points is called by quote_redemption as the definer, never from the browser: money.js
+-- does the same arithmetic client-side. It kept the default PUBLIC execute grant because it was
+-- created after the lock-down above, so anon could price any stay until this was applied.
+revoke all on function quote_points(uuid, date, date, int) from public, anon;
+grant execute on function quote_points(uuid, date, date, int) to authenticated;
