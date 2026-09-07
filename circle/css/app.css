@@ -536,15 +536,26 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
   .rooms-table tbody, .rooms-table tr { display: block; }
   .rooms-table tr { padding: 14px 0 16px; border-top: 1px solid var(--hairline-soft); }
   .rooms-table tr:first-child { border-top: 0; padding-top: 4px; }
-  .rooms-table td { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 4px 12px;
-    align-items: baseline; padding: 4px 0; border: 0; }
-  .rooms-table td::before { content: attr(data-k); font-size: .68rem; letter-spacing: .08em;
-    text-transform: uppercase; color: var(--ink-3); }
-  .rooms-table td.num { text-align: left; }
-  .rooms-table td:first-child, .rooms-table td:last-child { grid-template-columns: minmax(0, 1fr); }
+  .rooms-table td { display: block; padding: 2px 0; border: 0; }
+  /* Size and sleeps share a line, and so do the three parts of the price. Each on its own
+     labelled row cost 460px per room — thirteen rooms was six thousand pixels, seven of the
+     page's ten screens, and the Hilton has twenty-three. */
+  .rooms-table td[data-k] { display: inline; margin-right: 14px; }
+  .rooms-table td[data-k]::before { content: attr(data-k); font-size: .68rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-3); margin-right: 5px; }
+  .rooms-table td[data-k] > span { display: inline; }
+  .rooms-table td[data-k] > span + span::before { content: " · "; color: var(--ink-3); }
+  /* td.num carries white-space:nowrap so a figure never breaks mid-number. In a column that is
+     right; on one wrapped line holding three of them it ran 370px wide inside a 322px card and
+     pushed the last one off the edge. Here the line has to wrap — and a number cannot break
+     anyway, having no space in it, so nothing is at risk. The one part that does contain
+     spaces, "$139.69 short of 7", is a sentence and should wrap like one. */
+  .rooms-table td.num { display: block; margin: 6px 0 0; text-align: left; white-space: normal; }
   .rooms-table td:first-child::before, .rooms-table td:last-child::before { content: none; }
   .rooms-table td:last-child { margin-top: 10px; }
-  .rooms-table td:last-child .row { justify-content: flex-start; }
+  /* !important because the justify-content is written inline on the div, and an inline style
+     beats a stylesheet every time — which is why this rule has never once applied. */
+  .rooms-table td:last-child .row { justify-content: flex-start !important; }
 }
 
 /* Nav badges: how many deals are waiting that you asked for. */

@@ -272,12 +272,20 @@ export function stayDetail({ store, params, go }) {
           <thead><tr><th>Room</th><th>Size</th><th>Sleeps</th><th class="num">From, a night</th><th></th></tr></thead>
           <tbody id="r-body"></tbody>
         </table></div>
+        <button class="btn ghost sm" id="r-more" type="button" style="margin-top:12px" hidden></button>
         <p class="small muted" style="margin-top:12px">${icon('scale', { size: 14, cls: 'ico-muted' })}
           Every room is priced off this property's own rate, so when Victor negotiates a better one they all move together.
           Sizes are the property's own published figures. Where a room says <em>size not published</em>, nobody publishes one and we would rather leave it blank than guess at it.</p>
       </section>`));
+    // Thirteen rooms here, twenty-three at the Hilton. Nobody reads to the end of that, and it
+    // buried everything below it — so the page opens with a handful and says how many more.
+    const FIRST = 6;
+    let showAll = rooms.length <= FIRST + 2;
     const drawRooms = () => {
-      roomsSlot.querySelector('#r-body').innerHTML = rooms.map(r => {
+      const shown = showAll ? rooms : rooms.slice(0, FIRST);
+      const more = roomsSlot.querySelector('#r-more');
+      if (more) more.hidden = showAll;
+      roomsSlot.querySelector('#r-body').innerHTML = shown.map(r => {
         const per = store.roomPointsFrom(stay.id, r.id);
         const min = stay.minNights || 1;
         const can = Math.floor(avail / (per || 1));
@@ -287,17 +295,21 @@ export function stayDetail({ store, params, go }) {
             <br><span class="flags">${r.kitchen === 'full' ? `<span class="tag">${icon('kitchen', { size: 13 })}Full kitchen</span>` : r.kitchen === 'kitchenette' ? '<span class="tag">Kitchenette</span>' : ''}
               ${(r.extras || []).slice(0, 2).map(x => `<span class="tag">${escapeHtml(x)}</span>`).join('')}
               ${r.source === 'size-unpublished' ? '<span class="tag">size not published</span>' : ''}</span></td>
-          <td class="small" data-k="Size">${r.sqft ? `${r.sqft.toLocaleString('en-US')} sq ft` : '<span class="muted">not published</span>'}
-            ${r.sqm ? `<br><span class="muted">${r.sqm} m²</span>` : ''}</td>
-          <td class="small" data-k="Sleeps">${icon('users', { size: 14, cls: 'ico-muted' })} ${r.sleeps}${r.bedrooms ? `<br><span class="muted">${r.bedrooms} bed${r.bedrooms > 1 ? 'rooms' : 'room'}</span>` : ''}</td>
-          <td class="num" data-k="A night"><b>${escapeHtml(fmtPoints(per))}</b><br><span class="small muted">${escapeHtml(fmtUsd2(per / s.pointsPerDollar))}</span>
-            <br><span class="small ${can >= min ? 'muted' : ''}">${can >= min ? `covers ${Math.min(can, 14)} night${can === 1 ? '' : 's'}` : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of ${min}`}</span></td>
+          <td class="small" data-k="Size"><span>${r.sqft ? `${r.sqft.toLocaleString('en-US')} sq ft` : '<span class="muted">not published</span>'}</span>${r.sqm ? `<span class="muted">${r.sqm} m²</span>` : ''}</td>
+          <td class="small" data-k="Sleeps"><span>${icon('users', { size: 14, cls: 'ico-muted' })} ${r.sleeps}</span>${r.bedrooms ? `<span class="muted">${r.bedrooms} bed${r.bedrooms > 1 ? 'rooms' : 'room'}</span>` : ''}</td>
+          <td class="num" data-k="A night"><span><b>${escapeHtml(fmtPoints(per))}</b></span><span class="small muted">${escapeHtml(fmtUsd2(per / s.pointsPerDollar))}</span><span class="small ${can >= min ? 'muted' : ''}">${can >= min ? `covers ${Math.min(can, 14)} night${can === 1 ? '' : 's'}` : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of ${min}`}</span></td>
           <td><div class="row nowrap" style="gap:6px;justify-content:flex-end;flex-wrap:nowrap">
             <a class="btn ghost sm" href="#/book/${escapeHtml(stay.id)}?room=${escapeHtml(r.id)}">Ask</a>
-            <button class="btn quiet sm icon-only" data-watch-room="${escapeHtml(r.id)}" aria-label="Tell me when a ${escapeHtml(r.name)} comes free">${icon('bell', { size: 15 })}</button>
+            <button class="btn ghost sm icon-only" data-watch-room="${escapeHtml(r.id)}" aria-label="Tell me when a ${escapeHtml(r.name)} comes free">${icon('bell', { size: 15 })}</button>
           </div></td></tr>`;
       }).join('');
     };
+    if (!showAll) {
+      const rest = rooms.length - FIRST;
+      const more = roomsSlot.querySelector('#r-more');
+      more.textContent = `Show the other ${rest} room${rest === 1 ? '' : 's'}`;
+      more.addEventListener('click', () => { showAll = true; drawRooms(); more.hidden = true; });
+    }
     drawRooms();
     roomsSlot.addEventListener('click', async (e) => {
       const w = e.target.closest('[data-watch-room]');

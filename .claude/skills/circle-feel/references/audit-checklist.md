@@ -41,7 +41,18 @@ move a column here did not do anything.
 
 `/settings` is 1.9 screens on every pane but Insiders, which is fourteen people with three
 actions each and is honestly long. `/stays` is 23 cards; length there is the catalog, not waste.
-`/stays/:id` at 10.5 screens is the one still untouched.
+`/stays/:id` came down next: 10.5 → 5.5 screens. The rooms table was 6,216px of it, because
+on a phone every cell became its own labelled block — 460px per room, thirteen rooms here and
+twenty-three at the Hilton. Facts share lines now and the list opens with six.
+
+Two defects that pass the audit and are still real, both found by eye on a screenshot:
+
+- **`td.num` inherits `white-space: nowrap`** (line 42, so a figure never breaks mid-number).
+  Correct in a column; on a wrapped line holding three figures it pushed the last one past the
+  card edge. `.tablewrap` scrolls, so the page-level overflow check said nothing was wrong.
+- **An inline `justify-content` on the element beat the stylesheet rule for it.** The mobile
+  rule left-aligning those buttons had never once applied. That is the third time this project
+  has lost to an inline style — check the markup, not just the cascade.
 
 What those numbers mean in the owner's language:
 
