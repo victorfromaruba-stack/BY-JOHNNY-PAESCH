@@ -174,7 +174,7 @@ export function stayDetail({ store, params, go }) {
         </table></div>
         <p class="small muted" style="margin-top:12px">${icon('scale', { size: 14, cls: 'ico-muted' })}
           Every room is priced off this property's own rate, so when Victor negotiates a better one they all move together.
-          A room marked <em>inferred</em> is one nobody publishes a size for.</p>
+          Sizes are the property's own published figures. Where a room says <em>size not published</em>, nobody publishes one and we would rather leave it blank than guess at it.</p>
       </section>`));
     const drawRooms = () => {
       roomsSlot.querySelector('#r-body').innerHTML = rooms.map(r => {
@@ -186,7 +186,7 @@ export function stayDetail({ store, params, go }) {
             ${r.beds ? `<br><span class="small muted">${escapeHtml(r.beds)}</span>` : ''}
             <br><span class="flags">${r.kitchen === 'full' ? `<span class="tag">${icon('kitchen', { size: 13 })}Full kitchen</span>` : r.kitchen === 'kitchenette' ? '<span class="tag">Kitchenette</span>' : ''}
               ${(r.extras || []).slice(0, 2).map(x => `<span class="tag">${escapeHtml(x)}</span>`).join('')}
-              ${r.source === 'inferred' ? '<span class="tag">inferred</span>' : ''}</span></td>
+              ${r.source === 'size-unpublished' ? '<span class="tag">size not published</span>' : ''}</span></td>
           <td class="small" data-k="Size">${r.sqft ? `${r.sqft.toLocaleString('en-US')} sq ft` : '<span class="muted">not published</span>'}
             ${r.sqm ? `<br><span class="muted">${r.sqm} m²</span>` : ''}</td>
           <td class="small" data-k="Sleeps">${icon('users', { size: 14, cls: 'ico-muted' })} ${r.sleeps}${r.bedrooms ? `<br><span class="muted">${r.bedrooms} bed${r.bedrooms > 1 ? 'rooms' : 'room'}</span>` : ''}</td>

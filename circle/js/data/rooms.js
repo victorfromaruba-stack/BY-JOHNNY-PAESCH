@@ -1,6 +1,9 @@
 // Every room, villa and suite the Circle can actually be given, at the sixteen properties
 // where the type is published. Researched from each operator's own site first and booking
-// aggregators second; `source` says which, and 'inferred' means nobody publishes it.
+// aggregators second; `source` says which. 'size-unpublished' means the room is real and its
+// size is not published anywhere — so sqft and sqm are null rather than estimated. Eleven rooms
+// used to carry an estimate here, and a member reading "941 sq ft" had no way to know which
+// eleven were guesses. A blank is checkable; a plausible number is not.
 //
 // `rateFactor` is what a type costs relative to the room the property's catalog rate in
 // stays.js is modelled on. So 1.0 is that room, 0.70 is a studio at seventy per cent of it,
@@ -149,8 +152,8 @@ export const ROOM_TYPES = [
     beds: '1 king + queen sofa sleeper', extras: ['Ritz-Carlton Club Lounge access', 'Separate living and dining area', 'Balcony', 'Dedicated Club concierge'], rateFactor: 3.23, source: 'aggregator', sortOrder: 9 },
   { id: 'rt_ritz_deluxe_suite_ocean_front', stayId: 'stay_ritz', name: 'Deluxe Suite, Ocean Front', sqft: 1238, sqm: 115, sleeps: 4, bedrooms: 1, bathrooms: 1.5, kitchen: 'none', view: 'West-facing, uninterrupted ocean front',
     beds: '1 king + queen sofa sleeper', extras: ['Large wraparound balcony', 'Outdoor seating and dining', 'Best sunset position on the property', 'Separate living and dining area'], rateFactor: 3.49, source: 'aggregator', sortOrder: 10 },
-  { id: 'rt_ritz_the_ritz_carlton_suite_ocean_front', stayId: 'stay_ritz', name: 'The Ritz-Carlton Suite, Ocean Front (Club Level)', sqft: 2400, sqm: 223, sleeps: 6, bedrooms: 2, bathrooms: 2.5, kitchen: 'none', view: 'Ocean front, sweeping coastline',
-    beds: 'King in main bedroom + second bedroom + sofa sleeper', extras: ['The property\'s signature suite', 'Ritz-Carlton Club Lounge access', 'Expansive living and dining areas', 'Large terrace'], rateFactor: 6.55, source: 'inferred', sortOrder: 11 },
+  { id: 'rt_ritz_the_ritz_carlton_suite_ocean_front', stayId: 'stay_ritz', name: 'The Ritz-Carlton Suite, Ocean Front (Club Level)', sqft: null, sqm: null, sleeps: 6, bedrooms: 2, bathrooms: 2.5, kitchen: 'none', view: 'Ocean front, sweeping coastline',
+    beds: 'King in main bedroom + second bedroom + sofa sleeper', extras: ['The property\'s signature suite', 'Ritz-Carlton Club Lounge access', 'Expansive living and dining areas', 'Large terrace'], rateFactor: 6.55, source: 'size-unpublished', sortOrder: 11 },
 
   // Aruba Ocean Villas, Savaneta, Aruba — 16 types
   { id: 'rt_oceanvillas_joy', stayId: 'stay_oceanvillas', name: 'Joy', sqft: null, sqm: null, sleeps: 2, bedrooms: 1, bathrooms: 1, kitchen: 'none', view: 'Garden view',
@@ -203,14 +206,14 @@ export const ROOM_TYPES = [
     beds: '1 king + double sofa bed', extras: ['Balcony', 'Bathtub', 'Mini-fridge', 'Coffee/tea maker'], rateFactor: 1.25, source: 'aggregator', sortOrder: 6 },
   { id: 'rt_marriott_ocean_view_room_2_queen_beds', stayId: 'stay_marriott', name: 'Ocean View Room, 2 Queen Beds', sqft: 400, sqm: 37, sleeps: 4, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Ocean view',
     beds: '2 queens', extras: ['Balcony', 'Deep soaking bathtub', 'Mini-fridge', 'Coffee/tea maker'], rateFactor: 1.25, source: 'aggregator', sortOrder: 7 },
-  { id: 'rt_marriott_tradewinds_club_limited_view_room', stayId: 'stay_marriott', name: 'Tradewinds Club Limited View Room', sqft: 500, sqm: 46, sleeps: 2, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Limited view',
-    beds: '1 king + double sofa bed', extras: ['Adults only 18+', 'Tradewinds Club lounge access', 'Private check-in', 'Dedicated concierge'], rateFactor: 1.55, source: 'inferred', sortOrder: 8 },
+  { id: 'rt_marriott_tradewinds_club_limited_view_room', stayId: 'stay_marriott', name: 'Tradewinds Club Limited View Room', sqft: null, sqm: null, sleeps: 2, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Limited view',
+    beds: '1 king + double sofa bed', extras: ['Adults only 18+', 'Tradewinds Club lounge access', 'Private check-in', 'Dedicated concierge'], rateFactor: 1.55, source: 'size-unpublished', sortOrder: 8 },
   { id: 'rt_marriott_tradewinds_club_deluxe_ocean_view_', stayId: 'stay_marriott', name: 'Tradewinds Club Deluxe Ocean View Room', sqft: 500, sqm: 46, sleeps: 2, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Ocean view',
     beds: '1 king + double sofa bed', extras: ['Adults only 18+', 'Large balcony', 'Tradewinds Club lounge access', 'Premium open bar 6-9pm'], rateFactor: 1.7, source: 'official', sortOrder: 9 },
   { id: 'rt_marriott_oceanfront_junior_suite', stayId: 'stay_marriott', name: 'Oceanfront Junior Suite', sqft: 625, sqm: 58, sleeps: 3, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Ocean front',
     beds: '1 king + double sofa bed', extras: ['Wrap-around balcony', 'Hardwood flooring', 'Seating area', 'Desk'], rateFactor: 1.75, source: 'official', sortOrder: 10 },
-  { id: 'rt_marriott_two_bedroom_family_room_limited_vi', stayId: 'stay_marriott', name: 'Two-Bedroom Family Room, Limited View', sqft: 800, sqm: 74, sleeps: 6, bedrooms: 2, bathrooms: 2, kitchen: 'none', view: 'Limited view',
-    beds: 'Configurations vary; effectively two connecting Limited View rooms', extras: ['Two connecting rooms', 'Two bathrooms', 'Two balconies or patios', 'Lock-off: sells as one unit or two separate ro'], rateFactor: 1.85, source: 'inferred', sortOrder: 11 },
+  { id: 'rt_marriott_two_bedroom_family_room_limited_vi', stayId: 'stay_marriott', name: 'Two-Bedroom Family Room, Limited View', sqft: null, sqm: null, sleeps: 6, bedrooms: 2, bathrooms: 2, kitchen: 'none', view: 'Limited view',
+    beds: 'Configurations vary; effectively two connecting Limited View rooms', extras: ['Two connecting rooms', 'Two bathrooms', 'Two balconies or patios', 'Lock-off: sells as one unit or two separate ro'], rateFactor: 1.85, source: 'size-unpublished', sortOrder: 11 },
   { id: 'rt_marriott_tradewinds_club_junior_suite', stayId: 'stay_marriott', name: 'Tradewinds Club Junior Suite', sqft: 625, sqm: 58, sleeps: 2, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Ocean front',
     beds: '1 king + double sofa bed', extras: ['Adults only 18+', 'Only 3 exist', 'Wrap-around balcony', 'Hardwood flooring'], rateFactor: 2.1, source: 'official', sortOrder: 12 },
   { id: 'rt_marriott_governor_s_suite_one_bedroom_large', stayId: 'stay_marriott', name: 'Governor\'s Suite (One-Bedroom Larger Suite, Oceanfront)', sqft: 1000, sqm: 93, sleeps: 4, bedrooms: 1, bathrooms: 2, kitchen: 'none', view: 'Ocean front',
@@ -317,14 +320,14 @@ export const ROOM_TYPES = [
     beds: '1 super king (200x200 cm), plus sofa in separate lounge area', extras: ['Separate living area', 'Shower', 'Hairdryer', 'Minibar and liquor dispenser'], rateFactor: 1.18, source: 'official', sortOrder: 4 },
   { id: 'rt_riu_jr_suite_ocean_front_view_elite_cl', stayId: 'stay_riu', name: 'Jr. Suite ocean front view - Elite Club (card tagged \'Sea view\')', sqft: 377, sqm: 35, sleeps: 3, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Ocean view',
     beds: '1 super king (200x200 cm) or 2 twin extra-long (125x200 cm), plus sofa in lounge area', extras: ['Elite Club by RIU access', 'Balcony or terrace', 'Shower', 'Bathrobe'], rateFactor: 1.28, source: 'official', sortOrder: 5 },
-  { id: 'rt_riu_superior_jr_suite_with_sea_view_el', stayId: 'stay_riu', name: 'Superior Jr. Suite with sea view - Elite Club', sqft: 431, sqm: 40, sleeps: 3, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Ocean view',
-    beds: '1 king-size bed, plus sofa in lounge area', extras: ['Elite Club by RIU access', 'Hydromassage bathtub plus separate shower', 'Balcony or terrace', 'Lounge area with sofa'], rateFactor: 1.33, source: 'inferred', sortOrder: 6 },
-  { id: 'rt_riu_jr_suite_ocean_front_view_elite_cl2', stayId: 'stay_riu', name: 'Jr. Suite ocean front view - Elite Club (card tagged \'Front sea view\')', sqft: 377, sqm: 35, sleeps: 3, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Ocean front',
-    beds: '2 twin extra-long beds (125x200 cm), plus lounge area', extras: ['Elite Club by RIU access', 'Two separate balconies with Caribbean views', 'Shower', 'Hairdryer'], rateFactor: 1.39, source: 'inferred', sortOrder: 7 },
-  { id: 'rt_riu_suite_ocean_front_view_elite_club', stayId: 'stay_riu', name: 'Suite ocean front view Elite Club', sqft: 517, sqm: 48, sleeps: 3, bedrooms: 1, bathrooms: 1, kitchen: 'none', view: 'Ocean front',
-    beds: '1 super king (200x200 cm), plus sofa in separate lounge area', extras: ['Elite Club by RIU access', 'Bathtub and shower', 'Separate living area', 'Air conditioning'], rateFactor: 1.48, source: 'inferred', sortOrder: 8 },
-  { id: 'rt_riu_superior_jr_suite_with_sea_view_el2', stayId: 'stay_riu', name: 'Superior Jr. Suite with sea view - Elite Club (2 Bedrooms)', sqft: 861, sqm: 80, sleeps: 6, bedrooms: 2, bathrooms: 2, kitchen: 'none', view: 'Ocean view',
-    beds: '2 super king beds (200x200 cm), one in each connecting suite', extras: ['Two connecting superior junior suites', 'Elite Club by RIU access', 'Two lounge areas', 'Hydromassage bathtub plus separate shower'], rateFactor: 2.65, source: 'inferred', sortOrder: 9 },
+  { id: 'rt_riu_superior_jr_suite_with_sea_view_el', stayId: 'stay_riu', name: 'Superior Jr. Suite with sea view - Elite Club', sqft: null, sqm: null, sleeps: 3, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Ocean view',
+    beds: '1 king-size bed, plus sofa in lounge area', extras: ['Elite Club by RIU access', 'Hydromassage bathtub plus separate shower', 'Balcony or terrace', 'Lounge area with sofa'], rateFactor: 1.33, source: 'size-unpublished', sortOrder: 6 },
+  { id: 'rt_riu_jr_suite_ocean_front_view_elite_cl2', stayId: 'stay_riu', name: 'Jr. Suite ocean front view - Elite Club (card tagged \'Front sea view\')', sqft: null, sqm: null, sleeps: 3, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Ocean front',
+    beds: '2 twin extra-long beds (125x200 cm), plus lounge area', extras: ['Elite Club by RIU access', 'Two separate balconies with Caribbean views', 'Shower', 'Hairdryer'], rateFactor: 1.39, source: 'size-unpublished', sortOrder: 7 },
+  { id: 'rt_riu_suite_ocean_front_view_elite_club', stayId: 'stay_riu', name: 'Suite ocean front view Elite Club', sqft: null, sqm: null, sleeps: 3, bedrooms: 1, bathrooms: 1, kitchen: 'none', view: 'Ocean front',
+    beds: '1 super king (200x200 cm), plus sofa in separate lounge area', extras: ['Elite Club by RIU access', 'Bathtub and shower', 'Separate living area', 'Air conditioning'], rateFactor: 1.48, source: 'size-unpublished', sortOrder: 8 },
+  { id: 'rt_riu_superior_jr_suite_with_sea_view_el2', stayId: 'stay_riu', name: 'Superior Jr. Suite with sea view - Elite Club (2 Bedrooms)', sqft: null, sqm: null, sleeps: 6, bedrooms: 2, bathrooms: 2, kitchen: 'none', view: 'Ocean view',
+    beds: '2 super king beds (200x200 cm), one in each connecting suite', extras: ['Two connecting superior junior suites', 'Elite Club by RIU access', 'Two lounge areas', 'Hydromassage bathtub plus separate shower'], rateFactor: 2.65, source: 'size-unpublished', sortOrder: 9 },
 
   // Barcelo Aruba - All Inclusive, Palm Beach, Aruba — 11 types
   { id: 'rt_barcelo_deluxe_lanai_pool_view', stayId: 'stay_barcelo', name: 'Deluxe Lanai Pool View', sqft: 484, sqm: 45, sleeps: 4, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Pool view (sunset views)',
@@ -341,20 +344,20 @@ export const ROOM_TYPES = [
     beds: '1 king-size bed', extras: ['Royal Level club tier', 'Royal Level beach bar', 'Priority a la carte restaurant reservations', 'Upper floors of the North Tower'], rateFactor: 1.06, source: 'official', sortOrder: 5 },
   { id: 'rt_barcelo_deluxe_ocean_front_with_hot_tub', stayId: 'stay_barcelo', name: 'Deluxe Ocean Front with Hot Tub', sqft: 560, sqm: 52, sleeps: 2, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Ocean front',
     beds: '1 king-size bed', extras: ['Private hot tub with sea views', 'Balcony or terrace', 'Air conditioning', 'Internet access'], rateFactor: 1.14, source: 'official', sortOrder: 6 },
-  { id: 'rt_barcelo_deluxe_suite', stayId: 'stay_barcelo', name: 'Deluxe Suite', sqft: 560, sqm: 52, sleeps: 4, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'None stated',
-    beds: '1 king-size bed plus sofa bed in seating area', extras: ['Extra-large open-plan layout', 'Shower', 'Air conditioning', 'Free WiFi'], rateFactor: 1.14, source: 'inferred', sortOrder: 7 },
+  { id: 'rt_barcelo_deluxe_suite', stayId: 'stay_barcelo', name: 'Deluxe Suite', sqft: null, sqm: null, sleeps: 4, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'None stated',
+    beds: '1 king-size bed plus sofa bed in seating area', extras: ['Extra-large open-plan layout', 'Shower', 'Air conditioning', 'Free WiFi'], rateFactor: 1.14, source: 'size-unpublished', sortOrder: 7 },
   { id: 'rt_barcelo_royal_level_suite_ocean_view', stayId: 'stay_barcelo', name: 'Royal Level Suite Ocean View', sqft: 818, sqm: 76, sleeps: 4, bedrooms: 1, bathrooms: 1, kitchen: 'none', view: 'Ocean view',
     beds: '1 king-size bed plus sofa bed in the living-dining room', extras: ['Royal Level club tier', 'Separate living-dining room', 'Full bathroom with shower and hot tub', 'Upper floors of the North Tower'], rateFactor: 1.17, source: 'official', sortOrder: 8 },
-  { id: 'rt_barcelo_2_connecting_rooms', stayId: 'stay_barcelo', name: '2 Connecting Rooms', sqft: 818, sqm: 76, sleeps: 6, bedrooms: 2, bathrooms: 2, kitchen: 'none', view: 'None stated',
-    beds: 'Two rooms, each with 2 double beds or 1 king-size bed', extras: ['True lock-off: two connecting 38 m2 / 409 sq f', 'Balcony or terrace to each room', 'Internet access', '6 adults / 4 children max'], rateFactor: 2.0, source: 'inferred', sortOrder: 9 },
-  { id: 'rt_barcelo_royal_level_master_suite', stayId: 'stay_barcelo', name: 'Royal Level Master Suite', sqft: 2120, sqm: 197, sleeps: 6, bedrooms: 1, bathrooms: 1.5, kitchen: 'none', view: 'Ocean view',
-    beds: '1 king-size bed plus sofa bed in the living room', extras: ['Royal Level club tier', 'Full separate dining room and living room', 'Hot tub', 'Three balconies'], rateFactor: 3.0, source: 'inferred', sortOrder: 10 },
+  { id: 'rt_barcelo_2_connecting_rooms', stayId: 'stay_barcelo', name: '2 Connecting Rooms', sqft: null, sqm: null, sleeps: 6, bedrooms: 2, bathrooms: 2, kitchen: 'none', view: 'None stated',
+    beds: 'Two rooms, each with 2 double beds or 1 king-size bed', extras: ['True lock-off: two connecting 38 m2 / 409 sq f', 'Balcony or terrace to each room', 'Internet access', '6 adults / 4 children max'], rateFactor: 2.0, source: 'size-unpublished', sortOrder: 9 },
+  { id: 'rt_barcelo_royal_level_master_suite', stayId: 'stay_barcelo', name: 'Royal Level Master Suite', sqft: null, sqm: null, sleeps: 6, bedrooms: 1, bathrooms: 1.5, kitchen: 'none', view: 'Ocean view',
+    beds: '1 king-size bed plus sofa bed in the living room', extras: ['Royal Level club tier', 'Full separate dining room and living room', 'Hot tub', 'Three balconies'], rateFactor: 3.0, source: 'size-unpublished', sortOrder: 10 },
 
   // Tamarijn Aruba All Inclusive, Druif Beach, Aruba — 2 types
   { id: 'rt_tamarijn_deluxe_oceanfront', stayId: 'stay_tamarijn', name: 'Deluxe Oceanfront', sqft: 379, sqm: 35, sleeps: 4, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Direct ocean view',
     beds: '2 queen beds, or 1 king bed with sofa-bed and two chairs', extras: ['Balcony or patio steps from the beach', 'Walk-in shower', '55-inch smart TV with Netflix, YouTube and Ama', 'Nespresso-style coffee machine'], rateFactor: 1.0, source: 'official', sortOrder: 0 },
-  { id: 'rt_tamarijn_premium_oceanfront', stayId: 'stay_tamarijn', name: 'Premium Oceanfront', sqft: 443, sqm: 41, sleeps: 4, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Direct ocean view',
-    beds: '2 queen beds, or 1 king bed with sofa-bed and two chairs', extras: ['Most spacious accommodation on the property', 'Expanded beachfront patio or balcony', 'Walk-in shower', '55-inch smart TV with Netflix, YouTube and Ama'], rateFactor: 1.1, source: 'inferred', sortOrder: 1 },
+  { id: 'rt_tamarijn_premium_oceanfront', stayId: 'stay_tamarijn', name: 'Premium Oceanfront', sqft: null, sqm: null, sleeps: 4, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Direct ocean view',
+    beds: '2 queen beds, or 1 king bed with sofa-bed and two chairs', extras: ['Most spacious accommodation on the property', 'Expanded beachfront patio or balcony', 'Walk-in shower', '55-inch smart TV with Netflix, YouTube and Ama'], rateFactor: 1.1, source: 'size-unpublished', sortOrder: 1 },
 
   // Manchebo Beach Resort & Spa — 4 types
   { id: 'rt_manchebo_deluxe_garden_view_room', stayId: 'stay_manchebo', name: 'Deluxe Garden View Room', sqft: 344, sqm: 32, sleeps: 3, bedrooms: 0, bathrooms: 1, kitchen: 'none', view: 'Garden',

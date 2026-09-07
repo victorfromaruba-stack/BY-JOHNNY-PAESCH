@@ -92,6 +92,33 @@ export function home({ store, go }) {
       ${lt.committed ? `<span><i style="background:var(--flight)"></i>Committed <b>${escapeHtml(fmtPoints(lt.committed))}</b></span>` : ''}</div>`;
   }
 
+  // 1a — what being in the Circle has been worth, in dollars, from real bookings.
+  //
+  // "I want people to see their savings real price vs what on the page so they appreciate being
+  // a member." It only appears once there is a paid booking to build it from: a savings panel
+  // reading $0.00 on somebody's first week is the opposite of the intended feeling, and an
+  // estimate would make the number worthless on the day it finally matters.
+  {
+    const sv = store.savingsFor(me.id);
+    if (sv.trips) {
+      const good = sv.savedUsd > 0;
+      left.appendChild(el(`<div class="panel">
+        <div class="row-between"><p class="eyebrow">${icon('trend')}What the Circle has saved you</p>
+          <a class="small" href="#/ledger">Every line</a></div>
+        <p class="big-figure num" style="color:${good ? 'var(--good-text)' : 'var(--ink)'}">${escapeHtml(fmtUsd2(Math.abs(sv.savedUsd)))}</p>
+        <p class="small muted" style="margin-top:4px">${good
+          ? `across ${sv.trips} booking${sv.trips === 1 ? '' : 's'} — ${escapeHtml(fmtUsd2(sv.publicUsd))} of hotel for ${escapeHtml(fmtUsd2(sv.oursUsd))}, ${sv.pct}% off the public rate`
+          : `${escapeHtml(fmtUsd2(sv.oursUsd))} against a public ${escapeHtml(fmtUsd2(sv.publicUsd))} — the Circle has cost you more so far, and it says so`}</p>
+        <ul class="ledger" style="margin-top:14px">
+          ${sv.lines.slice(0, 3).map(l => `<li>
+            <span class="what"><b>${escapeHtml(l.stayName)}</b><span class="meta">${l.nights} night${l.nights === 1 ? '' : 's'} · booked alone ${escapeHtml(fmtUsd2(l.publicUsd))}</span></span>
+            <span class="delta"><b class="${l.savedUsd > 0 ? 'pos' : ''}">${l.savedUsd >= 0 ? '' : '+'}${escapeHtml(fmtUsd2(Math.abs(l.savedUsd)))}</b><small>${l.savedUsd >= 0 ? 'saved' : 'more than direct'} · paid ${escapeHtml(fmtUsd2(l.oursUsd))}</small></span></li>`).join('')}
+        </ul>
+        <p class="small muted" style="margin-top:10px">Against the public rate for the same nights, taken when you asked for them. ${sv.paidIn ? `You have put in ${escapeHtml(fmtUsd2(sv.paidIn))} altogether.` : ''}</p>
+      </div>`));
+    }
+  }
+
   // 1b — anything the Circle is waiting on you for, if you hold a job
   const jobs = store.officerWork();
   if (jobs.length) {

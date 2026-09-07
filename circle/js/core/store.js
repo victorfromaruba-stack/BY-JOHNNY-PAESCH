@@ -591,6 +591,52 @@ export class Store {
   availablePoints(memberId) { return this.ledgerBalance(memberId) - this.committedPoints(memberId); }
   promoPoints(memberId) { return sum(this.ledgerFor(memberId).filter(l => PROMO_KINDS.includes(l.kind)), l => l.points); }
   basePoints(memberId) { return Math.max(0, this.ledgerBalance(memberId) - this.promoPoints(memberId)); }
+  /**
+   * What being in the Circle has actually been worth to this member, in dollars.
+   *
+   * Victor: "I want people to see their savings real price vs what on the page so they
+   * appreciate being a member." This is that number, and it is only credible if it is built the
+   * hard way — from bookings that really happened, against the public rate for the SAME nights.
+   *
+   * Two things it deliberately refuses to do. It does not count a booking that has not been
+   * paid for, because a saving you have not taken is not a saving. And it does not clamp at
+   * zero: where the Circle was DEARER than booking direct — which happens, at the Ritz — that
+   * booking subtracts. A total that can only go up is an advertisement, and a member can check
+   * any line of this against the site they would have used.
+   */
+  savingsFor(memberId = this.session?.memberId) {
+    const mine = this.state.redemptions.filter(r => r.memberId === memberId
+      && [REDEMPTION_STATUS.confirmed, REDEMPTION_STATUS.completed].includes(r.status));
+    const lines = [];
+    for (const r of mine) {
+      // What we charged: the points that actually burned, at face value.
+      const oursUsd = round((r.points ?? r.indicativePoints ?? 0) / this.settings.pointsPerDollar);
+      // What the same nights cost booked alone. Stored on the row at request time, so it is the
+      // public rate as it stood then rather than a number re-derived today.
+      const publicUsd = round(r.retailUsd || 0);
+      if (!oursUsd || !publicUsd) continue;
+      const stay = this.stay(r.stayId);
+      lines.push({
+        redemptionId: r.id, stayName: stay?.name || 'A stay', nights: r.nights || 0,
+        when: r.completedAt || r.confirmedAt || r.requestedAt,
+        oursUsd, publicUsd, savedUsd: round(publicUsd - oursUsd),
+      });
+    }
+    lines.sort((a, b) => String(b.when || '').localeCompare(String(a.when || '')));
+    const savedUsd = round(lines.reduce((a, l) => a + l.savedUsd, 0));
+    const publicUsd = round(lines.reduce((a, l) => a + l.publicUsd, 0));
+    const oursUsd = round(lines.reduce((a, l) => a + l.oursUsd, 0));
+    // Against what they have put in — the number that answers "was this worth joining".
+    const paidIn = round(this.state.contributions
+      .filter(c => c.memberId === memberId && c.status === 'confirmed')
+      .reduce((a, c) => a + (Number(c.amountUsd) || 0), 0));
+    return {
+      lines, savedUsd, publicUsd, oursUsd, paidIn,
+      trips: lines.length,
+      pct: publicUsd ? Math.round((savedUsd / publicUsd) * 100) : 0,
+    };
+  }
+
   lifetime(memberId) {
     const cs = this.state.contributions.filter(c => c.memberId === memberId && c.status === CONTRIBUTION_STATUS.confirmed);
     const led = this.ledgerFor(memberId);
