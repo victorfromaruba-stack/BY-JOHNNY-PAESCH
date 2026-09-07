@@ -273,7 +273,7 @@ export function book({ store, params, go }) {
   const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:720px">
       <p class="eyebrow">${escapeHtml(stay.area)}</p>
       <h1>${isTrip ? 'Ask for a seat' : 'Ask Victor for dates'}</h1>
-      <p class="lede" style="margin-top:10px">${escapeHtml(stay.name)}. He answers within ${s.slaHours} hours with an all-in price in points, locked for ${s.quoteHours} hours. Nothing is committed until you accept it.</p>
+      <p class="lede" style="margin-top:10px">${escapeHtml(stay.name)}. He answers within ${tierFor(s, me.monthlyUsd).slaHours ?? s.slaHours} hours with an all-in price in points, locked for ${s.quoteHours} hours. Nothing is committed until you accept it.</p>
       <form class="panel" id="form" style="margin-top:20px">
         ${isTrip ? `<div class="notice"><b>${escapeHtml(fmtDay(stay.dates.from))} – ${escapeHtml(fmtDay(stay.dates.to))}</b>
             <p class="small">${stay.nights} nights · ${escapeHtml(fmtPoints(stay.pointsPerSeat))} a seat · ${store.seatsHeld(stay.id)} of ${stay.seats} seats held</p></div>

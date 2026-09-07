@@ -14,10 +14,22 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // Every Insider can ask for every stay and every trip. What a level changes is how
   // fast the points build, and the perks — how far ahead you can book, how many open
   // requests you can hold, guest passes, and first look at a new trip.
+  // The ladder has to be worth climbing. It used to give $200 the SAME number of open
+  // requests as $150 and exactly one more month of booking window — so the top level cost 33%
+  // more for almost nothing, which is not a ladder, it is a rounding error.
+  //
+  // Every one of these is enforced somewhere in the app, not printed and forgotten: holds caps
+  // what you can have in front of the Desk, windowMonths caps how far ahead you can ask,
+  // guestCerts is counted, firstLookHours gates the board, bonusRate mints points, and
+  // slaHours is the promise the Desk is held to.
+  //
+  // The bonus rates are affordable rather than generous-sounding: the Circle earns 15% when
+  // points are spent on a room, so a 6% bonus on a $200 contribution costs $12 against $30
+  // earned if that member spends it. promoCapRate still guards the month.
   tiers: [
-    { id: 't100', monthlyUsd: 100, bonusRate: 0.00, holds: 1, guestCerts: 2, windowMonths: 10, firstLookHours: 0 },
-    { id: 't150', monthlyUsd: 150, bonusRate: 0.02, holds: 2, guestCerts: 3, windowMonths: 12, firstLookHours: 48 },
-    { id: 't200', monthlyUsd: 200, bonusRate: 0.04, holds: 2, guestCerts: 4, windowMonths: 13, firstLookHours: 72 },
+    { id: 't100', monthlyUsd: 100, bonusRate: 0.00, holds: 1, guestCerts: 2, windowMonths: 9,  firstLookHours: 0,   slaHours: 72 },
+    { id: 't150', monthlyUsd: 150, bonusRate: 0.03, holds: 3, guestCerts: 4, windowMonths: 15, firstLookHours: 48,  slaHours: 48 },
+    { id: 't200', monthlyUsd: 200, bonusRate: 0.06, holds: 5, guestCerts: 8, windowMonths: 24, firstLookHours: 168, slaHours: 24 },
   ],
   streakBonuses: { 6: 1000, 12: 2500, 24: 5000 },
   foundingBonus: 2000,

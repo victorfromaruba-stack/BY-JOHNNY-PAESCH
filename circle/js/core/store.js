@@ -217,7 +217,11 @@ export class Store {
       if (asked.length) {
         out.push({ id: 'quote', href: '#/desk', count: asked.length, urgent: true,
           what: `${asked.length} request${asked.length === 1 ? '' : 's'} waiting for a price`,
-          why: `The promise is ${this.settings?.slaHours || 72} hours.` });
+          why: (() => {
+            const tightest = Math.min(...asked.map(r => tierFor(this.settings, this.member(r.memberId)?.monthlyUsd)?.slaHours
+              ?? this.settings?.slaHours ?? 72));
+            return `The tightest promise outstanding is ${tightest} hours.`;
+          })() });
       }
     }
 

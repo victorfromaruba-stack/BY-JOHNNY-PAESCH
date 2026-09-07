@@ -28,9 +28,14 @@ export function tierTable(tier, s) {
     ['Guest passes', `${tier.guestCerts} a year`,
       'for somebody who is not in the Circle; household is always free',
       below && tier.guestCerts > below.guestCerts],
-    ['First look at a deal', tier.firstLookHours ? `${tier.firstLookHours} hours early` : 'when it reaches the board',
+    ['First look at a deal',
+      tier.firstLookHours >= 168 ? `${Math.round(tier.firstLookHours / 24)} days early`
+        : tier.firstLookHours ? `${tier.firstLookHours} hours early` : 'when it reaches the board',
       'before a new week is shown to everyone',
       below && tier.firstLookHours > below.firstLookHours],
+    ['Answered within', `${tier.slaHours ?? s.slaHours} hours`,
+      'how fast the Desk comes back with a price',
+      below && (tier.slaHours ?? 0) < (below.slaHours ?? 999)],
   ];
   return `<dl class="tier-detail">${rows.map(([k, v, why, better]) => `
     <div${better ? ' class="up"' : ''}>

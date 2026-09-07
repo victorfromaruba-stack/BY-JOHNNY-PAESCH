@@ -395,7 +395,9 @@ export function desk({ store, go }) {
       ${rows.length ? rows.map(r => {
         const m = store.member(r.memberId); const st = store.stay(r.stayId);
         const age = Math.round((Date.now() - new Date(r.requestedAt)) / 36e5);
-        const sla = s.slaHours - age;
+        // Each level carries its own promise, so the clock that matters is the asker's.
+        const promised = tierFor(s, store.member(r.memberId)?.monthlyUsd)?.slaHours ?? s.slaHours;
+        const sla = promised - age;
         return `<div class="panel">
           <div class="row-between">
             <div class="row" style="gap:12px">${avatar(m, 38)}
