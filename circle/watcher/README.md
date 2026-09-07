@@ -94,6 +94,29 @@ for good.
 
 Until then the watcher runs RedWeek only and says so in the log.
 
+### Victor's account is served from a different host
+
+Signing in happens at `www.intervalworld.com`. The answer to the login POST carries **no
+`Location` header** — it carries a script:
+
+```js
+function doRedirect() { window.location.replace("https://vip.intervalworld.com/web/cs?a=0"); }
+```
+
+A browser runs that and moves. Victor is VIP Gold, and VIP members are served from
+`vip.intervalworld.com`. A `fetch()` client sees a plain 200, follows nothing, and keeps asking
+`www.` for pages the session now lives on at `vip.` — which answers, cheerfully, with the
+logged-out version. That was the bug.
+
+The watcher now reads that redirect out of the page (`followTo`), goes there, and **moves its
+origin** so everything afterwards is asked of that host. Signing in always starts back at
+`www.` regardless of where the last session ended.
+
+The cookie jar deliberately does not scope cookies by domain — that is what carries the session
+across from `www` to `vip`. Which makes the allowed-host list the thing that matters: a redirect
+to anything that is not `*.intervalworld.com` is **not followed**, because following it would
+hand Victor's session to whoever asked.
+
 ### How to tell whether it actually got in
 
 Interval does not bounce an anonymous caller to the login page. It answers the very same URL,
@@ -119,7 +142,10 @@ silently as you type, so if `INTERVAL_PASS` is longer than 14 characters the sit
 been shown that string. The watcher reads those limits off the form and refuses with a plain
 message rather than reporting a wrong password.
 
-`node session.test.mjs` covers all of this with a stub — no network, no credentials.
+`node session.test.mjs` covers all of this with stubs — no network, no credentials. 41
+assertions, including a two-host stub that reproduces the www→vip move end to end, and the
+ones that matter most: a refused login that still redirects to a normal page is reported as
+refused, and a redirect off Interval is never followed.
 
 ## What it will and will not post
 

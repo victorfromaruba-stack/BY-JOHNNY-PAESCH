@@ -12,7 +12,15 @@
 // the session actually lands on. Run once with --dump on the VPS and the selectors get
 // finished from that HTML — no password ever leaves the machine.
 
+// Where signing in starts. Where it ENDS is not this — see followTo(). Victor's account is
+// VIP Gold, and Interval serves VIP members from vip.intervalworld.com; the login answer moves
+// the browser there with a line of JavaScript. So this is the front door, not the address.
 const ORIGIN = 'https://www.intervalworld.com';
+// Only ever Interval. The jar does not scope cookies by domain — it sends what it holds to
+// whatever host it is pointed at, which is what carries the session from www to vip — so the
+// set of hosts it may be pointed at is the thing that has to be closed. A redirect off this
+// list is not followed, because following it would hand Victor's session to a stranger.
+const HOSTS = /(^|\.)intervalworld\.com$/i;
 // The page asked for to decide whether the session is real. Anything behind the login does;
 // this one is small and is where the account's own details live.
 const PROBE = process.env.INTERVAL_PROBE_PATH || '/web/my/home';
@@ -131,6 +139,38 @@ export function fieldLimits(html = '') {
   return out;
 }
 
+/**
+ * Where a page sends the browser next WITHOUT an HTTP redirect.
+ *
+ * Interval's login answer is a 200 carrying a script:
+ *
+ *   function doRedirect() { window.location.replace("https://vip.intervalworld.com/web/cs?a=0"); }
+ *
+ * A browser runs that and moves. A fetch() client does not, and there is no Location header to
+ * follow, so the session stays on www while the account actually lives on vip — which is why
+ * every page afterwards came back as the logged-out version. Meta refresh is handled too,
+ * because it is the same trick without the script.
+ *
+ * Returns an absolute URL on an Interval host, or null. Anything off Interval is ignored
+ * rather than followed: the jar sends its cookies to whatever host it is given.
+ */
+export function followTo(html = '', from = ORIGIN) {
+  const patterns = [
+    /(?:window\.)?location\s*\.\s*(?:replace|assign)\s*\(\s*["']([^"']+)["']/i,
+    /(?:window\.)?location(?:\s*\.\s*href)?\s*=\s*["']([^"']+)["']/i,
+    /<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]*content\s*=\s*["'][^"']*url\s*=\s*([^"';]+)/i,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    if (!m) continue;
+    let url;
+    try { url = new URL(m[1].trim(), from); } catch { continue; }
+    if (!/^https?:$/.test(url.protocol) || !HOSTS.test(url.hostname)) continue;
+    return url.toString();
+  }
+  return null;
+}
+
 /** One attribute off a tag, quoted or not, with entities decoded. */
 function attr(tag, key) {
   const m = tag.match(new RegExp(`\\b${key}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i'));
@@ -153,13 +193,17 @@ export class Interval {
     if (!username || !password) throw new Error('Set INTERVAL_USER and INTERVAL_PASS in the environment');
     this.username = username; this.password = password;
     this.jar = jar(); this.fetch = fetchImpl; this.signedIn = false;
+    // Where a bare path is resolved against. It starts at the front door and moves to wherever
+    // signing in actually puts the session — vip.intervalworld.com, for a VIP account. Asking
+    // www for a page the session lives on at vip returns the logged-out page, cheerfully, 200.
+    this.origin = ORIGIN;
     // Every hop, so a failed pass can be read afterwards without a password and without
     // guessing. Values are never recorded — only cookie NAMES.
     this.trace = [];
   }
 
   async req(path, { method = 'GET', body = null, redirect = 'manual', hops = 0, timeoutMs = 30000, referer = null } = {}) {
-    const url = path.startsWith('http') ? path : ORIGIN + path;
+    const url = path.startsWith('http') ? path : this.origin + path;
     const headers = { 'user-agent': UA, accept: 'text/html,application/xhtml+xml', 'accept-language': 'en-US,en;q=0.9' };
     if (this.jar.size()) headers.cookie = this.jar.header();
     // A browser posting a form always says where the form was. Sending it costs nothing and
@@ -184,7 +228,41 @@ export class Interval {
       if (hops >= 10) throw new Error(`Interval redirected more than ten times from ${path}`);
       const to = res.headers.get('location');
       // A redirect after a POST is a GET, which is what a Spring login does on success.
-      if (to) return this.req(to.startsWith('http') ? to : new URL(to, url).toString(), { redirect, hops: hops + 1, timeoutMs, referer: url });
+      if (to) {
+        const next = to.startsWith('http') ? to : new URL(to, url).toString();
+        // Never carry the jar off Interval: it sends whatever it holds to whatever host it is
+        // pointed at, so an open redirect would be a way to walk off with the session.
+        if (!HOSTS.test(new URL(next).hostname)) {
+          this.trace.push({ method: 'GET', url: next, status: 0, to: '', setCookies: [],
+            jarAfter: this.jar.names(), note: 'not followed — off Interval' });
+          return res;
+        }
+        return this.req(next, { redirect, hops: hops + 1, timeoutMs, referer: url });
+      }
+    }
+    return res;
+  }
+
+  /**
+   * Go where a page's own JavaScript would have gone, and stay there.
+   *
+   * Returns the final response, or null if the page was not moving anywhere. Bounded, because a
+   * pair of pages pointing at each other would otherwise loop until the stack gives out.
+   */
+  async followScript(html, from, max = 3) {
+    let res = null, page = html, at = from;
+    for (let i = 0; i < max; i++) {
+      const to = followTo(page, at);
+      if (!to || to === at) break;
+      res = await this.req(to);
+      at = res.url || to;
+      // The session lives on whichever host it was sent to, so everything asked for afterwards
+      // is asked of that host rather than the front door. The origin moves only to an Interval
+      // host: the same guard as the redirect itself, applied to where we actually ended up,
+      // because a hop can land somewhere other than where it was pointed.
+      const landed = (() => { try { return new URL(at); } catch { return null; } })();
+      this.origin = landed && HOSTS.test(landed.hostname) ? landed.origin : new URL(to).origin;
+      page = await res.clone().text();
     }
     return res;
   }
@@ -206,6 +284,10 @@ export class Interval {
    * hour for months reporting "no Getaways in Aruba", which is indistinguishable from bad luck.
    */
   async attemptSignIn() {
+    // Always begin at the front door. A second sign-in — after a session was lost mid-pass —
+    // would otherwise be posted to whatever host the FIRST one ended on, which is not where
+    // signing in starts.
+    this.origin = ORIGIN;
     const pageRes = await this.req('/web/my/auth/loginPage');   // establishes the session cookie
     const loginPage = await pageRes.text();
 
@@ -234,6 +316,17 @@ export class Interval {
     const landedOn = res.url || '';
     const said = (html.match(/class="[^"]*(?:error|alert|message)[^"]*"[^>]*>\s*([^<]{4,160})/i) || [])[1];
 
+    // The login answer does not redirect with a header — it redirects with a line of script,
+    // to a host that is not the one we signed in at. Go where it says.
+    const movedTo = followTo(html, landedOn || ORIGIN);
+    let after = null;
+    if (movedTo) {
+      try {
+        const r2 = await this.followScript(html, landedOn || ORIGIN);
+        if (r2) after = await r2.text();
+      } catch { /* not being able to follow is not evidence of a good session either */ }
+    }
+
     // The answer to the POST is not the evidence — ask for something behind the login and read
     // what comes back. If the probe page cannot say either way, fall back to the login answer;
     // if neither can say, report not-signed-in, because the costly mistake is the hopeful one.
@@ -243,10 +336,11 @@ export class Interval {
       probe = await pr.text();
       probeSays = readsAsSignedIn(probe);
     } catch { /* the probe failing is itself not evidence of a good session */ }
-    const verdict = probeSays ?? readsAsSignedIn(html) ?? false;
+    const verdict = probeSays ?? readsAsSignedIn(after ?? '') ?? readsAsSignedIn(html) ?? false;
 
     this.signedIn = verdict === true;
-    return { ok: this.signedIn, status: res.status, landedOn, html, loginPage, probe,
+    return { ok: this.signedIn, status: res.status, landedOn, html, loginPage, probe, after,
+             movedTo, origin: this.origin,
              probePath: PROBE, probeSays, answerSays: readsAsSignedIn(html),
              hidden: Object.keys(hidden), limits, tooLong, said: said && said.trim() };
   }
@@ -269,33 +363,36 @@ export class Interval {
   async dump(paths = ['/web/my/home', '/web/my/info/benefits/getaways']) {
     const out = {};
     let r = null;
-
-    // The control. Fetch the same pages with a brand-new jar and no login at all, so the
-    // signed-in run has something to be compared against. This is the whole point: Interval
-    // serves anonymous callers the public version of the same URL at the same address, so the
-    // only way to know whether a password was accepted is to hold the two side by side. If
-    // they match, it was not.
     const control = {};
-    try {
-      const anon = new Interval({ username: 'x', password: 'x', fetchImpl: this.fetch });
-      for (const p of [PROBE, ...paths]) {
-        const html = await (await anon.req(p)).text();
-        control[p] = { bytes: html.length, signedIn: readsAsSignedIn(html) };
-        out[`anon${p}`] = html;
-        await new Promise((wait) => setTimeout(wait, 1200));
-      }
-    } catch (err) { out['04-control-failed'] = `<!-- ${err.message} -->`; }
 
     try {
       r = await this.attemptSignIn();
       out['00-login-form'] = r.loginPage;
       out['01-login-answer'] = r.html;
+      if (r.after) out['01a-where-the-script-sent-us'] = r.after;
       if (r.probe) out['01b-probe-page'] = r.probe;
       const say = (v) => (v === true ? 'signed in' : v === false ? 'NOT signed in' : 'cannot tell');
+
+      // The control, run AFTER signing in and against the host the session ended up on, so the
+      // two runs differ in one thing only: whether there is a session. Comparing a vip page
+      // against a www page would have been comparing two different things.
+      try {
+        const anon = new Interval({ username: 'x', password: 'x', fetchImpl: this.fetch });
+        anon.origin = this.origin;
+        for (const p of [PROBE, ...paths]) {
+          const html = await (await anon.req(p)).text();
+          control[p] = { bytes: html.length, signedIn: readsAsSignedIn(html) };
+          out[`anon${p}`] = html;
+          await new Promise((wait) => setTimeout(wait, 1200));
+        }
+      } catch (err) { out['04-control-failed'] = `<!-- ${err.message} -->`; }
+
       out['02-what-happened'] = [
         '<!--', `  signed in:      ${r.ok}`, `  http status:    ${r.status}`,
         `  landed on:      ${r.landedOn}`,
         `     (landing here proves nothing — an anonymous caller lands here too)`,
+        `  script moved us: ${r.movedTo || '(the answer carried no javascript redirect)'}`,
+        `  now asking:     ${r.origin}${r.origin !== ORIGIN ? '   <-- NOT the host we signed in at' : ''}`,
         `  probe page:     ${r.probePath} -> ${say(r.probeSays)}`,
         `  login answer:   ${say(r.answerSays)}`,
         `  the site said:  ${r.said || '(nothing)'}`,
