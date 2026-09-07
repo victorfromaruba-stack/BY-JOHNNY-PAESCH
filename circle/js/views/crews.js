@@ -134,6 +134,7 @@ export function crewDetail({ store, params, go, refresh }) {
 
   const roster = store.crewRoster(c.id);
   const lead = store.leadsCrew(c.id, me.id);
+  store.markCrewSeen(c.id);            // opening it is reading it
 
   const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:760px">
       <p class="small"><a href="#/crews" class="back">${icon('chevronRight', { size: 14 })}Your crews</a></p>

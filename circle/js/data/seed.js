@@ -23,10 +23,10 @@ const BANKS = ['Aruba Bank', 'Banco di Caribe', 'CMB', 'RBC Royal Bank'];
 // story: 'partial' (Aug received short), 'returned' (Mar returned then re-sent),
 // 'pendingNow' (September transfer still waiting for the Banker), 'paused', 'lapsed'
 const PEOPLE = [
-  { id: 'mem_victor', name: 'Victor Rosario', roles: ['planner', 'admin'], tier: 200, since: '2026-01', hue: 208, home: 'Noord', title: 'Founder & Curator', founding: true, story: ['pendingNow'], dream: 'stay_ritz' },
+  { id: 'mem_victor', name: 'Victor Rosario', roles: ['planner', 'admin'], badgePins: ['founder_victor','founding','planner'], about: 'If it is bookable, I have already asked what it costs.', accent: 'flight', tier: 200, since: '2026-01', hue: 208, home: 'Noord', title: 'Founder & Curator', founding: true, story: ['pendingNow'], dream: 'stay_ritz' },
   { id: 'mem_ian', name: 'Ian Hekman', roles: ['comms'], tier: 150, since: '2026-01', hue: 32, home: 'Oranjestad', title: 'Voice of the Circle', founding: true, dream: 'stay_renaissance' },
   { id: 'mem_vishnu', name: 'Vishnu', roles: ['treasurer'], tier: 150, since: '2026-01', hue: 152, home: 'Paradera', title: 'Banker of the Circle', founding: true, dream: 'stay_divi' },
-  { id: 'mem_sasha', name: 'Sasha Wever', roles: ['member'], tier: 200, since: '2026-01', hue: 268, home: 'Malmok', founding: true, standingOrder: true, showOnRollcall: true, dream: 'stay_oceanvillas' },
+  { id: 'mem_sasha', name: 'Sasha Wever', roles: ['member'], badgePins: ['saltwater','twelve'], about: 'In the sea before breakfast, every trip.', accent: 'good', tier: 200, since: '2026-01', hue: 268, home: 'Malmok', founding: true, standingOrder: true, showOnRollcall: true, dream: 'stay_oceanvillas' },
   { id: 'mem_daniela', name: 'Daniela Croes', roles: ['member'], tier: 150, since: '2026-01', hue: 338, home: 'Santa Cruz', founding: true, story: ['paused', 'pendingNow'], dream: 'stay_manchebo' },
   { id: 'mem_marcus', name: 'Marcus Tromp', roles: ['member'], tier: 100, since: '2026-01', hue: 18, home: 'San Nicolas', founding: true, story: ['partial', 'pendingNow'], dream: 'stay_boardwalk' },
   { id: 'mem_ana', name: 'Ana-Lucía Maduro', roles: ['member'], tier: 150, since: '2026-01', hue: 4, home: 'Savaneta', founding: true, story: ['returned', 'notYet'], showOnRollcall: true, dream: 'stay_bucuti' },
@@ -58,6 +58,7 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
     founding: !!p.founding, cardCode: initialsOf(p.name) + String(1000 + Math.floor(rand() * 8999)),
     household: [], preferences: {}, standingOrder: !!p.standingOrder, showOnRollcall: !!p.showOnRollcall, pausedMonths: [],
     dreamStayId: p.dream, sponsorId: p.id === 'mem_victor' ? null : 'mem_victor', notes: '',
+    badgePins: p.badgePins || [], about: p.about || '', accent: p.accent || '', cover: p.cover || '',
   }));
   const byId = Object.fromEntries(members.map(m => [m.id, m]));
 
@@ -288,5 +289,37 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
     { id: 'msg_5', crewId: 'crw_family', memberId: 'mem_daniela', body: 'Manchebo for the long weekend?', momentId: null, createdAt: '2026-09-05T11:40:00Z', editedAt: null, deletedAt: null },
   ];
 
-  return { version: 2, seededAt: iso(now), settings, members, contributions, ledger, stays, roomTypes, watches: [], deals: [], redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, crews, crewMembers, crewMessages, moments: [], momentReactions: [], session: null };
+  // The badge catalog mirrors what is in the database, so the preview shows the real thing.
+  const badgeCatalog = [
+    { key: 'founder_victor', name: 'The Founder', blurb: 'Started the Circle and books every room in it.', kind: 'founder', pricePoints: null, mark: 'crown', sort: 1, active: true },
+    { key: 'founder_ian', name: 'The Voice', blurb: 'Wrote the first note and every one since.', kind: 'founder', pricePoints: null, mark: 'quill', sort: 2, active: true },
+    { key: 'founder_vishnu', name: 'The Banker', blurb: 'Holds the money and has never once been out by a cent.', kind: 'founder', pricePoints: null, mark: 'vault', sort: 3, active: true },
+    { key: 'founding', name: 'Founding Insider', blurb: 'One of the first twenty seats.', kind: 'earned', pricePoints: null, mark: 'star', sort: 10, active: true },
+    { key: 'twelve', name: 'Twelve Straight', blurb: 'Twelve consecutive contributions.', kind: 'earned', pricePoints: null, mark: 'twelve', sort: 12, active: true },
+    { key: 'chippedin', name: 'Chipped In', blurb: "Points put into three different Insiders' bookings.", kind: 'earned', pricePoints: null, mark: 'hands', sort: 16, active: true },
+    { key: 'longhaul', name: 'Long Haul', blurb: 'You left the island with the Circle.', kind: 'earned', pricePoints: null, mark: 'plane', sort: 21, active: true },
+    { key: 'nightowl', name: 'Night Owl', blurb: 'For the one who books at two in the morning.', kind: 'bought', pricePoints: 1000, mark: 'moon', sort: 30, active: true },
+    { key: 'firstin', name: 'First In', blurb: 'You want it known that you were early.', kind: 'bought', pricePoints: 1500, mark: 'flag', sort: 31, active: true },
+    { key: 'saltwater', name: 'Saltwater', blurb: 'In the sea before breakfast, every trip.', kind: 'bought', pricePoints: 1500, mark: 'wave', sort: 32, active: true },
+    { key: 'kitchen', name: 'Cooks', blurb: 'The one who does the cooking in the villa.', kind: 'bought', pricePoints: 2000, mark: 'pot', sort: 33, active: true },
+    { key: 'driver', name: 'Drives', blurb: 'Always ends up with the keys.', kind: 'bought', pricePoints: 2000, mark: 'wheel', sort: 34, active: true },
+    { key: 'photo', name: 'Takes the Photos', blurb: 'Every album is yours.', kind: 'bought', pricePoints: 2000, mark: 'camera', sort: 35, active: true },
+    { key: 'late', name: 'Never On Time', blurb: 'Owned, at least.', kind: 'bought', pricePoints: 2500, mark: 'clock', sort: 36, active: true },
+    { key: 'planner', name: 'Makes the Plan', blurb: 'Someone has to, and it is you.', kind: 'bought', pricePoints: 3000, mark: 'map', sort: 37, active: true },
+  ];
+  const memberBadges = [
+    { memberId: 'mem_victor', badgeKey: 'founder_victor', at: '2026-01-04T10:00:00Z' },
+    { memberId: 'mem_ian', badgeKey: 'founder_ian', at: '2026-01-04T10:00:00Z' },
+    { memberId: 'mem_vishnu', badgeKey: 'founder_vishnu', at: '2026-01-04T10:00:00Z' },
+    { memberId: 'mem_victor', badgeKey: 'founding', at: '2026-01-04T10:00:00Z' },
+    { memberId: 'mem_victor', badgeKey: 'planner', paidPoints: 3000, at: '2026-08-11T19:00:00Z' },
+    { memberId: 'mem_sasha', badgeKey: 'founding', at: '2026-01-05T10:00:00Z' },
+    { memberId: 'mem_sasha', badgeKey: 'saltwater', paidPoints: 1500, at: '2026-07-20T08:10:00Z' },
+    { memberId: 'mem_sasha', badgeKey: 'twelve', at: '2026-09-01T10:00:00Z' },
+    { memberId: 'mem_marcus', badgeKey: 'founding', at: '2026-01-05T10:00:00Z' },
+    { memberId: 'mem_marcus', badgeKey: 'driver', paidPoints: 2000, at: '2026-06-02T12:00:00Z' },
+    { memberId: 'mem_daniela', badgeKey: 'kitchen', paidPoints: 2000, at: '2026-05-14T18:30:00Z' },
+  ];
+
+  return { version: 2, seededAt: iso(now), settings, members, contributions, ledger, stays, roomTypes, watches: [], deals: [], redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, crews, crewMembers, crewMessages, badgeCatalog, memberBadges, moments: [], momentReactions: [], session: null };
 }

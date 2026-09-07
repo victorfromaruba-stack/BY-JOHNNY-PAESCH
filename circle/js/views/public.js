@@ -35,7 +35,11 @@ export function sourceLine(stay) {
 
 /** A stay or trip card, used on the landing page and throughout the catalog. */
 export function stayCard(stay, { store, season = 'low', href = null, footer = '' } = {}) {
-  const per = stay.kind === 'trip' ? stay.pointsPerSeat : seasonPoints(stay, season);
+  // store.settings, not the defaults. Without it the whole catalog priced itself off
+  // DEFAULT_SETTINGS and silently ignored every rate Victor edits in the Desk — so the number
+  // on the card and the number in the quote could disagree, which is the one thing a price
+  // must never do.
+  const per = stay.kind === 'trip' ? stay.pointsPerSeat : seasonPoints(stay, season, store?.settings);
   const node = el(`<a class="stay-card" href="${escapeHtml(href || `#/${stay.kind === 'trip' ? 'trips' : 'stays'}/${stay.id}`)}">
       <span class="strip"><span class="duo"></span><span class="ph-note">illustration</span></span>
       <span class="body">
@@ -144,7 +148,7 @@ export function landing({ store, go }) {
         <span class="tiny muted">${escapeHtml(fmtAfl2(t2.monthlyUsd, s.awgPerUsd))}</span></button>`).join('');
     const tier = tierFor(s, chosen);
     const sp = splitContribution(chosen, s, tier);
-    const slot = split.querySelector('#split-slot'); slot.replaceChildren(splitBar({ amountUsd: chosen, shareRate: s.serviceRate, points: sp.basePoints }));
+    const slot = split.querySelector('#split-slot'); slot.replaceChildren(splitBar({ amountUsd: chosen, shareRate: 0, points: sp.points }));
     split.querySelector('#split-figures').innerHTML = `
       <div class="stat"><span class="k">Points credited</span><b class="num">${escapeHtml(fmtPoints(sp.points))}</b><span class="sub">${escapeHtml(fmtUsd2(sp.points / 100))} of hotel${sp.bonusPoints ? ` · includes a ${Math.round(tier.bonusRate * 100)}% ${escapeHtml(tierName(chosen))} bonus the Circle funds` : ''}</span></div>
       <div class="stat"><span class="k">Into the Reserve</span><b class="num">${escapeHtml(fmtUsd2(sp.backingUsd))}</b><span class="sub">All of it. Held in a named account until you spend it on a room.</span></div>`;
@@ -251,19 +255,25 @@ export function landing({ store, go }) {
   // visitor can read no members at all, so the three jobs are described either way: those
   // are facts about how the Circle is arranged, not anybody's personal data.
   const JOBS = [
-    { role: 'planner', job: 'The Desk', what: 'Finds the deals, plans the trips, and quotes every request within 72 hours.' },
-    { role: 'comms', job: 'The Voice', what: 'Every message from the Circle comes from one person, so nobody is chased in a group chat.' },
-    { role: 'treasurer', job: 'The Banker', what: 'Holds the money and confirms every transfer. Points are minted only by him, and every line in your ledger carries his name and the time.' },
+    { role: 'planner', job: 'The Desk', name: 'Victor Rosario', what: 'Finds the deals, plans the trips, and quotes every request within 72 hours.' },
+    { role: 'comms', job: 'The Voice', name: 'Ian Hekman', what: 'Every message from the Circle comes from one person, so nobody is chased in a group chat.' },
+    { role: 'treasurer', job: 'The Banker', name: 'Vishnu', what: 'Holds the money and confirms every transfer. Points are minted only by him, and every line in your ledger carries his name and the time.' },
   ];
   wrap.appendChild(el(band('band-pool', 'Salt pans from above, pale shapes divided by thin channels',
     'The Reserve, checked against the bank every month.')));
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>Three people, three jobs</h2></div></div>
-      <div class="jobs">${JOBS.map(({ role, job, what }) => {
+      <div class="jobs">${JOBS.map(({ role, job, what, name }) => {
+        // A signed-out browser is handed no members at all by row-level security, so looking
+        // the officer up returned nothing and the section that exists to prove real people
+        // hold the money printed "not yet filled" three times — on the live site, to every
+        // stranger. The three names are already in prose twice on this same page, so naming
+        // them here exposes nothing and is simply true.
         const m = store.people().find(x => (x.roles || []).includes(role) && x.status !== 'left');
         return `<div class="job">
           <h3>${escapeHtml(job)}</h3>
-          <p class="job-who">${m ? `${avatar(m, 30)}<span>${escapeHtml(m.name)}</span>` : '<span class="muted">not yet filled</span>'}</p>
+          <p class="job-who">${m ? `${avatar(m, 30)}<span>${escapeHtml(m.name)}</span>`
+            : `<span>${escapeHtml(name)}</span>`}</p>
           <p class="small muted">${escapeHtml(what)}</p></div>`;
       }).join('')}</div>
       </div></section>`));
@@ -512,7 +522,7 @@ export function join({ store, params, go }) {
     body.querySelector('#tiers').innerHTML = s.tiers.map(t => `<button type="button" class="choice" aria-pressed="${t.monthlyUsd === state.monthlyUsd}" data-amt="${t.monthlyUsd}">
         <span class="amt">$${t.monthlyUsd}</span><span class="tier">${escapeHtml(tierName(t.monthlyUsd))} ${treeSvg(VOCAB.tierLean[t.monthlyUsd], { size: 14 })}</span>
         <span class="tiny muted">${t.holds} open request${t.holds > 1 ? 's' : ''} · ${t.guestCerts} guest passes</span></button>`).join('');
-    body.querySelector('#split').replaceChildren(splitBar({ amountUsd: state.monthlyUsd, shareRate: s.serviceRate, points: sp.basePoints }));
+    body.querySelector('#split').replaceChildren(splitBar({ amountUsd: state.monthlyUsd, shareRate: 0, points: sp.points }));
     body.querySelector('#card-preview').replaceChildren(memberCard(
       { id: 'preview', name: state.name || 'Your name', monthlyUsd: state.monthlyUsd, joinedAt: new Date().toISOString(), founding: store.activeMembers().length < s.foundingSeats, cardCode: '' },
       { store, flippable: false, compact: true }));

@@ -69,7 +69,8 @@ export class SupabaseStore extends Store {
   }
   async reload() {
     const tables = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'pledges', 'announcements', 'audit', 'invitations', 'month_closes', 'promo_deferrals', 'room_types', 'watches', 'deals',
-      'standings', 'crews', 'crew_members', 'crew_messages', 'moments', 'moment_reactions'];
+      'standings', 'crews', 'crew_members', 'crew_messages', 'moments', 'moment_reactions',
+      'badge_catalog', 'member_badges'];
     // members comes from a view that leaves out auth_user_id and the officer's private notes;
     // it is security_invoker, so the members_read policy still decides which rows come back.
     // standing_v answers for everybody — it returns a rank and a list of badges and nothing
@@ -83,6 +84,8 @@ export class SupabaseStore extends Store {
     this.state.crewMembers = this.state.crew_members || this.state.crewMembers || [];
     this.state.crewMessages = this.state.crew_messages || this.state.crewMessages || [];
     this.state.momentReactions = this.state.moment_reactions || this.state.momentReactions || [];
+    this.state.badgeCatalog = this.state.badge_catalog || this.state.badgeCatalog || [];
+    this.state.memberBadges = this.state.member_badges || this.state.memberBadges || [];
     // The database calls them from_date/to_date because `from` and `to` are awkward in SQL;
     // the rest of the app calls them from/to. Bridge it here rather than everywhere else.
     // Column names the screens do not use: full_amount is read as `full`, the stored proof
@@ -397,6 +400,12 @@ export class SupabaseStore extends Store {
       ? 'Those are not your words' : error.message);
     await this.reload();
   }
+
+  // Badges. Buying burns points and writes the ledger, so it has to be the server's decision;
+  // pinning is checked there too, or a member could display a badge they do not hold.
+  async buyBadge(key) { return this.rpc('buy_badge', { p_key: key }); }
+  async pinBadges(keys) { return this.rpc('pin_badges', { p_keys: keys }); }
+  async grantBadge(memberId, key) { return this.rpc('grant_badge', { p_member: memberId, p_key: key }); }
 
   async setGoal(_memberId, goal) { return this.rpc('set_my_goal', { p_goal: goal }); }
   async recordDirectContribution({ memberId, amountUsd, forMonth = null, method = 'cash', currency = 'USD', note = '' }) {

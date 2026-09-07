@@ -600,9 +600,9 @@ export function pool({ store }) {
           <h2 style="font-size:1.1rem">Where the money has gone</h2>
           <ul class="ledger" style="margin-top:12px">
             <li><span class="what"><b>Collected from Insiders</b><span class="meta">every confirmed contribution</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.collected))}</b></span></li>
-            <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta">15%, earned on settled bookings</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.serviceEarnedUsd))}</b></span></li>
-            <li><span class="what"><b>Into the Reserve</b><span class="meta">the 85% that backs points</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.backing))}</b></span></li>
-            <li><span class="what"><b>Bonuses funded by the Circle</b><span class="meta">tier, streak and founding — fronted against the 15% still to be earned</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.promoUsd))}</b></span></li>
+            <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta">15%, earned when points are spent on a room</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.serviceEarnedUsd))}</b></span></li>
+            <li><span class="what"><b>Into the Reserve</b><span class="meta">all of it — nothing is taken when points are bought</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.backing))}</b></span></li>
+            <li><span class="what"><b>Bonuses funded by the Circle</b><span class="meta">tier, streak and founding — fronted against the 15% still to be earned on bookings</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.promoUsd))}</b></span></li>
             ${t.topUpsUsd ? `<li><span class="what"><b>Cash top-ups received</b><span class="meta">paid straight on to the hotel; no 15% is taken</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.topUpsUsd))}</b></span></li>` : ''}
             <li><span class="what"><b>Paid to hotels</b><span class="meta">confirmed bookings, at the invoiced amount</span></span><span class="delta"><b>−${escapeHtml(fmtUsd2(t.paidOutUsd))}</b></span></li>
             <li><span class="what"><b>Reserve today</b></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.reserveExpectedUsd))}</b></span></li>

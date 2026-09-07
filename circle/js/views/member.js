@@ -3,7 +3,7 @@ import { escapeHtml, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDa
 import { RANKS, nextRank } from '../core/standing.js';
 import { VOCAB, tierName, refFor } from '../core/vocab.js';
 import { splitContribution, tierFor, seasonPoints, SEASONS, isDushiSeason, pointsPerMonth } from '../core/money.js';
-import { memberCard, poolGauge, rankCrest, ring, splitBar, tierTable } from '../ui/pieces.js';
+import { memberCard, poolGauge, rankCrest, ring, splitBar, tierTable, badgeMark, badgeRow } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel, avatar } from '../ui/components.js';
 import { sparkline, columns, tableFor } from '../ui/charts.js';
@@ -392,7 +392,7 @@ export function pay({ store, go }) {
 
       <p class="small muted" style="margin-top:18px">Prefer not to think about it? Set a standing order for the ${s.dueDay}th — Aruba Bank and Banco di Caribe both do it free, online — and put the reference in the description once. <a href="#/profile">Mark yourself on autopilot</a>.</p>
     </div></section></div>`);
-  wrap.querySelector('#split').appendChild(splitBar({ amountUsd: me.monthlyUsd, shareRate: s.serviceRate, points: sp.basePoints }));
+  wrap.querySelector('#split').appendChild(splitBar({ amountUsd: me.monthlyUsd, shareRate: 0, points: sp.points }));
   wrap.addEventListener('click', async (e) => {
     const c = e.target.closest('[data-copy]');
     if (c) { const ok = await copyText(c.dataset.copy); toast(ok ? 'Copied.' : 'Select and copy it by hand.'); return; }
@@ -682,6 +682,103 @@ function jobsPanel(store) {
     </div>`;
 }
 
+/**
+ * Badges: what you hold, what you have chosen to show, and what is for sale.
+ *
+ * Three kinds and the difference is the point. Earned ones are facts the club already records,
+ * so nobody awards or withholds them. Founder ones are held by name — three of them, and there
+ * will never be a fourth. Bought ones cost points, which means they cost hotel, so the dollar
+ * figure is printed beside every price. Nobody should spend a night by accident.
+ */
+function drawBadges(panel, { store, me, refresh }) {
+  const held = store.badgesOf(me.id);
+  const shop = store.badgeShop(me.id);
+  const pins = (me.badgePins || []);
+  const s = store.settings;
+  const lt = store.lifetime(me.id);
+
+  panel.innerHTML = `
+    <div class="row-between"><h2>Your badges</h2>
+      <span class="tiny muted">${held.length} held${pins.length ? ` · ${pins.length} shown` : ''}</span></div>
+    <p class="small muted" style="margin-top:6px">Pick up to three to show beside your name. Tap one to pin or unpin it.</p>
+    <div class="badge-grid" style="margin-top:14px">${held.length ? held.map(h => `
+      <button type="button" class="badge-card owned" data-pin="${escapeHtml(h.badgeKey)}"
+              aria-pressed="${pins.includes(h.badgeKey)}">
+        ${badgeMark(h.badge, { size: 26, tone: h.badge.kind === 'founder' ? 'is-founder' : h.badge.kind === 'bought' ? 'is-bought' : '' })}
+        <span><b>${escapeHtml(h.badge.name)}</b><span class="why">${escapeHtml(h.badge.blurb)}</span></span>
+      </button>`).join('') : '<p class="small muted">None yet. The earned ones arrive on their own.</p>'}</div>
+
+    ${shop.length ? `<hr class="rule" style="margin:20px 0">
+    <div class="row-between"><h2 style="font-size:1.1rem">For sale</h2>
+      <span class="tiny muted">you have ${escapeHtml(fmtPoints(lt.available))}</span></div>
+    <p class="small muted" style="margin-top:6px">Points spent here are hotel you are choosing not to have. That is the whole cost — nothing else changes.</p>
+    <div class="badge-grid" style="margin-top:14px">${shop.map(b => {
+      const afford = lt.available >= b.pricePoints;
+      return `<button type="button" class="badge-card ${afford ? '' : 'locked'}" data-buy="${escapeHtml(b.key)}" ${afford ? '' : 'disabled'}>
+        ${badgeMark(b, { size: 26, tone: 'is-bought' })}
+        <span><b>${escapeHtml(b.name)}</b><span class="why">${escapeHtml(b.blurb)}</span>
+          <span class="cost">${escapeHtml(fmtPoints(b.pricePoints))} · ${escapeHtml(fmtUsd2(b.pricePoints / s.pointsPerDollar))} of hotel</span></span>
+      </button>`; }).join('')}</div>` : ''}`;
+
+  panel.onclick = async (e) => {
+    const pin = e.target.closest('[data-pin]');
+    if (pin) {
+      const key = pin.dataset.pin;
+      const next = pins.includes(key) ? pins.filter(k => k !== key) : [...pins, key];
+      if (next.length > 3) { toast('Three at most — unpin one first.', { kind: 'bad' }); return; }
+      try { await store.pinBadges(next); refresh(); } catch (err) { toast(err.message, { kind: 'bad' }); }
+      return;
+    }
+    const buy = e.target.closest('[data-buy]');
+    if (!buy) return;
+    const b = store.badge(buy.dataset.buy);
+    const yes = await confirmDialog({ title: `Buy ${b.name}?`, confirmText: 'Buy it',
+      message: `${fmtPoints(b.pricePoints)} — ${fmtUsd2(b.pricePoints / s.pointsPerDollar)} of hotel you are choosing not to have. It is yours for good and it cannot be sold back.` });
+    if (!yes) return;
+    try { await store.buyBadge(b.key); toast(`${b.name} is yours.`, { kind: 'good' }); refresh(); }
+    catch (err) { toast(err.message, { kind: 'bad' }); }
+  };
+}
+
+/** A member's own corner. Deliberately small — a line, an accent, a cover. */
+function drawCorner(panel, { store, me, refresh }) {
+  const ACCENTS = [['good', 'Sea'], ['flight', 'Gold'], ['flag', 'Coral'], ['ink', 'Ink'], ['sea', 'Deep'], ['sand', 'Sand']];
+  const COVERS = [['', 'None'], ['hero', 'The shallows'], ['band-pool', 'Salt pans'], ['band-circle', 'The table'],
+                  ['band-open', 'The colonnade'], ['season-carnival', 'Carnival'], ['season-winter', 'Winter']];
+  panel.innerHTML = `
+    <h2>Your corner</h2>
+    <p class="small muted" style="margin-top:6px">A line about you, a colour, and a picture. It shows on your card in the Circle and nowhere else.</p>
+    <form id="corner" style="margin-top:14px">
+      <label class="field"><span>A line about you</span>
+        <input name="about" maxlength="200" placeholder="Always in the sea before breakfast."
+               value="${escapeHtml(me.about || '')}">
+        <span class="hint">200 characters. It is a line, not an essay.</span></label>
+      <p class="eyebrow">Your colour</p>
+      <div class="row" style="gap:8px;margin-top:8px">${ACCENTS.map(([k, n]) => `
+        <button type="button" class="chip accent-chip" data-accent="${k}" aria-pressed="${(me.accent || '') === k}">
+          <i style="background:var(--${k === 'sea' ? 'ink' : k === 'sand' ? 'share' : k})"></i>${escapeHtml(n)}</button>`).join('')}</div>
+      <p class="eyebrow" style="margin-top:16px">Your cover</p>
+      <label class="field" style="margin-top:8px"><select name="cover">
+        ${COVERS.map(([k, n]) => `<option value="${k}"${(me.cover || '') === k ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+      </select></label>
+      <button class="btn" type="submit">Save your corner</button>
+    </form>`;
+
+  let accent = me.accent || '';
+  panel.querySelectorAll('[data-accent]').forEach(b => b.addEventListener('click', () => {
+    accent = b.dataset.accent === accent ? '' : b.dataset.accent;
+    panel.querySelectorAll('[data-accent]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.accent === accent)));
+  }));
+  panel.querySelector('#corner').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try {
+      await store.updateMember(me.id, { about: f.get('about'), accent, cover: f.get('cover') }, me.id);
+      toast('Saved.', { kind: 'good' }); refresh();
+    } catch (err) { toast(err.message, { kind: 'bad' }); }
+  });
+}
+
 export function profile({ store, go, refresh }) {
   const me = store.me, s = store.settings;
   const exit = store.exitQuote(me.id);
@@ -721,6 +818,9 @@ export function profile({ store, go, refresh }) {
           <button class="btn" type="submit">Save</button>
         </form>
       </div>
+
+      <div class="panel" style="margin-top:16px" id="badges-panel"></div>
+      <div class="panel" style="margin-top:16px" id="corner-panel"></div>
 
       ${jobsPanel(store)}
 
@@ -777,6 +877,9 @@ export function profile({ store, go, refresh }) {
       message: `You hold ${fmtPoints(exit.basePoints)} base points. You have twelve months to use them on stays; after that ${fmtUsd2(exit.refundUsd)} comes back to you at face value. Bonus points are not refunded. Ian will be in touch.` });
     if (yes) { await store.leaveMember(me.id, me.id); toast('Notice given. Ian will be in touch this week.'); go('/home'); }
   });
+  drawBadges(wrap.querySelector('#badges-panel'), { store, me, refresh });
+  drawCorner(wrap.querySelector('#corner-panel'), { store, me, refresh });
+
   wrap.querySelector('#export').addEventListener('click', () => downloadText(`${VOCAB.clubName.toLowerCase()}-backup.json`, store.exportJson(), 'application/json'));
   wrap.querySelector('#signout').addEventListener('click', async () => { await store.signOut(); toast(`${VOCAB.pap.bye[0]} · ${VOCAB.pap.bye[1]}`); go('/'); });
   return wrap;

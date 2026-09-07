@@ -239,3 +239,24 @@ function attachTilt(wrap) {
     setInterval(() => { on = !on; wrap.querySelector('.card-obj')?.classList.toggle('shine', on); set(on ? 78 : 22, 50); }, 8000);
   }
 }
+
+/**
+ * A badge mark. Flat single-weight line art, deliberately not the prestige-crest treatment:
+ * these appear at 26px in a grid of two dozen, and a bevelled gold shield at that size is a
+ * dark blob. Silhouette first, and the same stroke weight across the whole set so one heavy
+ * mark cannot ruin a row.
+ */
+export function badgeMark(badge, { size = 26, tone = '' } = {}) {
+  const mark = badge?.mark || 'star';
+  return `<span class="badge-mark ${tone}" style="--s:${size}px" role="img"
+    aria-label="${escapeHtml(badge?.name || 'Badge')}"><img src="assets/badges/${escapeHtml(mark)}.svg"
+    width="${size}" height="${size}" alt="" loading="lazy"></span>`;
+}
+
+/** The three badges someone chose to show, beside their name. */
+export function badgeRow(pinned, { size = 22 } = {}) {
+  if (!pinned?.length) return '';
+  return `<span class="badge-row">${pinned.map(p => badgeMark(p.badge, {
+    size, tone: p.badge.kind === 'founder' ? 'is-founder' : p.badge.kind === 'bought' ? 'is-bought' : '',
+  })).join('')}</span>`;
+}

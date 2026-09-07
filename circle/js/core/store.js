@@ -14,7 +14,7 @@ export const OPEN_REDEMPTION = [REDEMPTION_STATUS.requested, REDEMPTION_STATUS.q
 export const LEDGER_KIND = Object.freeze({ earn: 'earn', bonus: 'bonus', streak: 'streak', founding: 'founding', burn: 'burn', refund: 'refund', adjust: 'adjust', expire: 'expire', reverse: 'reverse' });
 export const PROMO_KINDS = [LEDGER_KIND.bonus, LEDGER_KIND.streak, LEDGER_KIND.founding];
 export const ROLES = Object.freeze(['member', 'treasurer', 'deputy', 'planner', 'comms', 'admin']);
-export const COLLECTIONS = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes', 'pledges', 'standings', 'crews', 'crewMembers', 'crewMessages', 'moments', 'momentReactions'];
+export const COLLECTIONS = ['members', 'badgeCatalog', 'memberBadges', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes', 'pledges', 'standings', 'crews', 'crewMembers', 'crewMessages', 'moments', 'momentReactions'];
 /**
  * A complete, empty state. Every adapter starts from this — a missing collection is not a
  * missing feature, it is `[...undefined]` the first time any screen asks for it, which is
@@ -257,6 +257,31 @@ export class Store {
   leadsCrew(crewId, memberId = this.me?.id) {
     return (this.state.crewMembers || []).some(m => m.crewId === crewId && m.memberId === memberId && m.role === 'lead');
   }
+  /**
+   * Crews with something said since you last looked.
+   *
+   * Kept in this browser rather than on the server: a read marker is per-device by nature and
+   * a table for it would be a row written on every screen open. The cost is that it does not
+   * follow you to another phone, which for a badge on a nav icon is the right trade.
+   */
+  unreadCrews(memberId = this.me?.id) {
+    if (!memberId) return [];
+    let seen = {};
+    try { seen = JSON.parse(localStorage.getItem('hunto.crewSeen') || '{}'); } catch { /* private mode */ }
+    return this.crewsFor(memberId).filter((c) => {
+      const last = this.crewThread(c.id).filter(m => m.memberId !== memberId).at(-1);
+      return last && (!seen[c.id] || last.createdAt > seen[c.id]);
+    });
+  }
+  /** Opening a crew is reading it. */
+  markCrewSeen(crewId) {
+    try {
+      const seen = JSON.parse(localStorage.getItem('hunto.crewSeen') || '{}');
+      seen[crewId] = new Date().toISOString();
+      localStorage.setItem('hunto.crewSeen', JSON.stringify(seen));
+    } catch { /* nothing to remember on a browser that will not store */ }
+  }
+
   /** Oldest first, the way a conversation reads. Deleted lines keep their place as a tombstone. */
   crewThread(crewId) {
     return (this.state.crewMessages || []).filter(m => m.crewId === crewId).sort(asc('createdAt'));
@@ -339,6 +364,55 @@ export class Store {
     m.deletedAt = nowIso(); m.body = null;
     await this.commit('crewMessages');
     return m;
+  }
+
+  // ---------- badges ----------
+  // Three kinds, and the difference matters. `earned` are facts the club already records, so
+  // nobody awards or withholds them. `founder` are held by name — three of them, and there will
+  // never be a fourth. `bought` cost points, which means they cost hotel: the app says the
+  // dollar figure beside every price so nobody spends a night by accident.
+  badgeCatalog() { return (this.state.badgeCatalog || []).filter(b => b.active !== false).sort(asc('sort')); }
+  badge(key) { return (this.state.badgeCatalog || []).find(b => b.key === key) || null; }
+  badgesOf(memberId) {
+    return (this.state.memberBadges || []).filter(b => b.memberId === memberId)
+      .map(b => ({ ...b, badge: this.badge(b.badgeKey) })).filter(b => b.badge);
+  }
+  hasBadge(key, memberId = this.me?.id) {
+    return (this.state.memberBadges || []).some(b => b.memberId === memberId && b.badgeKey === key);
+  }
+  /** The three a member chose to show, in their order, falling back to whatever they hold. */
+  pinnedBadges(memberId) {
+    const m = this.member(memberId); if (!m) return [];
+    const held = this.badgesOf(memberId);
+    const pins = (m.badgePins || []).map(k => held.find(h => h.badgeKey === k)).filter(Boolean);
+    return pins.length ? pins : held.slice(0, 3);
+  }
+  /** What is for sale that this member does not already have. */
+  badgeShop(memberId = this.me?.id) {
+    return this.badgeCatalog().filter(b => b.kind === 'bought' && !this.hasBadge(b.key, memberId));
+  }
+
+  async buyBadge(key) {
+    const me = this.me; if (!me) throw new Error('Sign in first');
+    const b = this.badge(key);
+    if (!b) throw new Error('No such badge');
+    if (b.kind !== 'bought') throw new Error(`${b.name} is not for sale — it is ${b.kind === 'founder' ? 'held by name' : 'earned'}`);
+    if (this.hasBadge(key, me.id)) throw new Error(`You already have ${b.name}`);
+    const lt = this.lifetime(me.id);
+    if (lt.available < b.pricePoints) throw new Error(`That is ${b.pricePoints} points and you have ${lt.available} available`);
+    (this.state.ledger ||= []).push({ id: uid('lg'), memberId: me.id, kind: 'badge', points: -b.pricePoints,
+      usd: b.pricePoints / this.settings.pointsPerDollar, refType: 'badge', note: b.name, by: me.id, at: nowIso() });
+    (this.state.memberBadges ||= []).push({ memberId: me.id, badgeKey: key, paidPoints: b.pricePoints, at: nowIso() });
+    await this.commit('ledger', 'memberBadges');
+    return b;
+  }
+  async pinBadges(keys) {
+    const me = this.me; if (!me) throw new Error('Sign in first');
+    if (keys.length > 3) throw new Error('Three at most');
+    for (const k of keys) if (!this.hasBadge(k, me.id)) throw new Error('You do not have that badge');
+    me.badgePins = keys;
+    await this.commit('members');
+    return me;
   }
 
   // ---------- standing ----------

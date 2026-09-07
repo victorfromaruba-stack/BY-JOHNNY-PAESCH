@@ -206,8 +206,8 @@ const NAV = [
   { path: '/home', label: 'Home', icon: 'home' },
   { path: '/stays', label: 'Stays', icon: 'bed' },
   { path: '/deals', label: 'Deals', icon: 'zap', badge: 'deals' },
-  { path: '/pay', label: 'Send', icon: 'arrowUp' },
-  { path: '/circle', label: 'Circle', icon: 'users' },
+  { path: '/crews', label: 'Crews', icon: 'users', badge: 'crews' },
+  { path: '/circle', label: 'Circle', icon: 'globe' },
 ];
 
 function updateChrome(current) {
@@ -238,7 +238,8 @@ function updateChrome(current) {
     : `<a class="btn sm" href="#/sign-in">Sign in</a>`;
   document.getElementById('botnav').hidden = !me;
   list.innerHTML = me ? NAV.map(n => {
-    const count = n.badge === 'deals' ? unseen : 0;
+    const count = n.badge === 'deals' ? unseen
+      : n.badge === 'crews' ? (() => { try { return store.unreadCrews().length; } catch { return 0; } })() : 0;
     return `<li><a href="#${n.path}"${path === n.path ? ' aria-current="page"' : ''}>
       <span class="botnav-ico">${icon(n.icon, { size: 22, stroke: 1.6 })}${count ? `<span class="nav-dot" aria-hidden="true"></span>` : ''}</span>
       ${escapeHtml(n.label)}${count ? `<span class="sr-only">, ${count} new</span>` : ''}</a></li>`;
