@@ -124,6 +124,14 @@ broken for half the club.
 nothing. When a rule does not take, check specificity before rewriting the markup — and prefer
 changing a property the other rule does not set (position, not display).
 
+**And check the markup before the cascade.** Half the layout in this app is written as `style="…"`
+on the element, and an inline declaration beats any stylesheet rule without `!important`. Three
+separate rules here have turned out never to have applied even once — a mobile `justify-content`,
+a `min-height` on a Desk button, three checkbox sizes — because the value was also inline. A rule
+that appears to do nothing is more often being outranked by the element than by another selector,
+so open the template and look. Fixing it inline is usually right; reach for `!important` only when
+the desktop and phone layouts genuinely want different values.
+
 **Ship-visibility.** The service worker's cache name is stamped with the commit SHA at deploy
 time, and the page reloads once when a new worker takes over. If you touch `sw.js`, do not break
 that: a deploy nobody can see is worse than no deploy, and it already happened once — a whole run
