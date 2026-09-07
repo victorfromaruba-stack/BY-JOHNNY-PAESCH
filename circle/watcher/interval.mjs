@@ -64,21 +64,47 @@ export class Interval {
     return res;
   }
 
-  /** Sign in. Throws with the site's own words when it refuses. */
-  async signIn() {
-    await this.req('/web/my/auth/loginPage');            // establishes the session cookie
+  /**
+   * Try to sign in and report what happened, without throwing.
+   *
+   * Whether it worked is judged by WHERE the session landed, not by searching the HTML for
+   * hopeful words. A Spring form login redirects away from the login page on success and back
+   * to it on failure; that is a fact about the response, while "does this page contain the word
+   * logout" was a guess written without ever having seen a real signed-in page.
+   */
+  async attemptSignIn() {
+    const pageRes = await this.req('/web/my/auth/loginPage');   // establishes the session cookie
+    const loginPage = await pageRes.text();
+
+    // Some Spring setups carry a CSRF token in a hidden field on the login form. If one is
+    // there, send it back; posting without it is refused in a way that looks like a bad password.
+    const hidden = {};
+    for (const m of loginPage.matchAll(/<input[^>]*type=["']hidden["'][^>]*>/gi)) {
+      const name = (m[0].match(/name=["']([^"']+)["']/i) || [])[1];
+      if (name) hidden[name] = (m[0].match(/value=["']([^"']*)["']/i) || [])[1] ?? '';
+    }
+
     const form = new URLSearchParams({
+      ...hidden,
       j_username: this.username, j_password: this.password, _spring_security_remember_me: 'on',
     });
     const res = await this.req('/web/my/auth/login', { method: 'POST', body: form.toString() });
     const html = await res.text();
-    // Spring sends you back to the login page with an error when it does not like you.
-    if (/j_password|loginPage|invalid|incorrect|locked/i.test(html) && !/logout|sign ?out/i.test(html)) {
-      const msg = (html.match(/class="[^"]*error[^"]*"[^>]*>\s*([^<]{4,120})/i) || [])[1];
-      throw new Error(`Interval refused the sign-in${msg ? `: ${msg.trim()}` : ''}`);
+    const landedOn = res.url || '';
+    const backAtLogin = /\/auth\/(login|loginPage)/i.test(landedOn);
+    const said = (html.match(/class="[^"]*(?:error|alert|message)[^"]*"[^>]*>\s*([^<]{4,160})/i) || [])[1];
+    this.signedIn = !backAtLogin;
+    return { ok: this.signedIn, status: res.status, landedOn, html, loginPage,
+             hidden: Object.keys(hidden), said: said && said.trim() };
+  }
+
+  /** Sign in. Throws with the site's own words when it refuses. */
+  async signIn() {
+    const r = await this.attemptSignIn();
+    if (!r.ok) {
+      throw new Error(`Interval refused the sign-in${r.said ? `: ${r.said}` : ` (landed back on ${r.landedOn})`}`);
     }
-    this.signedIn = true;
-    return html;
+    return r.html;
   }
 
   /**
@@ -86,12 +112,28 @@ export class Interval {
    * anybody's password leaving the VPS. Returns {path: html}.
    */
   async dump(paths = ['/web/my/home', '/web/my/info/benefits/getaways']) {
-    if (!this.signedIn) await this.signIn();
     const out = {};
+    let r = null;
+    try {
+      r = await this.attemptSignIn();
+      out['00-login-form'] = r.loginPage;
+      out['01-login-answer'] = r.html;
+      out['02-what-happened'] = [
+        '<!--', `  signed in:      ${r.ok}`, `  http status:    ${r.status}`,
+        `  landed on:      ${r.landedOn}`, `  the site said:  ${r.said || '(nothing)'}`,
+        `  hidden fields:  ${r.hidden.join(', ') || '(none on the form)'}`,
+        `  cookies held:   ${this.jar.size()}`,
+        `  JSESSIONID set: ${this.jar.has('JSESSIONID')}`, '-->',
+      ].join('\n');
+    } catch (err) {
+      out['00-could-not-reach-the-login'] = `<!-- ${err.message} -->`;
+    }
+    // Ask for the pages either way. Signed out they come back as the login page, and that is
+    // itself the answer; signed in they are the thing we came for.
     for (const p of paths) {
       try { out[p] = await (await this.req(p)).text(); }
       catch (err) { out[p] = `<!-- ${err.message} -->`; }
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise((wait) => setTimeout(wait, 1500));
     }
     return out;
   }

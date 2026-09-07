@@ -139,7 +139,13 @@ async function pass(circle) {
           writeFileSync(f, html);
           log(`  saved ${f}  (${html.length} bytes)`);
         }
-        log('Send those files over and the Getaway search gets finished. No password is in them.');
+        // Say plainly whether it got in. The note file carries the detail; this is the line
+        // you read on the terminal without opening anything.
+        const note = (await import('node:fs')).readFileSync(join(dir, '02_what_happened.html'), 'utf8');
+        const got = /signed in:\s+true/.test(note);
+        log(got ? '  signed in — the Getaway pages are in dump/, send them over.'
+                : '  Interval did NOT accept the sign-in. dump/ has its answer and the reason.');
+        log('  No password is in any of those files.');
         return { found: [], posted: 0 };
       }
       const today = new Date(), plus = new Date(Date.now() + num('WATCH_WINDOW_DAYS', 120) * 864e5);
