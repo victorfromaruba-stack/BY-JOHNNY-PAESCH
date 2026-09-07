@@ -111,6 +111,10 @@ main:focus { outline: none; }
 .stat b { font-size: 1.4rem; font-weight: 500; }
 .stat .sub { font-size: .8rem; color: var(--ink-2); }
 .hero-figure { font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; font-size: clamp(2rem, 7vw, 2.9rem); font-weight: 500; letter-spacing: -.02em; }
+/* The one number a section is about. Same face as .hero-figure, one step down. No ✦ of its
+   own: fmtPoints already puts one there, and two of them read as a typo. */
+.big-figure { font-size: clamp(1.9rem, 6.4vw, 2.6rem); font-weight: 500; letter-spacing: -.02em;
+  line-height: 1.05; margin-top: 6px; }
 
 /* ---------- chips & status ---------- */
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: var(--r-pill);
@@ -185,7 +189,16 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-
 .field input[inputmode="decimal"], .field input[type="date"], .field input.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 fieldset { border: 0; margin: 0; padding: 0; }
 .choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-@media (max-width: 520px) { .choices { grid-template-columns: minmax(0, 1fr); } }
+/* Three columns all the way down. Stacking them made one choice a full-width card and cost
+   260px on a phone to present three options that are $100, $150 and $200 — and a chooser you
+   have to scroll is not a chooser. The Papiamento tree name goes; it is on the ladder below. */
+@media (max-width: 520px) {
+  .choices { gap: 7px; }
+  .choice { padding: 11px 9px; text-align: center; justify-items: center; }
+  .choice .amt { font-size: 1.05rem; }
+  .choice .tier { font-size: .7rem; }
+  .choice .tier svg, .choice .tiny { display: none; }
+}
 .choice { position: relative; display: grid; gap: 3px; padding: 14px; border: 1px solid var(--hairline); border-radius: var(--r-card); background: var(--surface); cursor: pointer; text-align: left; }
 .choice:hover { background: var(--raised); }
 .choice[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
@@ -472,6 +485,23 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 .live-card.beats { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
 .live-card h3 { overflow-wrap: anywhere; }
 
+/* The band table on a phone. Two mono ranges take 190px of a 358px card, which leaves the
+   category — the half a reader is actually scanning — squeezed into 130px: "Boutique and
+   low-rise" over three lines, its examples over five. Each band becomes a block instead, with
+   the two seasons on one row beneath the name. */
+@media (max-width: 620px) {
+  .bands, .bands tbody, .bands tr { display: block; }
+  .bands thead { display: none; }
+  .bands tr { padding: 13px 14px; border-bottom: 1px solid var(--hairline-soft); }
+  .bands tr:last-child { border-bottom: 0; }
+  .bands td { display: block; padding: 0; border: 0; }
+  .bands td:first-child { margin-bottom: 9px; }
+  .bands td.num { display: inline-block; width: 48%; text-align: left; font-size: .82rem; }
+  .bands td.num::before { content: attr(data-k); display: block; font-family: var(--font-body);
+    font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+    margin-bottom: 1px; }
+}
+
 /* Tables on a phone. The season table is Season / When / Points / Value, and at the default
    14px with 14px padding it needed 449px inside a 358px column — so the Value column, the one
    thing a member came for, sat off the right edge behind a scrollbar they had to find. Tighter
@@ -622,6 +652,25 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 
 .seasons-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
 @media (max-width: 900px) { .seasons-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* On a phone four stacked cards is 420px of scroll to say there are four seasons. Same swipe
+   as the places above it, so the page has one gesture rather than two. */
+@media (max-width: 620px) {
+  .seasons-row { grid-auto-flow: column; grid-auto-columns: 62%; grid-template-columns: none;
+    overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity;
+    padding-bottom: 8px; scrollbar-width: thin; }
+  .seasons-row > * { scroll-snap-align: start; }
+}
+
+/* Four steps, as four lines. The number is the marker, and the rule between them does the
+   work four bordered panels were doing at four times the height. */
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+.steps li { counter-increment: step; display: grid; grid-template-columns: 28px minmax(0, 1fr);
+  gap: 2px 12px; padding: 14px 0; border-top: 1px solid var(--hairline-soft); }
+.steps li:first-child { border-top: 0; padding-top: 0; }
+.steps li::before { content: counter(step, decimal-leading-zero); grid-row: span 2;
+  font-family: var(--font-mono); font-size: .8rem; color: var(--good-text); padding-top: 2px; }
+.steps li b { font-weight: 600; }
+.steps li span { font-size: .9rem; color: var(--ink-2); line-height: 1.5; }
 .season-card { margin: 0; border: 1px solid var(--hairline); border-radius: var(--r-card);
   overflow: hidden; background: var(--surface); }
 .season-card img { width: 100%; aspect-ratio: 3/2; object-fit: cover; display: block; }

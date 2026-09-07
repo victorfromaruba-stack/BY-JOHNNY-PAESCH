@@ -2,7 +2,7 @@
 import { escapeHtml, html, raw, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, fmtDay, fmtPct, initials } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, projectPoints, seasonPoints, seatPoints, unitPoints, SEASONS, REACH, pointsPerMonth, monthsToAfford } from '../core/money.js';
-import { splitBar, poolGauge, memberCard, ring, tierLadder } from '../ui/pieces.js';
+import { poolGauge, memberCard, ring, tierLadder } from '../ui/pieces.js';
 import { sceneSvg, treeSvg, starSvg } from '../ui/art.js';
 import { toast, setBusy, sheet, avatar } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
@@ -128,16 +128,17 @@ export function landing({ store, go }) {
   wrap.appendChild(horizon);
 
   // Where the money goes. Nothing is taken on the way in; the Circle is paid on the room.
+  // This said the same thing three times — a Split bar with one segment (a chart of 100%), then
+  // "Points credited 15,450" and "Into the Reserve $150.00" beside it, then a ledger carrying a
+  // $0.00 row for a share that is no longer taken here, then "104.9% of everything you sent",
+  // which reads like a scam even though it is true. 1,386px of phone for one number.
+  // One figure, one sentence under it, one line about the year. The bar went with the 15%.
   const split = el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>Every dollar backs a point</h2>
-      <p>Nothing is taken when you put money in. The Circle is paid 15% when you spend points on a room — on the thing it actually does, which is find the room and book it.</p></div></div>
-      <div class="side">
-        <div class="panel">
-          <div class="choices" id="tier-choices" role="group" aria-label="Choose a monthly contribution"></div>
-          <div id="split-slot" style="margin-top:18px"></div>
-          <dl id="split-figures" class="grid g2" style="margin-top:18px"></dl>
-        </div>
-        <div class="panel flat"><h3>Twelve months at this level</h3><div id="projection" style="margin-top:10px"></div></div>
+      <p>Nothing is taken when you put money in. The Circle is paid 15% when you spend points on a room — for the thing it actually does, which is find the room and book it.</p></div></div>
+      <div class="panel">
+        <div class="choices" id="tier-choices" role="group" aria-label="Choose a monthly contribution"></div>
+        <div id="split-figures" style="margin-top:20px"></div>
       </div></div></section>`);
   wrap.appendChild(split);
   let chosen = 150;
@@ -148,25 +149,21 @@ export function landing({ store, go }) {
         <span class="tiny muted">${escapeHtml(fmtAfl2(t2.monthlyUsd, s.awgPerUsd))}</span></button>`).join('');
     const tier = tierFor(s, chosen);
     const sp = splitContribution(chosen, s, tier);
-    const slot = split.querySelector('#split-slot'); slot.replaceChildren(splitBar({ amountUsd: chosen, shareRate: 0, points: sp.points }));
-    split.querySelector('#split-figures').innerHTML = `
-      <div class="stat"><span class="k">Points credited</span><b class="num">${escapeHtml(fmtPoints(sp.points))}</b><span class="sub">${escapeHtml(fmtUsd2(sp.points / 100))} of hotel${sp.bonusPoints ? ` · includes a ${Math.round(tier.bonusRate * 100)}% ${escapeHtml(tierName(chosen))} bonus the Circle funds` : ''}</span></div>
-      <div class="stat"><span class="k">Into the Reserve</span><b class="num">${escapeHtml(fmtUsd2(sp.backingUsd))}</b><span class="sub">All of it. Held in a named account until you spend it on a room.</span></div>`;
     const p12 = projectPoints(chosen, 12, s);
-    split.querySelector('#projection').innerHTML = `
-      <ul class="ledger" style="margin:0">
-        <li><span class="what"><b>You send</b><span class="meta">12 × ${escapeHtml(fmtUsd2(chosen))}</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(p12.paidUsd))}</b></span></li>
-        <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta">Nothing now — 15% when you book</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(0))}</b></span></li>
-        <li><span class="what"><b>Points after a year</b><span class="meta">Includes the 6- and 12-month streak bonuses</span></span><span class="delta"><b>${escapeHtml(fmtPoints(p12.points))}</b><small>${escapeHtml(fmtUsd2(p12.points / 100))}</small></span></li>
-      </ul>
-      ${(() => {
-        const nights = (id) => { const st = store.stayLike(id); if (!st) return null;
-          const per = seasonPoints(st, 'low'); return per > 0 ? { n: Math.floor(p12.points / per), name: st.name } : null; };
-        const villa = nights('stay_surfclub'), ai = nights('stay_divi');
-        const both = [villa && `about ${villa.n} nights in a villa at ${escapeHtml(villa.name)} in Summer`,
-                      ai && `${ai.n} all-inclusive at ${escapeHtml(ai.name)}`].filter(Boolean);
-        return `<p class="small muted" style="margin-top:12px">That is ${escapeHtml(fmtPct(p12.effectiveBacking, 1))} of everything you sent, back as hotel${both.length ? ` — and ${both.join(', or ')}` : ''}.</p>`;
-      })()}`;
+    // store.settings, not the defaults — the same trap the stay cards fell into. Without it
+    // these nights are priced off DEFAULT_SETTINGS and quietly ignore Victor's own rates.
+    const nights = (id) => { const st = store.stayLike(id); if (!st) return null;
+      const per = seasonPoints(st, 'low', s); return per > 0 ? { n: Math.floor(p12.points / per), name: st.name } : null; };
+    const villa = nights('stay_surfclub'), ai = nights('stay_divi');
+    const both = [villa && `about ${villa.n} nights in a villa at ${escapeHtml(villa.name)} in Summer`,
+                  ai && `${ai.n} all-inclusive at ${escapeHtml(ai.name)}`].filter(Boolean);
+    split.querySelector('#split-figures').innerHTML = `
+      <p class="eyebrow">${escapeHtml(fmtUsd2(chosen))} a month becomes</p>
+      <p class="big-figure num">${escapeHtml(fmtPoints(sp.points))}</p>
+      <p class="lede" style="margin-top:4px">${escapeHtml(fmtUsd2(sp.points / s.pointsPerDollar))} of hotel, every month.</p>
+      <p class="small muted" style="margin-top:14px;max-width:58ch">All ${escapeHtml(fmtUsd2(sp.backingUsd))} of it sits in the Reserve, in a named account, until you spend it on a room${sp.bonusPoints ? ` — and the ${escapeHtml(fmtPoints(sp.bonusPoints))} on top is the ${Math.round(tier.bonusRate * 100)}% ${escapeHtml(tierName(chosen))} bonus, which the Circle funds out of its own share` : ''}.</p>
+      <p class="small" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--hairline-soft);max-width:58ch">
+        <b>After a year, ${escapeHtml(fmtPoints(p12.points))}</b> — ${escapeHtml(fmtUsd2(p12.points / s.pointsPerDollar))} of hotel for the ${escapeHtml(fmtUsd2(p12.paidUsd))} you sent, the 6- and 12-month streak bonuses included.${both.length ? ` That is ${both.join(', or ')}.` : ''}</p>`;
   };
   draw();
   choices.addEventListener('click', (e) => { const b = e.target.closest('[data-amt]'); if (!b) return; chosen = Number(b.dataset.amt); draw(); });
@@ -201,14 +198,16 @@ export function landing({ store, go }) {
   // How a contribution becomes a stay
   wrap.appendChild(el(band('band-how', 'Stone steps descending to still water at first light',
     'Four steps, in order, every time.')));
+  // Four panels of forty words each, side by side on a desktop and stacked into 688px of
+  // phone, to say four things that are one sentence each. They are four lines now.
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>How a contribution becomes a stay</h2></div></div>
-      <div class="grid g4">
-        <div class="panel"><p class="eyebrow" style="color:var(--ink-2)">1 · You</p><h3>Send the transfer</h3><p class="small muted" style="margin-top:6px">Bank transfer to the Circle’s Reserve account with your reference, then tap “I sent it”. No points yet.</p></div>
-        <div class="panel"><p class="eyebrow" style="color:var(--good-text)">2 · Vishnu</p><h3>Confirms it landed</h3><p class="small muted" style="margin-top:6px">He matches the reference on the bank statement. The moment he confirms, your points are minted and dated.</p></div>
-        <div class="panel"><p class="eyebrow" style="color:var(--ink-2)">3 · Victor</p><h3>Quotes the stay</h3><p class="small muted" style="margin-top:6px">You ask for dates; he comes back within 72 hours with an all-in price in points, locked for three days.</p></div>
-        <div class="panel"><p class="eyebrow" style="color:var(--ink-2)">4 · The Circle</p><h3>Pays the hotel</h3><p class="small muted" style="margin-top:6px">Your points burn, the Reserve pays the hotel, and Ian sends you the confirmation.</p></div>
-      </div></div></section>`));
+      <ol class="steps">
+        <li><b>You send the transfer</b><span>To the Reserve account with your reference, then tap “I sent it”. No points yet.</span></li>
+        <li><b>Vishnu confirms it landed</b><span>He matches the reference on the bank statement, and your points are minted and dated the moment he does.</span></li>
+        <li><b>Victor quotes the stay</b><span>You ask for dates; he comes back with an all-in price in points, locked for three days.</span></li>
+        <li><b>The Circle pays the hotel</b><span>Your points burn, the Reserve pays, and Ian sends you the confirmation.</span></li>
+      </ol></div></section>`));
 
   // Award bands
   const bands = [
@@ -233,14 +232,14 @@ export function landing({ store, go }) {
               <span class="small muted">${escapeHtml(note)}</span></figcaption>
           </figure>`).join('')}
       </div>
-      <div class="tablewrap"><table>
+      <div class="tablewrap"><table class="bands">
         <caption class="sr-only">Indicative points per night by category and season</caption>
         <thead><tr><th>Category</th><th>Summer · ${escapeHtml(SEASONS.low.range)}</th><th>Winter · ${escapeHtml(SEASONS.high.range)}</th></tr></thead>
         <tbody>${bands.map(([n, ex, a, b, c, d]) => `<tr><td><b>${escapeHtml(n)}</b><br><span class="small muted">${escapeHtml(ex)}</span></td>
-          <td class="num">${a.toLocaleString('en-US')}–${b.toLocaleString('en-US')}</td><td class="num">${c.toLocaleString('en-US')}–${d.toLocaleString('en-US')}</td></tr>`).join('')}</tbody>
+          <td class="num" data-k="Summer">${a.toLocaleString('en-US')}–${b.toLocaleString('en-US')}</td>
+          <td class="num" data-k="Winter">${c.toLocaleString('en-US')}–${d.toLocaleString('en-US')}</td></tr>`).join('')}</tbody>
       </table></div>
-      <p class="small muted" style="margin-top:12px">Peak — 20 December to 3 January, and Carnival week — runs 15–20% above Winter with a seven-night minimum at most resorts.</p>
-      <p class="small muted" style="margin-top:8px">The two Marriott villa resorts are the odd ones out: they are vacation-ownership weeks, so they come as seven nights Saturday to Saturday and there is no resort fee. A villa there sleeps four to eight, which is why the per-night number looks high and the per-person number does not — chip in with three others and it is the cheapest week on Palm Beach.</p>
+      <p class="small muted" style="margin-top:12px">Peak — 20 December to 3 January, and Carnival — runs 15–20% above Winter, seven nights minimum at most resorts. The two Marriott villa resorts come as a whole week and sleep four to eight, which is why their per-night looks high and their per-person does not: chip in with three others and it is the cheapest week on Palm Beach.</p>
       </div></section>`));
 
   // The people. Found by the job they do, not by a seed id — on the real backend every row
@@ -248,7 +247,7 @@ export function landing({ store, go }) {
   // visitor can read no members at all, so the three jobs are described either way: those
   // are facts about how the Circle is arranged, not anybody's personal data.
   const JOBS = [
-    { role: 'planner', job: 'The Desk', name: 'Victor Rosario', what: 'Finds the deals, plans the trips, and quotes every request within 72 hours.' },
+    { role: 'planner', job: 'The Desk', name: 'Victor Rosario', what: `Finds the deals, plans the trips, and quotes every request within ${Math.min(...s.tiers.map(t => t.slaHours ?? s.slaHours))} to ${Math.max(...s.tiers.map(t => t.slaHours ?? s.slaHours))} hours, depending on your level.` },
     { role: 'comms', job: 'The Voice', name: 'Ian Hekman', what: 'Every message from the Circle comes from one person, so nobody is chased in a group chat.' },
     { role: 'treasurer', job: 'The Banker', name: 'Vishnu', what: 'Holds the money and confirms every transfer. Points are minted only by him, and every line in your ledger carries his name and the time.' },
   ];
@@ -274,21 +273,14 @@ export function landing({ store, go }) {
   // Rules in six sentences
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>What you are agreeing to</h2></div></div>
-      <div class="grid g2">
-        <ol class="stack" style="padding-left:1.1em">
-          <li>100 points = $1.00 of hotel. That never changes.</li>
-          <li>The only fee is 15%, and it is charged when you spend points on a room, never when you put money in. It is itemised on the quote before you accept it. There are never special assessments.</li>
-          <li>Points appear only when Vishnu confirms the money arrived.</li>
-        </ol>
-        <ol class="stack" start="4" style="padding-left:1.1em">
-          <li>Your points never expire while you are active. Bonus points expire after 24 months.</li>
-          <li>Pause for up to three months a year with one tap; your streak freezes rather than resets.</li>
-          <li>Every Insider can ask for every stay and every trip; the level only changes how fast points build.</li>
-          <li>Chip in to a friend's booking with your own points — each share burns from its own ledger.</li>
-          <li>Leave whenever you like: unused base points come back at face value, minus $25, after a 12-month window.</li>
-        </ol>
-      </div>
-      <p class="small muted" style="margin-top:18px">Rules version ${escapeHtml(s.rulesVersion)}, ${escapeHtml(fmtDay(s.rulesDate))}. <a href="#/rules">Read all twelve</a>.</p>
+      <ol class="stack" style="padding-left:1.2em;max-width:64ch">
+        <li>100 points = $1.00 of hotel. That never changes, in either direction.</li>
+        <li>The only fee is 15%, charged when you spend points on a room and never when you put money in. It is on the quote before you accept it, and there are no special assessments.</li>
+        <li>Points appear only when Vishnu confirms the money arrived, and they never expire while you are active.</li>
+        <li>Every Insider can ask for every stay and every trip. Pause for up to three months a year with one tap.</li>
+        <li>Leave whenever you like: unused base points come back at face value, minus ${escapeHtml(fmtUsd2(s.exitFeeUsd))}, after a 12-month window.</li>
+      </ol>
+      <p class="small muted" style="margin-top:18px">That is five of twelve. Version ${escapeHtml(s.rulesVersion)}, ${escapeHtml(fmtDay(s.rulesDate))} — <a href="#/rules">read all of them</a> before you decide anything.</p>
       <p class="small muted" style="margin-top:10px;max-width:70ch">${escapeHtml(VOCAB.legal)}</p>
       </div></section>`));
   return wrap;
@@ -486,8 +478,8 @@ export function join({ store, params, go }) {
             <h2>Choose your monthly contribution</h2>
             <p class="small muted" style="margin-top:6px">You can change it any month; it takes effect on your next contribution.</p>
             <div class="choices" id="tiers" style="margin-top:14px"></div>
-            <div id="split" style="margin-top:18px"></div>
-            <p class="small muted" style="margin-top:12px">${escapeHtml(fmtPointsUsd(sp.points))} a month${sp.bonusPoints ? `, including the ${Math.round(tier.bonusRate * 100)}% ${escapeHtml(tierName(state.monthlyUsd))} bonus the Circle funds out of its own share` : ''}. ${escapeHtml(fmtAfl2(state.monthlyUsd, s.awgPerUsd))} at the peg.</p>
+            <p class="big-figure num" style="margin-top:18px">${escapeHtml(fmtPoints(sp.points))}</p>
+            <p class="small muted" style="margin-top:4px">${escapeHtml(fmtUsd2(sp.points / s.pointsPerDollar))} of hotel a month${sp.bonusPoints ? `, including the ${Math.round(tier.bonusRate * 100)}% ${escapeHtml(tierName(state.monthlyUsd))} bonus the Circle funds out of its own share` : ''}. ${escapeHtml(fmtAfl2(state.monthlyUsd, s.awgPerUsd))} at the peg, and every dollar of it backs a point.</p>
           </div>
           <form class="panel" id="details" style="margin-top:16px">
             <h2>Your details</h2>
@@ -515,7 +507,6 @@ export function join({ store, params, go }) {
     body.querySelector('#tiers').innerHTML = s.tiers.map(t => `<button type="button" class="choice" aria-pressed="${t.monthlyUsd === state.monthlyUsd}" data-amt="${t.monthlyUsd}">
         <span class="amt">$${t.monthlyUsd}</span><span class="tier">${escapeHtml(tierName(t.monthlyUsd))} ${treeSvg(VOCAB.tierLean[t.monthlyUsd], { size: 14 })}</span>
         <span class="tiny muted">${t.holds} open request${t.holds > 1 ? 's' : ''} · ${t.guestCerts} guest passes</span></button>`).join('');
-    body.querySelector('#split').replaceChildren(splitBar({ amountUsd: state.monthlyUsd, shareRate: 0, points: sp.points }));
     body.querySelector('#card-preview').replaceChildren(memberCard(
       { id: 'preview', name: state.name || 'Your name', monthlyUsd: state.monthlyUsd, joinedAt: new Date().toISOString(), founding: store.activeMembers().length < s.foundingSeats, cardCode: '' },
       { store, flippable: false, compact: true }));
