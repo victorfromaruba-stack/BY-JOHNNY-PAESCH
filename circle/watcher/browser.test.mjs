@@ -10,7 +10,7 @@
 //
 // Run: node browser.test.mjs        (skips itself if Playwright is not installed)
 import http from 'node:http';
-import { IntervalBrowser } from './interval-browser.mjs';
+import { IntervalBrowser, splitProxy } from './interval-browser.mjs';
 
 let failures = 0;
 const ok = (cond, msg) => { if (!cond) failures++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); };
@@ -55,7 +55,15 @@ const www = http.createServer((req, res) => {
       <input name="j_password" type="password" maxlength="14">
       <input name="_spring_security_remember_me" type="checkbox" checked>
       <input type="submit" value="Sign In"></form>
-      <a href="/web/my/auth/loginPage">Sign In</a></body></html>`);
+      <a href="/web/my/auth/loginPage">Sign In</a>
+      <script>
+        // CSRFGuard's shape: the token is not in the served HTML, a script adds it afterwards.
+        setTimeout(function () {
+          var f = document.forms.loginForm, i = document.createElement('input');
+          i.type = 'hidden'; i.name = 'OWASP_CSRFTOKEN'; i.value = '2YPD-Q7M1-STUB';
+          f.appendChild(i);
+        }, 250);
+      </script></body></html>`);
   }
   // The same login page, but with a banner that has no accept button at all — the form has to
   // be submitted directly, or nothing happens.
@@ -104,6 +112,7 @@ ok(r.limits.j_password === 14 && r.limits.j_username === 33,
    `the browser reads the form's own limits (${JSON.stringify(r.limits)})`);
 ok(r.consent === '#onetrust-accept-btn-handler',
    `the cookie-consent panel covering the form was dismissed (${r.consent})`);
+ok(r.csrf === true, 'it waited for CSRFGuard to inject OWASP_CSRFTOKEN before submitting');
 ok(/clicked/.test(r.submitted || ''), `and the form was then actually submitted (${r.submitted})`);
 ok(r.interstitial === true, 'the "Please wait…" holding page was recognised');
 ok(r.interstitialCleared === true, 'and it was cleared by pressing Continue rather than navigated away from');
@@ -141,6 +150,24 @@ ok(!JSON.stringify(out).includes('shortpw'), 'the password appears in none of th
   const tookMs = Number(process.hrtime.bigint() - started) / 1e6;
   ok(cleared === false, 'a page that never moves and offers nothing is reported as NOT cleared');
   ok(tookMs < 5000, `and it gives up rather than hanging the pass (${Math.round(tookMs)}ms)`);
+}
+
+// The residential proxy, which Interval needs because a VPS is a datacenter address.
+{
+  const p = splitProxy('http://user:p%40ss@res.example.net:8080', '<-loopback>');
+  ok(p.server === 'http://res.example.net:8080', `credentials are split off the server (${p.server})`);
+  ok(p.username === 'user' && p.password === 'p@ss', 'and decoded, so a password with @ in it survives');
+  ok(splitProxy('http://res.example.net:8080').password === undefined, 'a proxy with no credentials has none');
+  ok(splitProxy('') === null && splitProxy('not a url') === null, 'nothing and nonsense both mean no proxy');
+}
+
+// A page where CSRFGuard's script never runs: the token never appears and it must say so
+// rather than submitting anyway into a silent drop.
+{
+  const page = await iv.open();
+  await page.setContent('<form name="loginForm"><input name="j_password" type="password"></form>');
+  ok(await iv.csrfToken(page, { waitMs: 600 }) === false,
+     'a page with no CSRFGuard token reports MISSING rather than assuming one');
 }
 
 // A banner with nothing to accept: the click cannot land, so the form itself has to be asked.

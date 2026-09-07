@@ -335,8 +335,11 @@ export class Interval {
     const pageRes = await this.req('/web/my/auth/loginPage');   // establishes the session cookie
     const loginPage = await pageRes.text();
 
-    // Some Spring setups carry a CSRF token in a hidden field on the login form. If one is
-    // there, send it back; posting without it is refused in a way that looks like a bad password.
+    // Hidden fields off the login form. This finds nothing on Interval, and that emptiness is
+    // misleading rather than informative: the site runs OWASP CSRFGuard, whose /web/csrf script
+    // injects OWASP_CSRFTOKEN into the form AFTER the page parses. It is not in the HTML, so no
+    // amount of parsing will find it, and a post without it is dropped in silence. Which is one
+    // more reason this client cannot sign in — see interval-browser.mjs.
     const hidden = hiddenFields(loginPage);
 
     // If what we hold is longer than the box the site gives a person, the site has never been

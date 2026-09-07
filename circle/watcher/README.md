@@ -115,7 +115,12 @@ site rather than guessed:
    browser while the bot layer finishes and then moves on — sometimes by itself, sometimes only
    when its Continue button is pressed. Navigating away too early leaves the session signed
    out, which looks identical to a wrong password.
-5. **A cookie-consent panel covers the login form.** It is a fixed overlay, so an automated
+5. **The site runs OWASP CSRFGuard.** `<script src="/web/csrf">` injects `OWASP_CSRFTOKEN`
+   into every form and link *after* the page parses — it appears in the POST twice, in the
+   query string and the body, and nowhere at all in the served HTML. A post without it is
+   dropped silently and answered with the signed-out page. Reading the HTML and concluding
+   "this form has no CSRF token" was my mistake; there is one, JavaScript puts it there.
+6. **A cookie-consent panel covers the login form.** It is a fixed overlay, so an automated
    click on Sign In lands on the banner instead and the form is never submitted — which again
    looks identical to a wrong password. The banner is dismissed first (known handlers, then
    acceptance words inside something that mentions cookies), and if the click still cannot
@@ -132,7 +137,13 @@ login and already works, finding around 138 open weeks a pass.
 ```sh
 WATCH_BROWSER=firefox        # or chromium; whichever is installed
 WATCH_INTERVAL_MODE=browser  # the default. `fetch` uses the old plain-HTTP client.
+INTERVAL_PROXY=              # optional: route Interval only, through a residential proxy
 ```
+
+`INTERVAL_PROXY` exists because a VPS is a datacenter address and bot management treats those
+differently from a phone. It takes `http://user:pass@host:port`; the credentials are split out
+for the browser and never logged — the dump records the host alone. It applies to Interval
+only, so RedWeek keeps going out directly.
 
 If Playwright is missing the watcher says so and carries on with RedWeek rather than dying.
 
@@ -187,7 +198,8 @@ not accepted. That file also carries every hop with its status, its redirect and
 it set, so a failed run can be read afterwards without another trip to the VPS.
 
 The login form itself, read off the live page: one form, `POST /web/my/auth/login`, fields
-`j_username` / `j_password` / `_spring_security_remember_me`, and **no CSRF token**. The
+`j_username` / `j_password` / `_spring_security_remember_me`. It appears to carry **no CSRF
+token**, and that appearance is wrong — see (5) above; the token is injected by JavaScript. The
 password box is `maxlength="14"` and the login ID box `maxlength="33"` — a browser truncates
 silently as you type, so if `INTERVAL_PASS` is longer than 14 characters the site has never
 been shown that string. The watcher reads those limits off the form and refuses with a plain
@@ -197,7 +209,7 @@ Two suites, both stub-driven, no network and no credentials:
 
 ```sh
 node session.test.mjs    # 48 assertions — the fetch client, cookie scoping, the host guard
-node browser.test.mjs    # 23 assertions — the browser client end to end (skips if no Playwright)
+node browser.test.mjs    # 29 assertions — the browser client end to end (skips if no Playwright)
 ```
 
 The ones that matter most: a refused login that still redirects to a normal page is reported

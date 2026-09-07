@@ -1,7 +1,7 @@
 // Interval International, driven by a real browser.
 //
 // The plain-fetch client in interval.mjs cannot sign in to Interval, and that is not a bug in
-// it — it is what Interval is. Three things, each read off the live site rather than guessed:
+// it — it is what Interval is. Four things, each read off the live site rather than guessed:
 //
 //   1. The login answer carries no Location header. It carries a script:
 //        window.location.replace("https://vip.intervalworld.com/web/cs?a=0")
@@ -14,6 +14,12 @@
 //   3. __uzma / __uzmb / __uzmc / __uzmd / __uzme are Radware Bot Manager, minted by a
 //      JavaScript challenge. A client that never runs the challenge never earns them.
 //
+//   4. The site runs OWASP CSRFGuard. `<script src="/web/csrf">` injects OWASP_CSRFTOKEN into
+//      every form and link AFTER the page parses — it is nowhere in the served HTML. A post
+//      without it is dropped silently, with the signed-out page as the answer. This one is on
+//      me: I read the HTML, found no hidden token field, and wrote down that the form has no
+//      CSRF token. It has one; JavaScript puts it there.
+//
 // That third one is no longer an inference. The same credentials were signed in by hand and
 // worked, so the password was never the problem and the bot layer is what was turning the
 // plain client away — politely, with a 200 and the signed-out page, rather than a 401.
@@ -22,7 +28,7 @@
 // page while the bot layer finishes; navigating away from it too early leaves the session
 // signed out, which looks exactly like a wrong password. See throughInterstitial().
 //
-// Two of those three need a JavaScript engine. So Interval gets a browser and RedWeek keeps
+// Three of those four need a JavaScript engine. So Interval gets a browser and RedWeek keeps
 // plain fetch, which needs no login and already works.
 //
 // The password lives in the environment on Victor's VPS and is typed into the page. It is
@@ -52,6 +58,22 @@ async function playwright() {
   throw e;
 }
 
+/**
+ * A proxy URL as Playwright wants it: server without credentials, credentials beside it.
+ *
+ * Residential proxies are nearly always `http://user:pass@host:port`, and passing that whole
+ * string as `server` fails — the credentials have to be separate. Returns null for no proxy.
+ */
+export function splitProxy(url, bypass) {
+  if (!url) return null;
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  const out = { server: `${u.protocol}//${u.host}`, bypass };
+  if (u.username) out.username = decodeURIComponent(u.username);
+  if (u.password) out.password = decodeURIComponent(u.password);
+  return out;
+}
+
 export class IntervalBrowser {
   constructor({ username, password, browser, headless = true, slowMo = 0, origin = ORIGIN } = {}) {
     if (!username || !password) throw new Error('Set INTERVAL_USER and INTERVAL_PASS in the environment');
@@ -71,9 +93,12 @@ export class IntervalBrowser {
     if (this._page) return this._page;
     const pw = await playwright();
     const engine = pw[this.browserName] || pw.chromium;
-    // Node's fetch reads HTTPS_PROXY on its own; a browser has to be told. Unset on Victor's
-    // VPS, which is the normal case — this only matters where something sits in the middle.
-    const proxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+    // INTERVAL_PROXY first, because it is a different thing from HTTPS_PROXY: a VPS is a
+    // datacenter address, and bot management treats those differently from the phone in
+    // somebody's hand. Routing Interval — and only Interval — through a residential proxy is
+    // the answer to that, so it gets its own setting rather than moving the whole watcher.
+    // Credentials may be in the URL and are never logged.
+    const proxy = process.env.INTERVAL_PROXY || process.env.HTTPS_PROXY || process.env.https_proxy;
     // NO_PROXY has to be passed on too, or the browser sends even localhost to the proxy.
     // Chromium's bypass list is not NO_PROXY: it does not understand CIDR blocks, and one
     // entry it cannot parse makes it discard the whole list. So the loopback is asked for by
@@ -83,9 +108,12 @@ export class IntervalBrowser {
       .split(',').map(s => s.trim())
       .filter(s => s && !s.includes('/'));          // drop CIDR blocks Chromium chokes on
     const bypass = ['<-loopback>', ...fromEnv].join(',');
+    this.proxy = splitProxy(proxy, bypass);
+    // What was used, for the dump — the host, never the credentials.
+    this.proxyHost = this.proxy ? new URL(proxy).host.replace(/^.*@/, '') : null;
     this._browser = await engine.launch({
       headless: this.headless, slowMo: this.slowMo,
-      ...(proxy ? { proxy: { server: proxy, bypass } } : {}),
+      ...(this.proxy ? { proxy: this.proxy } : {}),
     });
     this._ctx = await this._browser.newContext({
       locale: 'en-US', timezoneId: 'America/Aruba',
@@ -230,6 +258,30 @@ export class IntervalBrowser {
     return clicked ? 'clicked, then asked the form' : 'asked the form directly';
   }
 
+  /**
+   * Has CSRFGuard put its token on the form yet?
+   *
+   * Interval runs OWASP CSRFGuard. The login page loads `<script src="/web/csrf">`, and that
+   * script injects OWASP_CSRFTOKEN into every form and link AFTER the page has parsed. It is
+   * not in the served HTML at all — which is why reading the HTML and reporting "no CSRF token
+   * on this form" was wrong, and why the plain client could never have signed in no matter what
+   * else was fixed: it posted three fields, CSRFGuard saw no token, and dropped the
+   * authentication without a word.
+   *
+   * A browser gets it for free, but only once that script has actually run. Worth checking
+   * rather than assuming, because submitting a moment too early fails the same silent way.
+   */
+  async csrfToken(page, { waitMs = 8000 } = {}) {
+    const found = await page.waitForFunction(() => {
+      const onForm = document.querySelector('input[name="OWASP_CSRFTOKEN"]');
+      if (onForm?.value) return onForm.value.length;
+      // CSRFGuard also rewrites links, so a token on any href is proof the script ran.
+      const onLink = [...document.querySelectorAll('a[href*="OWASP_CSRFTOKEN"]')][0];
+      return onLink ? 1 : false;
+    }, null, { timeout: waitMs }).then(() => true).catch(() => false);
+    return found;
+  }
+
   /** Is this the holding page rather than a real one? */
   async isWaitingRoom(page) {
     return page.evaluate(() => {
@@ -295,6 +347,11 @@ export class IntervalBrowser {
     // page after that is the signed-out one.
     const consent = await this.dismissConsent(page);
 
+    // CSRFGuard adds its token with JavaScript after the page parses. Submitting before it has
+    // done so fails silently — the server drops the authentication and answers with the
+    // signed-out page, which by now is a very familiar disguise.
+    const csrf = await this.csrfToken(page);
+
     await page.fill('input[name="j_username"]', this.username);
     await page.fill('input[name="j_password"]', this.password);
     const submitted = await this.submitLogin(page);
@@ -320,7 +377,7 @@ export class IntervalBrowser {
     this.signedIn = (probeSays ?? readsAsSignedIn(answer) ?? false) === true;
     return {
       ok: this.signedIn, landedOn, loginPage, answer, probe, probePath: PROBE, probeSays,
-      interstitial: waited, interstitialCleared: cleared, consent, submitted,
+      interstitial: waited, interstitialCleared: cleared, consent, submitted, csrf,
       answerSays: readsAsSignedIn(answer), limits, tooLong, said: said && said.trim(),
       cookies: await this.cookieNames(),
     };
@@ -378,10 +435,11 @@ export class IntervalBrowser {
     const cookies = r?.cookies || (this._ctx ? await this.cookieNames() : {});
     const uzm = Object.values(cookies).flat().filter(n => /^__uzm/.test(n));
     out['02-what-happened'] = ['<!--',
-      `  browser:        ${this.browserName}`,
+      `  browser:        ${this.browserName}${this.proxyHost ? ` via ${this.proxyHost}` : ' (direct, no proxy)'}`,
       `  signed in:      ${r?.ok ?? 'could not get that far'}`,
       `  landed on:      ${r?.landedOn || '(nowhere)'}`,
       `  consent panel:  ${r?.consent ? `dismissed via ${r.consent}` : 'none in the way'}`,
+      `  CSRF token:     ${r?.csrf ? 'CSRFGuard put one on the form' : 'MISSING — /web/csrf never ran, the post will be dropped'}`,
       `  the form was:   ${r?.submitted || '(never reached)'}`,
       `  waiting room:   ${r?.interstitial ? (r.interstitialCleared ? 'yes, and it cleared' : 'YES, AND IT NEVER CLEARED') : 'none'}`,
       `  probe page:     ${PROBE} -> ${say(r?.probeSays)}`,
