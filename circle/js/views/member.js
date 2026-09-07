@@ -515,6 +515,7 @@ export function ledger({ store, params }) {
       <div class="panel" style="margin-top:16px">
         <h2 style="font-size:1.1rem">Points, line by line</h2>
         <ul class="ledger" style="margin-top:10px" id="rows"></ul>
+        <button class="btn ghost sm" id="rows-more" type="button" style="margin-top:12px" hidden></button>
       </div>
     </div></section></div>`);
 
@@ -532,12 +533,29 @@ export function ledger({ store, params }) {
   let running = 0;
   const ordered = [...rows].reverse();
   const withRunning = ordered.map(l => ({ ...l, running: (running += l.points) })).reverse();
-  wrap.querySelector('#rows').innerHTML = withRunning.map(l => `<li>
+
+  // The ledger is every line since you joined and it only ever gets longer — twenty-eight lines
+  // is already 2,287px on a phone, and a member three years in would be scrolling for a minute
+  // to reach the bottom. The newest are the ones anyone is looking for; the rest are one tap
+  // away, and the month picker and the CSV are there for going properly digging.
+  const FIRST = 20;
+  const moreBtn = wrap.querySelector('#rows-more');
+  let allRows = withRunning.length <= FIRST + 4;
+  const drawRows = () => {
+    const shown = allRows ? withRunning : withRunning.slice(0, FIRST);
+    moreBtn.hidden = allRows;
+    wrap.querySelector('#rows').innerHTML = shown.map(l => `<li>
       <span class="what"><b>${escapeHtml(l.note)}</b>
         <span class="meta">${escapeHtml(KIND_LABEL[l.kind] || l.kind)} · ${escapeHtml(fmtDayTime(l.at))}${l.by ? ` · ${escapeHtml(store.member(l.by)?.name.split(' ')[0] || '')}` : ''}${l.expiresAt ? ` · expires ${escapeHtml(fmtDay(l.expiresAt))}` : ''}</span></span>
       <span class="delta"><b class="${l.points > 0 ? 'pos' : 'neg'}">${l.points > 0 ? '+' : ''}${Math.round(l.points).toLocaleString('en-US')}</b>
         <small>balance ${Math.round(l.running).toLocaleString('en-US')}</small></span></li>`).join('')
-    || '<li><span class="what"><b>No lines yet</b><span class="meta">Your first confirmed contribution will appear here with its split.</span></span></li>';
+      || '<li><span class="what"><b>No lines yet</b><span class="meta">Your first confirmed contribution will appear here with its split.</span></span></li>';
+  };
+  if (!allRows) {
+    moreBtn.textContent = `Show all ${withRunning.length} lines`;
+    moreBtn.addEventListener('click', () => { allRows = true; drawRows(); });
+  }
+  drawRows();
 
   wrap.querySelector('#month-pick').addEventListener('change', (e) => { location.hash = e.target.value ? `#/ledger/${e.target.value}` : '#/ledger'; });
   wrap.querySelector('#print').addEventListener('click', () => window.print());

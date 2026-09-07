@@ -221,6 +221,16 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-
 .ledger .delta b { display: block; font-weight: 500; }
 .ledger .delta small { color: var(--ink-2); }
 
+/* On a phone the balance column is 122px of nowrap mono, which left the description 188px of a
+   390px screen — so every line wrapped over three or four rows and one ledger entry cost 125px.
+   Stacked, the description gets the full width and the figures sit under it on one line: the
+   same information in two rows instead of four. */
+@media (max-width: 620px) {
+  .ledger li { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+  .ledger .delta { text-align: left; display: flex; align-items: baseline; gap: 10px; }
+  .ledger .delta b { display: inline; }
+}
+
 /* ---------- forms ---------- */
 .field { display: grid; gap: 6px; margin-bottom: 14px; }
 .field > span, .field > label { font-size: .8rem; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); }
