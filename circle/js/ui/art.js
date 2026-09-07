@@ -10,6 +10,8 @@
 // Everything is deterministic from the id: the same place is the same picture every time,
 // on every device, with nothing fetched.
 
+import { escapeHtml } from '../core/util.js';
+
 const hash = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const rng = (seed) => { let s = (seed >>> 0) || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
 const n1 = (v) => Number(v.toFixed(1));
@@ -294,6 +296,38 @@ export function sceneSvg(stay, { w = W, h = H } = {}) {
   return `<svg viewBox="0 0 ${W} ${H}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice" role="img" aria-hidden="true" focusable="false" style="--sceneWin:${win}">
     <defs>${grad(`${uid}s`, pal.sky)}${grad(`${uid}w`, pal.sea)}</defs>
     ${sky}${sea}${mid}</svg>`;
+}
+
+/**
+ * The plate a place gets when we hold no photograph of it.
+ *
+ * This used to be a drawing of the property — a row of towers for Palm Beach, low blocks for
+ * Eagle, gables for town. It was honest in intent and wrong in effect. Fifteen of the
+ * twenty-three properties are chains that refuse an automated fetch, so fifteen cards drew one
+ * of two near-identical rows of rectangles with dots for windows, over and over down the grid.
+ * Victor's words for the site were "AI slop" and "all ghost fantasy pictures", and that grid was
+ * the strongest remaining evidence for both: a machine inventing a picture of somewhere it has
+ * never seen, fifteen times, with the variation turned down far enough that you notice the
+ * repetition before you notice the place.
+ *
+ * So it draws nothing. A card with no photograph now says so, quietly: the club's own mark
+ * embossed into a blank field, and a line of type underneath it. Fifteen identical blanks and
+ * fifteen slightly-different fakes are not the same failure — uniform blanks read as a system
+ * ("these eight have photographs, these do not"), while varied fakes read as a broken generator.
+ * The blank is also what makes the eight real photographs land.
+ *
+ * It is type rather than a drawing, and it is markup rather than SVG: real text at a real size,
+ * selectable, and themed by the same tokens as everything else instead of carrying a baked
+ * daylight sky into dark mode.
+ *
+ * The word on the plate is the beach, which is the one true thing we know about every property
+ * and the thing a member actually sorts by. The first attempt put the club's star here instead;
+ * at 3:1 and low contrast a centred grey mark reads as a broken-image icon, which is a worse lie
+ * than the drawing was.
+ */
+export function plateHtml(stay) {
+  const area = String(stay?.area || '').trim();
+  return area ? `<span class="plate-area">${escapeHtml(area)}</span>` : '';
 }
 
 /** The card's etched contour lines, as an inline SVG string. */

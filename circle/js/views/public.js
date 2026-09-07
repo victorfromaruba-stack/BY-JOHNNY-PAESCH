@@ -3,7 +3,7 @@ import { escapeHtml, html, raw, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, fmtDa
 import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, projectPoints, fromPoints, seatPoints, unitPoints, pointsPerMonth, monthsToAfford } from '../core/money.js';
 import { poolGauge, memberCard, ring, tierLadder } from '../ui/pieces.js';
-import { sceneSvg, treeSvg, starSvg } from '../ui/art.js';
+import { sceneSvg, plateHtml, treeSvg, starSvg } from '../ui/art.js';
 import { toast, setBusy, sheet, avatar } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { copyText } from '../core/share.js';
@@ -17,13 +17,17 @@ const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; re
  * photographs from the properties' own sites, fetched with .claude/skills/real-rooms with
  * robots.txt honoured, and assets/stays/sources.json records the page and the date for each.
  *
- * The other seventeen still get the drawing, and that is deliberate rather than lazy: the
- * illustration is plainly a drawing — flat shapes, no attempt at photography — so it reads as a
- * placeholder rather than as a picture of somewhere you might be sent. Run the skill over the
- * remaining properties and each one swaps itself out by appearing in this list.
+ * The other fifteen are chains — Marriott, Hilton, Hyatt, IHG, Radisson — and every one of them
+ * refuses an automated fetch: Marriott and Hilton answer the page request with 403, and Hyatt,
+ * IHG and Radisson return 403 on robots.txt itself, which is a site saying plainly that it does
+ * not want to be read by a script. We take the no. Working around bot management to take a
+ * property's copyrighted photographs would be wrong twice over.
+ *
+ * So those fifteen get no picture at all — see plateSvg. Run the skill over a property that will
+ * answer and it swaps itself out by appearing in this list.
  */
-const REAL_PHOTOS = new Set(['stay_amsterdam', 'stay_boardwalk', 'stay_bucuti',
-  'stay_manchebo', 'stay_oceanvillas', 'stay_oceanz']);
+const REAL_PHOTOS = new Set(['stay_amsterdam', 'stay_boardwalk', 'stay_bucuti', 'stay_divi',
+  'stay_manchebo', 'stay_oceanvillas', 'stay_oceanz', 'stay_tamarijn']);
 export const photoFor = (stay) => (REAL_PHOTOS.has(stay?.id)
   ? `assets/stays/${stay.id.replace('stay_', '')}.jpg` : null);
 
@@ -37,8 +41,11 @@ export const stayStrip = (stay) => {
     d.innerHTML = `<img src="${escapeHtml(photo)}" alt="${escapeHtml(stay.name)}" loading="lazy" decoding="async">`;
     return d;
   }
-  d.className = 'scene';
-  d.innerHTML = sceneSvg(stay);
+  // The three trips keep their drawing: there is one of each, they are drawn as the thing people
+  // actually go for, and nothing about them repeats down a grid.
+  const isTrip = stay?.kind === 'trip';
+  d.className = isTrip ? 'scene' : 'scene plate';
+  d.innerHTML = isTrip ? sceneSvg(stay) : plateHtml(stay);
   return d;
 };
 
@@ -73,11 +80,15 @@ export function stayCard(stay, { store, href = null, footer = '' } = {}) {
   // on the card and the number in the quote could disagree, which is the one thing a price
   // must never do.
   const per = unitPoints(stay, store?.settings);
+  // A card whose picture is the blank plate already carries the beach, in display type, two
+  // centimetres above this line. Saying it twice is the kind of thing that makes a page feel
+  // machine-assembled, so the body line drops it and keeps only what the plate does not say.
+  const plated = !photoFor(stay) && stay.kind !== 'trip';
   const node = el(`<a class="stay-card" href="${escapeHtml(href || `#/${stay.kind === 'trip' ? 'trips' : 'stays'}/${stay.id}`)}">
-      <span class="strip"><span class="duo"></span>${photoFor(stay) ? '' : '<span class="ph-note">illustration</span>'}</span>
+      <span class="strip"><span class="duo"></span>${photoFor(stay) || stay.kind === 'trip' ? '' : '<span class="ph-note">no photograph yet</span>'}</span>
       <span class="body">
         <h3>${escapeHtml(stay.name)}</h3>
-        <span class="where">${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}${stay.kind === 'trip' ? ` · ${stay.nights} nights` : stay.onSand ? ' · on the sand' : ' · across the road'}</span>
+        <span class="where">${plated ? '' : `${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}`}${stay.kind === 'trip' ? `${plated ? '' : ' · '}${stay.nights} nights` : plated ? (stay.onSand ? 'On the sand' : 'Across the road') : stay.onSand ? ' · on the sand' : ' · across the road'}</span>
         <span class="price"><b class="num">${escapeHtml(fmtPoints(per))}</b><small>${escapeHtml(stay.kind === 'trip' ? `a seat · ${fmtUsd2(per / 100)}` : `from, a night · ${fmtUsd2(per / 100)}`)}</small></span>
         <span class="flags">${stay.house ? '<span class="tag house">Where we stay</span>' : ''}${(stay.features || []).slice(0, stay.house ? 2 : 3).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</span>
         ${sourceLine(stay)}

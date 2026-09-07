@@ -289,14 +289,33 @@ fieldset { border: 0; margin: 0; padding: 0; }
    lifts entirely on hover rather than sitting under a slab of navy. */
 .stay-card .strip .duo { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(12,26,38,0) 55%, rgba(12,26,38,.28)); transition: opacity 600ms var(--ease-out); }
 .stay-card:hover .strip .duo, .stay-card:focus-within .strip .duo, .stay-card.daylight .strip .duo { opacity: 0; }
-/* The "ILLUSTRATION" chip is gone from the card. It sat in the corner of all twenty-three,
-   in capitals, telling everyone the picture was not real — which is honest but is also the
-   loudest thing on the card and made the whole board look like a placeholder. The drawing is
-   plainly a drawing; it does not need a label to say so, and the stay page still says where a
-   real photograph came from. */
-.stay-card .strip .ph-note { display: none; }
+/* A card with no photograph says so, once, quietly. The old version of this was an
+   "ILLUSTRATION" chip in capitals in the corner of all twenty-three cards — the loudest thing
+   on the card, and it made the whole board look like a placeholder. This is the opposite: the
+   same weight and colour as the small print it sits above, no box, no capitals, bottom left
+   where nothing else is. Without it a blank plate reads as an image that failed to load. */
+.stay-card .strip .ph-note { position: absolute; left: 14px; bottom: 10px; z-index: 1;
+  font-size: .68rem; letter-spacing: .01em; color: var(--ink-2); }
 .stay-card:hover .strip .scene svg { transform: scale(1.04); }
 .stay-card .strip .scene svg { transition: transform 700ms var(--ease-out); }
+/* The blank plate is not a picture, so it gets neither of the treatments a picture gets: no
+   vignette (a dark wash over an empty field is just a smudge, and it dirties the note sitting
+   on it) and no slow zoom (there is nothing to move closer to). */
+.stay-card .strip .scene.plate + .duo { display: none; }
+/* Unscoped on purpose: the same plate is used by the stay page's hero and by a deal card, and
+   scoping it to .stay-card left it with no ground and no layout in both. */
+/* The label is positioned rather than laid out with flex, deliberately: `.stay-card .strip
+   .scene` already sets display:block at a higher specificity, so a `display:flex` here silently
+   lost and the beach ended up jammed against the top edge. Positioning touches no property that
+   rule sets, so it holds in all three places the plate is used. */
+.scene.plate { position: relative; background: var(--well); }
+/* The beach, set as a chapter head rather than as a caption — a different typographic register
+   from the same words in .where underneath, which is what stops it reading as a repeat. Quiet
+   enough that the eight real photographs are still the loudest thing on the board. */
+.plate-area { position: absolute; left: 15px; right: 16px; bottom: 28px;
+  font-family: var(--font-display); font-weight: 600; letter-spacing: .01em;
+  font-size: clamp(1.05rem, 2.4vw, 1.35rem); line-height: 1.1; color: var(--ink);
+  opacity: .34; text-wrap: balance; }
 .stay-card .body { display: grid; gap: 8px; padding: 14px 16px 16px; align-content: start; }
 .stay-card h3 { font-size: 1.02rem; }
 .stay-card .where { font-size: .82rem; color: var(--ink-2); }

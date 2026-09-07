@@ -211,11 +211,13 @@ export function stayDetail({ store, params, go }) {
 
   // What you can actually be given here, and what each one costs a night.
   {
-    const heroStrip = wrap.querySelector('#stay-hero .strip');
-    if (heroStrip) {
-      heroStrip.appendChild(stayStrip(stay));
-      if (!photoFor(stay)) heroStrip.insertAdjacentHTML('beforeend', '<span class="ph-note">illustration</span>');
-    }
+    // On a card the blank plate earns its place: it holds the grid's rhythm and carries the
+    // beach. Here it earns nothing — a full-width empty box under a heading that has just said
+    // the same beach in the breadcrumb. Where there is no photograph the hero simply goes, and
+    // the page starts on the thing a member actually came for, the price and where it came from.
+    const hero = wrap.querySelector('#stay-hero');
+    if (hero && (photoFor(stay) || isTrip)) hero.querySelector('.strip').appendChild(stayStrip(stay));
+    else if (hero) hero.remove();
   }
   const roomsSlot = wrap.querySelector('#rooms');
   const rooms = store.roomTypesFor(stay.id);

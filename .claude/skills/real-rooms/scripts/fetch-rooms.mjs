@@ -225,25 +225,41 @@ function imagesFrom(html, base) {
     if (!seen.has(abs)) seen.set(abs, decode(alt) || null);
     else if (!seen.get(abs) && alt) seen.set(abs, decode(alt));
   };
+  // HTML lets an attribute value go unquoted, and plenty of real hotel sites ship it that way
+  // (`src=https://...` with no quotes at all). Requiring a quote here silently found nothing on
+  // a page carrying 163 photographs, so read all three forms.
+  const attr = (tag, names) => {
+    const m = tag.match(new RegExp(`\\b(?:${names})\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i'));
+    return m ? (m[1] ?? m[2] ?? m[3]) : undefined;
+  };
+  // From a srcset, take the widest — a member is looking at a room, not a thumbnail. A srcset
+  // with no width descriptors at all (one entry, common in <picture>) still yields its one URL.
+  const widestOf = (srcset) => {
+    let best = null, bestW = -1;
+    for (const part of String(srcset || '').split(',')) {
+      const [u, w] = part.trim().split(/\s+/);
+      const n = Number(String(w || '').replace(/\D/g, '')) || 0;
+      if (u && n >= bestW) { best = u; bestW = n; }
+    }
+    return best;
+  };
   let m;
   const imgRe = /<img\b([^>]*)>/gi;
   while ((m = imgRe.exec(html))) {
     const tag = m[1];
-    const src = (tag.match(/\bsrc=["']([^"']+)["']/i) || [])[1];
-    const dataSrc = (tag.match(/\bdata-(?:src|lazy-src|original)=["']([^"']+)["']/i) || [])[1];
-    const srcset = (tag.match(/\bsrcset=["']([^"']+)["']/i) || [])[1];
-    const alt = (tag.match(/\balt=["']([^"']*)["']/i) || [])[1];
-    // From a srcset, take the widest — a member is looking at a room, not a thumbnail.
-    let widest = null, widestW = 0;
-    for (const part of String(srcset || '').split(',')) {
-      const [u, w] = part.trim().split(/\s+/);
-      const n = Number(String(w || '').replace(/\D/g, '')) || 0;
-      if (u && n >= widestW) { widest = u; widestW = n; }
-    }
-    push(widest || dataSrc || src, alt);
+    const alt = attr(tag, 'alt');
+    // The real URL hides in a data- attribute whenever the page lazy-loads, and `src` is then a
+    // 1x1 base64 placeholder. Prefer the data- attribute over src for exactly that reason.
+    const lazy = attr(tag, 'data-src|data-lazy-src|data-lazy|data-original|data-orig|data-image|data-bg');
+    const widest = widestOf(attr(tag, 'srcset|data-srcset'));
+    push(lazy || widest || attr(tag, 'src'), alt);
   }
-  const ogRe = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/gi;
-  while ((m = ogRe.exec(html))) push(m[1], 'og:image');
+  // <picture> keeps its candidates on <source>, and on a page that serves avif/webp first the
+  // <img> inside may be a placeholder — so these are often the only real URLs on the page.
+  const srcRe = /<source\b([^>]*)>/gi;
+  while ((m = srcRe.exec(html))) push(widestOf(attr(m[1], 'srcset|data-srcset')), null);
+  const ogRe = /<meta\b[^>]*\bproperty\s*=\s*(?:"og:image"|'og:image'|og:image)[^>]*>/gi;
+  while ((m = ogRe.exec(html))) push(attr(m[0], 'content'), 'og:image');
   return [...seen].map(([src, alt]) => ({ src, alt }));
 }
 

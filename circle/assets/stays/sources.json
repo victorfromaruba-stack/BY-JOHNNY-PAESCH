@@ -1,53 +1,69 @@
 {
-  "note": "Photographs from each property's own website. Fetched with .claude/skills/real-rooms, robots.txt honoured. These are the properties' copyright \u2014 shown to members to identify a room the Circle books for them. Ask for a media kit before any public use.",
-  "stays": {
-    "stay_amsterdam": {
-      "file": "stays/amsterdam.jpg",
-      "source": "https://image-tc.galaxy.tf/wiwebp-57rmssjeop5fyj43621fo7ip4/dji-0981-crop-3x2-edit_standard.webp?crop=107%2C0%2C1707%2C1280&width=700",
-      "page": "https://www.amsterdammanor.com/",
-      "alt": null,
-      "seenOn": "2026-09-07",
-      "bytes": 178446
-    },
-    "stay_boardwalk": {
-      "file": "stays/boardwalk.jpg",
-      "source": "https://www.boardwalkaruba.com/sites/default/files/styles/responsive_15_10_2600w/public/2025-10/bo56d61.jpg.webp?h=db656dba&amp;itok=SIvCK7E8",
-      "page": "https://www.boardwalkaruba.com/",
-      "alt": "Yellow casita exterior with large windows and a private patio, surrounded by palm trees and tropical greenery at Boardwalk Boutique Hotel Aruba.",
-      "seenOn": "2026-09-07",
-      "bytes": 294873
-    },
-    "stay_bucuti": {
-      "file": "stays/bucuti.jpg",
-      "source": "https://symphony.cdn.tambourine.com/bucuti-tara-beach-resort/media/bucutiandtarabeachresort-homepage-bucutiandtarameans-68d19fe360fe6.webp",
-      "page": "https://www.bucuti.com/",
-      "alt": "a solar panels on a lawn next to a building",
-      "seenOn": "2026-09-07",
-      "bytes": 269748
-    },
-    "stay_manchebo": {
-      "file": "stays/manchebo.jpg",
-      "source": "https://image-tc.galaxy.tf/wijpeg-27grq3rkecscxmu5t2wnxux05/manchebo-hammock_wide.jpg?crop=0%2C100%2C1920%2C1080",
-      "page": "https://www.manchebo.com/",
-      "alt": null,
-      "seenOn": "2026-09-07",
-      "bytes": 231072
-    },
-    "stay_oceanvillas": {
-      "file": "stays/oceanvillas.jpg",
-      "source": "https://images.squarespace-cdn.com/content/v1/6015b7878480883a984732cd/ecdbc78c-53a6-42ee-b13d-ac680632ad76/DJI_20260209202410_0049_D.jpg",
-      "page": "https://www.arubaoceanvillas.com/",
-      "alt": "DJI_20260209202410_0049_D.jpg",
-      "seenOn": "2026-09-07",
-      "bytes": 282975
-    },
-    "stay_oceanz": {
-      "file": "stays/oceanz.jpg",
-      "source": "https://oceanzaruba.com/wp-content/uploads/Master-King-Suite-with-a-private-pool-and-ocean-view-at-Ocean-Z-Boutique-Hotel-Aruba.jpg",
-      "page": "https://www.oceanzaruba.com/",
-      "alt": "og:image",
-      "seenOn": "2026-09-07",
-      "bytes": 279926
-    }
+ "note": "Photographs from each property's own website. Fetched with .claude/skills/real-rooms, robots.txt honoured. These are the properties' copyright — shown to members to identify a room the Circle books for them. Ask for a media kit before any public use.",
+ "stays": {
+  "stay_amsterdam": {
+   "file": "stays/amsterdam.jpg",
+   "source": "https://image-tc.galaxy.tf/wiwebp-57rmssjeop5fyj43621fo7ip4/dji-0981-crop-3x2-edit_standard.webp?crop=107%2C0%2C1707%2C1280&width=700",
+   "page": "https://www.amsterdammanor.com/",
+   "alt": null,
+   "seenOn": "2026-09-07",
+   "bytes": 178446
+  },
+  "stay_boardwalk": {
+   "file": "stays/boardwalk.jpg",
+   "source": "https://www.boardwalkaruba.com/sites/default/files/styles/responsive_15_10_2600w/public/2025-10/bo56d61.jpg.webp?h=db656dba&amp;itok=SIvCK7E8",
+   "page": "https://www.boardwalkaruba.com/",
+   "alt": "Yellow casita exterior with large windows and a private patio, surrounded by palm trees and tropical greenery at Boardwalk Boutique Hotel Aruba.",
+   "seenOn": "2026-09-07",
+   "bytes": 294873
+  },
+  "stay_bucuti": {
+   "file": "stays/bucuti.jpg",
+   "source": "https://symphony.cdn.tambourine.com/bucuti-tara-beach-resort/media/bucutiandtarabeachresort-homepage-bucutiandtarameans-68d19fe360fe6.webp",
+   "page": "https://www.bucuti.com/",
+   "alt": "a solar panels on a lawn next to a building",
+   "seenOn": "2026-09-07",
+   "bytes": 269748
+  },
+  "stay_manchebo": {
+   "file": "stays/manchebo.jpg",
+   "source": "https://image-tc.galaxy.tf/wijpeg-27grq3rkecscxmu5t2wnxux05/manchebo-hammock_wide.jpg?crop=0%2C100%2C1920%2C1080",
+   "page": "https://www.manchebo.com/",
+   "alt": null,
+   "seenOn": "2026-09-07",
+   "bytes": 231072
+  },
+  "stay_oceanvillas": {
+   "file": "stays/oceanvillas.jpg",
+   "source": "https://images.squarespace-cdn.com/content/v1/6015b7878480883a984732cd/ecdbc78c-53a6-42ee-b13d-ac680632ad76/DJI_20260209202410_0049_D.jpg",
+   "page": "https://www.arubaoceanvillas.com/",
+   "alt": "DJI_20260209202410_0049_D.jpg",
+   "seenOn": "2026-09-07",
+   "bytes": 282975
+  },
+  "stay_oceanz": {
+   "file": "stays/oceanz.jpg",
+   "source": "https://oceanzaruba.com/wp-content/uploads/Master-King-Suite-with-a-private-pool-and-ocean-view-at-Ocean-Z-Boutique-Hotel-Aruba.jpg",
+   "page": "https://www.oceanzaruba.com/",
+   "alt": "og:image",
+   "seenOn": "2026-09-07",
+   "bytes": 279926
+  },
+  "stay_divi": {
+   "file": "stays/divi.jpg",
+   "source": "https://www.diviandtamarijnaruba.com/files/6685/26292212_ImageLargeWidth.jpg",
+   "page": "https://www.diviandtamarijnaruba.com/divi-rooms.htm",
+   "alt": "Poolside Rooms Building",
+   "seenOn": "2026-09-07",
+   "bytes": 458455
+  },
+  "stay_tamarijn": {
+   "file": "stays/tamarijn.jpg",
+   "source": "https://www.diviandtamarijnaruba.com/files/6685/26310448_ImageLargeWidth.jpg",
+   "page": "https://www.diviandtamarijnaruba.com/tamarijn-rooms.htm",
+   "alt": "Tamarijn Beach and Rooms",
+   "seenOn": "2026-09-07",
+   "bytes": 416568
   }
+ }
 }

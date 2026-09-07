@@ -47,6 +47,15 @@ books real rooms from these properties and Victor's name is on the booking; the 
 the client who scraped a site that asked them not to is not worth a room description. Ask the
 property for a media kit instead, or link out to their page and show no photo.
 
+**A 403 is also a no, even though the script says `allowed`.** When robots.txt itself returns
+403, or the page does, the standard says an unreachable robots.txt leaves the site unrestricted
+and the verdict comes back `allowed: true` with `why` naming the 403 — but a site answering a
+plain scripted request with 403 is telling you it does not serve scripts, in the only way it
+has. Read `why`, not just `allowed`. Every big chain does this: Marriott and Hilton 403 the
+page, Hyatt, IHG and Radisson 403 robots.txt. Take the no there too. Changing the user-agent,
+or reaching for a proxy or a bot-management workaround, would be exactly the thing the rule
+above exists to prevent, and it would be taking copyrighted photographs on top of it.
+
 **3. Read what comes back before trusting it.** The script marks each room `official` (from the
 property's schema.org data — their own machine-readable claim) or `page-text` (read off the
 page's headings, which is weaker). Both are real; the difference is how sure you can be. If
