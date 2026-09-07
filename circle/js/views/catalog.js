@@ -428,7 +428,7 @@ export function book({ store, params, query = {}, go }) {
           </div>`}
         <label class="field"><span>Anything Victor should know</span><textarea name="note" rows="3" placeholder="Ground floor if possible, arriving late, celebrating something…">${escapeHtml(openingNote)}</textarea></label>
         <label class="row" style="gap:10px;align-items:flex-start;margin-bottom:14px">
-          <input type="checkbox" name="shared" style="width:20px;height:20px;margin-top:2px">
+          <input type="checkbox" name="shared">
           <span class="small">Let the Circle chip in. <span class="muted">Anyone can add their own points toward this booking — for a room you are sharing, or a gift. Their points are committed the moment they chip in, and released if it falls through.</span></span></label>
         <div id="preview" class="notice" style="margin-bottom:16px"></div>
         <button class="btn block" type="submit">Send the request</button>

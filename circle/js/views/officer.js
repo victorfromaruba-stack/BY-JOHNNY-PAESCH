@@ -53,7 +53,7 @@ export function bank({ store, go }) {
             ${avatar(m, 40)}
             <div><b>${escapeHtml(m.name)}</b> · ${escapeHtml(tierName(m.monthlyUsd))}
               <br><span class="small muted">${c.extra ? 'Extra, not a monthly' : escapeHtml(fmtMonth(c.forMonth))} · sent ${escapeHtml(fmtDay(c.submittedAt))} · ${escapeHtml(c.bank || c.method || 'bank transfer')}${c.recordedBy ? ' · entered by the Banker' : ''}</span>
-              ${(c.proofName || c.proofPath || c.proofDataUrl) ? `<br><button class="btn quiet sm" data-proof="${escapeHtml(c.id)}" style="padding-inline:0;min-height:26px">${icon('eye', { size: 14 })}See the screenshot</button>` : ''}</div>
+              ${(c.proofName || c.proofPath || c.proofDataUrl) ? `<br><button class="btn quiet sm" data-proof="${escapeHtml(c.id)}" style="padding-inline:0">${icon('eye', { size: 14 })}See the screenshot</button>` : ''}</div>
           </div>
           <div style="text-align:right"><b class="num" style="font-size:1.2rem">${escapeHtml(fmtUsd2(c.expectedUsd))}</b>
             <br><span class="small muted num">${escapeHtml(fmtAfl2(c.expectedUsd, s.awgPerUsd))}</span></div>

@@ -107,9 +107,13 @@ main:focus { outline: none; }
 .btn.quiet:hover { color: var(--ink); background: var(--raised); }
 .btn.good { background: var(--good); color: var(--on-good); }
 .btn.danger { background: transparent; color: var(--flag); border-color: var(--flag); }
-.btn.sm { min-height: 38px; padding: 7px 14px; font-size: .84rem; }
+/* A small button is small in ink, not in target. 38px was under every thumb guideline and it
+   is most of what the owner meant by "unresponsive": the control is not broken, it is hard to
+   hit, which feels identical on a phone. The visual size is held by the padding and font; the
+   height is padded out to 44 so the finger has somewhere to land. */
+.btn.sm { min-height: 44px; min-width: 44px; padding: 7px 14px; font-size: .84rem; }
 .btn.block { width: 100%; }
-.icon-btn { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-chip); border: 1px solid var(--hairline); background: transparent; color: var(--ink); cursor: pointer; }
+.icon-btn { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: var(--r-chip); border: 1px solid var(--hairline); background: transparent; color: var(--ink); cursor: pointer; }
 .icon-btn:hover { background: var(--raised); }
 .icon-btn svg { width: 18px; height: 18px; }
 
@@ -138,6 +142,25 @@ main:focus { outline: none; }
   line-height: 1.05; margin-top: 6px; }
 
 /* ---------- chips & status ---------- */
+/* The wordmark is the way home from every screen, so it is a control even though it reads as a
+   logo. 24px tall was a thin strip to aim at. */
+a.brand { min-height: 44px; }
+
+/* A checkbox at its browser default is a 20px target with a 44px job. The input keeps its own
+   size — scaling it up looks clumsy — and gains a padded hit area instead. */
+input[type=checkbox], input[type=radio] { width: 22px; height: 22px; }
+label:has(> input[type=checkbox]), label:has(> input[type=radio]) { min-height: 44px;
+  display: inline-flex; align-items: center; gap: 10px; }
+
+/* A link that sits beside a section heading ("All of it", "Your corner") is navigation, not
+   prose, so it needs a thumb-sized target. Inline links inside a sentence are deliberately NOT
+   included: padding those out would wreck the line rhythm, and the guidelines exempt them. */
+.row-between > a.small, .sec-head a.small { display: inline-flex; align-items: center;
+  min-height: 44px; }
+
+/* A chip that can be pressed gets a thumb-sized target; a chip that is only a label does not
+   need one and would look bloated with it. */
+button.chip, a.chip, .chip[role=button] { min-height: 44px; padding-inline: 12px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: var(--r-pill);
   font-size: .76rem; font-weight: 600; border: 1px solid var(--hairline); background: var(--surface); color: var(--ink); white-space: nowrap; }
 .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); flex: none; }
@@ -579,7 +602,7 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 .fgroup { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .fsel { display: grid; gap: 4px; min-width: 0; }
 .fsel > span { font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); padding-left: 2px; }
-.fsel select { appearance: none; -webkit-appearance: none;
+.fsel select { appearance: none; -webkit-appearance: none; min-height: 44px;
   border: 1px solid var(--hairline); border-radius: var(--r-pill); background: var(--surface);
   padding: 9px 32px 9px 14px; font-size: .86rem; font-weight: 500; color: var(--ink); cursor: pointer;
   background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);

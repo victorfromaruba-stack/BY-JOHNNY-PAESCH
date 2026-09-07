@@ -850,9 +850,9 @@ export function profile({ store, go, refresh }) {
           <label class="field"><span>Your dream stay</span><select name="dreamStayId">
             ${store.arubaStays().map(st => `<option value="${st.id}"${st.id === me.dreamStayId ? ' selected' : ''}>${escapeHtml(st.name)}</option>`).join('')}</select>
             <span class="hint">This is the one your home screen counts nights toward.</span></label>
-          <label class="row" style="gap:10px;align-items:flex-start;margin-bottom:12px"><input type="checkbox" name="standingOrder" ${me.standingOrder ? 'checked' : ''} style="width:20px;height:20px;margin-top:2px">
+          <label class="row" style="gap:10px;align-items:flex-start;margin-bottom:12px"><input type="checkbox" name="standingOrder" ${me.standingOrder ? 'checked' : ''}>
             <span class="small">I have a standing order set for the ${s.dueDay}th.</span></label>
-          <label class="row" style="gap:10px;align-items:flex-start;margin-bottom:12px"><input type="checkbox" name="showOnRollcall" ${me.showOnRollcall ? 'checked' : ''} style="width:20px;height:20px;margin-top:2px">
+          <label class="row" style="gap:10px;align-items:flex-start;margin-bottom:12px"><input type="checkbox" name="showOnRollcall" ${me.showOnRollcall ? 'checked' : ''}>
             <span class="small">Show my name on the monthly roll call. <span class="muted">Off by default; only the count is public.</span></span></label>
           <button class="btn" type="submit">Save</button>
         </form>
