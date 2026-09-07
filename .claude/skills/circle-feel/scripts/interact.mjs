@@ -6,13 +6,18 @@
 // place, correctly labelled, and dead.
 //
 // What counts as "something happened": the route changed, a dialog opened, a toast appeared,
-// focus moved, the DOM under #app changed, a file download started, or the print dialog opened.
-// Deliberately generous — a filter redrawing a list and a button that only flips aria-pressed
-// both pass. We are hunting for zero.
+// focus moved, the DOM under #app changed, a download started, the print dialog opened, or a new
+// tab was opened. Deliberately generous — a filter redrawing a list and a button that only flips
+// aria-pressed both pass. We are hunting for zero.
 //
-// Those last two matter: "Print" and "Export CSV" change nothing a DOM diff can see, so a naive
-// version reports them dead. Excusing them by name would have been the easy fix and the wrong
-// one — a real regression in either would then go unnoticed forever. They are detected instead.
+// Those last three matter more than they look. Print, Export CSV, Share and every "book direct"
+// link change nothing a DOM diff can see, because what they do happens outside the page — so the
+// first version of this script called all of them dead, which is nine false accusations and no
+// real ones. Excusing them by name would have been the easy fix and the wrong one: a genuine
+// regression in any of them would then go unnoticed for good. They are detected instead.
+//
+// A control that is already selected is a separate case: pressing the tab you are on SHOULD do
+// nothing, so aria-pressed / aria-current is read before the click and those are not findings.
 //
 // Two passes. The sweep resets the screen between clicks — cheaply, by bouncing the hash rather
 // than reloading and re-decoding every image — because without it a click that redraws a panel
@@ -46,9 +51,14 @@ const SEL = ['button:not([disabled])', 'a[href]:not([href^="mailto"])', '[role=b
 /** Tag every control fresh. A click can redraw the list its neighbours lived in, and a stale
  *  index silently probes the wrong element — which would read as a finding. */
 function tagAll(sel) {
-  const found = [...document.querySelectorAll(sel)];
+  // Only what a person could actually press. A control inside a hidden pane, or one the app
+  // keeps in the DOM and reveals later, is still matched by querySelectorAll and still takes a
+  // .click() — and reports as dead, because it is not there to react.
+  const visible = (n) => !!(n.getClientRects().length && n.checkVisibility?.({ checkOpacity: true, checkVisibilityCSS: true }) !== false);
+  const found = [...document.querySelectorAll(sel)].filter(visible);
   found.forEach((n, i) => n.setAttribute('data-probe', String(i)));
   return found.map((n, i) => ({ i, tag: n.tagName,
+    on: n.getAttribute('aria-pressed') === 'true' || n.hasAttribute('aria-current'),
     label: (n.textContent || n.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 44) }));
 }
 
@@ -69,8 +79,11 @@ const PRINT_STUB = () => { window.__printed = 0; window.print = () => { window._
 async function instrument(p) {
   await p.addInitScript(PRINT_STUB);
   await p.evaluate(PRINT_STUB);
-  const state = { downloads: 0 };
+  const state = { downloads: 0, popups: 0 };
   p.on('download', (d) => { state.downloads++; d.delete().catch(() => {}); });
+  // Share falls back to window.open, and every "book direct" link is target=_blank. Close them
+  // straight away: an external page left open costs a real network fetch on every probe.
+  p.on('popup', (pop) => { state.popups++; pop.close().catch(() => {}); });
   return state;
 }
 
@@ -83,6 +96,17 @@ function clickProbe(i) {
 }
 
 const tidy = (p) => p.evaluate(() => document.querySelectorAll('dialog[open]').forEach(d => d.close()));
+
+/** Some controls end the session — /profile has a Sign out button. Left unhandled it poisons
+ *  every route swept after it: the run reported /settings as three controls because it was
+ *  looking at a signed-out page. Cheap to check, and only pays for itself when it fires. */
+async function keepSignedIn(p, id) {
+  const out = await p.evaluate(() => !window.__hunto?.store?.me);
+  if (!out) return false;
+  await p.evaluate(async (mid) => { await window.__hunto.store.signIn(mid); }, id);
+  await p.waitForTimeout(250);
+  return true;
+}
 
 /** Put the screen back the way it started. A hash router does not re-render when you set the
  *  hash it is already on, so bounce off another route and come back. */
@@ -97,11 +121,11 @@ async function reset(p, route) {
 
 /** One click, reported as changed / unchanged / gone. */
 async function probe(p, i, dl, wait = 320) {
-  const before = await p.evaluate(fingerprint) + '|' + dl.downloads;
+  const before = await p.evaluate(fingerprint) + `|${dl.downloads}|${dl.popups}`;
   const hit = await p.evaluate(clickProbe, i);
   if (!hit) return 'gone';
   await p.waitForTimeout(wait);
-  const after = await p.evaluate(fingerprint) + '|' + dl.downloads;
+  const after = await p.evaluate(fingerprint) + `|${dl.downloads}|${dl.popups}`;
   await tidy(p);
   return before === after ? 'unchanged' : 'changed';
 }
@@ -114,6 +138,7 @@ for (const role of ROLES) {
   const { b, p, errors } = await open({ width: 1280, height: 900, role });
   p.on('dialog', d => d.dismiss().catch(() => {}));
   const dl = await instrument(p);
+  const whoami = await p.evaluate(() => window.__hunto.store.me.id);
 
   for (const route of RUN) {
     await go(p, route, 700);
@@ -128,6 +153,8 @@ for (const role of ROLES) {
     let dead = 0;
     for (const c of keys) {
       if (EXPECTED_INERT.some(([re]) => re.test(c.label))) { skipped++; continue; }
+      // Pressing the tab you are already on is meant to do nothing.
+      if (c.on) { skipped++; continue; }
       await reset(p, hash);
       const found = await p.evaluate(([sel, key, nth]) => {
         const all = [...document.querySelectorAll(sel)];
@@ -145,6 +172,7 @@ for (const role of ROLES) {
       if (verdict === 'gone') { skipped++; continue; }
       clicked++;
       if (verdict === 'unchanged') { dead++; suspects.push({ role, route, ...c }); }
+      if (await keepSignedIn(p, whoami)) await reset(p, hash);
     }
     process.stdout.write(`${route.padEnd(24)} ${role.padEnd(8)} ${String(keys.length).padStart(3)} controls${dead ? ` · ${dead} suspect` : ''}\n`);
   }

@@ -124,6 +124,12 @@ broken for half the club.
 nothing. When a rule does not take, check specificity before rewriting the markup — and prefer
 changing a property the other rule does not set (position, not display).
 
+**A phone has no hover, so a hover-only reaction is no reaction.** `.btn:active { transform:
+translateY(0) }` looks like press feedback and is not — it only cancels the `:hover` lift, which
+never applied on the device most of this club uses, so a tap produced no visual change at all.
+Guard hover effects with `@media (hover: hover)` and give `:active` a state of its own. When you
+add a new tappable thing, press it on a 390px viewport before believing it answers.
+
 **And check the markup before the cascade.** Half the layout in this app is written as `style="…"`
 on the element, and an inline declaration beats any stylesheet rule without `!important`. Three
 separate rules here have turned out never to have applied even once — a mobile `justify-content`,

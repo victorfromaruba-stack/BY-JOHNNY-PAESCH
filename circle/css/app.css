@@ -97,8 +97,13 @@ main:focus { outline: none; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--h-touch);
   padding: 12px 20px; border-radius: var(--r-pill); border: 1px solid transparent; background: var(--ink); color: var(--on-ink);
   font-size: .94rem; font-weight: 600; cursor: pointer; transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast); text-decoration: none; }
-.btn:hover { transform: translateY(-1px); }
-.btn:active { transform: translateY(0); }
+/* A phone has no hover, so `:active { transform: translateY(0) }` — which only cancelled the
+   hover lift — meant pressing a button produced no visual change whatsoever on the device most
+   of the club uses. That is the first thing on this project's own list of what makes an app
+   feel cheap: a control that does not answer when you press it. The lift is now guarded to
+   pointers that can actually hover, and the press is a real state everywhere. */
+@media (hover: hover) { .btn:hover { transform: translateY(-1px); } }
+.btn:active { transform: scale(.97); transition-duration: 60ms; }
 .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
 .btn svg { width: 17px; height: 17px; flex: none; }
 .btn.ghost { background: transparent; color: var(--ink); border-color: var(--hairline); }
@@ -930,4 +935,26 @@ button.badge-card:hover { border-color: var(--ink-3); }
     margin-right: 3px; }
   .people-table td:last-child { margin-top: 8px; }
   .people-table td:last-child .row { justify-content: flex-start !important; }
+}
+
+
+/* Press feedback for everything else that is tappable. Same reasoning as .btn:active above:
+   without it a tap on a chip, a filter, a tier or a stay card is silent, and silence on a
+   phone is indistinguishable from broken. 60ms down, the standard ease back up. */
+.chip[role=button]:active, button.chip:active, a.chip:active,
+.choice:active, .badge-card:not([disabled]):active, .icon-btn:active,
+.segmented > button:active, .stay-card a:active, .fineprint > summary:active {
+  transform: scale(.97);
+  transition-duration: 60ms;
+}
+.choice, .badge-card, .icon-btn, button.chip, a.chip, .chip[role=button], .fineprint > summary {
+  transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+/* Nobody asked for the page to move under their finger. */
+@media (prefers-reduced-motion: reduce) {
+  .btn:active, .chip[role=button]:active, button.chip:active, a.chip:active, .choice:active,
+  .badge-card:not([disabled]):active, .icon-btn:active, .segmented > button:active,
+  .stay-card a:active, .fineprint > summary:active { transform: none; }
 }
