@@ -128,9 +128,27 @@ export class Interval {
     } catch (err) {
       out['00-could-not-reach-the-login'] = `<!-- ${err.message} -->`;
     }
+    // Follow what the site actually offers rather than guessing at URLs. The session lands
+    // somewhere after signing in (a 302 to /web/cs?a=1000, in Victor's case), and that page's
+    // own links are the truth about where Getaways live — a guessed path just returns a 404 and
+    // costs another round trip to the VPS and back.
+    const found = [];
+    if (r?.ok) {
+      const seen = new Set(paths);
+      for (const m of (r.html || '').matchAll(/href=["']([^"'#]+)["']/gi)) {
+        const href = m[1];
+        if (!/getaway|vacation|search|exchange|resort/i.test(href)) continue;
+        const abs = href.startsWith('http') ? href : new URL(href, ORIGIN).pathname + (href.includes('?') ? '?' + href.split('?')[1] : '');
+        if (!abs.startsWith('/') || seen.has(abs)) continue;
+        seen.add(abs); found.push(abs);
+        if (found.length >= 6) break;
+      }
+      out['03-links-worth-following'] = `<!--\n${found.map(f => '  ' + f).join('\n') || '  (none on the landing page)'}\n-->`;
+    }
+
     // Ask for the pages either way. Signed out they come back as the login page, and that is
     // itself the answer; signed in they are the thing we came for.
-    for (const p of paths) {
+    for (const p of [...paths, ...found]) {
       try { out[p] = await (await this.req(p)).text(); }
       catch (err) { out[p] = `<!-- ${err.message} -->`; }
       await new Promise((wait) => setTimeout(wait, 1500));
