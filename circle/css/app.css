@@ -755,7 +755,11 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 .band figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px clamp(16px, 4vw, 40px) 18px;
   color: #fff; font-size: clamp(.92rem, 1.6vw, 1.05rem); letter-spacing: -.01em;
   background: linear-gradient(to top, rgba(9,14,22,.72), rgba(9,14,22,0)); }
-@media (max-width: 620px) { .band { aspect-ratio: 16/9; } }
+/* These used to get TALLER on a phone — 21/9 on a desktop, 16/9 below 620px, which at 390px
+   wide is 219px each and 657px of atmosphere on a page the owner already said was too long.
+   A strip is a strip: keep it wide, so it still reads as a breath between sections without
+   costing a quarter of a screen three times over. */
+@media (max-width: 620px) { .band { aspect-ratio: 5/2; } }
 
 .seasons-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
 @media (max-width: 900px) { .seasons-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -858,3 +862,51 @@ button.badge-card:hover { border-color: var(--ink-3); }
   pointer-events: none; }
 .hero-shot .hero-video.ready { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .hero-shot .hero-video { display: none; } }
+
+/* A segmented control — one row of rooms, not a wrapping pile of ghost buttons.
+   Four `.btn.quiet` tabs wrapped onto two lines at 390px and, being borderless, read as plain
+   text rather than as the thing you tap to change screens — the tell this project keeps having
+   to catch: a control with no edge is not read as a control. One track, one filled thumb, and
+   it scrolls sideways rather than wrapping if a label ever grows. */
+.segmented { display: flex; gap: 2px; padding: 3px; margin-top: 16px; background: var(--raised);
+  border: 1px solid var(--hairline); border-radius: 999px; overflow-x: auto;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.segmented::-webkit-scrollbar { display: none; }
+.segmented > button { flex: 1 0 auto; min-height: 44px; padding: 0 14px; border: 0; cursor: pointer;
+  background: transparent; color: var(--ink-2); border-radius: 999px; white-space: nowrap;
+  font: 500 .84rem/1 var(--font-body); letter-spacing: -.005em;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.segmented > button:hover { color: var(--ink); }
+.segmented > button[aria-pressed="true"] { background: var(--surface); color: var(--ink);
+  box-shadow: 0 1px 2px rgba(9, 14, 22, .08), inset 0 0 0 1px var(--hairline); }
+.segmented > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Full width on a phone, where an even row of four reads as one control and there is no room
+   to spare. On a desktop it hugs its labels instead: stretched across 1,060px the four tabs
+   read as four separate links with a stray border around them. */
+@media (min-width: 700px) { .segmented { width: max-content; max-width: 100%; } }
+
+/* There is room for the three actions on one line now that tier and roles live with the name,
+   so the labels should not wrap inside their own buttons. */
+.people-table .btn { white-space: nowrap; }
+
+/* The Insiders table on a phone. Even at four columns, name + state + points + three buttons
+   in a 358px column puts the actions off the right edge, behind a sideways scroll you have to
+   discover. Each Insider becomes a block instead: who they are, then state and points on one
+   line, then the three buttons where a thumb finds them. */
+@media (max-width: 620px) {
+  .people-table, .people-table tbody, .people-table tr { display: block; }
+  .people-table thead { display: none; }
+  .people-table tr { padding: 12px 14px; border-bottom: 1px solid var(--hairline-soft); }
+  .people-table tr:last-child { border-bottom: 0; }
+  .people-table td { display: block; padding: 0; border: 0; }
+  /* State and points share a line rather than taking one each. Giving every fact its own row
+     turned fourteen Insiders into six screens — longer than the table it replaced, which is
+     not a fix. inline-block keeps each label welded to its value across a wrap. */
+  .people-table td[data-k] { display: inline-block; margin-right: 9px; font-size: .78rem;
+    line-height: 2; text-align: left; }
+  .people-table td[data-k]::before { content: attr(data-k); font-family: var(--font-body);
+    font-size: .63rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+    margin-right: 3px; }
+  .people-table td:last-child { margin-top: 8px; }
+  .people-table td:last-child .row { justify-content: flex-start !important; }
+}

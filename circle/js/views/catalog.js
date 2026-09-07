@@ -144,11 +144,18 @@ export function trips({ store }) {
   const look = effectiveTier(tier, store.standing(me.id));
   const all = store.trips();
   const wrap = el(`<div><section class="sec"><div class="wrap">
-      <div class="sec-head"><div><p class="eyebrow">${icon('plane')}Sourced by Victor, run with Ian</p><h1>Trips</h1>
-        <p>A seat covers the hotels, every internal transfer and everything else listed. Flights to and from Aruba are extra unless the note says otherwise. Guests can come at the same rate, in cash.</p>
-        <p class="small muted" style="margin-top:8px">Three countries this cycle: the Dominican Republic in March, Mexico in February, Japan the December after. Read the notes — Victor writes down what the journey actually costs you in days, not just in points.</p></div></div>
-      <div class="notice" style="margin-bottom:18px"><b>Everyone can come on everything</b>
-        <p class="small">There is no level that shuts you out of a trip. What your level changes is how quickly the points build — at ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))}, so a seat further afield takes longer to save for — and the perks: ${look.holds} open request${look.holds > 1 ? 's' : ''} at a time, ${look.windowMonths} months ahead${look.firstLookHours ? `, and first look at a new trip ${look.firstLookHours} hours early` : ''}${look.fromStanding.extraHolds || look.fromStanding.extraFirstLookHours ? ' — your standing is in those numbers' : ''}. <a href="#/profile">Change your level</a> any month; it starts on your next contribution.</p></div>
+      <!-- This header used to run 892px before the first trip: a lede, a paragraph naming the
+           three countries (which the cards below already name, and which goes stale the day a
+           trip changes), and a notice box explaining the levels. All of it true, none of it
+           what somebody opening /trips came for. The one sentence that matters most — nobody
+           is shut out — leads; the rest folds. -->
+      <div class="sec-head tight"><div><p class="eyebrow">${icon('plane')}Sourced by Victor, run with Ian</p><h1>Trips</h1>
+        <p class="small muted">Everyone can come on everything. A seat covers the hotels and every transfer on the ground; flights to and from Aruba are extra unless the note says otherwise.</p>
+        <details class="fineprint"><summary>What your level changes</summary>
+          <p class="small muted">Not whether you can come — only how fast the points build. At ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))}, so a seat further afield takes longer to save for. It also sets the perks: ${look.holds} open request${look.holds > 1 ? 's' : ''} at a time, ${look.windowMonths} months ahead${look.firstLookHours ? `, and first look at a new trip ${look.firstLookHours} hours early` : ''}${look.fromStanding.extraHolds || look.fromStanding.extraFirstLookHours ? ' — your standing is in those numbers' : ''}. <a href="#/profile">Change your level</a> any month; it starts on your next contribution.</p>
+          <p class="small muted">Guests can come at the same rate, in cash. Read each trip’s note — Victor writes down what the journey costs you in days, not just in points.</p>
+        </details>
+        </div></div>
       <div class="grid g3" id="list"></div>
       ${all.length ? '' : `<div class="empty">${icon('plane', { size: 28, cls: 'ico-muted' })}<b style="display:block;margin-top:10px">No trips on the board</b><p class="small muted">Victor posts them as he sources them. Ian sends a note when one goes live.</p></div>`}
     </div></section></div>`);

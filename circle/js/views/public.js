@@ -314,23 +314,30 @@ export function landing({ store, go }) {
     const show = priced.length > 8
       ? [...priced.slice(0, 4), ...priced.slice(-4)]
       : priced;
-    wrap.appendChild(el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><h2>What a night costs</h2>
-      <p>Every price on this page is the Circle&rsquo;s all-in rate — the room, the 12.5% levy, the service charge and the resort fee together. Nothing is added later.</p></div>
+    // The eight rows stack into cards on a phone and cost 1,527px — two full screens — to say
+    // something the sentence under them already said: prices run from here to here. So the
+    // range leads, with the figures in it, and the table sits behind a disclosure that is open
+    // from the start on a wide screen, where eight rows cost nothing.
+    const costs = el(`<section class="sec"><div class="wrap">
+      <div class="sec-head tight"><div><h2>What a night costs</h2>
+      <p>From <b class="num">${escapeHtml(fmtUsd2(cheapest.from / s.pointsPerDollar))}</b> a night at ${escapeHtml(cheapest.st.name)} to <b class="num">${escapeHtml(fmtUsd2(dearest.from / s.pointsPerDollar))}</b> at ${escapeHtml(dearest.st.name)} — the Circle&rsquo;s all-in rate, with the room, the 12.5% levy, the service charge and the resort fee already in it. Nothing is added later.</p></div>
       <a class="btn ghost sm" href="${blind ? '#/sign-in' : '#/stays'}">${icon('chevronRight', { size: 15 })}${blind ? 'Sign in for all ' + priced.length : 'All ' + priced.length}</a></div>
 
-      <div class="tablewrap"><table class="bands">
-        <caption class="sr-only">The cheapest and dearest places on the list, from-price per night</caption>
-        <thead><tr><th>Place</th><th class="num">From, a night</th><th class="num">In dollars</th></tr></thead>
-        <tbody>${show.map(({ st, from }) => `<tr>
-          <td><b>${escapeHtml(st.name)}</b><br><span class="small muted">${escapeHtml(st.area)}${st.onSand ? ' · on the sand' : ''}</span></td>
-          <td class="num" data-k="From">${escapeHtml(fmtPoints(from))}</td>
-          <td class="num" data-k="In dollars">${escapeHtml(fmtUsd2(from / s.pointsPerDollar))}</td></tr>`).join('')}</tbody>
-      </table></div>
+      <details class="fineprint" id="cost-table"><summary>${priced.length > 8 ? `The four cheapest and the four dearest of ${priced.length}` : `All ${priced.length}, cheapest first`}</summary>
+        <div class="tablewrap" style="margin-top:10px"><table class="bands">
+          <caption class="sr-only">The cheapest and dearest places on the list, from-price per night</caption>
+          <thead><tr><th>Place</th><th class="num">From, a night</th><th class="num">In dollars</th></tr></thead>
+          <tbody>${show.map(({ st, from }) => `<tr>
+            <td><b>${escapeHtml(st.name)}</b><br><span class="small muted">${escapeHtml(st.area)}${st.onSand ? ' · on the sand' : ''}</span></td>
+            <td class="num" data-k="From">${escapeHtml(fmtPoints(from))}</td>
+            <td class="num" data-k="In dollars">${escapeHtml(fmtUsd2(from / s.pointsPerDollar))}</td></tr>`).join('')}</tbody>
+        </table></div>
+      </details>
 
-      <p class="small muted" style="margin-top:12px">${priced.length > 8 ? `The four cheapest and the four dearest of ${priced.length}. ` : ''}From ${escapeHtml(fmtUsd2(cheapest.from / s.pointsPerDollar))} a night at ${escapeHtml(cheapest.st.name)} to ${escapeHtml(fmtUsd2(dearest.from / s.pointsPerDollar))} at ${escapeHtml(dearest.st.name)}.</p>
-      <p class="small muted" style="margin-top:8px">A night costs more at Christmas and in the busy months, the way it does on every booking site — you never have to work out which is which. Give Victor your dates and he prices those exact nights, and that quote is what you accept.</p>
-      </div></section>`));
+      <p class="small muted" style="margin-top:12px">A night costs more at Christmas and in the busy months, the way it does on every booking site — you never have to work out which is which. Give Victor your dates and he prices those exact nights, and that quote is what you accept.</p>
+      </div></section>`);
+    if (window.matchMedia?.('(min-width: 780px)').matches) costs.querySelector('#cost-table').open = true;
+    wrap.appendChild(costs);
   }
 
   // The people. Found by the job they do, not by a seed id — on the real backend every row

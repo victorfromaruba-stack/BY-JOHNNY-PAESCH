@@ -790,6 +790,18 @@ export function settings({ store, go }) {
       <p class="eyebrow">${isAdmin ? 'Admin' : 'The Banker'}</p>
       <h1>Settings</h1>
 
+      <!-- Settings used to be one scroll of six panels: three and a half screens of bank
+           details and copy before the first number, seven and a half screens end to end. Nobody
+           comes here to read all of it — they come to give somebody a login, or to check an
+           account number. So it is four rooms now, and you land in the one you came for. -->
+      <div class="segmented no-print" role="group" aria-label="Settings sections" id="tabs">
+        ${isAdmin ? '<button type="button" data-tab="people" aria-pressed="true">Insiders</button>' : ''}
+        <button type="button" data-tab="accounts" aria-pressed="${!isAdmin}">Accounts</button>
+        <button type="button" data-tab="money" aria-pressed="false">Money</button>
+        ${isAdmin ? '<button type="button" data-tab="record" aria-pressed="false">Record</button>' : ''}
+      </div>
+
+      <div data-pane="accounts"${isAdmin ? ' hidden' : ''}>
       <form class="panel" id="accounts" style="margin-top:20px">
         <h2 style="font-size:1.1rem">The two accounts</h2>
         <p class="small muted" style="margin-top:6px">Coverage can only be verified when the Reserve and Operating are two different accounts. Be honest about who holds them.</p>
@@ -814,8 +826,10 @@ export function settings({ store, go }) {
         <button class="btn" type="submit">Save</button>
         <p class="small muted" style="margin-top:10px">${s.wallet?.url ? 'Members see “Add to Apple Wallet” on their card screen.' : 'Members are told plainly that this is not set up yet.'}</p>
       </form>
+      </div>
 
-      <div class="panel" style="margin-top:16px">
+      <div data-pane="money" hidden>
+      <div class="panel" style="margin-top:20px">
         <h2 style="font-size:1.1rem">Dollars and points</h2>
         <p class="small muted" style="margin-top:6px">${s.pointsPerDollar} points = $1.00. Type either side to check a price before you put it in the catalog.</p>
         <div class="grid g2" style="margin-top:14px">
@@ -839,7 +853,8 @@ export function settings({ store, go }) {
           <label class="field"><span>Leaving fee US$</span><input name="exitFeeUsd" type="number" value="${s.exitFeeUsd}" inputmode="decimal"></label>
         </div>
         <button class="btn" type="submit">Save the rules</button>
-      </form>
+      </form>` : ''}
+      </div>
 
       <!-- "Pictures from your trips" used to sit here: a switch, over copy promising "it is built
            and ready… nothing has to be rebuilt". There is no /moments route, no view file, and
@@ -849,28 +864,29 @@ export function settings({ store, go }) {
            switch away rather than to keep offering it. The two tables and their policies stay in
            the database, harmless and ready, for whoever builds the screen. -->
 
-      <div class="panel" style="margin-top:16px">
-        <div class="row-between"><h2 style="font-size:1.1rem">Insiders</h2>
+      ${isAdmin ? `<div data-pane="people">
+      <div class="panel" style="margin-top:20px">
+        <div class="row-between"><h2 style="font-size:1.1rem">Insiders · ${store.members.length}</h2>
           <div class="row">${isAdmin ? `<button class="btn sm" id="add-member">${icon('plus', { size: 16 })}Add an Insider</button>` : ''}
             </div></div>
         <p class="small muted" style="margin-top:6px">Adding someone puts them on the list. Then <b>Give a login</b> makes them a username
           and a password, shown once, which you pass on however you like — a message, a phone call, in person. Nothing is emailed
           to anybody, and the first thing the app makes them do is choose their own.</p>
-        <div class="tablewrap" style="margin-top:14px;border:0"><table>
-          <thead><tr><th>Name</th><th>Tier</th><th>Roles</th><th>State</th><th class="num">Points</th><th></th></tr></thead>
+        <div class="tablewrap" style="margin-top:14px;border:0"><table class="people-table">
+          <thead><tr><th>Who</th><th>State</th><th class="num">Points</th><th></th></tr></thead>
           <tbody>${store.members.map(m => `<tr>
-            <td><b>${escapeHtml(m.name)}</b>${m.bot ? ' <span class="chip chip-muted">robot</span>' : ''}<br><span class="small ${m.username ? 'muted mono' : ''}" ${m.username ? '' : 'style="color:var(--flag)"'}>${escapeHtml(m.username ? `@${m.username}${m.mustChangePassword ? ' · has not changed their password yet' : ''}` : 'no login yet — they cannot sign in')}</span></td>
-            <td>${m.bot ? '<span class="small muted">no seat, pays nothing</span>' : escapeHtml(tierName(m.monthlyUsd))}</td>
-            <td class="small">${escapeHtml(m.roles.join(', '))}</td>
-            <td>${chip(m.status === 'active' ? 'active' : m.status)}</td>
-            <td class="num">${escapeHtml(fmtPoints(store.availablePoints(m.id)))}</td>
+            <td><b>${escapeHtml(m.name)}</b>${m.bot ? ' <span class="chip chip-muted">robot</span>' : ''}<br><span class="small ${m.username ? 'muted mono' : ''}" ${m.username ? '' : 'style="color:var(--flag)"'}>${escapeHtml(m.username ? `@${m.username}${m.mustChangePassword ? ' · has not changed their password yet' : ''}` : 'no login yet — they cannot sign in')}</span><br><span class="small muted">${m.bot ? 'no seat, pays nothing' : escapeHtml([tierName(m.monthlyUsd), m.roles.join(', ')].filter(Boolean).join(' · '))}</span></td>
+            <td data-k="State">${chip(m.status === 'active' ? 'active' : m.status)}</td>
+            <td class="num" data-k="Points">${escapeHtml(fmtPoints(store.availablePoints(m.id)))}</td>
             <td><div class="row nowrap" style="gap:6px;justify-content:flex-end;flex-wrap:nowrap">
               ${isAdmin ? `<button class="btn ghost sm" data-login="${m.id}">${icon('key', { size: 15 })}${m.username ? 'New password' : 'Give a login'}</button>` : ''}
               ${isAdmin ? `<button class="btn ghost sm" data-edit="${m.id}">${icon('edit', { size: 15 })}Edit</button>` : ''}
-              ${isAdmin ? `<button class="btn quiet sm" data-adjust="${m.id}">Adjust</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>
+              ${isAdmin ? `<button class="btn ghost sm" data-adjust="${m.id}">Adjust</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>
+      </div>
       </div>
 
-      <div class="panel" style="margin-top:16px">
+      <div data-pane="record" hidden>
+      <div class="panel" style="margin-top:20px">
         <h2 style="font-size:1.1rem">The record</h2>
         <p class="small muted" style="margin-top:6px">Everything anyone did, oldest at the bottom. The ledger itself can never be edited — corrections are new lines with a reason.</p>
         <div class="row" style="margin-top:12px">
@@ -882,8 +898,21 @@ export function settings({ store, go }) {
         <ul class="ledger" style="margin-top:14px">${store.audit(25).map(a => `<li>
           <span class="what"><b>${escapeHtml(a.action)}</b><span class="meta">${escapeHtml(store.member(a.actorId)?.name || 'system')} · ${escapeHtml(a.entity)}</span></span>
           <span class="delta"><small>${escapeHtml(fmtDayTime(a.at))}</small></span></li>`).join('')}</ul>
+      </div>
       </div>` : ''}
     </div></section></div>`);
+
+  // Every pane stays in the DOM and is only hidden, so the forms below keep the handlers they
+  // were given at build time — switching rooms never has to re-wire anything.
+  {
+    const tabs = wrap.querySelector('#tabs');
+    const panes = [...wrap.querySelectorAll('[data-pane]')];
+    tabs.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-tab]'); if (!b) return;
+      tabs.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      panes.forEach(p => { p.hidden = p.dataset.pane !== b.dataset.tab; });
+    });
+  }
 
   {
     const u = wrap.querySelector('#conv-usd'), pt = wrap.querySelector('#conv-pts'), note = wrap.querySelector('#conv-note');

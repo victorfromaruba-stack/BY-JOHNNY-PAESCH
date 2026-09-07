@@ -27,6 +27,22 @@ are density and touch, not breakage.
 | `/bank` | 3.7 | 300 | 11 | 1164 |
 | `/settings` | 7.4 | **2883** | **32** | 4544 |
 
+## After the first two passes (390px, as an admin)
+
+Touch work landed first, then density. Re-measure with the same script; a pass that does not
+move a column here did not do anything.
+
+| route | screens tall | px to first figure | targets < 44px | what changed |
+|---|---|---|---|---|
+| `/` | 9 → 7.5 | 789 | 3 → 1 | price table folded on a phone, bands stopped growing |
+| `/stays` | 10 → 9.6 | 780 → 464 | 11 → 2 | filters collapse, header tightened |
+| `/trips` | 2.4 → 2.0 | 892 → 553 | 1 | level explainer folded, stale copy cut |
+| `/settings` | 7.4 → 4.3 | 2883 → 532 | 32 → 0 | four panes behind a segmented control |
+
+`/settings` is 1.9 screens on every pane but Insiders, which is fourteen people with three
+actions each and is honestly long. `/stays` is 23 cards; length there is the catalog, not waste.
+`/stays/:id` at 10.5 screens is the one still untouched.
+
 What those numbers mean in the owner's language:
 
 - **"a lot of unresponsive things"** — 32 controls under 44px on `/settings`, 27 on a stay page.
