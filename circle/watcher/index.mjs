@@ -144,7 +144,13 @@ async function pass(circle) {
         const note = (await import('node:fs')).readFileSync(join(dir, '02_what_happened.html'), 'utf8');
         const got = /signed in:\s+true/.test(note);
         log(got ? '  signed in — the Getaway pages are in dump/, send them over.'
-                : '  Interval did NOT accept the sign-in. dump/ has its answer and the reason.');
+                : '  Interval did NOT sign us in: the pages behind the login still offer a way IN.');
+        // The dump now fetches the same pages twice — once signed in, once with no login at
+        // all — so this line is the answer rather than the start of another guess.
+        if (/IDENTICAL to the anonymous fetch/.test(note)) {
+          log('  Every page came back byte-identical to the anonymous fetch, so the password was not accepted.');
+        }
+        log('  02_what_happened.html has every hop and the two runs side by side.');
         log('  No password is in any of those files.');
         return { found: [], posted: 0 };
       }

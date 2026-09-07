@@ -13,24 +13,139 @@
 // finished from that HTML — no password ever leaves the machine.
 
 const ORIGIN = 'https://www.intervalworld.com';
+// The page asked for to decide whether the session is real. Anything behind the login does;
+// this one is small and is where the account's own details live.
+const PROBE = process.env.INTERVAL_PROBE_PATH || '/web/my/home';
 const UA = process.env.WATCH_UA
   || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 
 /** A cookie jar small enough to read, because a session is the whole game here. */
 export function jar() {
   const store = new Map();
+  /** A Set-Cookie that clears the cookie rather than setting one. */
+  const isDeletion = (value, attrs) => {
+    if (!value) return true;                       // servers clear a cookie by sending it empty
+    for (const a of attrs) {
+      const [k, v = ''] = a.split('=');
+      const key = k.trim().toLowerCase();
+      if (key === 'max-age' && Number(v.trim()) <= 0) return true;
+      if (key === 'expires') { const t = Date.parse(v.trim()); if (t && t <= Date.parse(SAFE_NOW)) return true; }
+    }
+    return false;
+  };
   return {
     header: () => [...store].map(([k, v]) => `${k}=${v}`).join('; '),
     absorb(res) {
       for (const line of res.headers.getSetCookie?.() ?? []) {
-        const [pair] = line.split(';');
+        const [pair, ...attrs] = line.split(';');
         const i = pair.indexOf('=');
-        if (i > 0) store.set(pair.slice(0, i).trim(), pair.slice(i + 1).trim());
+        if (i <= 0) continue;
+        const name = pair.slice(0, i).trim(), value = pair.slice(i + 1).trim();
+        // RFC 6265 says a cleared cookie is REMOVED, not stored as an empty string. Storing it
+        // would send `JSESSIONID=` on every later request, which is worse than sending nothing.
+        if (isDeletion(value, attrs)) store.delete(name);
+        else store.set(name, value);
       }
     },
+    names: () => [...store.keys()],
     has: (k) => store.has(k),
     size: () => store.size,
   };
+}
+// Date.now() is fine here, but keeping the comparison against one fixed reading makes the
+// jar's behaviour reproducible inside a single pass.
+const SAFE_NOW = new Date().toISOString();
+
+/**
+ * Does this page belong to somebody who is signed in?
+ *
+ * This is the ONLY sound test, and it was learned the hard way. Interval does not bounce an
+ * anonymous request to the login page — it answers the very same URL with the public version
+ * of the page, 200 and all. Verified against the live site with no credentials at all:
+ *
+ *   /web/cs?a=1000                  200 -> /web/my/home                  says "Sign In"
+ *   /web/my/home                    200 -> /web/my/home                  says "Sign In"
+ *   /web/my/info/benefits/getaways  200                                  says "Sign In"
+ *
+ * So "we did not land back on the login page" is worth nothing: an anonymous stranger does not
+ * land there either. What separates the two is which affordance the page offers — a way in, or
+ * a way out. Returns true, false, or null when the page says neither.
+ */
+export function readsAsSignedIn(html = '') {
+  const text = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ');
+  const wayOut = /href=["'][^"']*(?:\/logout|\/signout|sign-?out)/i.test(text)
+    || />\s*(?:sign\s*out|log\s*out)\s*</i.test(text);
+  const wayIn = /href=["'][^"']*\/auth\/(?:login|loginPage)/i.test(text)
+    || /name=["']j_password["']/i.test(text)
+    || />\s*(?:sign\s*in|log\s*in)\s*</i.test(text);
+  if (wayOut && !wayIn) return true;
+  if (wayIn && !wayOut) return false;
+  return null;                                   // both or neither: say so rather than guess
+}
+
+/**
+ * The hidden fields on the LOGIN form — not on every form on the page.
+ *
+ * A login page also carries a site-search box, a locale picker and a newsletter sign-up, each
+ * with hidden fields of its own. Scooping up the lot and posting them meant sending the login
+ * endpoint fields it never asked for, and — worse — a duplicate name from a later form silently
+ * overwrote the login form's own token. So: find the form that has the password box, and read
+ * only that one.
+ *
+ * Values are decoded, because a CSRF token containing &amp; or &#43; posted back verbatim is a
+ * different token, and the refusal that follows looks exactly like a wrong password.
+ */
+export function hiddenFields(html = '') {
+  const forms = [...html.matchAll(/<form\b[\s\S]*?<\/form>/gi)].map(m => m[0]);
+  const login = forms.find(f => /name\s*=\s*["']?j_password["']?/i.test(f))
+    || forms.find(f => /type\s*=\s*["']?password["']?/i.test(f))
+    || html;                                   // no form found: fall back to the whole page
+  const out = {};
+  for (const m of login.matchAll(/<input\b[^>]*>/gi)) {
+    const tag = m[0];
+    if (!/type\s*=\s*["']?hidden["']?/i.test(tag)) continue;
+    const name = attr(tag, 'name');
+    if (name) out[name] = attr(tag, 'value') ?? '';
+  }
+  return out;
+}
+
+/**
+ * What the login form says it will accept, read off the form itself.
+ *
+ * Interval's real password box carries maxlength="14" and its login ID box maxlength="33". A
+ * browser silently truncates as you type, so a longer password typed into the site becomes a
+ * shorter one — and nobody ever sees that happen. A watcher posting the full-length string is
+ * then sending something the site has never been told, and the refusal looks like a wrong
+ * password rather than a length limit. Read off the page rather than hard-coded, so it stays
+ * true if Interval changes it.
+ */
+export function fieldLimits(html = '') {
+  const forms = [...html.matchAll(/<form\b[\s\S]*?<\/form>/gi)].map(m => m[0]);
+  const login = forms.find(f => /name\s*=\s*["']?j_password/i.test(f)) || html;
+  const out = {};
+  for (const m of login.matchAll(/<input\b[^>]*>/gi)) {
+    const name = attr(m[0], 'name'), max = Number(attr(m[0], 'maxlength'));
+    if (name && max > 0) out[name] = max;
+  }
+  return out;
+}
+
+/** One attribute off a tag, quoted or not, with entities decoded. */
+function attr(tag, key) {
+  const m = tag.match(new RegExp(`\\b${key}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i'));
+  if (!m) return null;
+  return decodeEntities(m[1] ?? m[2] ?? m[3] ?? '');
+}
+
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'", nbsp: ' ' };
+function decodeEntities(s) {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, code) => {
+    if (ENTITIES[code.toLowerCase()]) return ENTITIES[code.toLowerCase()];
+    if (/^#x/i.test(code)) return String.fromCodePoint(parseInt(code.slice(2), 16));
+    if (/^#/.test(code)) return String.fromCodePoint(parseInt(code.slice(1), 10));
+    return whole;
+  });
 }
 
 export class Interval {
@@ -38,12 +153,18 @@ export class Interval {
     if (!username || !password) throw new Error('Set INTERVAL_USER and INTERVAL_PASS in the environment');
     this.username = username; this.password = password;
     this.jar = jar(); this.fetch = fetchImpl; this.signedIn = false;
+    // Every hop, so a failed pass can be read afterwards without a password and without
+    // guessing. Values are never recorded — only cookie NAMES.
+    this.trace = [];
   }
 
-  async req(path, { method = 'GET', body = null, redirect = 'manual', hops = 0, timeoutMs = 30000 } = {}) {
+  async req(path, { method = 'GET', body = null, redirect = 'manual', hops = 0, timeoutMs = 30000, referer = null } = {}) {
     const url = path.startsWith('http') ? path : ORIGIN + path;
     const headers = { 'user-agent': UA, accept: 'text/html,application/xhtml+xml', 'accept-language': 'en-US,en;q=0.9' };
     if (this.jar.size()) headers.cookie = this.jar.header();
+    // A browser posting a form always says where the form was. Sending it costs nothing and
+    // removes one more way for this to look like something other than a person at a keyboard.
+    if (referer) { headers.referer = referer; headers.origin = new URL(referer).origin; }
     if (body) headers['content-type'] = 'application/x-www-form-urlencoded';
     // A socket that opens and then says nothing would otherwise hang the pass for good. This
     // runs unattended for months; every request gets a clock.
@@ -52,14 +173,18 @@ export class Interval {
     let res;
     try { res = await this.fetch(url, { method, headers, body, redirect, signal: ctrl.signal }); }
     finally { clearTimeout(timer); }
+    const setCookies = (res.headers.getSetCookie?.() ?? []).map(l => l.split('=')[0].trim());
     this.jar.absorb(res);
+    this.trace.push({ method, url: url.replace(ORIGIN, ''), status: res.status,
+      to: (res.headers.get('location') || '').replace(ORIGIN, ''),
+      setCookies, jarAfter: this.jar.names() });
     // Follow redirects by hand so cookies are carried across each hop. Bounded, because a site
     // that bounces /a to /b to /a would otherwise recurse until the stack gives out.
     if ([301, 302, 303, 307, 308].includes(res.status)) {
       if (hops >= 10) throw new Error(`Interval redirected more than ten times from ${path}`);
       const to = res.headers.get('location');
       // A redirect after a POST is a GET, which is what a Spring login does on success.
-      if (to) return this.req(to.startsWith('http') ? to : new URL(to, url).toString(), { redirect, hops: hops + 1, timeoutMs });
+      if (to) return this.req(to.startsWith('http') ? to : new URL(to, url).toString(), { redirect, hops: hops + 1, timeoutMs, referer: url });
     }
     return res;
   }
@@ -67,10 +192,18 @@ export class Interval {
   /**
    * Try to sign in and report what happened, without throwing.
    *
-   * Whether it worked is judged by WHERE the session landed, not by searching the HTML for
-   * hopeful words. A Spring form login redirects away from the login page on success and back
-   * to it on failure; that is a fact about the response, while "does this page contain the word
-   * logout" was a guess written without ever having seen a real signed-in page.
+   * Whether it worked is decided by fetching a page behind the login and looking at what that
+   * page offers — a way out (signed in) or a way in (not). Two earlier versions of this check
+   * were wrong in the same direction, both calling a failure a success:
+   *
+   *   · "does the answer contain the word logout" — written without ever having seen a real
+   *     signed-in page, so it was a hope about markup rather than a fact about the response.
+   *   · "did we land somewhere other than the login page" — which sounds like a fact, and is
+   *     worthless: an anonymous request lands on /web/my/home too. Interval serves the public
+   *     version of a page instead of bouncing you, so the URL never tells you anything.
+   *
+   * Getting this wrong the optimistic way is the expensive one. The watcher then runs every
+   * hour for months reporting "no Getaways in Aruba", which is indistinguishable from bad luck.
    */
   async attemptSignIn() {
     const pageRes = await this.req('/web/my/auth/loginPage');   // establishes the session cookie
@@ -78,33 +211,55 @@ export class Interval {
 
     // Some Spring setups carry a CSRF token in a hidden field on the login form. If one is
     // there, send it back; posting without it is refused in a way that looks like a bad password.
-    const hidden = {};
-    for (const m of loginPage.matchAll(/<input[^>]*type=["']hidden["'][^>]*>/gi)) {
-      const name = (m[0].match(/name=["']([^"']+)["']/i) || [])[1];
-      if (name) hidden[name] = (m[0].match(/value=["']([^"']*)["']/i) || [])[1] ?? '';
-    }
+    const hidden = hiddenFields(loginPage);
+
+    // If what we hold is longer than the box the site gives a person, the site has never been
+    // shown this string and never will be. Worth saying out loud rather than reporting a
+    // wrong password.
+    const limits = fieldLimits(loginPage);
+    const tooLong = [
+      limits.j_username && this.username.length > limits.j_username
+        ? `the login ID is ${this.username.length} characters and the form accepts ${limits.j_username}` : null,
+      limits.j_password && this.password.length > limits.j_password
+        ? `the password is ${this.password.length} characters and the form accepts ${limits.j_password}` : null,
+    ].filter(Boolean);
 
     const form = new URLSearchParams({
       ...hidden,
       j_username: this.username, j_password: this.password, _spring_security_remember_me: 'on',
     });
-    const res = await this.req('/web/my/auth/login', { method: 'POST', body: form.toString() });
+    const res = await this.req('/web/my/auth/login', { method: 'POST', body: form.toString(),
+                                                       referer: ORIGIN + '/web/my/auth/loginPage' });
     const html = await res.text();
     const landedOn = res.url || '';
-    const backAtLogin = /\/auth\/(login|loginPage)/i.test(landedOn);
     const said = (html.match(/class="[^"]*(?:error|alert|message)[^"]*"[^>]*>\s*([^<]{4,160})/i) || [])[1];
-    this.signedIn = !backAtLogin;
-    return { ok: this.signedIn, status: res.status, landedOn, html, loginPage,
-             hidden: Object.keys(hidden), said: said && said.trim() };
+
+    // The answer to the POST is not the evidence — ask for something behind the login and read
+    // what comes back. If the probe page cannot say either way, fall back to the login answer;
+    // if neither can say, report not-signed-in, because the costly mistake is the hopeful one.
+    let probe = null, probeSays = null;
+    try {
+      const pr = await this.req(PROBE);
+      probe = await pr.text();
+      probeSays = readsAsSignedIn(probe);
+    } catch { /* the probe failing is itself not evidence of a good session */ }
+    const verdict = probeSays ?? readsAsSignedIn(html) ?? false;
+
+    this.signedIn = verdict === true;
+    return { ok: this.signedIn, status: res.status, landedOn, html, loginPage, probe,
+             probePath: PROBE, probeSays, answerSays: readsAsSignedIn(html),
+             hidden: Object.keys(hidden), limits, tooLong, said: said && said.trim() };
   }
 
   /** Sign in. Throws with the site's own words when it refuses. */
   async signIn() {
     const r = await this.attemptSignIn();
     if (!r.ok) {
-      throw new Error(`Interval refused the sign-in${r.said ? `: ${r.said}` : ` (landed back on ${r.landedOn})`}`);
+      if (r.tooLong?.length) throw new Error(`Interval cannot accept what is set: ${r.tooLong.join('; ')}`);
+      throw new Error(`Interval did not sign the watcher in${r.said ? `: ${r.said}`
+        : ` — ${r.probePath} still offers a way in, so the session is anonymous`}`);
     }
-    return r.html;
+    return r.probe || r.html;
   }
 
   /**
@@ -114,16 +269,51 @@ export class Interval {
   async dump(paths = ['/web/my/home', '/web/my/info/benefits/getaways']) {
     const out = {};
     let r = null;
+
+    // The control. Fetch the same pages with a brand-new jar and no login at all, so the
+    // signed-in run has something to be compared against. This is the whole point: Interval
+    // serves anonymous callers the public version of the same URL at the same address, so the
+    // only way to know whether a password was accepted is to hold the two side by side. If
+    // they match, it was not.
+    const control = {};
+    try {
+      const anon = new Interval({ username: 'x', password: 'x', fetchImpl: this.fetch });
+      for (const p of [PROBE, ...paths]) {
+        const html = await (await anon.req(p)).text();
+        control[p] = { bytes: html.length, signedIn: readsAsSignedIn(html) };
+        out[`anon${p}`] = html;
+        await new Promise((wait) => setTimeout(wait, 1200));
+      }
+    } catch (err) { out['04-control-failed'] = `<!-- ${err.message} -->`; }
+
     try {
       r = await this.attemptSignIn();
       out['00-login-form'] = r.loginPage;
       out['01-login-answer'] = r.html;
+      if (r.probe) out['01b-probe-page'] = r.probe;
+      const say = (v) => (v === true ? 'signed in' : v === false ? 'NOT signed in' : 'cannot tell');
       out['02-what-happened'] = [
         '<!--', `  signed in:      ${r.ok}`, `  http status:    ${r.status}`,
-        `  landed on:      ${r.landedOn}`, `  the site said:  ${r.said || '(nothing)'}`,
+        `  landed on:      ${r.landedOn}`,
+        `     (landing here proves nothing — an anonymous caller lands here too)`,
+        `  probe page:     ${r.probePath} -> ${say(r.probeSays)}`,
+        `  login answer:   ${say(r.answerSays)}`,
+        `  the site said:  ${r.said || '(nothing)'}`,
         `  hidden fields:  ${r.hidden.join(', ') || '(none on the form)'}`,
-        `  cookies held:   ${this.jar.size()}`,
-        `  JSESSIONID set: ${this.jar.has('JSESSIONID')}`, '-->',
+        `  form accepts:   ${Object.entries(r.limits).map(([k, v]) => `${k} up to ${v}`).join(', ') || '(no limits given)'}`,
+        ...(r.tooLong.length ? ['', '  !! WHAT IS SET IS TOO LONG FOR THE FORM:',
+          ...r.tooLong.map(t => `     ${t}`),
+          '     The site has never seen this string, so it cannot accept it.'] : []),
+        `  cookies held:   ${this.jar.size()} (${this.jar.names().join(', ') || 'none'})`,
+        `  JSESSIONID set: ${this.jar.has('JSESSIONID')}`,
+        '',
+        '  Every hop, in order:',
+        ...this.trace.map(t => `    ${String(t.status).padEnd(3)} ${t.method.padEnd(4)} ${t.url}${t.to ? `  ->  ${t.to}` : ''}${t.setCookies.length ? `   [set: ${t.setCookies.join(', ')}]` : ''}`),
+        '',
+        '  The same pages with NO login, for comparison:',
+        ...Object.entries(control).map(([p, c]) => `    ${p}  ${c.bytes} bytes  ${say(c.signedIn)}`),
+        '  If the signed-in sizes match these, the password was not accepted.',
+        '-->',
       ].join('\n');
     } catch (err) {
       out['00-could-not-reach-the-login'] = `<!-- ${err.message} -->`;
@@ -135,7 +325,9 @@ export class Interval {
     const found = [];
     if (r?.ok) {
       const seen = new Set(paths);
-      for (const m of (r.html || '').matchAll(/href=["']([^"'#]+)["']/gi)) {
+      // The probe page is what a signed-in session actually sees, so its links are the ones
+      // worth following; the login answer is a redirect target and often carries none.
+      for (const m of `${r.probe || ''}${r.html || ''}`.matchAll(/href=["']([^"'#]+)["']/gi)) {
         const href = m[1];
         if (!/getaway|vacation|search|exchange|resort/i.test(href)) continue;
         const abs = href.startsWith('http') ? href : new URL(href, ORIGIN).pathname + (href.includes('?') ? '?' + href.split('?')[1] : '');
@@ -146,12 +338,22 @@ export class Interval {
       out['03-links-worth-following'] = `<!--\n${found.map(f => '  ' + f).join('\n') || '  (none on the landing page)'}\n-->`;
     }
 
-    // Ask for the pages either way. Signed out they come back as the login page, and that is
-    // itself the answer; signed in they are the thing we came for.
+    // Ask for the pages either way. Signed out they come back as the public version of the same
+    // page — which is exactly what the control run above captured, so the pair is the evidence.
+    const sizes = [];
     for (const p of [...paths, ...found]) {
-      try { out[p] = await (await this.req(p)).text(); }
-      catch (err) { out[p] = `<!-- ${err.message} -->`; }
+      try {
+        const html = await (await this.req(p)).text();
+        out[p] = html;
+        sizes.push(`    ${p}  ${html.length} bytes  ${readsAsSignedIn(html) === true ? 'signed in'
+          : readsAsSignedIn(html) === false ? 'NOT signed in' : 'cannot tell'}${
+          control[p] ? (control[p].bytes === html.length ? '   <-- IDENTICAL to the anonymous fetch' : '   (differs from anonymous)') : ''}`);
+      } catch (err) { out[p] = `<!-- ${err.message} -->`; }
       await new Promise((wait) => setTimeout(wait, 1500));
+    }
+    if (out['02-what-happened']) {
+      out['02-what-happened'] = out['02-what-happened'].replace(/-->$/,
+        ['', '  What the signed-in run got for each page:', ...sizes, '-->'].join('\n'));
     }
     return out;
   }
@@ -174,7 +376,16 @@ export class Interval {
     const body = tpl.replace('{from}', from).replace('{to}', to)
                     .replace('{guests}', String(guests)).replace('{location}', encodeURIComponent(location));
     const res = await this.req(path, { method: 'POST', body });
-    return parseGetaways(await res.text(), { location });
+    const html = await res.text();
+    // A results page served to an anonymous caller parses to zero rows, and zero rows is
+    // indistinguishable from "nothing free in Aruba this week". Say which it is: a watcher that
+    // reports nothing for months because it quietly lost its session is the failure that costs
+    // the most, precisely because it never looks like a failure.
+    if (readsAsSignedIn(html) === false) {
+      this.signedIn = false;
+      throw new Error('The session was signed out by the time the Getaway search ran — no results were read.');
+    }
+    return parseGetaways(html, { location });
   }
 }
 

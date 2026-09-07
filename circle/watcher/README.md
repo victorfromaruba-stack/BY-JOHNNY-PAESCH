@@ -88,10 +88,38 @@ node index.mjs --dump
 ```
 
 It signs in, saves the pages that session lands on into `watcher/dump/`, and stops. Those are
-ordinary HTML pages and **no password appears in them**. Send them over and
-`INTERVAL_SEARCH_PATH` and `INTERVAL_SEARCH_FIELDS` get filled in for good.
+ordinary HTML pages and **no password appears in them** — the trace records cookie *names*
+only. Send them over and `INTERVAL_SEARCH_PATH` and `INTERVAL_SEARCH_FIELDS` get filled in
+for good.
 
 Until then the watcher runs RedWeek only and says so in the log.
+
+### How to tell whether it actually got in
+
+Interval does not bounce an anonymous caller to the login page. It answers the very same URL,
+200 and all, with the public version of the page. Verified against the live site with no
+credentials:
+
+| asked for | got | says |
+|---|---|---|
+| `/web/cs?a=1000` | 200, lands on `/web/my/home` | Sign In |
+| `/web/my/home` | 200 | Sign In |
+| `/web/my/info/benefits/getaways` | 200 | Sign In |
+
+So the URL a login lands on proves nothing, and neither does an HTTP 200. `--dump` therefore
+fetches every page **twice** — once with the session, once with a brand-new jar and no login —
+and writes both, with sizes, into `02_what_happened.html`. If the two match, the password was
+not accepted. That file also carries every hop with its status, its redirect and which cookies
+it set, so a failed run can be read afterwards without another trip to the VPS.
+
+The login form itself, read off the live page: one form, `POST /web/my/auth/login`, fields
+`j_username` / `j_password` / `_spring_security_remember_me`, and **no CSRF token**. The
+password box is `maxlength="14"` and the login ID box `maxlength="33"` — a browser truncates
+silently as you type, so if `INTERVAL_PASS` is longer than 14 characters the site has never
+been shown that string. The watcher reads those limits off the form and refuses with a plain
+message rather than reporting a wrong password.
+
+`node session.test.mjs` covers all of this with a stub — no network, no credentials.
 
 ## What it will and will not post
 
