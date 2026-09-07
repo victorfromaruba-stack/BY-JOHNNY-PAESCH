@@ -13,6 +13,7 @@ import * as catalog from './views/catalog.js';
 import * as officer from './views/officer.js';
 import * as dealsView from './views/deals.js';
 import * as liveView from './views/live.js';
+import * as crewsView from './views/crews.js';
 import { icon } from './ui/icons.js';
 
 const ROUTES = [
@@ -37,6 +38,8 @@ const ROUTES = [
   { path: '/deals', view: dealsView.deals, title: 'Deals', auth: true },
   { path: '/live', view: liveView.live, title: 'Open right now', auth: true },
   { path: '/watching', view: dealsView.watching, title: 'What you are watching', auth: true },
+  { path: '/crews', view: crewsView.crews, title: 'Your crews', auth: true },
+  { path: '/crews/:id', view: crewsView.crewDetail, title: 'Crew', auth: true },
   { path: '/circle', view: officer.circle, title: 'The Circle', auth: true },
   { path: '/pool', view: officer.pool, title: 'The Pool', auth: true },
   { path: '/bank', view: officer.bank, title: 'The Banker’s inbox', auth: true, roles: ['treasurer', 'deputy'] },
@@ -205,7 +208,7 @@ function updateChrome(current) {
   // extra tabs that only three people can open.
   const main = me ? [{ path: '/home', label: 'Home' }, { path: '/stays', label: 'Stays' }, { path: '/trips', label: 'Trips' },
                      { path: '/deals', label: 'Deals', badge: unseen }, { path: '/pay', label: 'Send' },
-                     { path: '/circle', label: 'Circle' }, { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }, { path: '/live', label: 'What is open' }]
+                     { path: '/circle', label: 'Circle' }, { path: '/crews', label: 'Crews' }, { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }, { path: '/live', label: 'What is open' }]
                   : [{ path: '/rules', label: 'How it works' }];
   tabs.innerHTML = main.map(n => `<a href="#${n.path}"${path === n.path ? ' aria-current="page"' : ''}>${escapeHtml(n.label)}${
     n.badge ? `<span class="nav-badge">${n.badge > 9 ? '9+' : n.badge}</span>` : ''}</a>`).join('');

@@ -232,6 +232,115 @@ export class Store {
     return out;
   }
 
+  // ---------- crews ----------
+  // A crew is who you actually travel with: the four who split a villa, the family group, the
+  // ones who always go in October. It is named by the people in it and it has its own thread.
+  // Deliberately not the same thing as chipping in — a pledge is money on one booking, a crew
+  // outlives any week.
+  crews() { return (this.state.crews || []).filter(c => !c.archivedAt); }
+  crew(id) { return (this.state.crews || []).find(c => c.id === id) || null; }
+  crewRoster(crewId) {
+    return (this.state.crewMembers || []).filter(m => m.crewId === crewId)
+      .map(m => ({ ...m, member: this.member(m.memberId) }))
+      .filter(m => m.member);
+  }
+  /** The crews this person is in, most recently spoken in first. */
+  crewsFor(memberId) {
+    const mine = new Set((this.state.crewMembers || []).filter(m => m.memberId === memberId).map(m => m.crewId));
+    return this.crews().filter(c => mine.has(c.id))
+      .map(c => ({ ...c, lastAt: this.crewThread(c.id).at(-1)?.createdAt || c.createdAt }))
+      .sort(desc('lastAt'));
+  }
+  isInCrew(crewId, memberId = this.me?.id) {
+    return (this.state.crewMembers || []).some(m => m.crewId === crewId && m.memberId === memberId);
+  }
+  leadsCrew(crewId, memberId = this.me?.id) {
+    return (this.state.crewMembers || []).some(m => m.crewId === crewId && m.memberId === memberId && m.role === 'lead');
+  }
+  /** Oldest first, the way a conversation reads. Deleted lines keep their place as a tombstone. */
+  crewThread(crewId) {
+    return (this.state.crewMessages || []).filter(m => m.crewId === crewId).sort(asc('createdAt'));
+  }
+
+  async createCrew({ name, about = '' }) {
+    const me = this.me; if (!me) throw new Error('Sign in first');
+    const clean = String(name || '').trim();
+    if (clean.length < 2) throw new Error('A crew needs a name');
+    if (clean.length > 40) throw new Error('That name is too long — 40 characters at most');
+    const c = { id: uid('crw'), name: clean, about: String(about || '').trim() || null,
+      coverPath: null, createdBy: me.id, createdAt: nowIso(), archivedAt: null };
+    (this.state.crews ||= []).push(c);
+    // Naming it and being in it are one act. Splitting them is what made this unusable on the
+    // server for everybody but an admin.
+    (this.state.crewMembers ||= []).push({ crewId: c.id, memberId: me.id, role: 'lead', joinedAt: nowIso() });
+    this.log(me.id, 'crew.create', 'crew', c.id, { name: clean });
+    await this.commit('crews', 'crewMembers');
+    return c;
+  }
+  async addToCrew(crewId, memberId) {
+    const me = this.me; if (!me) throw new Error('Sign in first');
+    if (!this.crew(crewId)) throw new Error('No such crew');
+    if (!this.leadsCrew(crewId, me.id) && !this.hasRole('admin')) throw new Error('Only the crew’s lead can add people');
+    if (!this.member(memberId)) throw new Error('No such member');
+    if (this.isInCrew(crewId, memberId)) return null;
+    const row = { crewId, memberId, role: 'member', joinedAt: nowIso() };
+    (this.state.crewMembers ||= []).push(row);
+    this.log(me.id, 'crew.add', 'crew', crewId, { memberId });
+    await this.commit('crewMembers');
+    return row;
+  }
+  /** Leaving is always yours to do. The last lead has to hand it on first. */
+  async leaveCrew(crewId, memberId = this.me?.id) {
+    const me = this.me; if (!me) throw new Error('Sign in first');
+    if (memberId !== me.id && !this.leadsCrew(crewId, me.id) && !this.hasRole('admin')) {
+      throw new Error('That is not yours to do');
+    }
+    const roster = this.crewRoster(crewId);
+    const leads = roster.filter(m => m.role === 'lead');
+    if (leads.length === 1 && leads[0].memberId === memberId && roster.length > 1) {
+      throw new Error('Make somebody else the lead first');
+    }
+    this.state.crewMembers = (this.state.crewMembers || []).filter(m => !(m.crewId === crewId && m.memberId === memberId));
+    this.log(me.id, 'crew.leave', 'crew', crewId, { memberId });
+    await this.commit('crewMembers');
+  }
+  async renameCrew(crewId, patch) {
+    const me = this.me; if (!me) throw new Error('Sign in first');
+    if (!this.leadsCrew(crewId, me.id) && !this.hasRole('admin')) throw new Error('Only the crew’s lead can change this');
+    const c = this.crew(crewId); if (!c) throw new Error('No such crew');
+    if (patch.name !== undefined) {
+      const clean = String(patch.name).trim();
+      if (clean.length < 2 || clean.length > 40) throw new Error('A name is between 2 and 40 characters');
+      c.name = clean;
+    }
+    if (patch.about !== undefined) c.about = String(patch.about).trim() || null;
+    this.log(me.id, 'crew.rename', 'crew', crewId, patch);
+    await this.commit('crews');
+    return c;
+  }
+  async sendCrewMessage(crewId, body) {
+    const me = this.me; if (!me) throw new Error('Sign in first');
+    if (!this.isInCrew(crewId, me.id)) throw new Error('You are not in that crew');
+    const text = String(body || '').trim();
+    if (!text) throw new Error('Say something first');
+    if (text.length > 4000) throw new Error('That is too long for one message');
+    const m = { id: uid('msg'), crewId, memberId: me.id, body: text, momentId: null,
+      createdAt: nowIso(), editedAt: null, deletedAt: null };
+    (this.state.crewMessages ||= []).push(m);
+    await this.commit('crewMessages');
+    return m;
+  }
+  /** Your own words are yours to take back. Nobody else's are. */
+  async deleteCrewMessage(id) {
+    const me = this.me; if (!me) throw new Error('Sign in first');
+    const m = (this.state.crewMessages || []).find(x => x.id === id);
+    if (!m) throw new Error('No such message');
+    if (m.memberId !== me.id && !this.hasRole('admin')) throw new Error('Those are not your words');
+    m.deletedAt = nowIso(); m.body = null;
+    await this.commit('crewMessages');
+    return m;
+  }
+
   // ---------- standing ----------
   /**
    * Where a member stands. Named standingOf() because standing() was already taken, further

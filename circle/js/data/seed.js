@@ -264,5 +264,29 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
   const burnedAll = -ledger.filter(l => l.kind === 'burn').reduce((s2, l) => s2 + l.points, 0) / settings.pointsPerDollar;
   settings.reserveVerified = { balanceUsd: Math.round((backingAll + promoAll - burnedAll) * 100) / 100, at: '2026-09-04T18:00:00Z', byId: 'mem_vishnu' };
 
-  return { version: 2, seededAt: iso(now), settings, members, contributions, ledger, stays, roomTypes, watches: [], deals: [], redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, session: null };
+  // Two crews, so the preview shows what one looks like with a conversation in it rather than
+  // an empty screen. Sasha leads one, Victor is in both.
+  const crews = [
+    { id: 'crw_october', name: 'The October Four', about: 'The ones who always go in October',
+      coverPath: null, createdBy: 'mem_sasha', createdAt: '2026-06-14T19:20:00Z', archivedAt: null },
+    { id: 'crw_family', name: 'Croes family', about: null,
+      coverPath: null, createdBy: 'mem_daniela', createdAt: '2026-07-02T14:05:00Z', archivedAt: null },
+  ];
+  const crewMembers = [
+    { crewId: 'crw_october', memberId: 'mem_sasha', role: 'lead', joinedAt: '2026-06-14T19:20:00Z' },
+    { crewId: 'crw_october', memberId: 'mem_victor', role: 'member', joinedAt: '2026-06-14T19:31:00Z' },
+    { crewId: 'crw_october', memberId: 'mem_marcus', role: 'member', joinedAt: '2026-06-15T08:02:00Z' },
+    { crewId: 'crw_october', memberId: 'mem_ana', role: 'member', joinedAt: '2026-06-15T09:44:00Z' },
+    { crewId: 'crw_family', memberId: 'mem_daniela', role: 'lead', joinedAt: '2026-07-02T14:05:00Z' },
+    { crewId: 'crw_family', memberId: 'mem_victor', role: 'member', joinedAt: '2026-07-02T14:09:00Z' },
+  ];
+  const crewMessages = [
+    { id: 'msg_1', crewId: 'crw_october', memberId: 'mem_sasha', body: 'Surf Club villa sleeps eight. If four of us go in it is about a quarter each.', momentId: null, createdAt: '2026-09-02T15:10:00Z', editedAt: null, deletedAt: null },
+    { id: 'msg_2', crewId: 'crw_october', memberId: 'mem_marcus', body: 'I am short until November. Can we ask for it anyway and I close the gap with a top-up?', momentId: null, createdAt: '2026-09-02T15:22:00Z', editedAt: null, deletedAt: null },
+    { id: 'msg_3', crewId: 'crw_october', memberId: 'mem_victor', body: 'Yes. Ask for it, I quote it, and you accept when the points are there.', momentId: null, createdAt: '2026-09-02T16:04:00Z', editedAt: null, deletedAt: null },
+    { id: 'msg_4', crewId: 'crw_october', memberId: 'mem_ana', body: 'Second week of October works for me either way.', momentId: null, createdAt: '2026-09-03T09:12:00Z', editedAt: null, deletedAt: null },
+    { id: 'msg_5', crewId: 'crw_family', memberId: 'mem_daniela', body: 'Manchebo for the long weekend?', momentId: null, createdAt: '2026-09-05T11:40:00Z', editedAt: null, deletedAt: null },
+  ];
+
+  return { version: 2, seededAt: iso(now), settings, members, contributions, ledger, stays, roomTypes, watches: [], deals: [], redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, crews, crewMembers, crewMessages, moments: [], momentReactions: [], session: null };
 }

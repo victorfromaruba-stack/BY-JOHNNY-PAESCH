@@ -1846,7 +1846,7 @@ declare
     'accept_quote','add_watch','adjust_points','admin_add_member','admin_update_member',
     'available_points','cancel_redemption','claim_membership','close_month','committed_points',
     'complete_redemption','confirm_contribution','confirm_top_up','consecutive_months','covered_points',
-    'current_member_id','deal_matches_watch','decline_redemption','easter_sunday','has_role',
+    'create_crew','current_member_id','deal_matches_watch','decline_redemption','easter_sunday','has_role',
     'ledger_balance','ledger_is_append_only','log_audit','mark_watches_seen','my_matches',
     'pay_redemption','pledge_to_redemption','post_deal','promo_room','quote_points',
     'quote_redemption','record_direct_contribution','reject_contribution','release_expired_quotes',
@@ -2069,6 +2069,47 @@ create policy reactions_read on moment_reactions for select to authenticated
 drop policy if exists reactions_own on moment_reactions;
 create policy reactions_own on moment_reactions for all to authenticated
   using (member_id = current_member_id()) with check (member_id = current_member_id());
+
+-- Naming a crew and being in it are one act, not two.
+--
+-- crew_members_write lets a lead add people, and leads_crew() asks whether you already hold a
+-- lead row. A crew that was just created has no rows at all, so the person who made it could
+-- not put themselves in it. Verified live with admin taken away: "name a crew: OK / join it as
+-- lead: REFUSED", which made crews unusable by everyone except Victor, who slipped through on
+-- has_role('admin').
+--
+-- Definer, so the two inserts happen together or not at all. It deliberately does NOT loosen
+-- crew_members_write: letting anyone insert their own row into any crew would let them read
+-- that crew's messages, because in_crew() is what gates them. Checked, with admin removed: a
+-- stranger still cannot walk into someone else's crew, cannot make themselves its lead, and
+-- reads none of its messages before or after trying.
+create or replace function create_crew(p_name text, p_about text default null)
+returns uuid
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := current_member_id();
+  mine int;
+  newid uuid;
+begin
+  if me is null then raise exception 'You are not on the Circle''s list'; end if;
+  if length(btrim(coalesce(p_name,''))) < 2 then raise exception 'A crew needs a name'; end if;
+  if length(btrim(p_name)) > 40 then raise exception 'That name is too long — 40 characters at most'; end if;
+
+  select count(*) into mine from crews c
+    where c.created_by = me and c.archived_at is null;
+  if mine >= 25 then
+    raise exception 'You have 25 crews already. Archive one before starting another.';
+  end if;
+
+  insert into crews (name, about, created_by)
+    values (btrim(p_name), nullif(btrim(coalesce(p_about,'')), ''), me)
+    returning id into newid;
+  insert into crew_members (crew_id, member_id, role) values (newid, me, 'lead');
+  return newid;
+end $$;
+
+revoke all on function create_crew(text, text) from public, anon;
+grant execute on function create_crew(text, text) to authenticated;
 
 revoke all on function in_crew(uuid), leads_crew(uuid) from public, anon;
 grant execute on function in_crew(uuid), leads_crew(uuid) to authenticated;

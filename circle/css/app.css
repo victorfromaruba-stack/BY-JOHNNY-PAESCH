@@ -477,6 +477,49 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 .tier-compare.mine { border-color: var(--ink); background: var(--surface); }
 .tier-compare .tier-detail > div:first-child { padding-top: 10px; border-top: 1px solid var(--hairline-soft); }
 
+/* Crews: who you travel with, and their thread. A conversation, not a feed — so the bubbles
+   are close together, the day rules are quiet, and your own words sit on the right. */
+.crew-card { display: block; color: inherit; text-decoration: none; }
+.crew-card:hover { border-color: var(--ink-3); }
+.faces { display: inline-flex; align-items: center; }
+.faces > * { margin-left: -8px; border: 2px solid var(--surface); border-radius: 50%; }
+.faces > *:first-child { margin-left: 0; }
+.face-rest { display: inline-grid; place-items: center; width: 30px; height: 30px; margin-left: -8px;
+  border-radius: 50%; background: var(--raised); color: var(--ink-2); font-size: .7rem; font-weight: 600;
+  border: 2px solid var(--surface); }
+
+.roster { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.roster li { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 0; border-top: 1px solid var(--hairline-soft); }
+.roster li:first-child { border-top: 0; }
+
+.thread { max-height: 52vh; overflow-y: auto; display: grid; gap: 8px; padding: 6px 2px 12px;
+  scrollbar-width: thin; }
+.thread-day { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; }
+.thread-day::before, .thread-day::after { content: ""; flex: 1; height: 1px; background: var(--hairline-soft); }
+.thread-day span { font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.msg { display: flex; align-items: flex-end; gap: 8px; }
+.msg.mine { justify-content: flex-end; }
+.msg .bubble { max-width: min(78%, 46ch); padding: 8px 12px; border-radius: 14px;
+  background: var(--raised); overflow-wrap: anywhere; }
+.msg.mine .bubble { background: var(--good-soft); border-bottom-right-radius: 4px; }
+.msg:not(.mine) .bubble { border-bottom-left-radius: 4px; }
+.msg .who { display: block; font-size: .74rem; color: var(--ink-2); margin-bottom: 2px; }
+.msg .what { display: block; line-height: 1.45; }
+.msg .when { display: block; margin-top: 3px; font-size: .66rem; color: var(--ink-3); text-align: right; }
+.msg.gone .bubble { background: transparent; border: 1px dashed var(--hairline);
+  color: var(--ink-3); font-style: italic; font-size: .82rem; }
+.unsay { background: none; border: 0; color: var(--ink-3); cursor: pointer; padding: 0 0 0 6px;
+  font-size: .9rem; line-height: 1; }
+.unsay:hover { color: var(--flag); }
+
+.say-row { display: flex; gap: 8px; margin-top: 10px; }
+.say-row input { flex: 1; min-width: 0; padding: 11px 14px; border-radius: var(--r-pill);
+  border: 1px solid var(--hairline); background: var(--surface); color: inherit; font: inherit; }
+.say-row input:focus { outline: 2px solid var(--good); outline-offset: 1px; }
+.say-row .btn { flex: none; border-radius: 50%; width: 44px; height: 44px; padding: 0;
+  display: grid; place-items: center; }
+
 /* An officer's work, inside the member's own screens. There is no separate admin app: this is
    a list on Home when something is waiting, and the same list under a profile, always. */
 .job-panel { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
@@ -492,3 +535,8 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 .job-what { flex: 1; min-width: 0; }
 .job-what .small { display: block; margin-top: 3px; }
 .job-list a > svg:last-child { flex: none; margin-top: 8px; }
+
+/* A back link points back. The icon set has only a right chevron, so it is turned around
+   rather than drawn twice. */
+.back { display: inline-flex; align-items: center; gap: 4px; }
+.back svg { transform: rotate(180deg); }

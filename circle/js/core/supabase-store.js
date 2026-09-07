@@ -124,7 +124,11 @@ export class SupabaseStore extends Store {
     this.channel = this.sb.channel('circle-live');
     // Deals are the whole point of the live channel: a deal posted at eleven at night has
     // to be on everyone's phone without them refreshing.
-    ['contributions', 'redemptions', 'ledger', 'announcements', 'deals', 'watches'].forEach(t => this.channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => this.reload()));
+    // crew_messages is here for the same reason: a thread that only updates when you reload
+    // is not a conversation. Row-level security still decides what comes back on the reload,
+    // so listening for the event tells this browser nothing it could not already read.
+    ['contributions', 'redemptions', 'ledger', 'announcements', 'deals', 'watches', 'crew_messages', 'crew_members']
+      .forEach(t => this.channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => this.reload()));
     this.channel.subscribe();
   }
   notify(reason) { this.listeners.forEach(fn => fn(reason, this.state)); }
@@ -340,6 +344,59 @@ export class SupabaseStore extends Store {
     return d ? { ...d, from: d.fromDate, to: d.toDate } : d;
   }
   async retireDeal(id, _actorId, reason = '') { return this.rpc('retire_deal', { p_id: id, p_reason: reason }); }
+
+  // ---------- crews ----------
+  // These are ordinary table writes: row-level security decides who may do what, so there is
+  // nothing here to enforce twice. The one exception is making a crew, which has to insert the
+  // crew and its first lead together — a half-made crew has no lead, and then nobody can add
+  // one, which is exactly the hole create_crew() exists to close.
+  async createCrew({ name, about = '' }) {
+    const id = await this.rpc('create_crew', { p_name: name, p_about: about || null });
+    await this.reload();
+    return this.crew(id) || { id, name, about };
+  }
+  async addToCrew(crewId, memberId) {
+    const { error } = await this.sb.from('crew_members').insert({ crew_id: crewId, member_id: memberId, role: 'member' });
+    if (error) throw new Error(/row-level security/i.test(error.message)
+      ? 'Only the crew’s lead can add people' : error.message);
+    await this.reload();
+  }
+  async leaveCrew(crewId, memberId = this.me?.id) {
+    const roster = this.crewRoster(crewId);
+    const leads = roster.filter(m => m.role === 'lead');
+    if (leads.length === 1 && leads[0].memberId === memberId && roster.length > 1) {
+      throw new Error('Make somebody else the lead first');
+    }
+    const { error } = await this.sb.from('crew_members').delete().eq('crew_id', crewId).eq('member_id', memberId);
+    if (error) throw new Error(error.message);
+    await this.reload();
+  }
+  async renameCrew(crewId, patch) {
+    const row = {};
+    if (patch.name !== undefined) row.name = String(patch.name).trim();
+    if (patch.about !== undefined) row.about = String(patch.about).trim() || null;
+    const { error } = await this.sb.from('crews').update(row).eq('id', crewId);
+    if (error) throw new Error(/row-level security/i.test(error.message)
+      ? 'Only the crew’s lead can change this' : error.message);
+    await this.reload();
+  }
+  async sendCrewMessage(crewId, body) {
+    const text = String(body || '').trim();
+    if (!text) throw new Error('Say something first');
+    const { error } = await this.sb.from('crew_messages')
+      .insert({ crew_id: crewId, member_id: this.me.id, body: text });
+    if (error) throw new Error(/row-level security/i.test(error.message)
+      ? 'You are not in that crew' : error.message);
+    await this.reload();
+  }
+  async deleteCrewMessage(id) {
+    // The row stays, so the conversation keeps its shape; only the words go.
+    const { error } = await this.sb.from('crew_messages')
+      .update({ body: null, deleted_at: new Date().toISOString() }).eq('id', id);
+    if (error) throw new Error(/row-level security/i.test(error.message)
+      ? 'Those are not your words' : error.message);
+    await this.reload();
+  }
 
   async setGoal(_memberId, goal) { return this.rpc('set_my_goal', { p_goal: goal }); }
   async recordDirectContribution({ memberId, amountUsd, forMonth = null, method = 'cash', currency = 'USD', note = '' }) {
