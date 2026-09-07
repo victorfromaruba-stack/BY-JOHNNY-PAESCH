@@ -152,7 +152,8 @@ ok(!JSON.stringify(out).includes('shortpw'), 'the password appears in none of th
   ok(tookMs < 5000, `and it gives up rather than hanging the pass (${Math.round(tookMs)}ms)`);
 }
 
-// The residential proxy, which Interval needs because a VPS is a datacenter address.
+// An ordinary outbound proxy, for a network that requires one. Not a way to change where the
+// traffic appears to come from — there is no setting for that, deliberately.
 {
   const p = splitProxy('http://user:p%40ss@res.example.net:8080', '<-loopback>');
   ok(p.server === 'http://res.example.net:8080', `credentials are split off the server (${p.server})`);

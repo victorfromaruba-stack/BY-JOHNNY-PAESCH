@@ -97,6 +97,28 @@ for good.
 
 Until then the watcher runs RedWeek only and says so in the log.
 
+### Interval is off, and turning it on is a decision, not a setting
+
+**The watcher ships RedWeek-only.** RedWeek needs no login, works today, and finds around 138
+open weeks a pass across the six resorts. Interval is switched off unless `WATCH_INTERVAL=on`
+is set deliberately — having `INTERVAL_USER` in `.env` is not enough.
+
+Two things to weigh before turning it on, both of which land on Victor rather than on the code:
+
+- **Interval's terms very likely prohibit automated collection of Getaways.** Worth ten minutes
+  reading them. This is Victor's own membership; a breach costs him the membership, not us.
+- **Repeatedly tripping bot management can get a real account flagged**, and an automated login
+  that keeps failing is exactly that pattern.
+
+Where the line sits, as this code draws it: sending back the site's own `OWASP_CSRFTOKEN` and
+letting the page's own JavaScript run is *using the form as built*. Routing the traffic through
+a residential address so it does not look like a datacenter is *circumventing a control the
+site deliberately put up*. The first is here; the second is not, and there is no setting for it
+— that was tried, recognised for what it was, and taken back out.
+
+If Interval is turned on and the login keeps failing, the honest reading is that they do not
+want this, and the answer is to stop rather than to try harder.
+
 ### Interval needs a browser. RedWeek does not.
 
 Three things stand between a plain `fetch()` and the Getaway pages, each read off the live
@@ -135,15 +157,10 @@ Two of those need a JavaScript engine. So **Interval is driven by Playwright**
 login and already works, finding around 138 open weeks a pass.
 
 ```sh
+WATCH_INTERVAL=on            # Interval is OFF unless this is set. See below.
 WATCH_BROWSER=firefox        # or chromium; whichever is installed
 WATCH_INTERVAL_MODE=browser  # the default. `fetch` uses the old plain-HTTP client.
-INTERVAL_PROXY=              # optional: route Interval only, through a residential proxy
 ```
-
-`INTERVAL_PROXY` exists because a VPS is a datacenter address and bot management treats those
-differently from a phone. It takes `http://user:pass@host:port`; the credentials are split out
-for the browser and never logged — the dump records the host alone. It applies to Interval
-only, so RedWeek keeps going out directly.
 
 If Playwright is missing the watcher says so and carries on with RedWeek rather than dying.
 

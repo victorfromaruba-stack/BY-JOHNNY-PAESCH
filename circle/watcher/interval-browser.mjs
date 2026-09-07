@@ -61,8 +61,9 @@ async function playwright() {
 /**
  * A proxy URL as Playwright wants it: server without credentials, credentials beside it.
  *
- * Residential proxies are nearly always `http://user:pass@host:port`, and passing that whole
- * string as `server` fails — the credentials have to be separate. Returns null for no proxy.
+ * This is for an ordinary outbound proxy — a network that requires one — read from HTTPS_PROXY,
+ * the same variable everything else on the machine uses. Passing a whole `user:pass@host` string
+ * as `server` fails, hence the split. Returns null for no proxy.
  */
 export function splitProxy(url, bypass) {
   if (!url) return null;
@@ -93,12 +94,11 @@ export class IntervalBrowser {
     if (this._page) return this._page;
     const pw = await playwright();
     const engine = pw[this.browserName] || pw.chromium;
-    // INTERVAL_PROXY first, because it is a different thing from HTTPS_PROXY: a VPS is a
-    // datacenter address, and bot management treats those differently from the phone in
-    // somebody's hand. Routing Interval — and only Interval — through a residential proxy is
-    // the answer to that, so it gets its own setting rather than moving the whole watcher.
-    // Credentials may be in the URL and are never logged.
-    const proxy = process.env.INTERVAL_PROXY || process.env.HTTPS_PROXY || process.env.https_proxy;
+    // Whatever proxy the machine already uses, if any. Deliberately NOT a separate setting for
+    // Interval: a proxy chosen to make this traffic look like it comes from somewhere else is
+    // circumventing bot management rather than using the site, and that is not a line this
+    // watcher crosses. Credentials, if the network needs them, are never logged.
+    const proxy = process.env.HTTPS_PROXY || process.env.https_proxy;
     // NO_PROXY has to be passed on too, or the browser sends even localhost to the proxy.
     // Chromium's bypass list is not NO_PROXY: it does not understand CIDR blocks, and one
     // entry it cannot parse makes it discard the whole list. So the loopback is asked for by

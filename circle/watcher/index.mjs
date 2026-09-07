@@ -127,7 +127,14 @@ async function pass(circle) {
   });
   found.push(...rw);
 
-  if (process.env.INTERVAL_USER) {
+  // Interval is off unless it is deliberately switched on, and having a username set is not
+  // deliberate enough. RedWeek needs no login, works today, and finds around 138 open weeks a
+  // pass across the six resorts — so the watcher does its job either way, and Interval is a
+  // separate decision rather than a blocker. See the README on what that decision involves.
+  const wantsInterval = /^(1|on|true|yes)$/i.test(process.env.WATCH_INTERVAL || '');
+  if (!wantsInterval) {
+    log('Interval: off (WATCH_INTERVAL is not set) — RedWeek only');
+  } else if (process.env.INTERVAL_USER) {
     let iv = null;
     try {
       // Interval needs a real browser and RedWeek does not. Two of the three things standing
