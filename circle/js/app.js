@@ -104,6 +104,20 @@ async function boot() {
   mountChrome();
   router.start();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    // Was there already a worker in charge when this page loaded? If so, the page we are looking
+    // at was served from its cache, and a NEW worker taking over means what we are looking at is
+    // out of date. Reload once, so a release is one visit away instead of two.
+    //
+    // Guarded on the existing controller because controllerchange also fires the very first time
+    // a worker installs, and reloading a first visit for no reason would be worse than the bug.
+    // `reloaded` stops the loop if anything ever makes the new worker hand over twice.
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloaded) return;
+      reloaded = true;
+      location.reload();
+    });
     navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* offline extras are optional */ });
   }
 }

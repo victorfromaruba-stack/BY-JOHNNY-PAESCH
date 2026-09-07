@@ -22,6 +22,22 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+
+      # Stamp the service worker's cache name with this commit.
+      #
+      # The cache name is the ONLY thing that evicts a browser's stored copy of the app. It was
+      # bumped by hand, which means it was not bumped: it sat at 'hunto-v10' across a run of
+      # releases, so anyone who had opened the site before kept being served the old hero, the
+      # old stylesheet and the old JavaScript, and every change shipped in that time was
+      # invisible to them. Doing it here means a deploy cannot forget.
+      - name: Stamp the service worker with this commit
+        run: |
+          set -euo pipefail
+          sed -i "s/^const VERSION = '[^']*';/const VERSION = 'hunto-${GITHUB_SHA:0:12}';/" circle/sw.js
+          grep -q "hunto-${GITHUB_SHA:0:12}" circle/sw.js \
+            || { echo "::error::sw.js cache version was not stamped — browsers would keep serving the old app"; exit 1; }
+          grep -n "^const VERSION" circle/sw.js
+
       - uses: actions/configure-pages@v5
         with:
           enablement: true
