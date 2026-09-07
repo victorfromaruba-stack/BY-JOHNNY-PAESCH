@@ -1,3 +1,21 @@
+-- !! THIS FILE IS BEHIND THE LIVE DATABASE. DO NOT RUN IT AGAINST THE LIVE PROJECT. !!
+--
+-- It is the record of how the schema was built, not the current state of it. Verified against
+-- project cdkopyphjvfxjqhasrae, these exist live and are absent or stale here:
+--
+--   functions only live:   buy_badge, pin_badges, rank_ladder, standing_of, months_held
+--   views only live:       standing_v
+--   columns only live:     members.about, members.accent, members.cover
+--   stale here:            update_my_profile (the live one also writes about / accent / cover)
+--
+-- `create or replace function` does not merge — running this file replaces the live
+-- update_my_profile with the older one and members silently stop being able to save their
+-- profile, which is exactly the bug an audit reported against this file and which turned out
+-- not to exist in production at all.
+--
+-- To change the live schema, write a migration against it and then bring this file forward.
+-- The tiers default below is now correct; the rest of the drift above is not yet closed.
+
 -- =====================================================================
 --  Hunto — the Inner Circle
 --  Schema, row-level security and the money rules, for Supabase/Postgres.
@@ -31,10 +49,15 @@ create table if not exists settings (
   service_rate      numeric(5,4) not null default 0.15,
   points_per_dollar int not null default 100,
   awg_per_usd       numeric(6,3) not null default 1.79,
+  -- Must stay identical to DEFAULT_SETTINGS.tiers in js/core/money.js. This default had drifted
+  -- back to the ladder money.js calls "a rounding error" — $200 with the same open requests as
+  -- $150, one extra month of window, and no slaHours key at all — so running this file against
+  -- the live project would have silently undone the ladder and made the landing page promise
+  -- every member the same 72-hour answer. The live row is correct; this line was not.
   tiers             jsonb not null default
-    '[{"id":"t100","monthlyUsd":100,"bonusRate":0,"holds":1,"guestCerts":2,"windowMonths":10,"firstLookHours":0},
-      {"id":"t150","monthlyUsd":150,"bonusRate":0.02,"holds":2,"guestCerts":3,"windowMonths":12,"firstLookHours":48},
-      {"id":"t200","monthlyUsd":200,"bonusRate":0.04,"holds":2,"guestCerts":4,"windowMonths":13,"firstLookHours":72}]',
+    '[{"id":"t100","monthlyUsd":100,"bonusRate":0,"holds":1,"guestCerts":2,"windowMonths":9,"firstLookHours":0,"slaHours":72},
+      {"id":"t150","monthlyUsd":150,"bonusRate":0.03,"holds":3,"guestCerts":4,"windowMonths":15,"firstLookHours":48,"slaHours":48},
+      {"id":"t200","monthlyUsd":200,"bonusRate":0.06,"holds":5,"guestCerts":8,"windowMonths":24,"firstLookHours":168,"slaHours":24}]',
   streak_bonuses    jsonb not null default '{"6":1000,"12":2500,"24":5000}',
   founding_bonus    int not null default 2000,
   founding_seats    int not null default 20,

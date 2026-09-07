@@ -106,6 +106,9 @@ export class SupabaseStore extends Store {
     this.state.stays = this.state.stays.map(s => ({ ...s,
       rates: { low: Number(s.rateLowUsd), high: Number(s.rateHighUsd), peak: Number(s.ratePeakUsd) },
       retailUsd: Number(s.retailUsd || 0),
+      // What the public sites were asking, and when. toCamel does not recurse, so the nested
+      // keys arrive exactly as stored. Defaulted so every reader can assume an object.
+      sources: (s.sources && typeof s.sources === 'object') ? s.sources : {},
       dates: s.startsOn ? { from: s.startsOn, to: s.endsOn } : undefined }));
     // Nobody signed in can read the stays table — every policy is `to authenticated`, on
     // purpose. But the public page still has to show what the Circle is for, and the same

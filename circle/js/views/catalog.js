@@ -109,28 +109,43 @@ export function stayDetail({ store, params, go }) {
       <p class="lede" style="margin-top:12px">${escapeHtml(stay.vibe)}</p>
       <div class="stay-card daylight" style="margin-top:20px;border-radius:var(--r-card)"><span class="strip"><span class="ph-note">illustration</span></span></div>
       <div class="row" style="margin-top:14px">${(stay.features || []).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</div>
-      ${stay.sources ? `<div class="panel" style="margin-top:16px">
-        <h3>Where a week here comes from</h3>
-        <p class="small muted" style="margin-top:6px">Interval is the cheapest most of the time — but it is surplus
-          inventory, so it is not always there, and an owner on RedWeek sometimes beats it. Victor checks both before
-          he books, which is the whole reason the Circle can price this the way it does.</p>
-        <div class="tablewrap" style="margin-top:12px;border:0"><table>
-          <thead><tr><th>Where</th><th class="num">Seen at</th><th>What it is</th></tr></thead>
-          <tbody>
-            ${stay.sources.interval ? `<tr${stay.sources.best === 'interval' ? ' class="best"' : ''}>
-              <td><b>Interval</b>${stay.sources.best === 'interval' ? ' <span class="tag house">usually cheapest</span>' : ''}</td>
-              <td class="num">${escapeHtml(fmtUsd2(stay.sources.interval.seenUsd))}</td>
-              <td class="small muted">${escapeHtml(stay.sources.interval.note)}</td></tr>` : ''}
-            ${stay.sources.redweek ? `<tr${stay.sources.best === 'redweek' ? ' class="best"' : ''}>
-              <td><b>RedWeek</b>${stay.sources.best === 'redweek' ? ' <span class="tag house">usually cheapest</span>' : ''}</td>
-              <td class="num">${escapeHtml(fmtUsd2(stay.sources.redweek.fromUsd))}</td>
-              <td class="small muted">${escapeHtml(stay.sources.redweek.note)}</td></tr>` : ''}
-            <tr><td><b>The resort</b></td><td class="num">${escapeHtml(fmtUsd2(stay.retailUsd || 0))}</td>
-              <td class="small muted">What it costs booking direct, for comparison</td></tr>
-          </tbody></table></div>
-        <p class="tiny muted" style="margin-top:10px">A night, both seen ${escapeHtml(fmtDay(stay.sources.interval?.seenOn || stay.sources.redweek?.seenOn))}.
-          These move — the number you are quoted is the one Victor actually finds on the day.</p>
-      </div>` : ''}
+      ${(() => {
+        // Where the number came from, ALWAYS — including when the answer is "nowhere yet".
+        //
+        // This panel used to render only when `stay.sources` existed, and no live row had it,
+        // because the column did not exist. The one audience who saw it was signed-OUT
+        // visitors, through the fallback to the bundled catalog — so a stranger saw the
+        // evidence and a member never did. It now says something on every stay, and it never
+        // shows a figure without the date it was seen: an undated price comparison is worth
+        // nothing, and a six-month-old one is worse than nothing.
+        const src = stay.sources || {};
+        const rows = [];
+        if (src.interval?.seenUsd) rows.push(['Interval', src.interval.seenUsd, src.interval.seenOn, src.interval.note, src.best === 'interval']);
+        if (src.redweek?.fromUsd) rows.push(['RedWeek', src.redweek.fromUsd, src.redweek.seenOn, src.redweek.note, src.best === 'redweek']);
+        const seenOn = src.interval?.seenOn || src.redweek?.seenOn || null;
+        const daysOld = seenOn ? Math.floor((Date.now() - Date.parse(seenOn)) / 864e5) : null;
+        const stale = daysOld != null && daysOld > 60;
+        return `<div class="panel" style="margin-top:16px">
+          <h3>Where this price comes from</h3>
+          ${rows.length ? `
+            <p class="small muted" style="margin-top:6px">What the public sites were asking for a week here, the last time anyone looked. Interval is surplus inventory so it is not always there, and an owner on RedWeek sometimes beats it.</p>
+            <div class="tablewrap" style="margin-top:12px;border:0"><table>
+              <thead><tr><th>Where</th><th class="num">Asking</th><th>Seen</th></tr></thead>
+              <tbody>
+                ${rows.map(([where, usd, on, note, best]) => `<tr${best ? ' class="best"' : ''}>
+                  <td><b>${escapeHtml(where)}</b>${best ? ' <span class="tag house">usually cheapest</span>' : ''}
+                    ${note ? `<br><span class="small muted">${escapeHtml(note)}</span>` : ''}</td>
+                  <td class="num">${escapeHtml(fmtUsd2(usd))}</td>
+                  <td class="small muted">${on ? escapeHtml(fmtDay(on)) : '<b>undated</b>'}</td></tr>`).join('')}
+                <tr><td><b>The resort</b><br><span class="small muted">Booking direct, for comparison</span></td>
+                  <td class="num">${escapeHtml(fmtUsd2(stay.retailUsd || 0))}</td><td class="small muted">—</td></tr>
+              </tbody></table></div>
+            <p class="tiny ${stale ? '' : 'muted'}" style="margin-top:10px">${stale
+              ? `Last checked ${daysOld} days ago — old enough to have moved. Victor re-checks before he quotes you.`
+              : 'A night. These move; the number you are quoted is the one Victor actually finds on the day.'}</p>`
+          : `<p class="small muted" style="margin-top:6px">Nobody has checked this one against the booking sites yet, so the rate above is the Circle&rsquo;s own negotiated number and nothing else. Victor checks Interval and RedWeek before he books, and what he finds goes here.</p>`}
+        </div>`;
+      })()}
       ${stay.dealNote ? `<div class="notice" style="margin-top:16px"><b>From Victor</b><p class="small">${escapeHtml(stay.dealNote)}</p></div>` : ''}
       <div class="side" style="margin-top:22px">
         <div class="panel" id="pricing"></div>
