@@ -108,3 +108,34 @@ Cheapest first, because each one is independently shippable:
 4. **Shorten the long pages** with progressive disclosure, not by removing information.
 5. **Motion and state feedback** last — it is the layer that makes the rest feel intentional,
    and it is wasted effort under a layout that is still wrong.
+
+
+## Does it work, though — the interaction sweep
+
+`scripts/interact.mjs` clicks every visible control on every route as three roles and reports
+any where nothing observable happens. Last full run:
+
+**537 controls clicked across 3 roles × 22 routes in 9.5 minutes. Every one of them did
+something.** The only suspects were `/bank` "Copy", which the verify pass found working on a
+clean page — the sweep had already put the same text on the clipboard, so the second click
+genuinely changed nothing.
+
+That is a real answer to "I am not convinced it is 100% functional", but be precise about what
+it proves: every control *reacts*. It does not prove any of them does the *right* thing. For
+that, the gate tests and the smoke test are the evidence.
+
+Four ways this script lied before it could be trusted, all worth knowing if you write another
+like it:
+
+- **`'#app ' + 'button, a[href]'` scopes only the first clause.** It swept in the whole topbar
+  and bottom nav, then could not find them again under `#app`, and skipped three quarters of
+  what it claimed to cover — while reporting a confident-looking control count.
+- **A click that acts outside the page looks identical to a dead one.** Share (`window.open`),
+  Print, Export CSV and every `target="_blank"` link were all reported dead. Count the calls in
+  the page rather than waiting on `page.on('popup')`, which arrives seconds later — long after
+  any sane probe window.
+- **One control can poison every route after it.** `/profile` has a Sign out button; once the
+  sweep pressed it, `/settings` reported three controls instead of forty-seven, and the number
+  looked plausible enough to believe.
+- **Hidden is not dead.** A control inside a collapsed pane still matches `querySelectorAll` and
+  still takes a `.click()`, and reports dead because it is not there to react.
