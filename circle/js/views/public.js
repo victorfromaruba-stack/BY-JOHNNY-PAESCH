@@ -140,6 +140,11 @@ export function landing({ store, go }) {
           <source media="(min-width:901px)" srcset="assets/hero-tall.jpg">
           <img src="assets/hero.jpg" alt="Shallow turquoise water over white sand, late in the afternoon" fetchpriority="high" decoding="async">
         </picture>
+        <!-- The still paints first and always. The video is layered over it and only fades in
+             once it can actually play, and only when the browser says that is a reasonable thing
+             to spend somebody's data on. Its poster frame IS this image, so there is no jump at
+             the swap — you cannot see the moment the water starts moving. -->
+        <video class="hero-video" muted loop playsinline preload="none" aria-hidden="true" tabindex="-1"></video>
         <figcaption>${icon('mapPin', { size: 14 })}The west coast — every place on the list is on this water or ten minutes from it.</figcaption>
       </figure>
       <div class="hero-gauge enter" style="--d:180ms">
@@ -154,6 +159,40 @@ export function landing({ store, go }) {
         </div>
       </div>
     </div></section>`));
+  // The hero video, added only when it is a reasonable thing to spend somebody's data on.
+  //
+  // The still has already painted by the time this runs, and it stays as the base layer, so a
+  // refusal here costs nothing — the page simply looks the way it did before. Reasons to refuse:
+  // the viewer asked for less motion, the browser is in data-saver mode, or the connection is
+  // slow. Aruban mobile data is the normal case for this club, not the edge case.
+  (() => {
+    const v = wrap.querySelector('.hero-video');
+    if (!v) return;
+    const conn = navigator.connection || {};
+    const wants = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const cheap = !conn.saveData && !/2g/.test(conn.effectiveType || '');
+    if (!wants || !cheap) return;
+    // Same breakpoint as the stills: the tall crop belongs to the WIDE viewport, because the
+    // frame is 4:5 above 900px and 16:10 below it.
+    const tall = window.matchMedia('(min-width: 901px)').matches;
+    v.poster = tall ? 'assets/hero-tall.jpg' : 'assets/hero.jpg';
+    // Both codecs, webm first. H.264 is universal on the browsers members actually use, but
+    // Firefox and every open-source Chromium build ship VP9 and not H.264 — including the one
+    // this project's own tests run in, which is how this got caught rather than shipped blind.
+    const stem = tall ? 'assets/hero-tall' : 'assets/hero';
+    for (const [ext, type] of [['webm', 'video/webm'], ['mp4', 'video/mp4']]) {
+      const src = document.createElement('source');
+      src.src = `${stem}.${ext}`; src.type = type;
+      v.appendChild(src);
+    }
+    v.addEventListener('canplay', () => {
+      v.classList.add('ready');
+      // Autoplay can still be refused; if it is, the still is already there and nothing breaks.
+      v.play().catch(() => v.classList.remove('ready'));
+    }, { once: true });
+    v.load();
+  })();
+
   if (!blind) wrap.querySelector('#gauge-slot').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, configured: t.accountsConfigured, size: 'full' }));
 
   wrap.appendChild(el(`<section class="sec statement"><div class="wrap">

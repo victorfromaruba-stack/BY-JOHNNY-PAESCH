@@ -848,3 +848,13 @@ button.badge-card:hover { border-color: var(--ink-3); }
   #filters.open { display: block; }
 }
 @media (min-width: 780px) { #ftoggle { display: none; } }
+
+/* The hero video sits over the still that already painted, and only becomes visible once it can
+   actually play. Fading in over its own first frame means the swap is invisible — the water
+   simply starts moving. If it never loads, never plays, or the viewer asked for less motion,
+   the still underneath is the design and nothing looks broken. */
+.hero-shot .hero-video { position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; opacity: 0; transition: opacity var(--dur-water) var(--ease-out);
+  pointer-events: none; }
+.hero-shot .hero-video.ready { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .hero-shot .hero-video { display: none; } }
