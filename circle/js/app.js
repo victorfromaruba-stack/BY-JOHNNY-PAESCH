@@ -197,20 +197,25 @@ function updateChrome(current) {
   const who = document.getElementById('who');
   const list = document.getElementById('botnav-list');
   const path = current.path;
-  const roleTabs = [];
-  if (store.canConfirmMoney()) roleTabs.push({ path: '/bank', label: 'Bank' });
-  if (store.hasRole('planner', 'comms', 'admin')) roleTabs.push({ path: '/desk', label: 'Desk' });
-  if (store.hasRole('admin', 'treasurer')) roleTabs.push({ path: '/settings', label: 'Settings' });
   // How many deals answer something this member asked for and has not looked at yet.
   const unseen = me ? (() => { try { return store.unseenMatches(me.id).length; } catch { return 0; } })() : 0;
+  // One set of tabs, the same for everybody. Victor, Ian and Vishnu hold seats like everyone
+  // else and happen to have jobs on top, so their jobs live inside the member's own screens —
+  // on Home when something is waiting, and always under their profile — rather than as three
+  // extra tabs that only three people can open.
   const main = me ? [{ path: '/home', label: 'Home' }, { path: '/stays', label: 'Stays' }, { path: '/trips', label: 'Trips' },
                      { path: '/deals', label: 'Deals', badge: unseen }, { path: '/pay', label: 'Send' },
-                     { path: '/circle', label: 'Circle' }, { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }, { path: '/live', label: 'What is open' }, ...roleTabs]
+                     { path: '/circle', label: 'Circle' }, { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }, { path: '/live', label: 'What is open' }]
                   : [{ path: '/rules', label: 'How it works' }];
   tabs.innerHTML = main.map(n => `<a href="#${n.path}"${path === n.path ? ' aria-current="page"' : ''}>${escapeHtml(n.label)}${
     n.badge ? `<span class="nav-badge">${n.badge > 9 ? '9+' : n.badge}</span>` : ''}</a>`).join('');
+  // A job that needs doing shows on the name in the bar, so an officer sees it from any screen
+  // without a tab sitting there all day saying nothing.
+  const jobs = me ? (() => { try { return store.officerWork(); } catch { return []; } })() : [];
+  const urgent = jobs.filter(j => j.urgent).length;
   who.innerHTML = me
-    ? `<a class="btn ghost sm" href="#/profile">${escapeHtml(me.name.split(' ')[0])}</a>`
+    ? `<a class="btn ghost sm" href="#/profile">${escapeHtml(me.name.split(' ')[0])}${
+        urgent ? `<span class="nav-badge">${urgent > 9 ? '9+' : urgent}</span><span class="sr-only">, ${urgent} thing${urgent === 1 ? '' : 's'} waiting for you</span>` : ''}</a>`
     : `<a class="btn sm" href="#/sign-in">Sign in</a>`;
   document.getElementById('botnav').hidden = !me;
   list.innerHTML = me ? NAV.map(n => {

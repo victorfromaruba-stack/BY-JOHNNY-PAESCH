@@ -179,6 +179,59 @@ export class Store {
   // about people uses this; only Settings, where Victor manages the thing, sees every row.
   people() { return this.state.members.filter(m => !m.bot); }
 
+  /**
+   * What is waiting for THIS person because of a role they hold.
+   *
+   * The officers are members first. Victor, Ian and Vishnu each hold one seat, contribute like
+   * everybody else, and happen to have jobs on top — so the app is the member's app and the
+   * jobs surface inside it, rather than a second application bolted alongside with its own
+   * tabs. This is what feeds that: a short list of things that actually need them today, empty
+   * for a member with no role and empty for an officer with nothing outstanding.
+   */
+  officerWork() {
+    const out = [];
+    const me = this.me;
+    if (!me) return out;
+
+    if (this.canConfirmMoney()) {
+      const waiting = this.pendingContributions();
+      if (waiting.length) {
+        out.push({ id: 'bank', href: '#/bank', count: waiting.length, urgent: true,
+          what: `${waiting.length} transfer${waiting.length === 1 ? '' : 's'} waiting to be confirmed`,
+          why: 'Nobody has points until you match the money to the statement.' });
+      }
+      const month = monthKey();
+      if (!this.state.monthCloses.some(c => c.month === month)) {
+        const last = shiftMonth(month, -1);
+        if (!this.state.monthCloses.some(c => c.month === last)
+            && this.state.contributions.some(c => c.forMonth === last && c.status === CONTRIBUTION_STATUS.confirmed)) {
+          out.push({ id: 'close', href: `#/bank/close/${last}`, count: null,
+            what: `${fmtMonth(last)} is not closed yet`,
+            why: 'A second officer co-signs it, and the Reserve is checked against the bank.' });
+        }
+      }
+    }
+
+    if (this.hasRole('planner', 'comms', 'admin')) {
+      const asked = this.state.redemptions.filter(r => r.status === 'requested');
+      if (asked.length) {
+        out.push({ id: 'quote', href: '#/desk', count: asked.length, urgent: true,
+          what: `${asked.length} request${asked.length === 1 ? '' : 's'} waiting for a price`,
+          why: `The promise is ${this.settings?.slaHours || 72} hours.` });
+      }
+    }
+
+    if (this.hasRole('admin')) {
+      const noLogin = this.people().filter(m => m.status !== 'left' && !m.username);
+      if (noLogin.length) {
+        out.push({ id: 'logins', href: '#/settings', count: noLogin.length,
+          what: `${noLogin.length} Insider${noLogin.length === 1 ? '' : 's'} cannot sign in yet`,
+          why: 'They need a username and a password from you — nothing is emailed.' });
+      }
+    }
+    return out;
+  }
+
   // ---------- standing ----------
   /**
    * Where a member stands. Named standingOf() because standing() was already taken, further

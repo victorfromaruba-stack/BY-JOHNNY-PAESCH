@@ -2,7 +2,7 @@
 import { escapeHtml, html, raw, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, fmtDay, fmtPct, initials } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, projectPoints, seasonPoints, SEASONS, REACH, pointsPerMonth, monthsToAfford } from '../core/money.js';
-import { splitBar, poolGauge, memberCard, ring } from '../ui/pieces.js';
+import { splitBar, poolGauge, memberCard, ring, tierTable } from '../ui/pieces.js';
 import { sceneSvg, treeSvg, starSvg } from '../ui/art.js';
 import { toast, setBusy, sheet, avatar } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
@@ -15,7 +15,6 @@ export const stayStrip = (stay) => {
   d.innerHTML = sceneSvg(stay);
   return d;
 };
-
 
 /**
  * Where a week at this place actually comes from. Interval's Getaway inventory is the
@@ -177,8 +176,10 @@ export function landing({ store, go }) {
             ${line(villa, `${monthsToAfford(s, villaShare, t.monthlyUsd)} months for your quarter of a Surf Club villa for a week`)}
             ${line(trip, `${monthsToAfford(s, trip?.pointsPerSeat, t.monthlyUsd)} months for a seat on the Samaná week`)}
             ${line(far, `${monthsToAfford(s, far?.pointsPerSeat, t.monthlyUsd)} months for ten nights in Japan`)}
-            <li class="small muted">${t.holds} open request${t.holds > 1 ? 's' : ''} · ${t.windowMonths} months ahead · ${t.guestCerts} guest passes${t.firstLookHours ? ` · first look ${t.firstLookHours}h early` : ''}</li>
-          </ul></div>`;
+          </ul>
+          <p class="eyebrow" style="margin-top:16px">What the level carries</p>
+          ${tierTable(t, s)}
+          </div>`;
         }).join('')}
       </div>
       <p class="small muted" style="margin-top:16px">Move between levels any month; it starts on your next contribution and nothing you already hold changes. Short of a trip you want? Ask for it anyway — Victor quotes it and you accept when the points are there, or you close the gap with a cash top-up.</p>

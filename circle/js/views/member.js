@@ -3,7 +3,7 @@ import { escapeHtml, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDa
 import { RANKS, nextRank } from '../core/standing.js';
 import { VOCAB, tierName, refFor } from '../core/vocab.js';
 import { splitContribution, tierFor, seasonPoints, SEASONS, isDushiSeason, pointsPerMonth } from '../core/money.js';
-import { memberCard, poolGauge, rankCrest, ring, splitBar } from '../ui/pieces.js';
+import { memberCard, poolGauge, rankCrest, ring, splitBar, tierTable } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel, avatar } from '../ui/components.js';
 import { sparkline, columns, tableFor } from '../ui/charts.js';
@@ -13,6 +13,8 @@ import { shiftMonth } from '../core/store.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 const KIND_LABEL = { earn: 'Contribution', bonus: 'Tier bonus', streak: 'Streak bonus', founding: 'Founding bonus', burn: 'Stay', refund: 'Refund', adjust: 'Adjustment', expire: 'Expired', reverse: 'Reversal' };
+// One glyph per kind of officer work, so the Home list reads at a glance.
+const WORK_ICON = { bank: 'vault', close: 'scale', quote: 'send', logins: 'key' };
 
 export function home({ store, go }) {
   const me = store.me, s = store.settings;
@@ -67,6 +69,25 @@ export function home({ store, go }) {
       </div>
       <div class="split-legend"><span><i style="background:var(--good)"></i>Available <b>${escapeHtml(fmtPoints(lt.available))}</b></span>
       ${lt.committed ? `<span><i style="background:var(--flight)"></i>Committed <b>${escapeHtml(fmtPoints(lt.committed))}</b></span>` : ''}</div>`;
+  }
+
+  // 1b — anything the Circle is waiting on you for, if you hold a job
+  const jobs = store.officerWork();
+  if (jobs.length) {
+    left.appendChild(el(`<div class="panel job-panel">
+      <div class="row-between">
+        <p class="eyebrow">${icon('crown')}Waiting on you</p>
+        <a class="small" href="#/profile">Your jobs</a>
+      </div>
+      <ul class="job-list" style="margin-top:12px">${jobs.map(j => `
+        <li${j.urgent ? ' class="urgent"' : ''}>
+          <a href="${escapeHtml(j.href)}">
+            <span class="job-ico">${icon(WORK_ICON[j.id] || 'clipboard', { size: 19 })}</span>
+            <span class="job-what"><b>${escapeHtml(j.what)}</b><span class="small muted">${escapeHtml(j.why)}</span></span>
+            ${icon('chevronRight', { size: 18, cls: 'ico-muted' })}
+          </a>
+        </li>`).join('')}</ul>
+    </div>`));
   }
 
   // 2 — what you are saving for, and exactly how far off it is
@@ -587,6 +608,46 @@ export function card({ store, go }) {
   return wrap;
 }
 
+// The jobs a role opens, and what each one is for.
+//
+// There is no separate administrator's application and no second login. Victor, Ian and Vishnu
+// hold seats like everybody else — they contribute, they hold points, they ask for stays — and
+// the work they do for the Circle sits inside their own profile, under their level and their
+// details. An Insider with no role never sees any of it.
+const JOBS = [
+  { roles: ['treasurer', 'deputy'], label: 'The Banker’s inbox', href: '#/bank', ico: 'vault',
+    what: 'Confirm transfers against the statement, and close a month with a second officer co-signing.' },
+  { roles: ['planner', 'comms', 'admin'], label: 'The Desk', href: '#/desk', ico: 'send',
+    what: 'Price what people ask for, keep the catalog honest, post deals, write the notes.' },
+  { roles: ['admin', 'treasurer'], label: 'Settings', href: '#/settings', ico: 'sliders',
+    what: 'People and their logins, the levels, and the rules every number on every screen is worked out from.' },
+];
+const ROLE_WORDS = { treasurer: 'Banker', deputy: 'Deputy Banker', planner: 'Desk', comms: 'Voice', admin: 'Admin' };
+
+/** The officer's half of a profile. Empty string for everybody else, which is most people. */
+function jobsPanel(store) {
+  if (!store.isOfficer()) return '';
+  const held = (store.me.roles || []).filter(r => ROLE_WORDS[r]);
+  const waiting = store.officerWork();
+  const mine = JOBS.filter(j => store.hasRole(...j.roles));
+  return `<div class="panel" style="margin-top:16px">
+      <div class="row-between"><h2>Your jobs in the Circle</h2>
+        <span class="row" style="gap:6px">${held.map(r => `<span class="chip">${escapeHtml(ROLE_WORDS[r])}</span>`).join('')}</span></div>
+      <p class="small muted" style="margin-top:6px">On top of your own seat, not instead of it. You contribute, hold points and ask for stays like everyone else; these are the extra doors your roles open.</p>
+      <ul class="job-list" style="margin-top:14px">${mine.map(j => {
+        const due = waiting.filter(w => w.href.startsWith(j.href));
+        const count = due.reduce((n, w) => n + (w.count || 0), 0);
+        return `<li${due.some(w => w.urgent) ? ' class="urgent"' : ''}>
+          <a href="${escapeHtml(j.href)}">
+            <span class="job-ico">${icon(j.ico, { size: 19 })}</span>
+            <span class="job-what"><b>${escapeHtml(j.label)}${count ? ` · ${count} waiting` : ''}</b>
+              <span class="small muted">${escapeHtml(j.what)}</span></span>
+            ${icon('chevronRight', { size: 18, cls: 'ico-muted' })}
+          </a></li>`;
+      }).join('')}</ul>
+    </div>`;
+}
+
 export function profile({ store, go, refresh }) {
   const me = store.me, s = store.settings;
   const exit = store.exitQuote(me.id);
@@ -599,6 +660,14 @@ export function profile({ store, go, refresh }) {
         <h2>Your contribution level</h2>
         <p class="small muted" style="margin-top:6px">A change takes effect on your next contribution and nothing you already hold is affected. Every level can ask for every stay and every trip — what changes is how fast the points build, and the perks.</p>
         <div class="choices" id="tiers" style="margin-top:14px"></div>
+        <p class="eyebrow" style="margin-top:22px">What each level carries</p>
+        <div class="grid g3" style="margin-top:10px">${s.tiers.map(t => `
+          <div class="tier-compare${t.monthlyUsd === me.monthlyUsd ? ' mine' : ''}">
+            <b>${escapeHtml(tierName(t.monthlyUsd))}</b>
+            <span class="tiny muted">${escapeHtml(fmtUsd2(t.monthlyUsd))} a month${t.monthlyUsd === me.monthlyUsd ? ' · the one you are on' : ''}</span>
+            ${tierTable(t, s)}
+          </div>`).join('')}</div>
+        <p class="tiny muted" style="margin-top:12px">▲ marks what is more than the level below it.</p>
       </div>
 
       <div class="panel" style="margin-top:16px">
@@ -618,6 +687,8 @@ export function profile({ store, go, refresh }) {
           <button class="btn" type="submit">Save</button>
         </form>
       </div>
+
+      ${jobsPanel(store)}
 
       <div class="panel" style="margin-top:16px">
         <h2>Pausing and leaving</h2>

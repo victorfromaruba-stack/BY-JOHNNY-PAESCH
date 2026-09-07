@@ -2,6 +2,43 @@
 import { escapeHtml, fmtUsd2, fmtPoints, fmtPct, prefersReducedMotion } from '../core/util.js';
 import { contourSvg, treeSvg } from './art.js';
 import { VOCAB, tierName } from '../core/vocab.js';
+import { pointsPerMonth } from '../core/money.js';
+
+/**
+ * What a level actually carries, one line per thing, with the ones that differ from the level
+ * below marked. It used to be a single run-on line — "2 open requests · 12 months ahead · 3
+ * guest passes · first look 48h early" — which is all of it and none of it: nobody comparing
+ * three levels can hold that in their head, and the differences are the entire point.
+ *
+ * Every figure is read off settings.tiers, so a rule change in the app changes this page too.
+ */
+export function tierTable(tier, s) {
+  const tiers = [...s.tiers].sort((a, b) => a.monthlyUsd - b.monthlyUsd);
+  const below = tiers[tiers.indexOf(tiers.find(x => x.monthlyUsd === tier.monthlyUsd)) - 1] || null;
+  const rows = [
+    ['Points a month', `${fmtPoints(pointsPerMonth(s, tier.monthlyUsd))}`,
+      tier.bonusRate ? `${Math.round(tier.bonusRate * 100)}% of it a bonus the Circle funds` : 'face value, nothing taken',
+      below && pointsPerMonth(s, tier.monthlyUsd) > pointsPerMonth(s, below.monthlyUsd)],
+    ['Open requests', `${tier.holds} at a time`,
+      'things you can have in front of the Desk at once',
+      below && tier.holds > below.holds],
+    ['Booking window', `${tier.windowMonths} months ahead`,
+      'how far out you can ask for a week in Aruba',
+      below && tier.windowMonths > below.windowMonths],
+    ['Guest passes', `${tier.guestCerts} a year`,
+      'for somebody who is not in the Circle; household is always free',
+      below && tier.guestCerts > below.guestCerts],
+    ['First look at a deal', tier.firstLookHours ? `${tier.firstLookHours} hours early` : 'when it reaches the board',
+      'before a new week is shown to everyone',
+      below && tier.firstLookHours > below.firstLookHours],
+  ];
+  return `<dl class="tier-detail">${rows.map(([k, v, why, better]) => `
+    <div${better ? ' class="up"' : ''}>
+      <dt>${escapeHtml(k)}</dt>
+      <dd><b>${escapeHtml(v)}</b>${better ? '<span class="more" aria-label="more than the level below">▲</span>' : ''}
+        <span class="small muted">${escapeHtml(why)}</span></dd>
+    </div>`).join('')}</dl>`;
+}
 
 /**
  * The Split bar — wherever a dollar amount appears: backing (yours) | the Circle's share.
