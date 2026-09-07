@@ -958,3 +958,13 @@ button.badge-card:hover { border-color: var(--ink-3); }
   .badge-card:not([disabled]):active, .icon-btn:active, .segmented > button:active,
   .stay-card a:active, .fineprint > summary:active { transform: none; }
 }
+
+/* The cross-fade between screens (js/app.js). Short enough not to be in anybody's way: at 180ms
+   it reads as the screen changing rather than as an animation you are waiting through. */
+::view-transition-old(root), ::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+}

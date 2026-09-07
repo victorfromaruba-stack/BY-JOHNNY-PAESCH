@@ -59,6 +59,9 @@ function tagAll(sel) {
   found.forEach((n, i) => n.setAttribute('data-probe', String(i)));
   return found.map((n, i) => ({ i, tag: n.tagName,
     on: n.getAttribute('aria-pressed') === 'true' || n.hasAttribute('aria-current'),
+    // An <a target="_blank"> with a real href opens a tab by definition. Nothing to observe on
+    // this page and nothing to time — it is not dead, it is simply somewhere else.
+    newTab: n.tagName === 'A' && n.target === '_blank' && !!n.getAttribute('href'),
     label: (n.textContent || n.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 44) }));
 }
 
@@ -68,14 +71,23 @@ function fingerprint() {
   return [location.hash, document.querySelectorAll('dialog[open]').length,
     document.querySelectorAll('.toast, [role=status], [role=alert]').length, h,
     document.activeElement?.tagName + '.' + (document.activeElement?.className || ''),
-    window.__printed || 0].join('|');
+    window.__printed || 0, window.__opened || 0].join('|');
 }
 
 /** Count print dialogs and downloads, which a DOM diff cannot see.
  *  The stub deliberately does not call through: a real window.print() blocks the page on a
  *  dialog the harness would then have to dismiss. addInitScript covers later navigations;
  *  the evaluate covers the document that is already open when we get here. */
-const PRINT_STUB = () => { window.__printed = 0; window.print = () => { window.__printed++; }; };
+// window.open is counted in the page rather than through page.on('popup'): the popup event
+// arrives long after a 320ms probe window (the new tab has to start navigating first, and to a
+// host this sandbox cannot reach that takes seconds), so every Share button read as dead.
+// Counting the call itself is instant and cannot be missed.
+const PRINT_STUB = () => {
+  window.__printed = 0; window.__opened = 0;
+  window.print = () => { window.__printed++; };
+  const realOpen = window.open;
+  window.open = function (...a) { window.__opened++; try { return realOpen.apply(window, a); } catch { return null; } };
+};
 async function instrument(p) {
   await p.addInitScript(PRINT_STUB);
   await p.evaluate(PRINT_STUB);
@@ -154,7 +166,7 @@ for (const role of ROLES) {
     for (const c of keys) {
       if (EXPECTED_INERT.some(([re]) => re.test(c.label))) { skipped++; continue; }
       // Pressing the tab you are already on is meant to do nothing.
-      if (c.on) { skipped++; continue; }
+      if (c.on || c.newTab) { skipped++; continue; }
       await reset(p, hash);
       const found = await p.evaluate(([sel, key, nth]) => {
         const all = [...document.querySelectorAll(sel)];

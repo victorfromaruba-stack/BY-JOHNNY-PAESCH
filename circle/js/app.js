@@ -173,15 +173,30 @@ function render(current = router?.current) {
     app.replaceChildren(pub.denied(ctx(current)));
     return;
   }
-  disposer?.(); disposer = null;
-  const out = route.view(ctx(current));
-  const node = out instanceof Node ? out : Object.assign(document.createElement('div'), { innerHTML: String(out) });
-  if (typeof out?.dispose === 'function') disposer = out.dispose;
-  app.replaceChildren(node);
-  document.title = `${route.title} · ${VOCAB.clubName}`;
-  if (liveRegion) liveRegion.textContent = route.title;
-  updateChrome(current);
-  if (!location.hash.includes('#/stays/') || true) window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+  const paint = () => {
+    disposer?.(); disposer = null;
+    const out = route.view(ctx(current));
+    const node = out instanceof Node ? out : Object.assign(document.createElement('div'), { innerHTML: String(out) });
+    if (typeof out?.dispose === 'function') disposer = out.dispose;
+    app.replaceChildren(node);
+    document.title = `${route.title} · ${VOCAB.clubName}`;
+    if (liveRegion) liveRegion.textContent = route.title;
+    updateChrome(current);
+    // This used to read `if (!location.hash.includes('#/stays/') || true)` — the `|| true` made
+    // the test dead code, so it always scrolled anyway. Say what it does.
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  };
+
+  // A cross-fade between screens, where the browser offers one. It is the difference between a
+  // page being replaced and a screen changing, and it costs nothing: no library, no animation
+  // to maintain, and browsers without it simply swap as before. Never for somebody who asked
+  // for less motion. If the view throws, the swap still has to happen — a transition that never
+  // resolves would leave the member looking at a frozen snapshot of the screen they just left.
+  const smooth = typeof document.startViewTransition === 'function'
+    && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (!smooth) { paint(); return; }
+  try { document.startViewTransition(paint); }
+  catch { paint(); }
 }
 
 // ---------- shell ----------
