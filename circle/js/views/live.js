@@ -177,7 +177,7 @@ export function live({ store, go }) {
                 : 'You hold enough for this.'}</p>
 
       <div class="row" style="margin-top:14px">
-        ${stayRef ? `<a class="btn sm" href="#/book/${escapeHtml(stayRef)}?from=${escapeHtml(d.from)}&to=${escapeHtml(d.to)}">${icon('send', { size: 16 })}Ask the Circle for it</a>` : ''}
+        ${stayRef ? `<a class="btn sm" href="#/book/${escapeHtml(stayRef)}?from=${escapeHtml(d.from)}&to=${escapeHtml(d.to)}${d.bookingUrl ? `&src=${encodeURIComponent(d.bookingUrl)}&srcLabel=${encodeURIComponent(d.source || 'Open right now')}` : ''}">${icon('send', { size: 16 })}Ask the Circle for it</a>` : ''}
         ${canPost && stayRef ? `<button class="btn ghost sm" data-post="${escapeHtml(d.externalId)}">${icon('plus', { size: 15 })}Put it on the board</button>` : ''}
         ${canPost && d.bookingUrl ? `<a class="btn quiet sm" href="${escapeHtml(d.bookingUrl)}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 16 })}Go and book it</a>` : ''}
       </div>

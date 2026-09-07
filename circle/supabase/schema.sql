@@ -316,6 +316,63 @@ create table if not exists redemptions (
   check (check_out > check_in)
 );
 
+do $$ begin create type look_found as enum ('showing','gone','unclear','different','booked');
+exception when duplicate_object then null; end $$;
+do $$ begin create type look_channel as enum ('site','phone');
+exception when duplicate_object then null; end $$;
+
+create table if not exists looks (
+  id            uuid primary key default gen_random_uuid(),
+  stay_id       uuid not null references stays(id) on delete cascade,
+  redemption_id uuid references redemptions(id) on delete set null,
+  check_in      date not null,
+  check_out     date not null,
+  found         look_found not null,
+  channel       look_channel not null default 'site',
+  url           text,
+  label         text,
+  price_usd     numeric(10,2),
+  -- The room as the PAGE named it, not as our catalog names it. A listing is one unit; saying
+  -- "the week was showing" when what was showing is a two-bedroom and the member asked for a
+  -- studio is a true sentence about a false thing.
+  room_label    text,
+  note          text,
+  looked_by     uuid not null references members(id),
+  -- The watcher may record what it scraped, but a robot look can never open the gate and must
+  -- never appear in a sentence with a person's name on it. Only a person can confirm a room.
+  by_robot      boolean not null default false,
+  looked_at     timestamptz not null default now(),
+  -- Stored at insert, never recomputed: a look made under a 72-hour policy must not silently
+  -- gain life when the policy changes. Same reasoning as stays.sources.seenOn.
+  good_until    timestamptz not null,
+  check (check_out > check_in),
+  check (found not in ('unclear','different') or note is not null)
+);
+alter table looks drop constraint if exists looks_site_needs_a_link;
+-- A 'booked' look records that the Desk took the room, not that it read a page, so it needs no
+-- link. Requiring one forced a placeholder URL into the column, and a made-up link is exactly
+-- what this table exists to keep out.
+alter table looks add constraint looks_site_needs_a_link
+  check (channel <> 'site' or found = 'booked' or url is not null);
+create index if not exists looks_stay_idx on looks(stay_id, check_in, looked_at desc);
+create index if not exists looks_red_idx  on looks(redemption_id, looked_at desc);
+
+-- Append-only, like the ledger. A second look is a second row, so a change of story is visible
+-- rather than overwritten.
+create or replace function looks_are_append_only() returns trigger
+language plpgsql as $$
+begin raise exception 'A look is a record of what somebody saw. Add another one instead.'; end $$;
+drop trigger if exists looks_no_edit on looks;
+create trigger looks_no_edit before update or delete on looks
+  for each row execute function looks_are_append_only();
+
+alter table redemptions add column if not exists quote_look_id uuid references looks(id);
+alter table redemptions add column if not exists last_look_id  uuid references looks(id);
+alter table settings add column if not exists look_hours jsonb not null default '{"site":72,"phone":48}';
+alter table settings add column if not exists min_quote_hours int not null default 12;
+alter table settings add column if not exists looks_from timestamptz;
+update settings set looks_from = now() where id = 1 and looks_from is null;
+
 -- ---------- chipping in: other members' points on someone else's booking ----------
 create table if not exists pledges (
   id            uuid primary key default gen_random_uuid(),
@@ -854,9 +911,13 @@ begin
 end $$;
 
 -- ---------- redemptions ----------
+-- The old 8-argument signature is DROPPED, not left beside the new one: adding a parameter in
+-- Postgres overloads rather than replaces, and an ungated older path stays callable forever.
+drop function if exists request_redemption(uuid, date, date, int, int, text, int, boolean);
+
 create or replace function request_redemption(p_stay uuid, p_check_in date, p_check_out date,
   p_guests int default 2, p_seats int default 1, p_note text default '', p_flex int default 0,
-  p_shared boolean default false)
+  p_shared boolean default false, p_source_url text default null, p_source_label text default null)
 returns redemptions language plpgsql security definer set search_path = public as $$
 declare st stays; s settings; m members; tier jsonb; me uuid; q record; r redemptions;
         open_count int; window_months int; allow int; extra int;
@@ -901,22 +962,30 @@ begin
   end if;
 
   insert into redemptions(member_id, stay_id, kind, check_in, check_out, nights, guests, seats, flex_days, note,
-                          indicative_points, seasons, retail_usd, points, status, shared)
+                          indicative_points, seasons, retail_usd, points, status, shared,
+                          source_url, source_label)
     values (me, p_stay, st.kind, coalesce(st.starts_on, p_check_in), coalesce(st.ends_on, p_check_out), q.nights,
             case when st.kind = 'trip' then p_seats else p_guests end,
             case when st.kind = 'trip' then p_seats else null end, p_flex, p_note,
             q.points, q.seasons, coalesce(st.retail_usd,0) * case when st.kind='trip' then p_seats else q.nights end,
-            q.points, 'requested', p_shared)
+            q.points, 'requested', p_shared,
+            -- The listing they were looking at. clean_link() is the same guard the deals board
+            -- uses: http/https only. A member-supplied URL lands on a screen the Desk clicks.
+            clean_link(p_source_url), nullif(btrim(coalesce(p_source_label,'')), ''))
     returning * into r;
   perform log_audit('redemption.request','redemption',r.id::text,
-    jsonb_build_object('stay', st.name, 'nights', q.nights, 'points', q.points));
+    jsonb_build_object('stay', st.name, 'nights', q.nights, 'points', q.points, 'source', clean_link(p_source_url)));
   return r;
 end $$;
 
+-- Same overload trap as above: adding p_look would leave the ungated six-argument function live.
+drop function if exists quote_redemption(uuid, int, jsonb, text, date, text);
+
 create or replace function quote_redemption(p_id uuid, p_points int, p_stack jsonb default null,
-  p_terms text default '', p_deadline date default null, p_note text default '')
+  p_terms text default '', p_deadline date default null, p_note text default '',
+  p_look uuid default null)
 returns redemptions language plpgsql security definer set search_path = public as $$
-declare r redemptions; s settings; st stays; avail int; covered int; pledged int;
+declare r redemptions; s settings; st stays; avail int; covered int; pledged int; l looks;
 begin
   select * into r from redemptions where id = p_id for update;
   if r.id is null then raise exception 'No such request'; end if;
@@ -927,6 +996,33 @@ begin
   if r.status <> 'requested' then raise exception 'Only an open request can be quoted'; end if;
   if p_points <= 0 then raise exception 'A quote must be positive'; end if;
   select * into s from settings where id = 1;
+
+  -- THE GATE. A trip is the Circle's own inventory with seats already enforced, so there is no
+  -- public page to look at; requests older than settings.looks_from predate the gate and are
+  -- exempt, so shipping it does not brick the open queue.
+  if st.kind <> 'trip' and r.requested_at >= coalesce(s.looks_from, 'infinity'::timestamptz) then
+    if p_look is null then
+      select * into l from look_for(r.stay_id, r.check_in, r.check_out);
+    else
+      select * into l from looks where id = p_look;
+      if l.id is null then raise exception 'No such look'; end if;
+      if l.stay_id <> r.stay_id then raise exception 'That look is for a different property'; end if;
+      if l.by_robot then raise exception 'That is the watcher''s find, not a look. Open it yourself first.'; end if;
+      if l.check_in > r.check_in or l.check_out < r.check_out then
+        raise exception 'That look does not cover these nights';
+      end if;
+    end if;
+    if l.id is null then
+      raise exception 'Open the link and say what you saw before you price it. A quote with nothing behind it is the thing we are getting rid of.';
+    end if;
+    if l.found = 'gone' then
+      raise exception 'The last look says that week was gone. Look again, or decline it.';
+    end if;
+    if l.found = 'unclear' then
+      raise exception 'The last look says it was not clear. Ring them, or look again.';
+    end if;
+  end if;
+
   avail := greatest(available_points(r.member_id), 0);
   pledged := coalesce((select sum(points) from pledges where redemption_id = p_id), 0);
   covered := least(greatest(p_points - pledged, 0), avail);
@@ -934,10 +1030,18 @@ begin
          top_up_usd = round(greatest(p_points - covered - pledged, 0)::numeric / s.points_per_dollar, 2),
          quote_stack=p_stack, hotel_terms=p_terms, hotel_deadline=p_deadline, decision=p_note,
          quoted_by=current_member_id(), quoted_at=now(),
-         quote_expires_at = now() + make_interval(hours => s.quote_hours)
+         quote_look_id = l.id,
+         -- A quote cannot outlive the look it was made against. But a stale look never dead-ends
+         -- the Desk: it costs the member acceptance time instead, down to a floor. A hard recency
+         -- refusal on a man with a job produces invented looks, and an invented look is worse
+         -- than an honest old one.
+         quote_expires_at = greatest(
+           least(now() + make_interval(hours => s.quote_hours),
+                 coalesce(l.good_until, now() + make_interval(hours => s.quote_hours))),
+           now() + make_interval(hours => s.min_quote_hours))
   where id = p_id returning * into r;
   perform log_audit('redemption.quote','redemption',r.id::text,
-    jsonb_build_object('points', p_points, 'topUpUsd', r.top_up_usd));
+    jsonb_build_object('points', p_points, 'topUpUsd', r.top_up_usd, 'look', l.id));
   return r;
 end $$;
 
@@ -1031,7 +1135,7 @@ end $$;
 
 create or replace function pay_redemption(p_id uuid, p_paid_usd numeric default null, p_confirmation text default '')
 returns redemptions language plpgsql security definer set search_path = public as $$
-declare r redemptions; s settings; st stays;
+declare r redemptions; s settings; st stays; l looks;
 begin
   if not has_role('treasurer','deputy','planner','admin') then raise exception 'Only the Banker or the Desk can pay a hotel'; end if;
   select * into r from redemptions where id = p_id for update;
@@ -1042,6 +1146,22 @@ begin
   end if;
   select * into s from settings where id = 1;
   select * into st from stays where id = r.stay_id;
+
+  -- The gate on the quote protects what the member expects. THIS one protects the money: this is
+  -- the irreversible act — points burn here, the pledgers' points burn here, and paid_usd leaves
+  -- the club here. Days pass between a member accepting and the Desk booking, and a week can go
+  -- in that time. It costs nothing in practice: at this moment the Desk is on the booking page.
+  if st.kind <> 'trip' and r.requested_at >= coalesce(s.looks_from, 'infinity'::timestamptz) then
+    select * into l from look_for(r.stay_id, r.check_in, r.check_out, r.held_at);
+    if l.id is null then
+      raise exception 'Look at it once more before you pay. Nobody has looked at these nights since % accepted.',
+        coalesce((select split_part(name,' ',1) from members where id = r.member_id), 'the member');
+    end if;
+    if l.found in ('gone','unclear') then
+      raise exception 'The last look says that week was %. Do not pay for it.', l.found;
+    end if;
+  end if;
+
   update redemptions set status='confirmed', confirmed_at=now(), decided_by=current_member_id(), decided_at=now(),
          paid_usd = coalesce(p_paid_usd, round(r.quoted_points::numeric / s.points_per_dollar, 2)),
          confirmation_ref = p_confirmation
@@ -1057,6 +1177,17 @@ begin
            st.name || ' · chipped in for ' || split_part((select name from members where id = r.member_id), ' ', 1),
            current_member_id()
     from pledges pl where pl.redemption_id = r.id;
+
+  -- The booking is the last and best look: the one moment somebody did not just see the room,
+  -- they took it. Recorded so the history does not end on a maybe.
+  insert into looks (stay_id, redemption_id, check_in, check_out, found, channel, url, label,
+                     note, looked_by, good_until)
+  values (r.stay_id, r.id, r.check_in, r.check_out, 'booked', 'site',
+          coalesce(clean_link(r.source_url), clean_link(st.site)), 'Booked',
+          nullif(p_confirmation,''), current_member_id(), now() + interval '3650 days')
+  returning id into l.id;
+  update redemptions set last_look_id = l.id where id = r.id;
+
   perform log_audit('redemption.pay','redemption',r.id::text,
     jsonb_build_object('points', r.points, 'paidUsd', r.paid_usd, 'confirmationRef', p_confirmation));
   return r;
@@ -2546,3 +2677,91 @@ grant execute on function months_held(uuid), rank_ladder(), rank_perks(int), sta
 -- created after the lock-down above, so anon could price any stay until this was applied.
 revoke all on function quote_points(uuid, date, date, int) from public, anon;
 grant execute on function quote_points(uuid, date, date, int) to authenticated;
+
+-- =====================================================================
+--  Looks: the only availability fact this app is allowed to hold
+--
+--  Nothing here checks a hotel. There is no availability API, and every chain refuses a scripted
+--  request — Marriott and Hilton 403 the page, Hyatt, IHG and Radisson 403 robots.txt itself.
+--  Working around bot management is off the table as policy and would mean taking copyrighted
+--  content besides. So the app never says a room is available: it says a named person opened a
+--  named page at a named time and wrote down what they saw. That is a claim it can stand behind,
+--  because it holds the row.
+--
+--  Declared after the functions that read it — a plpgsql body is not resolved until it runs, so
+--  a fresh build is fine, and the alters below need this table to exist first.
+-- =====================================================================
+
+-- Writing a look. Desk only, or the watcher — which is forced to by_robot regardless of what it
+-- claims, so a scrape can never be dressed up as a person having looked.
+create or replace function record_look(p_stay uuid, p_check_in date, p_check_out date,
+  p_found look_found, p_channel look_channel default 'site', p_url text default null,
+  p_label text default null, p_price numeric default null, p_room_label text default null,
+  p_note text default null, p_redemption uuid default null)
+returns looks language plpgsql security definer set search_path = public as $$
+declare me uuid; s settings; robot boolean; hours int; l looks; clean text;
+begin
+  me := current_member_id();
+  if me is null then raise exception 'Not a member'; end if;
+  robot := coalesce(current_is_bot(), false);
+  if not (robot or has_role('planner','comms','admin')) then
+    raise exception 'Only the Desk records what it saw';
+  end if;
+  if p_check_out <= p_check_in then raise exception 'Check-out must be after check-in'; end if;
+  clean := clean_link(p_url);
+  if p_channel = 'site' and clean is null then
+    raise exception 'A look at a page needs the link to that page';
+  end if;
+  if p_found in ('unclear','different') and nullif(btrim(coalesce(p_note,'')),'') is null then
+    raise exception 'Say what you saw — that is the whole point of writing it down';
+  end if;
+  select * into s from settings where id = 1;
+  hours := coalesce((s.look_hours ->> p_channel::text)::int, 48);
+  insert into looks (stay_id, redemption_id, check_in, check_out, found, channel, url, label,
+                     price_usd, room_label, note, looked_by, by_robot, good_until)
+  values (p_stay, p_redemption, p_check_in, p_check_out, p_found, p_channel, clean,
+          nullif(btrim(coalesce(p_label,'')),''), p_price,
+          nullif(btrim(coalesce(p_room_label,'')),''), nullif(btrim(coalesce(p_note,'')),''),
+          me, robot, now() + make_interval(hours => hours))
+  returning * into l;
+  if p_redemption is not null then
+    update redemptions set last_look_id = l.id where id = p_redemption;
+  end if;
+  perform log_audit('look.record','look',l.id::text,
+    jsonb_build_object('stay', p_stay, 'found', p_found, 'robot', robot, 'url', clean));
+  return l;
+end $$;
+
+-- The newest HUMAN look whose nights contain these ones. Seeing the 10th-17th tells you nothing
+-- about the 20th, so containment is the test, not overlap.
+create or replace function look_for(p_stay uuid, p_in date, p_out date, p_since timestamptz default null)
+returns looks language sql stable security definer set search_path = public as $$
+  select l.* from looks l
+   where l.stay_id = p_stay and not l.by_robot
+     and l.check_in <= p_in and l.check_out >= p_out
+     and (p_since is null or l.looked_at >= p_since)
+   order by l.looked_at desc limit 1
+$$;
+
+alter table looks enable row level security;
+-- The member whose request prompted it, anyone who chipped into that request, and the Desk.
+drop policy if exists looks_read on looks;
+create policy looks_read on looks for select to authenticated using (
+  has_role('planner','comms','admin')
+  or exists (select 1 from redemptions r where r.id = looks.redemption_id
+               and (r.member_id = current_member_id()
+                    or exists (select 1 from pledges p where p.redemption_id = r.id
+                                 and p.member_id = current_member_id())))
+);
+-- Nobody writes directly. Writes go through record_look, which is definer and role-checked.
+revoke all on looks from anon, authenticated;
+grant select on looks to authenticated;
+
+revoke all on function record_look(uuid, date, date, look_found, look_channel, text, text, numeric, text, text, uuid) from public, anon;
+grant execute on function record_look(uuid, date, date, look_found, look_channel, text, text, numeric, text, text, uuid) to authenticated;
+revoke all on function look_for(uuid, date, date, timestamptz) from public, anon;
+grant execute on function look_for(uuid, date, date, timestamptz) to authenticated;
+revoke all on function quote_redemption(uuid, int, jsonb, text, date, text, uuid) from public, anon;
+grant execute on function quote_redemption(uuid, int, jsonb, text, date, text, uuid) to authenticated;
+revoke all on function request_redemption(uuid, date, date, int, int, text, int, boolean, text, text) from public, anon;
+grant execute on function request_redemption(uuid, date, date, int, int, text, int, boolean, text, text) to authenticated;

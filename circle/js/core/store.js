@@ -14,7 +14,7 @@ export const OPEN_REDEMPTION = [REDEMPTION_STATUS.requested, REDEMPTION_STATUS.q
 export const LEDGER_KIND = Object.freeze({ earn: 'earn', bonus: 'bonus', streak: 'streak', founding: 'founding', burn: 'burn', refund: 'refund', adjust: 'adjust', expire: 'expire', reverse: 'reverse' });
 export const PROMO_KINDS = [LEDGER_KIND.bonus, LEDGER_KIND.streak, LEDGER_KIND.founding];
 export const ROLES = Object.freeze(['member', 'treasurer', 'deputy', 'planner', 'comms', 'admin']);
-export const COLLECTIONS = ['members', 'badgeCatalog', 'memberBadges', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes', 'pledges', 'standings', 'crews', 'crewMembers', 'crewMessages', 'moments', 'momentReactions'];
+export const COLLECTIONS = ['members', 'badgeCatalog', 'memberBadges', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes', 'pledges', 'looks', 'standings', 'crews', 'crewMembers', 'crewMessages', 'moments', 'momentReactions'];
 /**
  * A complete, empty state. Every adapter starts from this — a missing collection is not a
  * missing feature, it is `[...undefined]` the first time any screen asks for it, which is
@@ -1010,7 +1010,7 @@ export class Store {
     // release_expired_quotes() is authoritative; this only keeps the screen honest.
     if (changed) this.adapter?.save(this.state);
   }
-  async requestRedemption({ memberId, stayId, checkIn, checkOut, guests = 2, seats = 1, note = '', flexDays = 0, maxPoints = null, shared = false }) {
+  async requestRedemption({ memberId, stayId, checkIn, checkOut, guests = 2, seats = 1, note = '', flexDays = 0, maxPoints = null, shared = false, sourceUrl = '', sourceLabel = '' }) {
     const stay = this.stay(stayId); if (!stay) throw new Error('No such stay');
     const m = this.member(memberId); const tier = tierFor(this.settings, m.monthlyUsd);
     const isTrip = stay.kind === 'trip';
@@ -1033,6 +1033,11 @@ export class Store {
     const r = {
       id: uid('red'), memberId, stayId, kind: isTrip ? 'trip' : 'stay', checkIn: isTrip ? stay.dates.from : checkIn, checkOut: isTrip ? stay.dates.to : checkOut, nights: q.nights, guests: isTrip ? seats : Number(guests), seats: isTrip ? seats : null, note, flexDays, maxPoints,
       indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd, shared: !!shared, pledges: [],
+      // The listing they were looking at when they asked. This is the whole of Victor's "I need
+      // to know the source, I need a link to even be able to book it" — and it was being dropped
+      // on the floor: the caller passed it, this signature did not name it, so whereToBook()'s
+      // top-ranked "the listing they were looking at" row could never fire for a real request.
+      sourceUrl: safeUrl(sourceUrl) || '', sourceLabel: String(sourceLabel || '').slice(0, 60),
       points: q.points, topUpUsd: 0, quoteStack: null, hotelTerms: '', hotelDeadline: null, quotedBy: null, quotedAt: null, quoteExpiresAt: null,
       status: REDEMPTION_STATUS.requested, requestedAt: nowIso(), decidedBy: null, decidedAt: null, decision: '', heldAt: null, confirmedAt: null, completedAt: null, paidUsd: null, confirmationRef: '',
     };
@@ -1041,16 +1046,90 @@ export class Store {
     await this.commit('redemptions');
     return r;
   }
+  /**
+   * A look: a named person opened a named page at a named time and wrote down what they saw.
+   *
+   * This is the only availability fact the app holds. Nothing checks a hotel — there is no API,
+   * and every chain refuses a scripted request — so the app never says a room is available. It
+   * says who looked, where, when, and what they found. Append-only: a second look is a second
+   * row, so a change of story is visible rather than overwritten.
+   */
+  async recordLook({ stayId, checkIn, checkOut, found, channel = 'site', url = '', label = '', priceUsd = null, roomLabel = '', note = '', redemptionId = null, byRobot = false }, actorId) {
+    if (!this.stay(stayId)) throw new Error('No such stay');
+    if (!(Date.parse(checkOut) > Date.parse(checkIn))) throw new Error('Check-out must be after check-in');
+    const clean = safeUrl(url);
+    if (channel === 'site' && !clean && found !== 'booked') throw new Error('A look at a page needs the link to that page');
+    if (['unclear', 'different'].includes(found) && !String(note).trim()) {
+      throw new Error('Say what you saw — that is the whole point of writing it down');
+    }
+    const hours = (this.settings.lookHours || { site: 72, phone: 48 })[channel] ?? 48;
+    const at = nowIso();
+    const l = {
+      id: uid('look'), stayId, redemptionId, checkIn, checkOut, found, channel,
+      url: clean || '', label: String(label || '').slice(0, 60), priceUsd: priceUsd == null ? null : Number(priceUsd),
+      roomLabel: String(roomLabel || '').slice(0, 80), note: String(note || '').slice(0, 400),
+      lookedBy: actorId, byRobot: !!byRobot, lookedAt: at, goodUntil: addHours(at, hours),
+    };
+    (this.state.looks ||= []).push(l);
+    if (redemptionId) { const r = this.redemption(redemptionId); if (r) r.lastLookId = l.id; }
+    this.log(actorId, 'look.record', 'look', l.id, { stay: stayId, found, robot: !!byRobot, url: clean });
+    await this.commit('looks', 'redemptions');
+    return l;
+  }
+  /** The newest HUMAN look whose nights contain these ones. A robot find never counts. */
+  lookFor(stayId, checkIn, checkOut, since = null) {
+    return (this.state.looks || [])
+      .filter(l => l.stayId === stayId && !l.byRobot
+        && Date.parse(l.checkIn) <= Date.parse(checkIn)
+        && Date.parse(l.checkOut) >= Date.parse(checkOut)
+        && (!since || Date.parse(l.lookedAt) >= Date.parse(since)))
+      .sort((a, b) => Date.parse(b.lookedAt) - Date.parse(a.lookedAt))[0] || null;
+  }
+  looksFor(redemptionId) {
+    return (this.state.looks || []).filter(l => l.redemptionId === redemptionId)
+      .sort((a, b) => Date.parse(b.lookedAt) - Date.parse(a.lookedAt));
+  }
+  /** Requests that predate the gate are exempt, so it does not brick the open queue. */
+  needsLook(r) {
+    const stay = this.stay(r?.stayId);
+    if (!r || !stay || stay.kind === 'trip') return false;
+    const from = this.settings.looksFrom;
+    return !!from && Date.parse(r.requestedAt) >= Date.parse(from);
+  }
   /** Planner publishes the binding all-in quote. Top-up = points beyond Available, payable in cash. */
-  async quoteRedemption(id, actorId, { points, stack = null, terms = '', hotelDeadline = null, note = '' }) {
+  async quoteRedemption(id, actorId, { points, stack = null, terms = '', hotelDeadline = null, note = '', lookId = null }) {
     const r = this.redemption(id); if (!r) throw new Error('No such request');
     if (r.status !== REDEMPTION_STATUS.requested) throw new Error('Only an open request can be quoted');
     const pts = Math.round(Number(points)); if (!(pts > 0)) throw new Error('Quote must be positive');
+    // The gate. Mirrors quote_redemption() in SQL exactly — if these two disagree, the demo
+    // teaches a rule the server does not enforce, which is the failure this whole app is about.
+    let look = null;
+    if (this.needsLook(r)) {
+      look = lookId ? (this.state.looks || []).find(l => l.id === lookId) : this.lookFor(r.stayId, r.checkIn, r.checkOut);
+      if (lookId) {
+        if (!look) throw new Error('No such look');
+        if (look.stayId !== r.stayId) throw new Error('That look is for a different property');
+        if (look.byRobot) throw new Error('That is the watcher’s find, not a look. Open it yourself first.');
+        if (Date.parse(look.checkIn) > Date.parse(r.checkIn) || Date.parse(look.checkOut) < Date.parse(r.checkOut)) {
+          throw new Error('That look does not cover these nights');
+        }
+      }
+      if (!look) throw new Error('Open the link and say what you saw before you price it. A quote with nothing behind it is the thing we are getting rid of.');
+      if (look.found === 'gone') throw new Error('The last look says that week was gone. Look again, or decline it.');
+      if (look.found === 'unclear') throw new Error('The last look says it was not clear. Ring them, or look again.');
+    }
     const pledged = sum(r.pledges || [], p => p.points);
     const available = Math.max(0, this.availablePoints(r.memberId));
     const covered = Math.min(Math.max(0, pts - pledged), available);
     const at = nowIso();
-    Object.assign(r, { status: REDEMPTION_STATUS.quoted, points: covered, quotedPoints: pts, topUpUsd: round(Math.max(0, pts - covered - pledged) / this.settings.pointsPerDollar), quoteStack: stack, hotelTerms: terms, hotelDeadline, quotedBy: actorId, quotedAt: at, quoteExpiresAt: addHours(at, this.settings.quoteHours), decision: note });
+    // A quote cannot outlive the look it was made against — but a stale look never dead-ends the
+    // Desk, it costs the member acceptance time instead, down to a floor. A hard recency refusal
+    // on a man with a job produces invented looks, and an invented look is worse than an old one.
+    const full = addHours(at, this.settings.quoteHours);
+    const floor = addHours(at, this.settings.minQuoteHours ?? 12);
+    const capped = look?.goodUntil && Date.parse(look.goodUntil) < Date.parse(full) ? look.goodUntil : full;
+    const expires = Date.parse(capped) < Date.parse(floor) ? floor : capped;
+    Object.assign(r, { status: REDEMPTION_STATUS.quoted, points: covered, quotedPoints: pts, topUpUsd: round(Math.max(0, pts - covered - pledged) / this.settings.pointsPerDollar), quoteStack: stack, hotelTerms: terms, hotelDeadline, quotedBy: actorId, quotedAt: at, quoteLookId: look?.id || null, quoteExpiresAt: expires, decision: note });
     this.log(actorId, 'redemption.quote', 'redemption', id, { points: pts, topUpUsd: r.topUpUsd }); await this.commit('redemptions'); return r;
   }
   /** Member accepts → points Committed. */
@@ -1110,6 +1189,16 @@ export class Store {
     const r = this.redemption(id); if (!r) throw new Error('No such request');
     if (r.status !== REDEMPTION_STATUS.held) throw new Error('The member has not accepted a quote yet');
     if (r.topUpUsd > 0 && !r.topUpConfirmed) throw new Error(`Top-up of $${r.topUpUsd.toFixed(2)} has not been confirmed as received`);
+    // The gate on the quote protects what the member expects. THIS one protects the money: this
+    // is the irreversible act — points burn here, the pledgers' points burn here, and paid_usd
+    // leaves the club here. Days pass between a member accepting and the Desk booking, and a week
+    // can go in that time. Requiring a look made since they accepted costs nothing in practice,
+    // because at this moment the Desk is on the booking page doing the booking.
+    if (this.needsLook(r)) {
+      const l = this.lookFor(r.stayId, r.checkIn, r.checkOut, r.heldAt);
+      if (!l) throw new Error(`Look at it once more before you pay. Nobody has looked at these nights since ${this.member(r.memberId)?.name.split(' ')[0] || 'the member'} accepted.`);
+      if (['gone', 'unclear'].includes(l.found)) throw new Error(`The last look says that week was ${l.found}. Do not pay for it.`);
+    }
     if (this.availablePoints(r.memberId) + r.points < r.points) throw new Error('Member no longer has enough points');
     for (const p of r.pledges || []) {
       if (this.availablePoints(p.memberId) + p.points < p.points) throw new Error(`${this.member(p.memberId)?.name || 'A member'} no longer has the points they chipped in`);
@@ -1121,7 +1210,16 @@ export class Store {
     for (const p of r.pledges || []) {
       burn(p.memberId, p.points, `${stay?.name || 'Stay'} · chipped in for ${this.member(r.memberId)?.name.split(' ')[0] || 'an Insider'}`);
     }
-    this.log(actorId, 'redemption.pay', 'redemption', id, { points: r.points, paidUsd: r.paidUsd, confirmationRef }); await this.commit('redemptions'); return r;
+    // The booking is the last and best look: the one moment somebody did not just see the room,
+    // they took it. Recorded so the history does not end on a maybe.
+    (this.state.looks ||= []).push({
+      id: uid('look'), stayId: r.stayId, redemptionId: r.id, checkIn: r.checkIn, checkOut: r.checkOut,
+      found: 'booked', channel: 'site', url: safeUrl(r.sourceUrl) || safeUrl(stay?.site) || '',
+      label: 'Booked', priceUsd: null, roomLabel: '', note: confirmationRef || '',
+      lookedBy: actorId, byRobot: false, lookedAt: at, goodUntil: addHours(at, 24 * 3650),
+    });
+    r.lastLookId = this.state.looks[this.state.looks.length - 1].id;
+    this.log(actorId, 'redemption.pay', 'redemption', id, { points: r.points, paidUsd: r.paidUsd, confirmationRef }); await this.commit('redemptions', 'looks'); return r;
   }
   async confirmTopUp(id, actorId) { const r = this.redemption(id); if (!r) throw new Error('No such request'); r.topUpConfirmed = true; r.topUpConfirmedAt = nowIso(); this.log(actorId, 'redemption.topup', 'redemption', id, { topUpUsd: r.topUpUsd }); await this.commit('redemptions'); return r; }
   async completeRedemption(id, actorId) {

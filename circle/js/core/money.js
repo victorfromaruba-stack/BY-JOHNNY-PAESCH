@@ -37,6 +37,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   promoCapRate: 0.40,         // promotional points in a month ≤ 40% of that month's share × 100
   bonusExpireMonths: 24,      // promotional points expire; base points never do while active
   quoteHours: 72,             // a quote is locked for 72 hours
+  // How long a look is worth something, by how it was made. Stored on each look at the moment
+  // it is written, never recomputed, so changing this cannot revive an old look.
+  lookHours: { site: 72, phone: 48 },
+  minQuoteHours: 12,          // a stale look shortens the quote, but never below this
+  looksFrom: null,            // requests older than this predate the gate and are exempt
   slaHours: 72,               // planner answers a request within 72 hours
   bankerSlaHours: 48,         // Banker confirms within 48 hours of money arriving
   undoSeconds: 60,            // a confirmation can be reversed by the same officer for 60 s

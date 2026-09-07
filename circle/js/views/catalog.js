@@ -391,9 +391,14 @@ export function book({ store, params, query = {}, go }) {
   // Interval or RedWeek came in through the same link. Victor gets this on the request so he
   // does not have to go and find it again.
   const fromDeal = query.deal ? store.deal?.(query.deal) : null;
+  // ?src= is the listing the member had open when they tapped through — the "Open right now"
+  // board sends it, and that is the freshest link the app ever holds, because VakayMood is the
+  // one source the Circle is allowed to poll. It used to carry the dates and drop the link, so
+  // the request reached Victor with nothing to click and he had to go and find the page again.
+  const fromLink = safeUrl(query.src) ? { url: safeUrl(query.src), label: String(query.srcLabel || 'Where they were looking').slice(0, 60) } : null;
   const cameFrom = fromDeal?.sourceUrl
     ? { url: fromDeal.sourceUrl, label: fromDeal.source === 'other' ? 'The board' : (fromDeal.source || 'The board') }
-    : null;
+    : fromLink;
   // The request has no room column, and inventing one across two backends to carry a
   // preference is the wrong trade — the note is the field for exactly this, and it reaches
   // Victor with everything else. It is prefilled, not locked: it is still the member's message.
@@ -542,15 +547,59 @@ export function requestDetail({ store, params, go, refresh }) {
             // a job — once the hotel is paid the link is history, not a task.
             if (!store.canPlan?.() || ['completed', 'declined', 'cancelled', 'expired'].includes(r.status)) return '';
             const links = store.whereToBook(r.id);
+            const gated = store.needsLook?.(r);
+            const seen = gated ? store.lookFor?.(r.stayId, r.checkIn, r.checkOut) : null;
             return `<div class="panel" style="border-color:var(--good)">
-              <p class="eyebrow">${icon('external')}Where to book it</p>
-              ${links.length ? `<ul class="stack" style="margin-top:10px;list-style:none;padding:0;gap:8px">
-                ${links.map(l => `<li><a class="btn ${l.exact ? '' : 'ghost'} sm" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">
+              <p class="eyebrow">${icon('external')}Go and look</p>
+              <p class="small muted" style="margin-top:6px">Open it, then say what you saw. Nothing here checks the hotel &mdash; you are the only thing that can.</p>
+              ${links.length ? `<ul class="stack" style="margin-top:10px;list-style:none;padding:0;gap:10px">
+                ${links.map((l, i) => `<li><a class="btn ${l.exact ? '' : 'ghost'} sm" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">
                   ${icon('external', { size: 15 })}${escapeHtml(l.label)}</a>${l.exact
                     ? '<span class="small muted" style="margin-left:8px">the listing they were looking at</span>'
-                    : l.seenOn ? `<span class="small muted" style="margin-left:8px">seen ${escapeHtml(fmtDay(l.seenOn))}</span>` : ''}</li>`).join('')}
-              </ul>` : `<p class="small muted" style="margin-top:8px">No link on file for this one — the property has no booking page in the catalog and this request did not come from a listing. Add one in the Desk so the next request has somewhere to go.</p>`}
+                    : l.seenOn ? `<span class="small muted" style="margin-left:8px">seen ${escapeHtml(fmtDay(l.seenOn))}</span>` : ''}
+                  <span class="row" style="gap:6px;margin-top:6px">
+                    <button class="btn ghost sm" data-look="showing" data-url="${escapeHtml(l.url)}" data-label="${escapeHtml(l.label)}">It is there</button>
+                    <button class="btn ghost sm" data-look="gone" data-url="${escapeHtml(l.url)}" data-label="${escapeHtml(l.label)}">It is gone</button>
+                    <button class="btn ghost sm" data-look="unclear" data-url="${escapeHtml(l.url)}" data-label="${escapeHtml(l.label)}">Could not tell</button>
+                  </span></li>`).join('')}
+              </ul>` : `<p class="small muted" style="margin-top:8px">No link on file for this one &mdash; the property has no booking page in the catalog and this request did not come from a listing. Add one in the Desk so the next request has somewhere to go.</p>`}
+              <p class="small" style="margin-top:12px">
+                <button class="btn ghost sm" data-look="phone">I rang them instead</button></p>
+              ${gated ? `<p class="tiny ${seen ? 'muted' : ''}" style="margin-top:10px${seen ? '' : ';color:var(--flag)'}">${seen
+                ? `Last look: ${escapeHtml(store.member(seen.lookedBy)?.name.split(' ')[0] || 'someone')} ${escapeHtml(seen.found === 'showing' ? 'saw it' : seen.found === 'booked' ? 'booked it' : `found it ${seen.found}`)} ${escapeHtml(fmtDayTime(seen.lookedAt))}${seen.priceUsd ? `, asking ${escapeHtml(fmtUsd2(seen.priceUsd))} a night` : ''}.`
+                : 'Nobody has looked at these nights yet, so this cannot be quoted.'}</p>` : ''}
             </div>`;
+          })()}
+          ${(() => {
+            // What anyone has actually seen. The app never says a room is available — it cannot
+            // know that, and saying it would be the same ghost information the rest of this
+            // codebase has spent weeks deleting. It says who looked, where, when, and what they
+            // found. A member reading this can tell the difference between "somebody checked an
+            // hour ago" and "nobody has looked", which is the whole point.
+            if (!store.needsLook?.(r)) return '';
+            const rows = (store.looksFor?.(r.id) || []).filter(l => !l.byRobot);
+            const newest = rows[0];
+            const who = (id) => escapeHtml(store.member(id)?.name.split(' ')[0] || 'The Desk');
+            const host = (u) => { try { return escapeHtml(new URL(u).host.replace(/^www\./, '')); } catch { return 'their site'; } };
+            let line;
+            if (!newest) {
+              line = `<b>Nobody has looked yet.</b> Victor looks before he prices anything — nothing is committed and no points have moved.`;
+            } else if (newest.found === 'booked') {
+              line = `<b>${who(newest.lookedBy)} booked it${newest.note ? `, reference ${escapeHtml(newest.note)}` : ''}.</b> That is the room, not a maybe.`;
+            } else if (newest.found === 'gone') {
+              line = `<b>Not there.</b> ${who(newest.lookedBy)} looked ${newest.channel === 'phone' ? 'and rang them' : `on ${host(newest.url)}`} ${escapeHtml(fmtDayTime(newest.lookedAt))} and could not find these nights.`;
+            } else if (newest.found === 'unclear') {
+              line = `${who(newest.lookedBy)} looked ${escapeHtml(fmtDayTime(newest.lookedAt))} and could not tell${newest.note ? ` &mdash; ${escapeHtml(newest.note)}` : ''}.`;
+            } else {
+              const stale = Date.parse(newest.goodUntil) < Date.now();
+              line = `${who(newest.lookedBy)} saw these nights open. ${newest.channel === 'phone' ? 'He rang them' : `He opened <b>${host(newest.url)}</b>`} ${escapeHtml(fmtDayTime(newest.lookedAt))}${newest.priceUsd ? `, asking ${escapeHtml(fmtUsd2(newest.priceUsd))} a night` : ''}${newest.roomLabel ? ` (${escapeHtml(newest.roomLabel)})` : ''}. That is what the page showed &mdash; it is not a reservation. The room is yours when Victor books it.`
+                + (stale ? ` <b>That was a while ago, and nobody has looked since;</b> he will look again before he books.` : '');
+            }
+            return `<div class="panel flat"><p class="eyebrow">${icon('search')}What anyone has actually seen</p>
+              <p class="small" style="margin-top:8px;line-height:1.5">${line}</p>
+              ${rows.length > 1 ? `<ul class="stack small muted" style="margin-top:10px;list-style:none;padding:0;gap:4px">
+                ${rows.slice(1, 4).map(l => `<li>${who(l.lookedBy)} &middot; ${escapeHtml(fmtDayTime(l.lookedAt))} &middot; ${escapeHtml(l.found)}</li>`).join('')}
+              </ul>` : ''}</div>`;
           })()}
           ${r.decision ? `<div class="notice ${['declined', 'cancelled', 'expired'].includes(r.status) ? 'bad' : ''}">
             <b>${escapeHtml(['declined'].includes(r.status) ? 'Declined by ' : 'Note from ')}${escapeHtml(store.member(r.decidedBy || r.quotedBy)?.name.split(' ')[0] || 'the Desk')}</b>
@@ -644,6 +693,43 @@ export function requestDetail({ store, params, go, refresh }) {
       }
     });
   }
+
+  // Writing down what the Desk saw. Its own listener because the buttons live in the "Go and
+  // look" panel, not in #actions, and that dispatcher only matches [data-act].
+  wrap.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-look]'); if (!btn) return;
+    const found = btn.dataset.look;
+    const phone = found === 'phone';
+    try {
+      const out = await sheet({ title: phone ? 'You rang them' : 'What did you see?', render: (body, close) => {
+        body.innerHTML = `<p class="sheet-text">${escapeHtml(stay?.name || '')} · ${escapeHtml(fmtDay(r.checkIn))} – ${escapeHtml(fmtDay(r.checkOut))}.
+            This is written down with your name and the time on it, and the member reads it.</p>
+          ${phone ? `<label class="field"><span>What did they say?</span><input name="note" placeholder="Held under Hunto until Tuesday, ref 4471" required></label>
+            <label class="field"><span>Was the week there?</span><select name="found">
+              <option value="showing">Yes, it is there</option><option value="gone">No, it is gone</option>
+              <option value="unclear">They could not say</option></select></label>` : ''}
+          <label class="field"><span>Asking, a night (optional)</span><input name="price" type="number" step="0.01" inputmode="decimal" placeholder="only if the page said"></label>
+          <label class="field"><span>The room, as the page named it (optional)</span><input name="room" placeholder="Two-Bedroom Oceanfront"></label>
+          ${phone ? '' : `<label class="field"><span>Anything worth noting${found === 'showing' ? ' (optional)' : ''}</span><input name="note" ${found === 'showing' ? '' : 'required'} placeholder="${found === 'gone' ? 'nothing for these dates' : 'the calendar would not load'}"></label>`}
+          <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Write it down</button></div>`;
+        body.querySelector('[data-ok]').addEventListener('click', () => {
+          const noteEl = body.querySelector('[name=note]');
+          const note = noteEl?.value.trim() || '';
+          if ((phone || ['gone', 'unclear'].includes(found)) && !note) { noteEl.classList.add('invalid'); return; }
+          close({ found: phone ? body.querySelector('[name=found]').value : found, note,
+            priceUsd: Number(body.querySelector('[name=price]').value) || null,
+            roomLabel: body.querySelector('[name=room]').value.trim() });
+        });
+      } });
+      if (out) {
+        await store.recordLook({ stayId: r.stayId, checkIn: r.checkIn, checkOut: r.checkOut,
+          found: out.found, channel: phone ? 'phone' : 'site',
+          url: phone ? '' : btn.dataset.url, label: phone ? 'Rang them' : btn.dataset.label,
+          priceUsd: out.priceUsd, roomLabel: out.roomLabel, note: out.note, redemptionId: r.id }, me.id);
+        toast('Written down.', { kind: 'good' });
+      }
+    } catch (err) { toast(err.message, { kind: 'bad' }); }
+  });
 
   const actions = wrap.querySelector('#actions');
   const buttons = [];

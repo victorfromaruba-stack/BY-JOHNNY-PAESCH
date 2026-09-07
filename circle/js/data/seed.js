@@ -46,6 +46,9 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
     reserveAccount: { bank: 'Aruba Bank', holder: `${VOCAB.clubName} Reserve — held by Vishnu on behalf of the Circle`, number: '6001 2233 4455' },
     operatingAccount: { bank: 'Aruba Bank', holder: `${VOCAB.clubName} Operating — held by Vishnu on behalf of the Circle`, number: '6001 2233 4460' },
     whatsappGroupUrl: '',
+    // The gate starts now, so the requests seeded above (which are older) are exempt exactly as
+    // the real open queue is, and anything asked for from here on has to be looked at first.
+    looksFrom: iso(now),
   };
   const thisMonth = monthKeyOf(now);
   let n = 0; const uid = (p) => `${p}_s${(++n).toString(36).padStart(4, '0')}`;
@@ -321,5 +324,5 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
     { memberId: 'mem_daniela', badgeKey: 'kitchen', paidPoints: 2000, at: '2026-05-14T18:30:00Z' },
   ];
 
-  return { version: 2, seededAt: iso(now), settings, members, contributions, ledger, stays, roomTypes, watches: [], deals: [], redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, crews, crewMembers, crewMessages, badgeCatalog, memberBadges, moments: [], momentReactions: [], session: null };
+  return { version: 2, seededAt: iso(now), settings, members, contributions, ledger, stays, roomTypes, watches: [], deals: [], looks: [], redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, crews, crewMembers, crewMessages, badgeCatalog, memberBadges, moments: [], momentReactions: [], session: null };
 }

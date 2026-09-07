@@ -68,7 +68,7 @@ export class SupabaseStore extends Store {
     this.subscribeRealtime();
   }
   async reload() {
-    const tables = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'pledges', 'announcements', 'audit', 'invitations', 'month_closes', 'promo_deferrals', 'room_types', 'watches', 'deals',
+    const tables = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'pledges', 'looks', 'announcements', 'audit', 'invitations', 'month_closes', 'promo_deferrals', 'room_types', 'watches', 'deals',
       'standings', 'crews', 'crew_members', 'crew_messages', 'moments', 'moment_reactions',
       'badge_catalog', 'member_badges'];
     // members comes from a view that leaves out auth_user_id and the officer's private notes;
@@ -122,7 +122,7 @@ export class SupabaseStore extends Store {
       this.state.stays = [...ARUBA_STAYS, ...WORLD_TRIPS].map(x => ({ ...x, active: true }));
     }
     const { data: s } = await this.sb.from('settings').select('*').eq('id', 1).maybeSingle();
-    if (s) this.state.settings = { ...DEFAULT_SETTINGS, serviceRate: Number(s.service_rate), pointsPerDollar: Number(s.points_per_dollar), awgPerUsd: Number(s.awg_per_usd), tiers: s.tiers, streakBonuses: s.streak_bonuses, foundingBonus: s.founding_bonus, memberCap: s.member_cap, exitFeeUsd: Number(s.exit_fee_usd), quoteHours: s.quote_hours, bankerSlaHours: s.banker_sla_hours, reserveAccount: s.reserve_account, operatingAccount: s.operating_account, reserveVerified: s.reserve_verified, wallet: s.wallet, clubName: s.club_name, momentsOn: !!s.moments_on };
+    if (s) this.state.settings = { ...DEFAULT_SETTINGS, serviceRate: Number(s.service_rate), pointsPerDollar: Number(s.points_per_dollar), awgPerUsd: Number(s.awg_per_usd), tiers: s.tiers, streakBonuses: s.streak_bonuses, foundingBonus: s.founding_bonus, memberCap: s.member_cap, exitFeeUsd: Number(s.exit_fee_usd), quoteHours: s.quote_hours, lookHours: s.look_hours || DEFAULT_SETTINGS.lookHours, minQuoteHours: s.min_quote_hours ?? 12, looksFrom: s.looks_from || null, bankerSlaHours: s.banker_sla_hours, reserveAccount: s.reserve_account, operatingAccount: s.operating_account, reserveVerified: s.reserve_verified, wallet: s.wallet, clubName: s.club_name, momentsOn: !!s.moments_on };
     this.notify('reload');
   }
   subscribeRealtime() {
@@ -286,11 +286,19 @@ export class SupabaseStore extends Store {
   async reverseContribution(id) { return this.rpc('reverse_contribution', { p_id: id }); }
 
   // ---------- redemptions ----------
-  async requestRedemption({ stayId, checkIn, checkOut, guests = 2, seats = 1, note = '', flexDays = 0, shared = false }) {
-    return this.rpc('request_redemption', { p_stay: stayId, p_check_in: checkIn, p_check_out: checkOut, p_guests: guests, p_seats: seats, p_note: note, p_flex: flexDays, p_shared: shared });
+  async requestRedemption({ stayId, checkIn, checkOut, guests = 2, seats = 1, note = '', flexDays = 0, shared = false, sourceUrl = '', sourceLabel = '' }) {
+    return this.rpc('request_redemption', { p_stay: stayId, p_check_in: checkIn, p_check_out: checkOut, p_guests: guests, p_seats: seats, p_note: note, p_flex: flexDays, p_shared: shared, p_source_url: sourceUrl || null, p_source_label: sourceLabel || null });
   }
-  async quoteRedemption(id, _actor, { points, stack = null, terms = '', hotelDeadline = null, note = '' }) {
-    return this.rpc('quote_redemption', { p_id: id, p_points: points, p_stack: stack, p_terms: terms, p_deadline: hotelDeadline, p_note: note });
+  async quoteRedemption(id, _actor, { points, stack = null, terms = '', hotelDeadline = null, note = '', lookId = null }) {
+    return this.rpc('quote_redemption', { p_id: id, p_points: points, p_stack: stack, p_terms: terms, p_deadline: hotelDeadline, p_note: note, p_look: lookId });
+  }
+  /** A named person opened a named page and wrote down what they saw. Desk only, server-side. */
+  async recordLook({ stayId, checkIn, checkOut, found, channel = 'site', url = '', label = '', priceUsd = null, roomLabel = '', note = '', redemptionId = null }) {
+    const l = await this.rpc('record_look', { p_stay: stayId, p_check_in: checkIn, p_check_out: checkOut,
+      p_found: found, p_channel: channel, p_url: url || null, p_label: label || null,
+      p_price: priceUsd, p_room_label: roomLabel || null, p_note: note || null, p_redemption: redemptionId });
+    await this.reload();
+    return l;
   }
   async acceptQuote(id) {
     // A lapsed quote comes back as the expired row rather than an exception, because raising
