@@ -4,7 +4,7 @@
 // Business rules live here so the demo and the real club produce identical numbers.
 
 import { uid, nowIso, sum, monthKey, fmtMonth, nightsBetween } from './util.js';
-import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, seasonPoints, seatPoints, pointsPerMonth } from './money.js';
+import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, fromPoints, seatPoints, pointsPerMonth } from './money.js';
 import { initialsOf, refFor } from './vocab.js';
 import { standingFrom, rankFor, RANKS } from './standing.js';
 
@@ -499,13 +499,15 @@ export class Store {
    * The pick is their own dream stay when they can cover its minimum, and otherwise the
    * DEAREST place they can still cover: "3 nights at the Ritz-Carlton" is a truer picture of
    * what the points are worth than "nineteen nights at the cheapest place on the list".
-   * Summer, because it is the honest floor and the screen names the season.
+   *
+   * Priced at each place's cheapest night, because this screen has no dates on it — the member
+   * has not chosen any yet. The screen says "from" so the number is never read as a promise.
    */
-  canBookNow(memberId = this.session?.memberId, { season = 'low' } = {}) {
+  canBookNow(memberId = this.session?.memberId) {
     const m = this.member(memberId);
     if (!m) return null;
     const avail = Math.max(0, this.availablePoints(memberId));
-    const per = (st) => seasonPoints(st, season, this.settings);
+    const per = (st) => fromPoints(st, this.settings);
     const list = this.stays.filter(x => x.active !== false && x.kind !== 'trip' && per(x) > 0);
     if (!list.length) return null;
     const nightsAt = (st) => Math.floor(avail / per(st));
@@ -521,7 +523,7 @@ export class Store {
         : dearest(real.length ? real : affordable);
       // Capped: past a fortnight the number stops being a plan and starts being a boast.
       const nights = Math.min(nightsAt(pick), 14);
-      return { can: true, stay: pick, season, nights, capped: nightsAt(pick) > 14,
+      return { can: true, stay: pick, nights, capped: nightsAt(pick) > 14, from: true,
         perNight: per(pick), points: nights * per(pick), available: avail };
     }
     // Nearest by what it takes to WALK IN, not by the nightly rate. The Surf Club is the
@@ -531,15 +533,19 @@ export class Store {
     const nearest = list.reduce((a, b) => (total(b) < total(a) ? b : a));
     const nights = nearest.minNights || 1;
     const need = total(nearest);
-    return { can: false, stay: nearest, season, nights, perNight: per(nearest),
+    return { can: false, stay: nearest, nights, perNight: per(nearest), from: true,
       points: need, short: Math.max(0, need - avail), available: avail,
       months: monthsToAfford(this.settings, need, m.monthlyUsd, avail) };
   }
 
   /**
-   * What a member is saving for, and how far off it is. A goal is a stay (with a number of
-   * nights and a season) or a seat on a trip. Nothing is reserved by setting one — it is
-   * the thing that makes a contribution feel like it moved something.
+   * What a member is saving for, and how far off it is. A goal is a stay and a number of
+   * nights, or a seat on a trip. Nothing is reserved by setting one — it is the thing that
+   * makes a contribution feel like it moved something.
+   *
+   * Goals saved before the seasons went carry a `season` key. It is ignored rather than
+   * migrated: every goal in the database has one, none of them can be re-asked for, and a
+   * target priced from the cheapest night is the right answer for a goal with no dates on it.
    */
   goalFor(memberId = this.session?.memberId) {
     const m = this.member(memberId); const g = m?.goal;
@@ -547,13 +553,12 @@ export class Store {
     const stay = this.stay(g.stayId); if (!stay || stay.active === false) return null;
     const isTrip = stay.kind === 'trip';
     const nights = isTrip ? stay.nights : Math.max(Number(g.nights) || 0, stay.minNights || 1);
-    const season = g.season || 'low';
-    const target = isTrip ? seatPoints(stay, this.settings) : seasonPoints(stay, season, this.settings) * nights;
+    const target = isTrip ? seatPoints(stay, this.settings) : fromPoints(stay, this.settings) * nights;
     const have = Math.max(0, this.availablePoints(memberId));
     const short = Math.max(0, target - have);
     const perMonth = pointsPerMonth(this.settings, m.monthlyUsd);
     return {
-      stay, isTrip, nights, season, target, have, short,
+      stay, isTrip, nights, target, have, short, from: !isTrip,
       pct: target ? Math.min(1, have / target) : 1,
       months: monthsToAfford(this.settings, target, m.monthlyUsd, have),
       perMonth, topUpUsd: round(short / this.settings.pointsPerDollar),
@@ -1081,10 +1086,16 @@ export class Store {
   roomTypes() { return (this.state.roomTypes || []).filter(r => r.active !== false); }
   roomTypesFor(stayId) { return this.roomTypes().filter(r => r.stayId === stayId).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (a.rateFactor || 1) - (b.rateFactor || 1)); }
   roomType(id) { return id ? (this.state.roomTypes || []).find(r => r.id === id) || null : null; }
-  /** What a night in this particular room costs, in points. */
-  roomPoints(stayId, roomTypeId, season = 'low') {
+  /**
+   * What a night in this particular room costs at its cheapest, in points.
+   *
+   * Renamed from roomPoints(stayId, roomTypeId, season). JS discards a surplus positional
+   * argument in silence, so keeping the old name would have left both call sites passing a
+   * dead season variable and rendering plausible numbers forever.
+   */
+  roomPointsFrom(stayId, roomTypeId) {
     const stay = this.stay(stayId); if (!stay) return 0;
-    const base = seasonPoints(stay, season, this.settings);
+    const base = fromPoints(stay, this.settings);
     const rt = this.roomType(roomTypeId);
     return Math.round(base * (rt?.rateFactor || 1));
   }

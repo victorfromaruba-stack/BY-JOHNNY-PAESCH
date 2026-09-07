@@ -2,7 +2,7 @@
 // plus the two everyone can see: the Circle and the Pool.
 import { countdownTo, downloadText, escapeHtml, fmtAfl2, fmtDay, fmtDayTime, fmtMonth, fmtPct, fmtPoints, fmtUsd2, initials, monthKey, pointsUsd, safeUrl, sum, toCsv } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
-import { splitContribution, tierFor, seasonPoints, seatPoints, SEASONS } from '../core/money.js';
+import { splitContribution, tierFor, fromPoints, seatPoints, RATE_BAND_LIST } from '../core/money.js';
 import { poolGauge, rankCrest, ring, splitBar } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel, avatar } from '../ui/components.js';
@@ -427,19 +427,17 @@ export function desk({ store, go }) {
       <div class="row-between"><h2 style="font-size:1.1rem">What the Circle offers</h2>
         <button class="btn ghost sm" id="add">Add a stay</button></div>
       <div class="tablewrap" style="margin-top:14px;border:0"><table>
-        <thead><tr><th>Name</th><th>Area</th><th class="num">Summer</th><th class="num">Winter</th><th class="num">Peak</th><th>State</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Area</th><th class="num">From, a night</th><th>State</th><th></th></tr></thead>
         <tbody>${list.map(st => `<tr>
           <td><b>${escapeHtml(st.name)}</b><br><span class="small muted">${st.kind === 'trip' ? `${escapeHtml(fmtDay(st.dates.from))} · ${st.nights} nights` : `min ${st.minNights} nights`}</span></td>
           <td class="small">${escapeHtml(st.area)}</td>
           ${st.kind === 'trip'
-            ? `<td class="num" colspan="3">${escapeHtml(fmtPoints(seatPoints(st, s)))} a seat</td>`
-            : `<td class="num">${escapeHtml(fmtPoints(seasonPoints(st, 'low', s)))}</td>
-               <td class="num">${escapeHtml(fmtPoints(seasonPoints(st, 'high', s)))}</td>
-               <td class="num">${escapeHtml(fmtPoints(seasonPoints(st, 'peak', s)))}</td>`}
+            ? `<td class="num">${escapeHtml(fmtPoints(seatPoints(st, s)))} a seat</td>`
+            : `<td class="num">${escapeHtml(fmtPoints(fromPoints(st, s)))}</td>`}
           <td>${st.active ? chip('confirmed', 'Live') : chip('cancelled', 'Draft')}</td>
           <td><button class="btn quiet sm" data-edit="${st.id}">Edit</button></td></tr>`).join('')}</tbody>
       </table></div>
-      <p class="small muted" style="margin-top:12px">Rates are the Circle’s all-in cost per night. Members see the points; you edit the dollars.</p>
+      <p class="small muted" style="margin-top:12px">The cheapest night of the year at each place — open one to set all three of its rates. Members see the points; you edit the dollars.</p>
     </div>`));
     panel.addEventListener('click', async (e) => {
       const ed = e.target.closest('[data-edit]');
@@ -537,13 +535,13 @@ async function editStay(store, stay) {
           <label class="field"><span>Guest price in cash US$</span><input name="guestCashUsd" type="number" step="1" value="${stay.guestCashUsd || 0}" inputmode="decimal">
             <span class="hint">What a non-member pays the Banker, at face value.</span></label></div>`
         : `<div class="grid g3">
-        ${moneyPair('low', 'Summer · Apr 6 – Dec 19', stay?.rates?.low ?? 250, s)}
-        ${moneyPair('high', 'Winter · Jan 4 – Apr 5', stay?.rates?.high ?? 380, s)}
-        ${moneyPair('peak', 'Peak · Dec 20 – Jan 3', stay?.rates?.peak ?? 460, s)}
+        ${RATE_BAND_LIST.map(b => moneyPair(b.id, `${b.from} – ${b.to}`,
+            stay?.rates?.[b.id] ?? ({ low: 250, high: 380, peak: 460 })[b.id], s)).join('')}
       </div>
+      <p class="small muted" style="margin-bottom:14px">Three dates, three rates — the way the hotels quote them. A member never sees these three or any name for them: they give their dates and the app prices those nights.</p>
       <div class="grid g3">
         <label class="field"><span>Minimum nights</span><input name="minNights" type="number" value="${stay?.minNights || 2}" inputmode="numeric"></label>
-        <label class="field"><span>Minimum at Peak</span><input name="peakMinNights" type="number" value="${stay?.peakMinNights || 7}" inputmode="numeric"></label>
+        <label class="field"><span>Minimum, 20 Dec – 3 Jan</span><input name="peakMinNights" type="number" value="${stay?.peakMinNights || 7}" inputmode="numeric"></label>
         <label class="field"><span>Public rate US$</span><input name="retailUsd" type="number" value="${stay?.retailUsd || 0}" inputmode="decimal"></label>
       </div>`}
       <label class="field"><span>What it is like</span><textarea name="vibe" rows="2">${escapeHtml(stay?.vibe || '')}</textarea></label>

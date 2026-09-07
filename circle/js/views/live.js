@@ -14,7 +14,7 @@
 //     asking for it goes through the same quote as everything else.
 
 import { escapeHtml, fmtUsd2, fmtPoints, fmtDay, pointsUsd, nightsBetween } from '../core/util.js';
-import { seasonPoints, SEASONS, seasonFor } from '../core/money.js';
+import { nightPoints } from '../core/money.js';
 import { icon } from '../ui/icons.js';
 import { toast, setBusy, confirmDialog } from '../ui/components.js';
 import { availability, RESORTS, rrCode } from '../data/vakaymood.js';
@@ -44,8 +44,8 @@ function clubRateFor(store, d) {
   if (!d.stayId) return null;
   const stay = store.stayLike(d.stayId);
   if (!stay || stay.kind === 'trip') return null;
-  const season = seasonFor(`${d.from}T12:00:00Z`) || 'low';
-  const base = seasonPoints(stay, season, store.settings);
+  // Priced on the night the deal actually starts, which is what this comparison is about.
+  const base = nightPoints(stay, `${d.from}T12:00:00Z`, store.settings);
   if (!base) return null;
 
   const beds = bedroomsOf(d);
@@ -57,7 +57,7 @@ function clubRateFor(store, d) {
 
   const per = match ? Math.round(base * (match.rateFactor || 1)) : base;
   return {
-    season, per, total: per * d.nights, stay,
+    per, total: per * d.nights, stay,
     // Named so the card can say WHAT it is comparing against, rather than implying it is
     // the property's headline rate when it is not.
     against: match ? match.name : null,
@@ -169,8 +169,8 @@ export function live({ store, go }) {
         ${escapeHtml(fmtUsd2(d.usdSubtotal))} at booking, ${escapeHtml(fmtUsd2(d.usdFees))} at the resort${d.feeLines.length ? ` (${d.feeLines.map(f => escapeHtml(f.name)).join(', ')})` : ''}</p>` : ''}
 
       ${beatsClub ? `<div class="notice good" style="margin-top:10px"><b>${icon('trend', { size: 16 })} ${escapeHtml(fmtPoints(savedPts))} under our own rate</b>
-          <p class="small">Our ${escapeHtml(SEASONS[club.season].label)} rate for ${d.nights} nights${club.against ? ` in a ${escapeHtml(club.against)}` : ''} is ${escapeHtml(fmtPoints(club.total))} — this is ${escapeHtml(pointsUsd(savedPts, s.pointsPerDollar))} cheaper.${club.exact ? '' : ' Compared against the property’s headline room, since we have no room of this size on file.'}</p></div>`
-        : club ? `<p class="small muted" style="margin-top:8px">Our ${escapeHtml(SEASONS[club.season].label)} rate for the same ${d.nights} nights${club.against ? ` in a ${escapeHtml(club.against)}` : ''} is ${escapeHtml(fmtPoints(club.total))}.</p>` : ''}
+          <p class="small">Our own rate for those ${d.nights} nights${club.against ? ` in a ${escapeHtml(club.against)}` : ''} is ${escapeHtml(fmtPoints(club.total))} — this is ${escapeHtml(pointsUsd(savedPts, s.pointsPerDollar))} cheaper.${club.exact ? '' : ' Compared against the property’s headline room, since we have no room of this size on file.'}</p></div>`
+        : club ? `<p class="small muted" style="margin-top:8px">Our own rate for the same ${d.nights} nights${club.against ? ` in a ${escapeHtml(club.against)}` : ''} is ${escapeHtml(fmtPoints(club.total))}.</p>` : ''}
 
       <p class="small ${short ? 'muted' : ''}" style="margin-top:8px">${icon('spark', { size: 14 })}
         ${short ? `You are ${escapeHtml(fmtPoints(short))} short — ${escapeHtml(pointsUsd(short, s.pointsPerDollar))} as a top-up, or open it to the Circle.`

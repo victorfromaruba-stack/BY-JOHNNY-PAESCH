@@ -122,15 +122,32 @@ export const usdToPoints = (usd, settings = DEFAULT_SETTINGS) => Math.round((Num
 export function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 
 // ---------------------------------------------------------------------
-// Seasons. Aruba's hotel year splits at Dec 20 / Apr 5. Peak = Christmas–New
-// Year and Carnival week (from Easter); both carry 7-night minimums.
-// Three published levels, never dynamic.
+// What a night costs, by the date.
+//
+// There used to be a "season" system here — Summer, Winter, Peak, Carnival — with a picker on
+// the goal sheet, a toggle on the room table, four photographs on the landing page and a
+// two-column table of bands. Victor: "I am not sure what season have to do with our system
+// winter, summer etc. no need for that." He is right about all of it, and none of it was ever
+// the member's problem: you do not want to learn a vocabulary, you want to know what YOUR
+// nights cost.
+//
+// So the words are gone and the arithmetic stayed. It had to. Measured against the live
+// catalog, a night at Marriott's Aruba Surf Club is $135 in September and $580 at Christmas —
+// 4.3x — and across all 23 Aruba stays the dear half of the year averages 1.53x and the
+// fortnight around Christmas 1.96x. One flat number would be either a summer rate that gives
+// away half of every winter booking, or a blend that overcharges everyone in September. The
+// hotels price by date; so do we. We simply never make anybody read a season name to find out.
+//
+// Nothing below is exported under a season name, and no screen prints one. `RATE_BANDS` is
+// internal: three stored rates keyed by when they apply, and `rateBandFor(date)` says which.
 // ---------------------------------------------------------------------
-export const SEASONS = Object.freeze({
-  low: { id: 'low', label: 'Summer', range: 'Apr 6 – Dec 19' },
-  high: { id: 'high', label: 'Winter', range: 'Jan 4 – Apr 5' },
-  peak: { id: 'peak', label: 'Peak', range: 'Dec 20 – Jan 3 · Carnival week' },
+const RATE_BANDS = Object.freeze({
+  low: { id: 'low', from: 'Apr 6', to: 'Dec 19' },
+  high: { id: 'high', from: 'Jan 4', to: 'Apr 5' },
+  peak: { id: 'peak', from: 'Dec 20', to: 'Jan 3' },
 });
+/** For the Desk's rate editor, which is the only screen that sets three numbers. */
+export const RATE_BAND_LIST = Object.freeze(Object.values(RATE_BANDS).map(b => Object.freeze({ ...b })));
 export function easterSunday(year) {
   const a = year % 19, b = Math.floor(year / 100), c = year % 100, d = Math.floor(b / 4), e = b % 4,
     f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30,
@@ -146,7 +163,13 @@ export function carnivalWeek(year) {
   const end = new Date(ash); end.setDate(ash.getDate() + 1);
   return { start, end, parade, ash };
 }
-export function seasonFor(dateLike) {
+/**
+ * Which of a stay's three stored rates applies on a given night. Internal — the id it returns
+ * is a column name, not a word anybody reads. Mirrored by season_for() in schema.sql, which
+ * keeps its old name because SQL is not a screen; the two must agree to the day or the
+ * two backends quote different prices for the same week.
+ */
+export function rateBandFor(dateLike) {
   const d = new Date(dateLike); const md = (d.getMonth() + 1) * 100 + d.getDate();
   if (md >= 1220 || md <= 103) return 'peak';
   const cw = carnivalWeek(d.getFullYear());
@@ -154,7 +177,6 @@ export function seasonFor(dateLike) {
   if (md >= 104 && md <= 405) return 'high';
   return 'low';
 }
-export const isDushiSeason = (dateLike) => { const m = new Date(dateLike).getMonth() + 1; return m >= 9 && m <= 11; };
 
 /**
  * What one night costs, all in — the room and the Circle's share together, because that is the
@@ -166,17 +188,33 @@ const allIn = (usd, settings) => Math.round((Number(usd) || 0) * settings.points
 /** The room on its own, without the Circle's share. For showing the split, never for charging. */
 export const roomOnlyPoints = (usd, settings = DEFAULT_SETTINGS) => Math.round((Number(usd) || 0) * settings.pointsPerDollar);
 
-export function nightlyPoints(stay, dateLike, settings = DEFAULT_SETTINGS) {
-  const s = seasonFor(dateLike);
-  const usd = stay.rates?.[s] ?? stay.rates?.high ?? stay.rates?.low ?? 0;
-  return allIn(usd, settings);
-}
-export function seasonPoints(stay, season, settings = DEFAULT_SETTINGS) {
-  return allIn(stay.rates?.[season] ?? 0, settings);
+/**
+ * What one night costs on a given date, all in. This is the function nearly every screen wants.
+ *
+ * It replaces seasonPoints(stay, season, settings), and it is a RENAME rather than a changed
+ * signature on purpose. The old one read `stay.rates?.[season] ?? 0`, so a caller that lost its
+ * middle argument in the refactor would have looked up `stay.rates[settingsObject]`, found
+ * nothing, and charged the member ZERO — a free room, rendered without an error, in a screen
+ * that looks entirely normal. A new name turns every one of those into an import error at load
+ * instead, which is a bad afternoon rather than a bad month.
+ */
+export function nightPoints(stay, dateLike, settings = DEFAULT_SETTINGS) {
+  return allIn(stay?.rates?.[rateBandFor(dateLike)] ?? 0, settings);
 }
 
 /**
- * What a seat on a trip actually costs a member — `seasonPoints`' opposite number for trips.
+ * The cheapest a place ever is, for the screens that have no dates yet — a card in the list, a
+ * filter, a goal. Always shown as "from", because that is what it is, and because quoting the
+ * dearest or an average would make every card a small lie in one direction or the other.
+ */
+export function fromPoints(stay, settings = DEFAULT_SETTINGS) {
+  const r = stay?.rates || {};
+  const known = [r.low, r.high, r.peak].map(Number).filter(n => Number.isFinite(n) && n > 0);
+  return known.length ? allIn(Math.min(...known), settings) : 0;
+}
+
+/**
+ * What a seat on a trip actually costs a member — `nightPoints`' opposite number for trips.
  *
  * `pointsPerSeat` is stored the same way `rates` is: the room, before the Circle's share. Only
  * quoteStay applied the 15%, so every screen that printed `pointsPerSeat` was quoting a member
@@ -189,9 +227,12 @@ export function seatPoints(stay, settings = DEFAULT_SETTINGS) {
   return Math.round((stay?.pointsPerSeat || 0) * (1 + settings.serviceRate));
 }
 
-/** What a member pays for one of anything on the board: a night in a season, or a seat. */
-export function unitPoints(stay, season = 'low', settings = DEFAULT_SETTINGS) {
-  return stay?.kind === 'trip' ? seatPoints(stay, settings) : seasonPoints(stay, season, settings);
+/**
+ * The "from" price of anything on the board: the cheapest night of the year, or a seat.
+ * A trip has one price and always did, so this is where the two shapes finally meet.
+ */
+export function unitPoints(stay, settings = DEFAULT_SETTINGS) {
+  return stay?.kind === 'trip' ? seatPoints(stay, settings) : fromPoints(stay, settings);
 }
 
 /**
@@ -239,27 +280,33 @@ export function quoteStay(stay, checkIn, checkOut, settings = DEFAULT_SETTINGS, 
   const breakdown = { low: 0, high: 0, peak: 0 };
   // Night by night, exactly as quote_points() does it in the database. `points` is what comes
   // off the balance; `basePoints` is the room alone, so a screen can show what the Circle took.
-  let points = 0, basePoints = 0, usd = 0;
+  let points = 0, basePoints = 0, usd = 0, retail = 0;
+  // The public rate has to move with the calendar the same way ours does, or the comparison is
+  // theatre. `retailUsd` is a DEAR-season figure — stays.js calls it "a typical public all-in
+  // winter rate" — so holding it flat across a September week compared a cheap week of ours
+  // against a Christmas week of theirs and printed "82% off" on a real screen. Scaling it by
+  // the same band ratio our own rates carry makes it like-for-like using data already on the
+  // row; the Surf Club goes from a fictional 82% to a defensible 58%.
+  const anchor = Number(stay.rates?.high) || 0;
   for (let i = 0; i < nights; i++) {
     const d = new Date(start); d.setDate(start.getDate() + i);
-    const s = seasonFor(d); breakdown[s]++;
+    const s = rateBandFor(d); breakdown[s]++;
     const rate = stay.rates?.[s] ?? stay.rates?.high ?? 0;
     usd += rate;
     basePoints += roomOnlyPoints(rate, settings);
     points += allIn(rate, settings);
+    retail += anchor > 0 ? (stay.retailUsd || 0) * (rate / anchor) : (stay.retailUsd || 0);
   }
+  retail = round2(retail);
+  // The longer minimum still applies over Christmas and Carnival — that is the hotels' rule,
+  // not ours, and 21 of the 26 catalog rows carry one. It is no longer called a Peak minimum
+  // anywhere a member reads: quoteStay just returns the minimum for THESE dates, and the screen
+  // says "7 nights minimum for those dates". Losing this when the seasons went would have
+  // silently flipped q.ok from false to true on every Christmas week in the catalog.
   const minNights = breakdown.peak > 0 ? Math.max(stay.minNights || 1, stay.peakMinNights || stay.minNights || 1) : (stay.minNights || 1);
-  const retail = nights * (stay.retailUsd || 0);
   return { nights, points, basePoints, servicePoints: points - basePoints, usd: round2(usd), breakdown, minNights,
     ok: nights >= minNights && nights > 0, retailUsd: retail,
     savingsPct: retail ? Math.round((1 - usd / retail) * 100) : 0 };
 }
 
-/** "You are 1.4 nights from Bucuti in Summer" */
-export function nightsAway(points, stay, season = 'low', settings = DEFAULT_SETTINGS) {
-  const per = unitPoints(stay, season, settings);
-  if (!per) return null;
-  const nights = points / per;
-  const need = Math.max(0, (stay.minNights || 1) * per - points);
-  return { nightsCoverable: Math.floor(nights * 10) / 10, perNight: per, need, months: null };
-}
+

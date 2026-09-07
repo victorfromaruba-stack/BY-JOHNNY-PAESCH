@@ -1,7 +1,7 @@
 // Public and entry screens: the landing page, the rules, sign-in, and the invitation.
 import { escapeHtml, html, raw, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, fmtDay, fmtPct, initials } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
-import { splitContribution, tierFor, projectPoints, seasonPoints, seatPoints, unitPoints, SEASONS, REACH, pointsPerMonth, monthsToAfford } from '../core/money.js';
+import { splitContribution, tierFor, projectPoints, fromPoints, seatPoints, unitPoints, pointsPerMonth, monthsToAfford } from '../core/money.js';
 import { poolGauge, memberCard, ring, tierLadder } from '../ui/pieces.js';
 import { sceneSvg, treeSvg, starSvg } from '../ui/art.js';
 import { toast, setBusy, sheet, avatar } from '../ui/components.js';
@@ -33,19 +33,26 @@ export function sourceLine(stay) {
     <em>a night, seen ${escapeHtml(fmtDay(src.interval?.seenOn || src.redweek?.seenOn))}</em></span></span>`;
 }
 
-/** A stay or trip card, used on the landing page and throughout the catalog. */
-export function stayCard(stay, { store, season = 'low', href = null, footer = '' } = {}) {
+/**
+ * A stay or trip card, used on the landing page and throughout the catalog.
+ *
+ * A card has no dates on it, so it shows the cheapest the place ever is and says "from". It
+ * used to take a season and quote that season's rate without ever saying which — so the same
+ * hotel showed a different number on the landing page and in the catalog, and neither was
+ * labelled.
+ */
+export function stayCard(stay, { store, href = null, footer = '' } = {}) {
   // store.settings, not the defaults. Without it the whole catalog priced itself off
   // DEFAULT_SETTINGS and silently ignored every rate Victor edits in the Desk — so the number
   // on the card and the number in the quote could disagree, which is the one thing a price
   // must never do.
-  const per = unitPoints(stay, season, store?.settings);
+  const per = unitPoints(stay, store?.settings);
   const node = el(`<a class="stay-card" href="${escapeHtml(href || `#/${stay.kind === 'trip' ? 'trips' : 'stays'}/${stay.id}`)}">
       <span class="strip"><span class="duo"></span><span class="ph-note">illustration</span></span>
       <span class="body">
         <h3>${escapeHtml(stay.name)}</h3>
         <span class="where">${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}${stay.kind === 'trip' ? ` · ${stay.nights} nights` : stay.onSand ? ' · on the sand' : ' · across the road'}</span>
-        <span class="price"><b class="num">${escapeHtml(fmtPoints(per))}</b><small>${escapeHtml(stay.kind === 'trip' ? `a seat · ${fmtUsd2(per / 100)}` : `a night · ${fmtUsd2(per / 100)}`)}</small></span>
+        <span class="price"><b class="num">${escapeHtml(fmtPoints(per))}</b><small>${escapeHtml(stay.kind === 'trip' ? `a seat · ${fmtUsd2(per / 100)}` : `from, a night · ${fmtUsd2(per / 100)}`)}</small></span>
         <span class="flags">${stay.house ? '<span class="tag house">Where we stay</span>' : ''}${(stay.features || []).slice(0, stay.house ? 2 : 3).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</span>
         ${sourceLine(stay)}
         ${footer}
@@ -124,7 +131,7 @@ export function landing({ store, go }) {
   const hz = horizon.querySelector('#horizon');
   // Signed out, every one of these opened a password form with no explanation — someone was
   // browsing hotels and got a login screen. Send them somewhere deliberate instead.
-  featured.forEach(st => hz.appendChild(stayCard(st, { store, season: 'low', href: blind ? '#/sign-in' : null })));
+  featured.forEach(st => hz.appendChild(stayCard(st, { store, href: blind ? '#/sign-in' : null })));
   wrap.appendChild(horizon);
 
   // Where the money goes. Nothing is taken on the way in; the Circle is paid on the room.
@@ -153,9 +160,9 @@ export function landing({ store, go }) {
     // store.settings, not the defaults — the same trap the stay cards fell into. Without it
     // these nights are priced off DEFAULT_SETTINGS and quietly ignore Victor's own rates.
     const nights = (id) => { const st = store.stayLike(id); if (!st) return null;
-      const per = seasonPoints(st, 'low', s); return per > 0 ? { n: Math.floor(p12.points / per), name: st.name } : null; };
+      const per = fromPoints(st, s); return per > 0 ? { n: Math.floor(p12.points / per), name: st.name } : null; };
     const villa = nights('stay_surfclub'), ai = nights('stay_divi');
-    const both = [villa && `about ${villa.n} nights in a villa at ${escapeHtml(villa.name)} in Summer`,
+    const both = [villa && `about ${villa.n} nights in a villa at ${escapeHtml(villa.name)}`,
                   ai && `${ai.n} all-inclusive at ${escapeHtml(ai.name)}`].filter(Boolean);
     split.querySelector('#split-figures').innerHTML = `
       <p class="eyebrow">${escapeHtml(fmtUsd2(chosen))} a month becomes</p>
@@ -183,9 +190,9 @@ export function landing({ store, go }) {
   // Any of these can come back empty on a catalog that has been edited — a missing place costs
   // its own row, never the section.
   const waitRows = [
-    ...waitRow('3 nights at Amsterdam Manor', 'in Summer, all in', aruba ? seasonPoints(aruba, 'low', s) * 3 : 0),
+    ...waitRow('3 nights at Amsterdam Manor', 'at its cheapest, all in', aruba ? fromPoints(aruba, s) * 3 : 0),
     ...waitRow('A week in a Surf Club villa', 'your quarter of it, four of you chipping in',
-      villa ? Math.round(seasonPoints(villa, 'low', s) * (villa.minNights || 7) / 4) : 0),
+      villa ? Math.round(fromPoints(villa, s) * (villa.minNights || 7) / 4) : 0),
     ...waitRow('A seat on the Samaná week', 'flights not included', trip ? seatPoints(trip, s) : 0),
   ];
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
@@ -209,38 +216,43 @@ export function landing({ store, go }) {
         <li><b>The Circle pays the hotel</b><span>Your points burn, the Reserve pays, and Ian sends you the confirmation.</span></li>
       </ol></div></section>`));
 
-  // Award bands
-  const bands = [
-    ['Boutique and low-rise', 'Amsterdam Manor · Boardwalk · voco Surfside · Eagle Aruba', 18000, 24000, 26000, 34000],
-    ['Villas, rented by the week', 'Marriott’s Aruba Surf Club · Marriott’s Aruba Ocean Club', 28000, 31000, 45000, 48000],
-    ['Full-service Palm Beach', 'Hilton · Holiday Inn · Courtyard · Radisson Blu · Embassy Suites', 25000, 32000, 36000, 48000],
-    ['Premium', 'Aruba Marriott · Hyatt Regency · Renaissance · Manchebo · Ocean Z', 33000, 42000, 50000, 65000],
-    ['Luxury', 'Ritz-Carlton · Bucuti & Tara · Aruba Ocean Villas', 55000, 75000, 85000, 120000],
-    ['All-inclusive, two adults', 'Divi · Tamarijn · Barceló · RIU Palace Antillas', 45000, 55000, 60000, 75000],
-  ];
-  wrap.appendChild(el(`<section class="sec"><div class="wrap">
+  // What a night costs — read off the catalog, at render time, every time.
+  //
+  // This was six hand-typed bands with two season columns. Measured against the catalog it
+  // sits twelve lines away from, all twelve published ranges were wrong and 27 of the 46 named
+  // hotels fell outside the band their own name was printed in — the villa row overstated the
+  // Circle's own summer rate by 65%. It also carried the sentence "Published once a year and
+  // never changed after you have booked against them", which made a wrong number a promise.
+  //
+  // A price that is typed in two places drifts. This one is computed from store.stays, so it
+  // cannot: if Victor edits a rate in the Desk, this table has already changed.
+  const priced = store.arubaStays()
+    .map(st => ({ st, from: fromPoints(st, s) }))
+    .filter(x => x.from > 0)
+    .sort((a, b) => a.from - b.from);
+  if (priced.length) {
+    const cheapest = priced[0], dearest = priced[priced.length - 1];
+    const show = priced.length > 8
+      ? [...priced.slice(0, 4), ...priced.slice(-4)]
+      : priced;
+    wrap.appendChild(el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>What a night costs</h2>
-      <p>Published once a year and never changed after you have booked against them. Your binding quote is Victor’s negotiated all-in rate, which is usually better.</p></div></div>
-      <div class="seasons-row">
-        ${[['season-summer', 'Summer', SEASONS.low.range, 'The quiet half of the year, and the cheapest.'],
-           ['season-winter', 'Winter', SEASONS.high.range, 'When everyone wants to be here.'],
-           ['season-peak', 'Peak', SEASONS.peak.range, 'Christmas and New Year, priced accordingly.'],
-           ['season-carnival', 'Carnival', 'the weeks before Lent', 'Moves every year with Easter.']]
-          .map(([img, name, when, note]) => `<figure class="season-card">
-            <img src="assets/${img}.jpg" alt="" loading="lazy" decoding="async">
-            <figcaption><b>${escapeHtml(name)}</b><span class="tiny muted">${escapeHtml(when)}</span>
-              <span class="small muted">${escapeHtml(note)}</span></figcaption>
-          </figure>`).join('')}
-      </div>
+      <p>Every price on this page is the Circle&rsquo;s all-in rate — the room, the 12.5% levy, the service charge and the resort fee together. Nothing is added later.</p></div>
+      <a class="btn ghost sm" href="${blind ? '#/sign-in' : '#/stays'}">${icon('chevronRight', { size: 15 })}${blind ? 'Sign in for all ' + priced.length : 'All ' + priced.length}</a></div>
+
       <div class="tablewrap"><table class="bands">
-        <caption class="sr-only">Indicative points per night by category and season</caption>
-        <thead><tr><th>Category</th><th>Summer · ${escapeHtml(SEASONS.low.range)}</th><th>Winter · ${escapeHtml(SEASONS.high.range)}</th></tr></thead>
-        <tbody>${bands.map(([n, ex, a, b, c, d]) => `<tr><td><b>${escapeHtml(n)}</b><br><span class="small muted">${escapeHtml(ex)}</span></td>
-          <td class="num" data-k="Summer">${a.toLocaleString('en-US')}–${b.toLocaleString('en-US')}</td>
-          <td class="num" data-k="Winter">${c.toLocaleString('en-US')}–${d.toLocaleString('en-US')}</td></tr>`).join('')}</tbody>
+        <caption class="sr-only">The cheapest and dearest places on the list, from-price per night</caption>
+        <thead><tr><th>Place</th><th class="num">From, a night</th><th class="num">In dollars</th></tr></thead>
+        <tbody>${show.map(({ st, from }) => `<tr>
+          <td><b>${escapeHtml(st.name)}</b><br><span class="small muted">${escapeHtml(st.area)}${st.onSand ? ' · on the sand' : ''}</span></td>
+          <td class="num" data-k="From">${escapeHtml(fmtPoints(from))}</td>
+          <td class="num" data-k="In dollars">${escapeHtml(fmtUsd2(from / s.pointsPerDollar))}</td></tr>`).join('')}</tbody>
       </table></div>
-      <p class="small muted" style="margin-top:12px">Peak — 20 December to 3 January, and Carnival — runs 15–20% above Winter, seven nights minimum at most resorts. The two Marriott villa resorts come as a whole week and sleep four to eight, which is why their per-night looks high and their per-person does not: chip in with three others and it is the cheapest week on Palm Beach.</p>
+
+      <p class="small muted" style="margin-top:12px">${priced.length > 8 ? `The four cheapest and the four dearest of ${priced.length}. ` : ''}From ${escapeHtml(fmtUsd2(cheapest.from / s.pointsPerDollar))} a night at ${escapeHtml(cheapest.st.name)} to ${escapeHtml(fmtUsd2(dearest.from / s.pointsPerDollar))} at ${escapeHtml(dearest.st.name)}.</p>
+      <p class="small muted" style="margin-top:8px">A night costs more at Christmas and in the busy months, the way it does on every booking site — you never have to work out which is which. Give Victor your dates and he prices those exact nights, and that quote is what you accept.</p>
       </div></section>`));
+  }
 
   // The people. Found by the job they do, not by a seed id — on the real backend every row
   // has a uuid, so looking them up as mem_victor rendered an empty grid. And a signed-out

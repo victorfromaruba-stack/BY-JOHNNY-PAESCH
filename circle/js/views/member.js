@@ -2,7 +2,7 @@
 import { escapeHtml, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDay, fmtDayTime, fmtMonth, fmtPct, monthKey, countdownTo, initials, toCsv, downloadText } from '../core/util.js';
 import { RANKS, nextRank } from '../core/standing.js';
 import { VOCAB, tierName, refFor } from '../core/vocab.js';
-import { splitContribution, tierFor, seasonPoints, seatPoints, SEASONS, isDushiSeason, pointsPerMonth } from '../core/money.js';
+import { splitContribution, tierFor, fromPoints, seatPoints, pointsPerMonth } from '../core/money.js';
 import { memberCard, poolGauge, rankCrest, ring, splitBar, tierLadder, badgeMark, badgeRow } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel, avatar } from '../ui/components.js';
@@ -49,7 +49,7 @@ export function home({ store, go }) {
     : book.can
       ? `<p class="eyebrow">${icon('bed')}What you can book today</p>
          <h1 class="book-now">${book.nights}${book.capped ? '+' : ''} night${book.nights === 1 ? '' : 's'} at<br>${escapeHtml(book.stay.name)}</h1>
-         <p class="small muted" style="margin-top:8px">In ${escapeHtml(SEASONS[book.season].label)}, all in. Every other place on the list is priced beside it.</p>
+         <p class="small muted" style="margin-top:8px">At its cheapest, all in. Pick your dates and the Desk prices those nights exactly.</p>
          <div class="row" style="margin-top:14px">
            <a class="btn" href="#/book/${escapeHtml(book.stay.id)}">${icon('send', { size: 17 })}Ask for these dates</a>
            <a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Other places</a>
@@ -135,7 +135,7 @@ export function home({ store, go }) {
       <h2 style="font-size:1.2rem;margin-top:10px">${escapeHtml(g.stay.name)}</h2>
       <p class="small muted" style="margin-top:4px">${g.isTrip
         ? `A seat · ${g.nights} nights · ${escapeHtml(fmtDay(g.stay.dates.from))}`
-        : `${g.nights} night${g.nights === 1 ? '' : 's'} · ${escapeHtml(SEASONS[g.season].label)} · ${escapeHtml(SEASONS[g.season].range)}`}</p>
+        : `${g.nights} night${g.nights === 1 ? '' : 's'} · from ${escapeHtml(fmtPointsUsd(g.target, s.pointsPerDollar))}`}</p>
 
       <div class="goal-bar" style="margin-top:16px" role="img"
            aria-label="${fmtPoints(g.have)} of ${fmtPoints(g.target)}, ${pct} per cent of the way">
@@ -289,7 +289,7 @@ export function home({ store, go }) {
  *  confused with the undefined that closing or cancelling the sheet gives back. */
 const CLEAR_GOAL = Symbol('clear-goal');
 
-/** Choose what you are saving for: a place, how many nights, which season. */
+/** Choose what you are saving for: a place and how many nights. */
 export async function goalSheet({ store }) {
   const s = store.settings;
   const me = store.me;
@@ -307,7 +307,7 @@ export async function goalSheet({ store }) {
           </select></label>
         <div class="grid g2" id="stay-only">
           <label class="field"><span>Nights</span><input name="nights" type="number" min="1" max="30" value="${current.nights || 3}" inputmode="numeric"></label>
-          <label class="field"><span>Season</span><select name="season">${Object.values(SEASONS).map(se => `<option value="${se.id}"${se.id === (current.season || 'low') ? ' selected' : ''}>${escapeHtml(se.label)}</option>`).join('')}</select></label>
+
         </div>
         <div id="prev" class="notice"></div>
         <div class="sheet-actions">
@@ -319,7 +319,7 @@ export async function goalSheet({ store }) {
         const isTrip = stay?.kind === 'trip';
         body.querySelector('#stay-only').hidden = isTrip;
         const nights = isTrip ? stay.nights : Math.max(Number(v('nights').value) || 1, stay?.minNights || 1);
-        const target = isTrip ? seatPoints(stay, s) : seasonPoints(stay, v('season').value, s) * nights;
+        const target = isTrip ? seatPoints(stay, s) : fromPoints(stay, s) * nights;
         const have = Math.max(0, store.availablePoints(me.id));
         const short = Math.max(0, target - have);
         const perMonth = pointsPerMonth(s, me.monthlyUsd);
@@ -335,7 +335,7 @@ export async function goalSheet({ store }) {
       body.querySelector('[data-clear]')?.addEventListener('click', () => close(CLEAR_GOAL));
       body.querySelector('[data-ok]').addEventListener('click', () => {
         const stay = store.stay(v('stayId').value);
-        close({ stayId: stay.id, nights: stay.kind === 'trip' ? stay.nights : Number(v('nights').value) || 1, season: v('season').value });
+        close({ stayId: stay.id, nights: stay.kind === 'trip' ? stay.nights : Number(v('nights').value) || 1 });
       });
     },
   });
@@ -767,7 +767,7 @@ function drawBadges(panel, { store, me, refresh }) {
 function drawCorner(panel, { store, me, refresh }) {
   const ACCENTS = [['good', 'Sea'], ['flight', 'Gold'], ['flag', 'Coral'], ['ink', 'Ink'], ['sea', 'Deep'], ['sand', 'Sand']];
   const COVERS = [['', 'None'], ['hero', 'The shallows'], ['band-pool', 'Salt pans'], ['band-circle', 'The table'],
-                  ['band-open', 'The colonnade'], ['season-carnival', 'Carnival'], ['season-winter', 'Winter']];
+                  ['band-open', 'The colonnade'], ['season-carnival', 'Carnival'], ['season-winter', 'The west coast']];
   panel.innerHTML = `
     <h2>Your corner</h2>
     <p class="small muted" style="margin-top:6px">A line about you, a colour, and a picture. It shows on your card in the Circle and nowhere else.</p>

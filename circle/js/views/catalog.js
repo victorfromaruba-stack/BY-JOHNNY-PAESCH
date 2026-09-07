@@ -1,7 +1,7 @@
 // Stays, trips, requesting one, and the life of a request.
 import { escapeHtml, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, countdownTo, initials, nightsBetween } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
-import { quoteStay, seasonPoints, seatPoints, unitPoints, versusPublic, SEASONS, seasonFor, tierFor, isDushiSeason, REACH, reachOf, pointsPerMonth } from '../core/money.js';
+import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth } from '../core/money.js';
 import { ring, versusLine } from '../ui/pieces.js';
 import { stayCard, stayStrip } from './public.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
@@ -14,7 +14,7 @@ const AREAS = ['Palm Beach', 'Eagle Beach', 'Druif Beach', 'Oranjestad', 'Malmok
 export function stays({ store, query, go }) {
   const me = store.me, s = store.settings;
   const avail = store.availablePoints(me.id);
-  const state = { season: query.season || 'low', area: '', house: false, onSand: false, adultsOnly: false, allInclusive: false, affordable: false };
+  const state = { area: '', house: false, onSand: false, adultsOnly: false, allInclusive: false, affordable: false };
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <div class="sec-head"><div><p class="eyebrow">${icon('palm')}Twenty-three places on the island</p><h1>Stays in Aruba</h1>
         <p>Every price is the Circle’s all-in rate per night — room, the 12.5% tourist levy, service charge, resort fee and the environmental levy. Your binding quote comes from Victor and is usually better.</p>
@@ -25,13 +25,12 @@ export function stays({ store, query, go }) {
       <div class="row no-print" id="filters" style="margin-bottom:18px" role="group" aria-label="Filter stays"></div>
       <p class="small muted" id="count" style="margin-bottom:14px"></p>
       <div class="grid g3" id="list"></div>
-      <p class="small muted" style="margin-top:22px">Minimums apply at Peak — 20 December to 3 January and Carnival week — where most resorts want seven nights. <a href="#/rules">The rules</a> explain how cancellations work.</p>
+      <p class="small muted" style="margin-top:22px">Most resorts want a longer stay over Christmas and Carnival; the quote tells you when that applies to your dates. <a href="#/rules">The rules</a> explain how cancellations work.</p>
     </div></section></div>`);
   const list = wrap.querySelector('#list'), filters = wrap.querySelector('#filters'), count = wrap.querySelector('#count');
 
   const draw = () => {
     filters.innerHTML = `
-      <div class="row" role="group" aria-label="Season">${Object.values(SEASONS).map(se => `<button class="btn ${state.season === se.id ? '' : 'quiet'} sm" data-season="${se.id}" aria-pressed="${state.season === se.id}">${escapeHtml(se.label)}</button>`).join('')}</div>
       <button class="btn ${state.house ? '' : 'quiet'} sm" data-flag="house" aria-pressed="${state.house}">Where we stay</button>
       <select class="btn ghost sm" id="area" aria-label="Area" style="padding-inline:12px"><option value="">Anywhere on the island</option>${AREAS.map(a => `<option${a === state.area ? ' selected' : ''}>${a}</option>`).join('')}</select>
       <button class="btn ${state.onSand ? '' : 'quiet'} sm" data-flag="onSand" aria-pressed="${state.onSand}">On the sand</button>
@@ -41,26 +40,24 @@ export function stays({ store, query, go }) {
     let items = store.arubaStays();
     if (state.area) items = items.filter(x => x.area === state.area);
     for (const f of ['house', 'onSand', 'adultsOnly', 'allInclusive']) if (state[f]) items = items.filter(x => x[f]);
-    if (state.affordable) items = items.filter(x => avail >= seasonPoints(x, state.season, s) * (x.minNights || 1));
-    items = items.slice().sort((a, b) => (b.house ? 1 : 0) - (a.house ? 1 : 0) || seasonPoints(a, state.season, s) - seasonPoints(b, state.season, s));
-    count.textContent = `${items.length} of ${store.arubaStays().length} places · ${SEASONS[state.season].label}, ${SEASONS[state.season].range}` +
-      (state.season === 'low' && isDushiSeason(new Date()) ? ' · dushi season, the quietest and cheapest weeks of the year' : '');
+    if (state.affordable) items = items.filter(x => avail >= fromPoints(x, s) * (x.minNights || 1));
+    items = items.slice().sort((a, b) => (b.house ? 1 : 0) - (a.house ? 1 : 0) || fromPoints(a, s) - fromPoints(b, s));
+    count.textContent = `${items.length} of ${store.arubaStays().length} places · from-price a night, all in`;
     list.replaceChildren(...items.map(st => {
-      const per = seasonPoints(st, state.season, s);
+      const per = fromPoints(st, s);
       const min = st.minNights || 1;
       const coverable = Math.floor(avail / per);
       const footer = `<span class="small ${coverable >= min ? 'muted' : ''}" style="margin-top:4px">${
         coverable >= min ? `You can cover ${Math.min(coverable, 14)} night${coverable === 1 ? '' : 's'}`
         : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of the ${min}-night minimum`}</span>`;
-      return stayCard(st, { store, season: state.season, footer });
+      return stayCard(st, { store, footer });
     }));
     if (!items.length) list.replaceChildren(el(`<div class="empty">${icon('search', { size: 28, cls: 'ico-muted' })}<b style="display:block;margin-top:10px">Nothing matches those filters</b><p class="small muted">Try a different area, or turn off “I can afford it now” to see everything.</p></div>`));
   };
   draw();
   filters.addEventListener('click', (e) => {
-    const seasonBtn = e.target.closest('[data-season]'); const flagBtn = e.target.closest('[data-flag]');
-    if (seasonBtn) { state.season = seasonBtn.dataset.season; draw(); }
-    else if (flagBtn) { state[flagBtn.dataset.flag] = !state[flagBtn.dataset.flag]; draw(); }
+    const flagBtn = e.target.closest('[data-flag]');
+    if (flagBtn) { state[flagBtn.dataset.flag] = !state[flagBtn.dataset.flag]; draw(); }
   });
   filters.addEventListener('change', (e) => { if (e.target.id === 'area') { state.area = e.target.value; draw(); } });
   return wrap;
@@ -152,27 +149,21 @@ export function stayDetail({ store, params, go }) {
   const roomsSlot = wrap.querySelector('#rooms');
   const rooms = store.roomTypesFor(stay.id);
   if (rooms.length && !isTrip) {
-    let rSeason = 'low';
     roomsSlot.appendChild(el(`<section class="panel" style="margin-top:22px">
-        <div class="row-between" style="flex-wrap:wrap;gap:10px">
-          <div><p class="eyebrow">${icon('bed')}The rooms</p>
-            <h2 style="font-size:1.15rem;margin-top:6px">${rooms.length} you can be given here</h2></div>
-          <div class="row" role="group" aria-label="Season" id="r-season">
-            ${Object.values(SEASONS).map((se, i) => `<button class="btn ${i ? 'quiet' : ''} sm" data-rs="${se.id}" aria-pressed="${!i}">${escapeHtml(se.label)}</button>`).join('')}
-          </div>
-        </div>
+        <div><p class="eyebrow">${icon('bed')}The rooms</p>
+          <h2 style="font-size:1.15rem;margin-top:6px">${rooms.length} you can be given here</h2></div>
         <div class="tablewrap" style="margin-top:14px"><table class="rooms-table">
-          <caption class="sr-only">Room types with size, occupancy and points per night</caption>
-          <thead><tr><th>Room</th><th>Size</th><th>Sleeps</th><th class="num">A night</th><th></th></tr></thead>
+          <caption class="sr-only">Room types with size, occupancy and from-price per night</caption>
+          <thead><tr><th>Room</th><th>Size</th><th>Sleeps</th><th class="num">From, a night</th><th></th></tr></thead>
           <tbody id="r-body"></tbody>
         </table></div>
         <p class="small muted" style="margin-top:12px">${icon('scale', { size: 14, cls: 'ico-muted' })}
-          Every room is priced off this property's one seasonal rate, so when Victor negotiates a better rate they all move together.
+          Every room is priced off this property's own rate, so when Victor negotiates a better one they all move together.
           A room marked <em>inferred</em> is one nobody publishes a size for.</p>
       </section>`));
     const drawRooms = () => {
       roomsSlot.querySelector('#r-body').innerHTML = rooms.map(r => {
-        const per = store.roomPoints(stay.id, r.id, rSeason);
+        const per = store.roomPointsFrom(stay.id, r.id);
         const min = stay.minNights || 1;
         const can = Math.floor(avail / (per || 1));
         return `<tr>
@@ -191,15 +182,9 @@ export function stayDetail({ store, params, go }) {
             <button class="btn quiet sm icon-only" data-watch-room="${escapeHtml(r.id)}" aria-label="Tell me when a ${escapeHtml(r.name)} comes free">${icon('bell', { size: 15 })}</button>
           </div></td></tr>`;
       }).join('');
-      roomsSlot.querySelectorAll('[data-rs]').forEach(b => {
-        b.setAttribute('aria-pressed', String(b.dataset.rs === rSeason));
-        b.classList.toggle('quiet', b.dataset.rs !== rSeason);
-      });
     };
     drawRooms();
     roomsSlot.addEventListener('click', async (e) => {
-      const b = e.target.closest('[data-rs]');
-      if (b) { rSeason = b.dataset.rs; drawRooms(); return; }
       const w = e.target.closest('[data-watch-room]');
       if (w) { const { addWatchSheet } = await import('./deals.js'); addWatchSheet({ store, prefill: { stayId: stay.id, roomTypeId: w.dataset.watchRoom, nights: stay.minNights || 3 } }); }
     });
@@ -224,19 +209,50 @@ export function stayDetail({ store, params, go }) {
       </ul>
       ${versusLine(versusPublic(stay.retailUsd, seatPoints(stay, s) / s.pointsPerDollar), 'a seat')}`;
   } else {
+    // Defaults a member would plausibly want: a fortnight out, for this stay's own minimum.
+    // The minimum matters — opening on two nights at a villa that only comes by the week would
+    // greet everybody with a refusal.
+    const today = new Date();
+    const soon = new Date(today.getTime() + 14 * 864e5);
+    const iso = (d) => new Date(d).toISOString().slice(0, 10);
+    const dToday = iso(today), dIn = iso(soon);
+    const dOut = iso(soon.getTime() + Math.max(1, stay.minNights || 1) * 864e5);
     wrap.querySelector('#pricing').innerHTML = `
-      <h2>What a night costs</h2>
-      <div class="tablewrap" style="margin-top:12px;border:0"><table>
-        <thead><tr><th>Season</th><th>When</th><th class="num">Points</th><th class="num">Value</th></tr></thead>
-        <tbody>${Object.values(SEASONS).map(se => `<tr><td>${escapeHtml(se.label)}</td><td class="small muted">${escapeHtml(se.range)}</td>
-          <td class="num">${escapeHtml(fmtPoints(seasonPoints(stay, se.id, s)))}</td><td class="num">${escapeHtml(fmtUsd2(seasonPoints(stay, se.id, s) / s.pointsPerDollar))}</td></tr>`).join('')}</tbody>
-      </table></div>
-      <p class="small muted" style="margin-top:12px">Minimum ${stay.minNights} night${stay.minNights > 1 ? 's' : ''}${stay.peakMinNights > stay.minNights ? `, ${stay.peakMinNights} at Peak` : ''}.
-      ${stay.taxesIncluded ? 'Taxes and breakfast are already in this rate.' : 'Room, 12.5% tourist levy, service charge, resort fee and environmental levy are all included.'}
-      </p>
-      ${versusLine(versusPublic(stay.retailUsd, seasonPoints(stay, 'high', s) / s.pointsPerDollar), 'Winter night')}`;
+      <h2>What your nights cost</h2>
+      <p class="small muted" style="margin-top:6px">From <b class="num">${escapeHtml(fmtPoints(fromPoints(stay, s)))}</b> a night. Put your dates in and it prices those exact nights — the same arithmetic the Desk quotes from.</p>
+      <div class="grid g2" style="margin-top:14px">
+        <label class="field"><span>Check in</span><input type="date" id="q-in" value="${escapeHtml(dIn)}" min="${escapeHtml(dToday)}"></label>
+        <label class="field"><span>Check out</span><input type="date" id="q-out" value="${escapeHtml(dOut)}" min="${escapeHtml(dToday)}"></label>
+      </div>
+      <div id="q-out-slot"></div>`;
+
+    // A date-driven quote instead of a table of three seasons. Same numbers, none of the
+    // vocabulary: the member says when, and the app says what — which is the only question
+    // they ever had. quoteStay walks the nights exactly as the database does, so this figure
+    // and the Desk's binding quote come from one piece of arithmetic.
+    const qSlot = wrap.querySelector('#q-out-slot');
+    const drawQuote = () => {
+      const ci = wrap.querySelector('#q-in').value, co = wrap.querySelector('#q-out').value;
+      const q = quoteStay(stay, ci, co, s);
+      if (!q.nights) { qSlot.innerHTML = '<p class="small muted">Pick a check-out after your check-in.</p>'; return; }
+      const short = Math.max(0, q.points - avail);
+      qSlot.innerHTML = `
+        <div class="notice${q.ok ? '' : ' warn'}" style="margin-top:4px">
+          ${q.ok ? `<b>${escapeHtml(fmtPoints(q.points))} for ${q.nights} night${q.nights > 1 ? 's' : ''}</b>
+            <p class="small">${escapeHtml(fmtUsd2(q.points / s.pointsPerDollar))} all in — ${escapeHtml(fmtUsd2(q.points / s.pointsPerDollar / q.nights))} a night on average.
+            ${escapeHtml(fmtPoints(q.basePoints))} is the room and ${escapeHtml(fmtPoints(q.servicePoints))} is the Circle's 15%.
+            ${short ? `You are ${escapeHtml(fmtPoints(short))} short — a top-up of ${escapeHtml(fmtUsd2(short / s.pointsPerDollar))} in cash, at face value.` : 'Covered by the points you hold.'}</p>`
+          : `<b>${escapeHtml(stay.name)} wants ${q.minNights} nights for those dates</b>
+            <p class="small">Most resorts ask for longer over Christmas and Carnival. Move a date, or ask anyway and Victor will tell you what he can get.</p>`}
+        </div>
+        ${q.ok ? versusLine(versusPublic(q.retailUsd, q.points / s.pointsPerDollar), `for ${q.nights} night${q.nights > 1 ? 's' : ''}`) : ''}
+        <p style="margin-top:12px"><a class="btn" href="#/book/${escapeHtml(stay.id)}?from=${escapeHtml(ci)}&to=${escapeHtml(co)}">${icon('send', { size: 17 })}Ask for these dates</a></p>
+        <p class="small muted" style="margin-top:10px">${stay.taxesIncluded ? 'Taxes and breakfast are already in this.' : 'Room, the 12.5% tourist levy, service charge, resort fee and environmental levy are all in this.'} Victor's binding quote is usually better.</p>`;
+    };
+    drawQuote();
+    wrap.querySelector('#pricing').addEventListener('change', (e) => { if (e.target.id === 'q-in' || e.target.id === 'q-out') drawQuote(); });
   }
-  const per = unitPoints(stay, 'low', s);
+  const per = unitPoints(stay, s);
   const min = isTrip ? 1 : (stay.minNights || 1);
   const canCover = Math.floor(avail / per);
   wrap.querySelector('#afford').innerHTML = `
@@ -250,7 +266,7 @@ export function stayDetail({ store, params, go }) {
   {
     // Nobody is turned away from a trip. If it is more than they hold, say plainly how
     // long it takes at their level — and how long it would take at the others.
-    const price = isTrip ? seatPoints(stay, s) : seasonPoints(stay, 'low', s) * (stay.minNights || 1);
+    const price = isTrip ? seatPoints(stay, s) : fromPoints(stay, s) * (stay.minNights || 1);
     const pace = store.monthsToAfford(price);
     const mineRow = pace?.find(x => x.mine);
     if (mineRow && mineRow.months > 0) {
@@ -311,7 +327,7 @@ export function book({ store, params, query = {}, go }) {
             <label class="field"><span>Check out</span><input name="checkOut" type="date" required value="${escapeHtml(startOut)}" min="${d(today)}"></label>
           </div>
           ${wantRoom ? `<div class="notice" style="margin-bottom:14px"><b>${escapeHtml(wantRoom.name)}</b>
-              <p class="small">${escapeHtml(fmtPoints(store.roomPoints(stay.id, wantRoom.id, 'low')))} a night in Summer. It is in your note below, so Victor prices that room — ask for another and he will price that instead.</p></div>` : ''}
+              <p class="small">From ${escapeHtml(fmtPoints(store.roomPointsFrom(stay.id, wantRoom.id)))} a night. It is in your note below, so Victor prices that room — ask for another and he will price that instead.</p></div>` : ''}
           <div class="grid g2">
             <label class="field"><span>Guests</span><input name="guests" type="number" min="1" max="8" value="2" inputmode="numeric"></label>
             <label class="field"><span>Flexible by</span><select name="flexDays"><option value="0">Exact dates</option><option value="1">A day either way</option><option value="3">Three days either way</option><option value="7">A week either way</option></select></label>
@@ -336,12 +352,12 @@ export function book({ store, params, query = {}, go }) {
     preview.className = `notice${q.ok ? '' : ' warn'}`;
     preview.innerHTML = q.ok
       ? `<b>Indicative: ${escapeHtml(fmtPoints(q.points))} (${escapeHtml(fmtUsd2(q.points / s.pointsPerDollar))})</b>
-         <p class="small">${q.nights} night${q.nights > 1 ? 's' : ''}${isTrip ? '' : ` · ${Object.entries(q.breakdown).filter(([, n]) => n).map(([k, n]) => `${n} at ${SEASONS[k].label}`).join(', ')}`}.
+         <p class="small">${q.nights} night${q.nights > 1 ? 's' : ''}${isTrip || q.nights < 1 ? '' : ` · ${escapeHtml(fmtUsd2(q.points / s.pointsPerDollar / q.nights))} a night on average`}.
          ${escapeHtml(fmtPoints(q.basePoints))} is the room and ${escapeHtml(fmtPoints(q.servicePoints))} is the Circle's 15% — the only fee there is, and this is where it is charged.
          ${short ? `You are ${escapeHtml(fmtPoints(short))} short — that would be a top-up of ${escapeHtml(fmtUsd2(short / s.pointsPerDollar))} in cash, at face value.` : 'Covered by the points you hold.'}
          ${q.retailUsd ? ` Booked alone this runs about ${escapeHtml(fmtUsd2(q.retailUsd))}.` : ''}</p>`
       : `<b>${stay.name} needs at least ${q.minNights} nights for those dates</b>
-         <p class="small">${q.breakdown.peak ? 'Peak weeks — 20 December to 3 January and Carnival — carry a longer minimum at most resorts.' : ''}</p>`;
+         <p class="small">${q.breakdown.peak ? 'Christmas and Carnival weeks carry a longer minimum at most resorts.' : ''}</p>`;
   };
   update();
   form.addEventListener('input', update);

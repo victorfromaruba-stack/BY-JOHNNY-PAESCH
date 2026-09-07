@@ -4,7 +4,7 @@
 //
 // `rateFactor` is what a type costs relative to the room the property's catalog rate in
 // stays.js is modelled on. So 1.0 is that room, 0.70 is a studio at seventy per cent of it,
-// and 2.79 is the oceanfront two-bedroom. One seasonal rate per property therefore prices
+// and 2.79 is the oceanfront two-bedroom. One rate per property therefore prices
 // every room in it, and editing the rate in the Desk moves them all together.
 //
 // Seven of the twenty-three properties have no rows here yet: Radisson Blu, Holiday Inn,

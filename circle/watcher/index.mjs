@@ -18,7 +18,7 @@ import { Circle } from './circle.mjs';
 // The app's own season rules, not a copy of them. Carnival moves with Easter, and a second
 // implementation would drift — which is exactly how the watcher would end up judging a week
 // against the wrong rate.
-import { seasonFor } from '../js/core/money.js';
+import { rateBandFor } from '../js/core/money.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const args = new Set(process.argv.slice(2));
@@ -60,9 +60,9 @@ const CFG = {
 /**
  * What the Circle would charge for this week, in dollars. Null when we do not carry it.
  *
- * Priced a night at a time. Taking the season of the check-in date and multiplying got the
- * shoulder weeks badly wrong: a week beginning 17 December is three Summer nights and four at
- * the Peak rate, and pricing all seven as Summer made an ordinary listing look like a steal.
+ * Priced a night at a time. Taking the check-in date's rate and multiplying got the shoulder
+ * weeks badly wrong: a week beginning 17 December is three nights at the cheap rate and four at
+ * the Christmas one, and pricing all seven as cheap made an ordinary listing look like a steal.
  */
 function ourPrice(stay, from, nights) {
   if (!stay) return null;
@@ -72,7 +72,7 @@ function ourPrice(stay, from, nights) {
   let total = 0;
   for (let i = 0; i < nights; i++) {
     const night = new Date(start + i * 864e5).toISOString().slice(0, 10);
-    const n = Number(rates[seasonFor(`${night}T12:00:00Z`)]);
+    const n = Number(rates[rateBandFor(`${night}T12:00:00Z`)]);
     if (!Number.isFinite(n) || n <= 0) return null;   // one unpriced night and we cannot judge it
     total += n;
   }

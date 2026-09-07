@@ -1,7 +1,8 @@
 // The catalog. `rates` are the Circle's ALL-IN member cost per night in USD
 // (room + 12.5% tourist levy + service charge + resort fee + environmental levy),
-// which is also the points price: 100 points = $1.00. Seasons: Summer Apr 6–Dec 19 ·
-// Winter Jan 4–Apr 5 · Peak Dec 20–Jan 3 and Carnival week.
+// which is also the points price: 100 points = $1.00. Three rates per place, by the dates they
+// apply to — Apr 6–Dec 19, Jan 4–Apr 5, and Dec 20–Jan 3 with Carnival week. These are never
+// named or shown to a member: they give their dates and quoteStay prices those exact nights.
 //
 // These are planning bands, not quotes. Victor's negotiated all-in rate is what a
 // member actually accepts, and planners edit every number in the Desk.
@@ -17,7 +18,7 @@ export const ARUBA_STAYS = [
   { id: 'stay_ritz', kind: 'aruba', name: 'The Ritz-Carlton, Aruba', area: 'Palm Beach', country: 'Aruba', category: 4,
     rates: { low: 720, high: 1180, peak: 1416 }, retailUsd: 1341, minNights: 2, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: false,
     vibe: 'Big-brand polish at the quiet north end of Palm Beach.',
-    features: ['Club level', 'Casino', 'Spa', 'On the sand'], dealNote: 'Resort fee waived on Victor’s corporate rate in Summer.' },
+    features: ['Club level', 'Casino', 'Spa', 'On the sand'], dealNote: 'Resort fee waived on Victor’s corporate rate outside the busy months.' },
   { id: 'stay_oceanvillas', kind: 'aruba', name: 'Aruba Ocean Villas', area: 'Savaneta', country: 'Aruba', category: 4,
     rates: { low: 620, high: 920, peak: 1104 }, retailUsd: 900, minNights: 3, peakMinNights: 5, onSand: true, adultsOnly: true,
     vibe: 'Eight overwater bungalows in a fishing village. Bali meets Aruba, and it sells out months ahead.',
@@ -27,8 +28,8 @@ export const ARUBA_STAYS = [
     // Interval Getaway week here came up at US$90.50 a night in September 2026, against the
     // resort's own $850.
     //
-    // Only Summer is anchored to that observation, and set above it on purpose — one week in
-    // deep low season is not a season. Winter and Peak are estimates: Getaways thin out and
+    // Only the cheap-months rate is anchored to that observation, and set above it on purpose —
+    // one week of surplus is not a year. The other two are estimates: Getaways thin out and
     // owners on RedWeek ask more, but nobody has watched a winter yet. Replace them with real
     // numbers the first time Victor prices a January week.
     rates: { low: 135, high: 310, peak: 580 }, retailUsd: 850, minNights: 7, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: false,
@@ -41,9 +42,9 @@ export const ARUBA_STAYS = [
     features: ['Villas sleep up to 8', 'Full kitchen', 'Washer-dryer in villa', 'Lazy river', 'On the sand'],
     dealNote: 'One of the four we keep coming back to. Owner weeks rent Saturday to Saturday, so this is a seven-night booking — but a two-bedroom villa sleeps eight, and split three or four ways it is the cheapest good week on Palm Beach. No resort fee; the 12.5% levy is already in the price.' },
   { id: 'stay_oceanclub', kind: 'aruba', name: 'Marriott’s Aruba Ocean Club', area: 'Palm Beach', country: 'Aruba', category: 4, house: true,
-    // Same repricing, same caveat: Summer is anchored to Interval having this at US$167.50 the
+    // Same repricing, same caveat: the cheap-months rate is anchored to Interval having it at US$167.50 the
     // same week the Surf Club was at $90.50 — which is itself the reason to check both every
-    // time. Winter and Peak are still estimates.
+    // time. The other two are still estimates.
     rates: { low: 165, high: 340, peak: 620 }, retailUsd: 875, minNights: 7, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: false,
     sources: {
       best: 'interval',
