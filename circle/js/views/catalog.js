@@ -269,7 +269,7 @@ export function stayDetail({ store, params, go }) {
   return wrap;
 }
 
-export function book({ store, params, go }) {
+export function book({ store, params, query = {}, go }) {
   const me = store.me, s = store.settings;
   const stay = store.stay(params.id);
   if (!stay) return el('<div class="wrap sec"><h1>Nothing to request</h1><p class="lede" style="margin-top:10px"><a href="#/stays">Back to the stays</a>.</p></div>');
@@ -278,6 +278,24 @@ export function book({ store, params, go }) {
   const tier = tierFor(s, me.monthlyUsd);
   const today = new Date(); const soon = new Date(today); soon.setMonth(soon.getMonth() + 2);
   const d = (x) => x.toISOString().slice(0, 10);
+
+  // Three screens link here with what the member already chose — a deal's dates, a week seen on
+  // Interval, a room out of the room table — and this form threw all of it away and opened on
+  // "two months from today, any room". Somebody who tapped "Ask for it" under a specific week
+  // then had to retype that week. The link carried the answer; use it.
+  const isDate = (x) => /^\d{4}-\d{2}-\d{2}$/.test(String(x || '')) && !Number.isNaN(Date.parse(x));
+  const wantFrom = isDate(query.from) && Date.parse(query.from) >= Date.parse(d(today)) ? query.from : null;
+  const wantTo = wantFrom && isDate(query.to) && Date.parse(query.to) > Date.parse(wantFrom) ? query.to : null;
+  const startIn = wantFrom || d(soon);
+  const startOut = wantTo || d(new Date(Date.parse(startIn) + (stay.minNights || 2) * 864e5));
+  const wantRoom = (store.roomTypesFor?.(stay.id) || []).find(r => r.id === query.room) || null;
+  // The request has no room column, and inventing one across two backends to carry a
+  // preference is the wrong trade — the note is the field for exactly this, and it reaches
+  // Victor with everything else. It is prefilled, not locked: it is still the member's message.
+  const openingNote = [
+    wantRoom ? `${wantRoom.name}, if it is free.` : '',
+    query.deal ? 'Asking against a deal from the board.' : '',
+  ].filter(Boolean).join(' ');
   const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:720px">
       <p class="eyebrow">${escapeHtml(stay.area)}</p>
       <h1>${isTrip ? 'Ask for a seat' : 'Ask Victor for dates'}</h1>
@@ -286,15 +304,19 @@ export function book({ store, params, go }) {
         ${isTrip ? `<div class="notice"><b>${escapeHtml(fmtDay(stay.dates.from))} – ${escapeHtml(fmtDay(stay.dates.to))}</b>
             <p class="small">${stay.nights} nights · ${escapeHtml(fmtPoints(seatPoints(stay, s)))} a seat · ${store.seatsHeld(stay.id)} of ${stay.seats} seats held</p></div>
           <label class="field" style="margin-top:14px"><span>Seats</span><input name="seats" type="number" min="1" max="4" value="1" inputmode="numeric"></label>`
-        : `<div class="grid g2">
-            <label class="field"><span>Check in</span><input name="checkIn" type="date" required value="${d(soon)}" min="${d(today)}"></label>
-            <label class="field"><span>Check out</span><input name="checkOut" type="date" required value="${d(new Date(soon.getTime() + (stay.minNights || 2) * 864e5))}" min="${d(today)}"></label>
+        : `${wantFrom ? `<div class="notice" style="margin-bottom:14px"><b>${escapeHtml(fmtDay(startIn))} – ${escapeHtml(fmtDay(startOut))}</b>
+              <p class="small">The dates you came in with. Change them if you meant others.</p></div>` : ''}
+          <div class="grid g2">
+            <label class="field"><span>Check in</span><input name="checkIn" type="date" required value="${escapeHtml(startIn)}" min="${d(today)}"></label>
+            <label class="field"><span>Check out</span><input name="checkOut" type="date" required value="${escapeHtml(startOut)}" min="${d(today)}"></label>
           </div>
+          ${wantRoom ? `<div class="notice" style="margin-bottom:14px"><b>${escapeHtml(wantRoom.name)}</b>
+              <p class="small">${escapeHtml(fmtPoints(store.roomPoints(stay.id, wantRoom.id, 'low')))} a night in Summer. It is in your note below, so Victor prices that room — ask for another and he will price that instead.</p></div>` : ''}
           <div class="grid g2">
             <label class="field"><span>Guests</span><input name="guests" type="number" min="1" max="8" value="2" inputmode="numeric"></label>
             <label class="field"><span>Flexible by</span><select name="flexDays"><option value="0">Exact dates</option><option value="1">A day either way</option><option value="3">Three days either way</option><option value="7">A week either way</option></select></label>
           </div>`}
-        <label class="field"><span>Anything Victor should know</span><textarea name="note" rows="3" placeholder="Ground floor if possible, arriving late, celebrating something…"></textarea></label>
+        <label class="field"><span>Anything Victor should know</span><textarea name="note" rows="3" placeholder="Ground floor if possible, arriving late, celebrating something…">${escapeHtml(openingNote)}</textarea></label>
         <label class="row" style="gap:10px;align-items:flex-start;margin-bottom:14px">
           <input type="checkbox" name="shared" style="width:20px;height:20px;margin-top:2px">
           <span class="small">Let the Circle chip in. <span class="muted">Anyone can add their own points toward this booking — for a room you are sharing, or a gift. Their points are committed the moment they chip in, and released if it falls through.</span></span></label>
