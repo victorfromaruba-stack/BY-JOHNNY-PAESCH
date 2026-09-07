@@ -1,5 +1,5 @@
 // Stays, trips, requesting one, and the life of a request.
-import { escapeHtml, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, countdownTo, initials, nightsBetween } from '../core/util.js';
+import { escapeHtml, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, countdownTo, initials, nightsBetween, safeUrl } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
 import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth } from '../core/money.js';
 import { ring, versusLine } from '../ui/pieces.js';
@@ -168,6 +168,10 @@ export function stayDetail({ store, params, go }) {
         // shows a figure without the date it was seen: an undated price comparison is worth
         // nothing, and a six-month-old one is worse than nothing.
         const src = stay.sources || {};
+        // The property's own booking page. Every one of the twenty-three now has one, each
+        // checked to be that property's page on its own or its chain's site — never an OTA and
+        // never a chain homepage. Victor: "I need a link to even be able to book it."
+        const site = safeUrl(stay.site);
         const rows = [];
         if (src.interval?.seenUsd) rows.push(['Interval', src.interval.seenUsd, src.interval.seenOn, src.interval.note, src.best === 'interval']);
         if (src.redweek?.fromUsd) rows.push(['RedWeek', src.redweek.fromUsd, src.redweek.seenOn, src.redweek.note, src.best === 'redweek']);
@@ -186,13 +190,18 @@ export function stayDetail({ store, params, go }) {
                     ${note ? `<br><span class="small muted">${escapeHtml(note)}</span>` : ''}</td>
                   <td class="num">${escapeHtml(fmtUsd2(usd))}</td>
                   <td class="small muted">${on ? escapeHtml(fmtDay(on)) : '<b>undated</b>'}</td></tr>`).join('')}
-                <tr><td><b>The resort</b><br><span class="small muted">Booking direct, for comparison</span></td>
+                <tr><td>${site
+                    ? `<a href="${escapeHtml(site)}" target="_blank" rel="noopener noreferrer"><b>The resort</b> ${icon('external', { size: 13 })}</a>`
+                    : '<b>The resort</b>'}<br><span class="small muted">Booking direct, for comparison</span></td>
                   <td class="num">${escapeHtml(fmtUsd2(stay.retailUsd || 0))}</td><td class="small muted">—</td></tr>
               </tbody></table></div>
             <p class="tiny ${stale ? '' : 'muted'}" style="margin-top:10px">${stale
               ? `Last checked ${daysOld} days ago — old enough to have moved. Victor re-checks before he quotes you.`
               : 'A night. These move; the number you are quoted is the one Victor actually finds on the day.'}</p>`
-          : `<p class="small muted" style="margin-top:6px">Nobody has checked this one against the booking sites yet, so the rate above is the Circle&rsquo;s own negotiated number and nothing else. Victor checks Interval and RedWeek before he books, and what he finds goes here.</p>`}
+          : `<p class="small muted" style="margin-top:6px">Nobody has checked this one against the booking sites yet, so the rate above is the Circle&rsquo;s own negotiated number and nothing else. Victor checks Interval and RedWeek before he books, and what he finds goes here.</p>
+             ${site ? `<p class="small" style="margin-top:10px">Their own page is
+               <a href="${escapeHtml(site)}" target="_blank" rel="noopener noreferrer">${escapeHtml(new URL(site).host.replace(/^www\./, ''))} ${icon('external', { size: 13 })}</a>
+               &mdash; what it is asking today is the number to beat.</p>` : ''}`}
         </div>`;
       })()}
       ${stay.dealNote ? `<div class="notice" style="margin-top:16px"><b>From Victor</b><p class="small">${escapeHtml(stay.dealNote)}</p></div>` : ''}
