@@ -122,9 +122,12 @@ export function landing({ store, go }) {
         </div>
       </div>
       <figure class="hero-shot enter" style="--d:140ms">
+        <!-- The frame is 4:5 above 900px and 16:10 below it, so the tall file belongs to the
+             WIDE viewport, not the narrow one. Serving these the other way round crops the
+             sea out of both. -->
         <picture>
-          <source media="(max-width:760px)" srcset="assets/hero-tall.jpg">
-          <img src="assets/hero.jpg" alt="The shallows off Aruba's west coast on a clear morning" fetchpriority="high" decoding="async">
+          <source media="(min-width:901px)" srcset="assets/hero-tall.jpg">
+          <img src="assets/hero.jpg" alt="Shallow turquoise water over white sand, late in the afternoon" fetchpriority="high" decoding="async">
         </picture>
         <figcaption>${icon('mapPin', { size: 14 })}The west coast — every place on the list is on this water or ten minutes from it.</figcaption>
       </figure>
