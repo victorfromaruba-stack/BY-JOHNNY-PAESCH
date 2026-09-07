@@ -20,17 +20,43 @@ export function stays({ store, query, go }) {
   const state = { area: '', house: false, onSand: false, adultsOnly: false, allInclusive: false,
                   affordable: false, maxUsd: 0, sleeps: 0, sort: 'price' };
   const wrap = el(`<div><section class="sec"><div class="wrap">
-      <div class="sec-head"><div><p class="eyebrow">${icon('palm')}Twenty-three places on the island</p><h1>Stays in Aruba</h1>
-        <p>Every price is the Circle’s all-in rate per night — room, the 12.5% tourist levy, service charge, resort fee and the environmental levy. Your binding quote comes from Victor and is usually better.</p>
+      <!-- The member tapped "Stays" to get here, so the page does not need an eyebrow saying
+           there are twenty-three of them, a heading repeating the tab, AND a count line: that
+           was three ways of saying the same thing and 780px of scrolling before the first
+           price. The count carries the number, the title orients, and what is in the price is
+           read once — so it folds away instead of pushing the goods off the screen. -->
+      <div class="sec-head tight"><div><h1>Stays in Aruba</h1>
+        <p class="small muted" id="count"></p>
+        <details class="fineprint"><summary>What is in the price</summary>
+          <p class="small muted">Every price is the Circle’s all-in rate per night — room, the 12.5% tourist levy, service charge, resort fee and the environmental levy. Your binding quote comes from Victor and is usually better.</p>
+        </details>
         </div></div>
-      <div class="row no-print" id="filters" style="margin-bottom:18px" role="group" aria-label="Filter stays"></div>
-      <p class="small muted" id="count" style="margin-bottom:14px"></p>
+      <!-- On a phone the filter bar was 244px — four selects and five chips, 29% of the screen,
+           standing between the member and the hotels. It is one control there now, and stays
+           inline on a wide screen where the room is free. -->
+      <button class="btn ghost sm no-print" id="ftoggle" type="button" aria-expanded="false" aria-controls="filters"></button>
+      <div class="row no-print filterbar" id="filters" style="margin-bottom:14px" role="group" aria-label="Filter stays"></div>
       <div class="grid g3" id="list"></div>
       <p class="small muted" style="margin-top:18px">${icon('eye', { size: 14, cls: 'ico-muted' })} <a href="#/live">See what is open right now</a> · you never book it yourself — you put points in and the Circle books it for you. The four marked <em>Where we stay</em> are the ones we actually end up at; the rest are here because Victor can get them. Longer minimums apply over Christmas and Carnival, and the quote says when. <a href="#/rules">The rules</a>.</p>
     </div></section></div>`);
   const list = wrap.querySelector('#list'), filters = wrap.querySelector('#filters'), count = wrap.querySelector('#count');
+  const ftoggle = wrap.querySelector('#ftoggle');
+  // The label carries the state, because a shut filter bar that silently narrows the list is
+  // how someone concludes half the island has disappeared.
+  const activeFilters = () => ['house', 'onSand', 'adultsOnly', 'allInclusive', 'affordable']
+    .filter(k => state[k]).length + (state.area ? 1 : 0) + (state.maxUsd ? 1 : 0)
+    + (state.sleeps ? 1 : 0) + (state.sort !== 'price' ? 1 : 0);
+  const drawToggle = () => {
+    const n = activeFilters();
+    ftoggle.innerHTML = `${icon('search', { size: 15 })}${n ? `Filters · ${n}` : 'Filters'}`;
+  };
+  ftoggle.addEventListener('click', () => {
+    const open = filters.classList.toggle('open');
+    ftoggle.setAttribute('aria-expanded', String(open));
+  });
 
   const draw = () => {
+    drawToggle();
     const on = (k) => (state[k] ? '' : 'quiet');
     const dirty = state.area || state.house || state.onSand || state.adultsOnly || state.allInclusive
       || state.affordable || state.maxUsd || state.sleeps;
