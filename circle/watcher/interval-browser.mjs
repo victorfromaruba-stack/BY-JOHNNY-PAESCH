@@ -11,9 +11,16 @@
 //      session established at the front door is NOT the session the VIP host wants; something
 //      has to establish one there, and that something runs in the page.
 //
-//   3. __uzma / __uzmb / __uzmc / __uzmd / __uzme are Radware Bot Manager, normally minted by
-//      a JavaScript challenge. A client that never runs the challenge never earns them — which
-//      fits the symptom exactly: a polite 200 carrying the signed-out page, rather than a 401.
+//   3. __uzma / __uzmb / __uzmc / __uzmd / __uzme are Radware Bot Manager, minted by a
+//      JavaScript challenge. A client that never runs the challenge never earns them.
+//
+// That third one is no longer an inference. The same credentials were signed in by hand and
+// worked, so the password was never the problem and the bot layer is what was turning the
+// plain client away — politely, with a 200 and the signed-out page, rather than a 401.
+//
+// A correct password does not land on the account either. It lands on a "Please wait…" holding
+// page while the bot layer finishes; navigating away from it too early leaves the session
+// signed out, which looks exactly like a wrong password. See throughInterstitial().
 //
 // Two of those three need a JavaScript engine. So Interval gets a browser and RedWeek keeps
 // plain fetch, which needs no login and already works.
@@ -109,6 +116,54 @@ export class IntervalBrowser {
     try { return hostname === new URL(this.origin).hostname; } catch { return false; }
   }
 
+  /**
+   * Sit through the "Please wait…" page.
+   *
+   * A correct password does not land on the account. It lands on an interstitial that holds the
+   * browser while the bot layer finishes, and only then moves on — usually by itself, sometimes
+   * only when its Continue button is pressed. Navigating away too early interrupts it, and then
+   * every page after that is the signed-out one, which looks exactly like a refused password.
+   *
+   * So: wait for it to move on its own; if it does not, press the button; repeat a few times.
+   * Bounded, because this runs unattended and a page that never settles must not hang the pass.
+   */
+  async throughInterstitial(page, { rounds = 4, patienceMs = 12000 } = {}) {
+    for (let i = 0; i < rounds; i++) {
+      if (!(await this.isWaitingRoom(page))) return true;
+      const before = page.url();
+      // Give it the time it asked for. Most of these move on their own.
+      const moved = await page.waitForURL((u) => u.toString() !== before, { timeout: patienceMs })
+        .then(() => true).catch(() => false);
+      if (moved) { await page.waitForLoadState('domcontentloaded').catch(() => {}); continue; }
+
+      // It did not. Press whatever it is offering — a link, a button, or a submit input,
+      // matched on its words rather than on a selector we would have to guess at.
+      const pressed = await page.evaluate(() => {
+        const wanted = /continue|proceed|click here|enter|go on/i;
+        const els = [...document.querySelectorAll('a,button,input[type=submit],input[type=button]')];
+        const hit = els.find(el => wanted.test(el.value || el.textContent || ''));
+        if (!hit) return false;
+        hit.click(); return true;
+      }).catch(() => false);
+      if (!pressed) return false;                    // nothing to press and it will not move
+      await page.waitForLoadState('domcontentloaded').catch(() => {});
+      await page.waitForLoadState('networkidle').catch(() => {});
+    }
+    return !(await this.isWaitingRoom(page));
+  }
+
+  /** Is this the holding page rather than a real one? */
+  async isWaitingRoom(page) {
+    return page.evaluate(() => {
+      const waiting = /please\s*wait|one\s*moment|just a moment|checking your browser|redirecting|verifying/i;
+      const title = document.title || '';
+      const text = (document.body?.innerText || '').slice(0, 500);
+      // A real page that happens to say "please wait" somewhere is not an interstitial: these
+      // are nearly empty, which is the tell worth using alongside the words.
+      return waiting.test(title) || (waiting.test(text) && text.length < 400);
+    }).catch(() => false);
+  }
+
   /** Cookie names the context is holding, per host. Names only. */
   async cookieNames() {
     const all = await this._ctx.cookies();
@@ -166,6 +221,11 @@ export class IntervalBrowser {
       page.click('input[type="submit"], button[type="submit"]'),
     ]);
     await page.waitForLoadState('networkidle').catch(() => {});
+    // A right password lands on a holding page, not on the account. Sit through it before
+    // reading anything — asking for a page while it is still working interrupts it, and
+    // everything after that comes back signed out.
+    const waited = await this.isWaitingRoom(page);
+    const cleared = waited ? await this.throughInterstitial(page) : true;
     const answer = await page.content();
     const landedOn = page.url();
 
@@ -180,6 +240,7 @@ export class IntervalBrowser {
     this.signedIn = (probeSays ?? readsAsSignedIn(answer) ?? false) === true;
     return {
       ok: this.signedIn, landedOn, loginPage, answer, probe, probePath: PROBE, probeSays,
+      interstitial: waited, interstitialCleared: cleared,
       answerSays: readsAsSignedIn(answer), limits, tooLong, said: said && said.trim(),
       cookies: await this.cookieNames(),
     };
@@ -240,6 +301,7 @@ export class IntervalBrowser {
       `  browser:        ${this.browserName}`,
       `  signed in:      ${r?.ok ?? 'could not get that far'}`,
       `  landed on:      ${r?.landedOn || '(nowhere)'}`,
+      `  waiting room:   ${r?.interstitial ? (r.interstitialCleared ? 'yes, and it cleared' : 'YES, AND IT NEVER CLEARED') : 'none'}`,
       `  probe page:     ${PROBE} -> ${say(r?.probeSays)}`,
       `  login answer:   ${say(r?.answerSays)}`,
       `  the site said:  ${r?.said || '(nothing)'}`,

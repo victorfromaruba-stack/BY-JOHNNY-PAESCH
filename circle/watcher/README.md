@@ -12,10 +12,11 @@ credential is read from `.env` on that machine.
 nights, bedrooms, sleeps, view, price — so this reads structured values rather than guessing at
 text. One request per resort, 2.5 seconds apart, identifying itself in the user agent.
 
-**Interval** is Victor's account. Signing in is a form POST (`j_username` / `j_password` to
-`/web/my/auth/login` — it is a Spring application) and the session is a cookie, so no browser
-is needed. The Getaway search sits behind that login and could not be read from outside it;
-see *Finishing Interval* below.
+**Interval** is Victor's account, and it needs a real browser — see *Interval needs a browser*
+below for the three reasons, each read off the live site. Signing in is a form POST
+(`j_username` / `j_password` to `/web/my/auth/login`, a Spring application), but the session
+only survives if a JavaScript engine runs what comes back. The Getaway search sits behind that
+login; see *Finishing Interval*.
 
 **Posting** happens as an ordinary account calling the same `post_deal` the Desk calls. There
 is no service key on the VPS, and the account holds no role at all — `post_deal` lets a member
@@ -76,7 +77,9 @@ sudo systemctl enable --now hunto-watcher
 journalctl -u hunto-watcher -f
 ```
 
-Needs Node 20 or newer. No packages to install — it uses nothing but the standard library.
+Needs Node 20 or newer. RedWeek and the posting path use nothing but the standard library.
+Interval additionally needs Playwright and one browser (`npx playwright install firefox`); if it
+is missing the watcher says so and carries on with RedWeek rather than dying.
 
 ## Finishing Interval
 
@@ -105,9 +108,16 @@ site rather than guessed:
    session made at the front door is not the one the VIP host wants, and no correct cookie jar
    will send it there. Something has to establish a session on `vip`, and that something runs
    in the page.
-3. **`__uzma`/`__uzmb`/`__uzmc`/`__uzmd`/`__uzme` are Radware Bot Manager**, normally minted by
-   a JavaScript challenge. A client that never runs the challenge never earns them — which is
-   exactly the symptom: a polite `200` carrying the signed-out page instead of an honest `401`.
+3. **`__uzma`/`__uzmb`/`__uzmc`/`__uzmd`/`__uzme` are Radware Bot Manager**, minted by a
+   JavaScript challenge. A client that never runs it never earns them, and gets a polite `200`
+   carrying the signed-out page instead of an honest `401`.
+4. **A correct password lands on a "Please wait…" page, not on the account.** It holds the
+   browser while the bot layer finishes and then moves on — sometimes by itself, sometimes only
+   when its Continue button is pressed. Navigating away too early leaves the session signed
+   out, which looks identical to a wrong password.
+
+The same credentials were signed in by hand and worked, so the password was never the problem
+and (3) is established rather than inferred.
 
 Two of those need a JavaScript engine. So **Interval is driven by Playwright**
 (`interval-browser.mjs`) and **RedWeek stays on plain fetch** (`redweek.mjs`) — it needs no
@@ -142,10 +152,15 @@ The watcher now reads that redirect out of the page (`followTo`), goes there, an
 origin** so everything afterwards is asked of that host. Signing in always starts back at
 `www.` regardless of where the last session ended.
 
-The cookie jar deliberately does not scope cookies by domain — that is what carries the session
-across from `www` to `vip`. Which makes the allowed-host list the thing that matters: a redirect
-to anything that is not `*.intervalworld.com` is **not followed**, because following it would
-hand Victor's session to whoever asked.
+The cookie jar scopes cookies the way a browser does — name, domain and path — because
+`JSESSIONID` is host-only with `path=/web` and each host has its own. An earlier version keyed
+them on name alone, which sent `www`'s session to `vip` (something no browser would do) and then
+let one overwrite the other. A redirect to anything that is not `*.intervalworld.com` is **not
+followed** either, on both the HTTP and the script path.
+
+None of which is enough on its own: the fetch client can now follow the move correctly and still
+not hold a session, because `vip` wants its own and the bot layer is what grants it. That is
+what the browser is for.
 
 ### How to tell whether it actually got in
 
@@ -176,15 +191,18 @@ Two suites, both stub-driven, no network and no credentials:
 
 ```sh
 node session.test.mjs    # 48 assertions — the fetch client, cookie scoping, the host guard
-node browser.test.mjs    # 10 assertions — the browser client end to end (skips if no Playwright)
+node browser.test.mjs    # 17 assertions — the browser client end to end (skips if no Playwright)
 ```
 
 The ones that matter most: a refused login that still redirects to a normal page is reported
 as **refused**; a redirect off Interval is never followed; `www`'s session cookie is never
 sent to `vip`; and the password appears in none of the dumped files.
 
-What no stub can prove is the Radware challenge, which only the real site issues. That is why
-the first real run still has to happen on the VPS.
+The browser suite covers all three shapes of holding page: one that moves on its own, one that
+only moves when Continue is pressed, and one that never moves at all — which must be reported
+as not-cleared rather than hanging a pass that runs unattended for months.
+
+What no stub can prove is the Radware challenge itself, which only the real site issues.
 
 ## What it will and will not post
 

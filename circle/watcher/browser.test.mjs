@@ -50,11 +50,26 @@ const www = http.createServer((req, res) => {
       <a href="/web/my/auth/loginPage">Sign In</a></body></html>`);
   }
   if (req.url.includes('/auth/login')) {
-    // No Location header. A script, to the other host. Exactly Interval's shape.
+    // The real shape, found on the VPS: a CORRECT password lands on a "Please wait…" holding
+    // page, not on the account. This one moves only when its Continue is pressed, which is the
+    // harder of the two cases — navigating away instead leaves the session signed out, and
+    // that is indistinguishable from a refused password.
     res.writeHead(200, { 'content-type': 'text/html', 'set-cookie': 'handoff=yes; Path=/' });
-    return res.end(`<html><head><script>function doRedirect(){
-      window.location.replace("http://127.0.0.1:${vipPort}/web/cs?a=0"); }</script></head>
-      <body onload="doRedirect()">Redirecting…</body></html>`);
+    return res.end(`<html><head><title>Please wait...</title></head><body>
+      <p>Please wait while we verify your browser.</p>
+      <button onclick="window.location.replace('http://127.0.0.1:${vipPort}/web/cs?a=0')">Continue</button>
+      </body></html>`);
+  }
+  // The commoner shape: a holding page that moves on by itself.
+  if (req.url.includes('/waits-then-goes')) {
+    res.writeHead(200, { 'content-type': 'text/html' });
+    return res.end(`<html><head><title>Please wait...</title></head><body><p>One moment.</p>
+      <script>setTimeout(function(){ location.replace('/web/my/home'); }, 500);</script></body></html>`);
+  }
+  // And the one that must never hang the pass: it waits forever and offers nothing to press.
+  if (req.url.includes('/waits-forever')) {
+    res.writeHead(200, { 'content-type': 'text/html' });
+    return res.end(`<html><head><title>Please wait...</title></head><body><p>Just a moment.</p></body></html>`);
   }
   res.writeHead(200, { 'content-type': 'text/html' });
   res.end(ANON);
@@ -68,8 +83,10 @@ const r = await iv.attemptSignIn();
 
 ok(r.limits.j_password === 14 && r.limits.j_username === 33,
    `the browser reads the form's own limits (${JSON.stringify(r.limits)})`);
+ok(r.interstitial === true, 'the "Please wait…" holding page was recognised');
+ok(r.interstitialCleared === true, 'and it was cleared by pressing Continue rather than navigated away from');
 ok(r.landedOn.includes(String(vipPort)),
-   `the browser followed the JAVASCRIPT redirect to the other host by itself (${r.landedOn})`);
+   `the browser came out the other side, on the other host (${r.landedOn})`);
 ok(r.ok === true, 'and reports signed in, judged by a page behind the login');
 ok(r.probeSays === true, 'the probe page is the one that decided it, not the URL');
 
@@ -87,6 +104,32 @@ ok(/signed in:\s+true/.test(note), 'the dump records that it got in');
 ok(/Radware bot-manager cookies:/.test(note), 'and says whether the bot-manager challenge ran');
 ok(/anonymous fetch|NOT signed in/.test(note), 'and carries the anonymous control to compare against');
 ok(!JSON.stringify(out).includes('shortpw'), 'the password appears in none of the dumped files');
+
+// The other two shapes of holding page.
+{
+  const page = await iv.open();
+  await page.goto(`http://127.0.0.1:${wwwPort}/waits-then-goes`, { waitUntil: 'domcontentloaded' });
+  ok(await iv.isWaitingRoom(page) === true, 'a self-moving holding page is recognised as one');
+  ok(await iv.throughInterstitial(page) === true, 'and waiting is enough — no button needed');
+  ok(page.url().includes('/web/my/home'), `it ends up on the real page (${page.url()})`);
+
+  await page.goto(`http://127.0.0.1:${wwwPort}/waits-forever`, { waitUntil: 'domcontentloaded' });
+  const started = process.hrtime.bigint();
+  const cleared = await iv.throughInterstitial(page, { rounds: 2, patienceMs: 700 });
+  const tookMs = Number(process.hrtime.bigint() - started) / 1e6;
+  ok(cleared === false, 'a page that never moves and offers nothing is reported as NOT cleared');
+  ok(tookMs < 5000, `and it gives up rather than hanging the pass (${Math.round(tookMs)}ms)`);
+}
+
+// A real page that merely contains the words is not a holding page.
+{
+  const page = await iv.open();
+  await page.setContent(`<html><head><title>Getaways</title></head><body>
+    <a href="/logout">Sign Out</a>
+    <p>Please wait for confirmation from the resort before booking flights. ${'Lorem ipsum. '.repeat(40)}</p>
+    </body></html>`);
+  ok(await iv.isWaitingRoom(page) === false, 'a real page that happens to say "please wait" is not mistaken for one');
+}
 
 await iv.close(); www.close(); vip.close();
 console.log(`\n${failures ? `${failures} failing` : 'all good'}`);
