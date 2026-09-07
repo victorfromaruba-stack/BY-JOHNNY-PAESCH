@@ -488,6 +488,55 @@ export class Store {
       .sort(asc('requestedAt'));
   }
   /**
+   * The one thing a member can book TODAY, in nights.
+   *
+   * The home screen opened on "✦ 28,850", which is a five-digit number nobody can convert in
+   * their head into anything they want. A member does not save points, they save nights, and
+   * the app knew the answer all along — it just never said it. This is the sentence it should
+   * have opened with, and it comes back as data so the screen can also say it when the answer
+   * is "not yet, and here is how far off".
+   *
+   * The pick is their own dream stay when they can cover its minimum, and otherwise the
+   * DEAREST place they can still cover: "3 nights at the Ritz-Carlton" is a truer picture of
+   * what the points are worth than "nineteen nights at the cheapest place on the list".
+   * Summer, because it is the honest floor and the screen names the season.
+   */
+  canBookNow(memberId = this.session?.memberId, { season = 'low' } = {}) {
+    const m = this.member(memberId);
+    if (!m) return null;
+    const avail = Math.max(0, this.availablePoints(memberId));
+    const per = (st) => seasonPoints(st, season, this.settings);
+    const list = this.stays.filter(x => x.active !== false && x.kind !== 'trip' && per(x) > 0);
+    if (!list.length) return null;
+    const nightsAt = (st) => Math.floor(avail / per(st));
+    const affordable = list.filter(st => nightsAt(st) >= (st.minNights || 1));
+    if (affordable.length) {
+      const dream = this.stay(m.dreamStayId);
+      // The dearest place you can cover, but only among the ones that give you a stay rather
+      // than a night: "2 nights at the Renaissance" is a worse answer than "5 nights on Eagle
+      // Beach" when you could have either. Below three nights it is not a trip, it is a stop.
+      const dearest = (xs) => xs.reduce((a, b) => (per(b) > per(a) ? b : a));
+      const real = affordable.filter(st => nightsAt(st) >= Math.max(3, st.minNights || 1));
+      const pick = dream && affordable.includes(dream) ? dream
+        : dearest(real.length ? real : affordable);
+      // Capped: past a fortnight the number stops being a plan and starts being a boast.
+      const nights = Math.min(nightsAt(pick), 14);
+      return { can: true, stay: pick, season, nights, capped: nightsAt(pick) > 14,
+        perNight: per(pick), points: nights * per(pick), available: avail };
+    }
+    // Nearest by what it takes to WALK IN, not by the nightly rate. The Surf Club is the
+    // cheapest per night on the island and the furthest away, because it is a villa that only
+    // comes by the week: 135 a night times a seven-night minimum is not a short walk.
+    const total = (st) => (st.minNights || 1) * per(st);
+    const nearest = list.reduce((a, b) => (total(b) < total(a) ? b : a));
+    const nights = nearest.minNights || 1;
+    const need = total(nearest);
+    return { can: false, stay: nearest, season, nights, perNight: per(nearest),
+      points: need, short: Math.max(0, need - avail), available: avail,
+      months: monthsToAfford(this.settings, need, m.monthlyUsd, avail) };
+  }
+
+  /**
    * What a member is saving for, and how far off it is. A goal is a stay (with a number of
    * nights and a season) or a seat on a trip. Nothing is reserved by setting one — it is
    * the thing that makes a contribution feel like it moved something.

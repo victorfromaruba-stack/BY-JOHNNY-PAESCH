@@ -482,6 +482,13 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
   .tablewrap tbody td { padding: 10px 8px; }
 }
 
+/* The home screen's first sentence. It answers the only question a member actually has, so it
+   gets the display face and the size the balance used to have — the balance is now one quiet
+   line up beside the card, where a number that needs converting belongs. */
+.book-lead { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--hairline-soft); }
+.book-now { font-size: clamp(1.7rem, 6.4vw, 2.3rem); line-height: 1.04; margin-top: 10px; }
+@media (min-width: 900px) { .book-now br { display: none; } }
+
 /* Us against the published rate. Three states, and one of them says we are dearer this week —
    which is the reason this is a styled sentence and not a green badge: a comparison that can
    only ever come out in our favour is an advertisement, and a member can check us on RedWeek

@@ -38,28 +38,49 @@ export function home({ store, go }) {
     </div></div></section></div>`);
   const left = wrap.querySelector('#left'), right = wrap.querySelector('#right');
 
-  // 1 — the card strip and the balance, above the fold
+  // 1 — what the points are actually worth, in nights, before anything else.
+  //
+  // This screen used to open on "✦ 28,850" in the biggest type on the page. Nobody holds a
+  // conversion rate in their head: a member wants to know whether they can go somewhere, and
+  // the app knew the answer and never said it. The five-digit figure is still here — it is
+  // just no longer the headline, because it is not the question.
+  const book = store.canBookNow(me.id);
+  const bookLine = !book ? ''
+    : book.can
+      ? `<p class="eyebrow">${icon('bed')}What you can book today</p>
+         <h1 class="book-now">${book.nights}${book.capped ? '+' : ''} night${book.nights === 1 ? '' : 's'} at<br>${escapeHtml(book.stay.name)}</h1>
+         <p class="small muted" style="margin-top:8px">In ${escapeHtml(SEASONS[book.season].label)}, all in. Every other place on the list is priced beside it.</p>
+         <div class="row" style="margin-top:14px">
+           <a class="btn" href="#/book/${escapeHtml(book.stay.id)}">${icon('send', { size: 17 })}Ask for these dates</a>
+           <a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Other places</a>
+         </div>`
+      : `<p class="eyebrow">${icon('bed')}The first thing within reach</p>
+         <h1 class="book-now">${book.nights} night${book.nights === 1 ? '' : 's'} at<br>${escapeHtml(book.stay.name)}</h1>
+         <p class="small muted" style="margin-top:8px"><b class="num">${escapeHtml(fmtPoints(book.short))}</b> to go — about ${book.months} more month${book.months === 1 ? '' : 's'} at ${escapeHtml(fmtUsd2(me.monthlyUsd))}. You can ask for it before then and close the gap in cash.</p>
+         <div class="row" style="margin-top:14px">
+           <a class="btn" href="#/pay">${icon('arrowUp', { size: 17 })}Send a contribution</a>
+           <a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Other places</a>
+         </div>`;
+
   const top = el(`<div class="panel">
       <div class="card-strip">
         <a href="#/card" style="width:132px;display:block" aria-label="Open your card"><span id="mini-card"></span></a>
         <div>
-          <h1 style="font-size:1.05rem;letter-spacing:.01em"><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span>, ${escapeHtml(me.name.split(' ')[0])}</h1>
-          <p class="k small muted" style="margin-top:8px">Available</p>
-          <div class="hero-figure" id="avail">0</div>
-          <p class="small muted" id="avail-usd"></p>
+          <h2 style="font-size:1.05rem;letter-spacing:.01em"><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span>, ${escapeHtml(me.name.split(' ')[0])}</h2>
+          <p class="small muted" style="margin-top:6px"><b class="num" id="avail">0</b> <span id="avail-usd"></span></p>
+          <div id="balbar" style="margin-top:12px"></div>
         </div>
       </div>
-      <div id="balbar" style="margin-top:16px"></div>
-      <div class="row" style="margin-top:16px">
-        <a class="btn" href="#/pay">${icon('arrowUp', { size: 17 })}Send a contribution</a>
-        <a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Request a stay</a>
+      <div class="book-lead">${bookLine}</div>
+      <div class="row" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--hairline-soft)">
+        ${book?.can === false ? '' : `<a class="btn ghost sm" href="#/pay">${icon('arrowUp', { size: 16 })}Send a contribution</a>`}
         <a class="btn quiet sm" href="#/ledger">${icon('receipt', { size: 16 })}Statement</a>
       </div>
     </div>`);
   left.appendChild(top);
   top.querySelector('#mini-card').replaceChildren(memberCard(me, { store, flippable: false, compact: true }));
   countUp(top.querySelector('#avail'), lt.available, { format: (n) => `✦ ${Math.round(n).toLocaleString('en-US')}` });
-  top.querySelector('#avail-usd').textContent = `${pointsUsd(lt.available, s.pointsPerDollar)} of hotel${lt.committed ? ` · ${fmtPoints(lt.committed)} committed to a booking` : ''}`;
+  top.querySelector('#avail-usd').textContent = `· ${pointsUsd(lt.available, s.pointsPerDollar)} of hotel${lt.committed ? ` · ${fmtPoints(lt.committed)} committed` : ''}`;
   {
     const total = Math.max(1, lt.available + lt.committed);
     top.querySelector('#balbar').innerHTML = `
@@ -223,7 +244,8 @@ export function home({ store, go }) {
   const myStanding = store.standingOf(me.id);
   const nextUp = nextRank(myStanding?.monthsHeld ?? 0);
   right.appendChild(el(`<div class="panel">
-      <p class="eyebrow">${icon('crown')}Your standing</p>
+      <div class="row-between"><p class="eyebrow">${icon('crown')}Your standing</p>
+        <a class="small" href="#/profile">Your corner</a></div>
       <div id="crest-slot" style="margin-top:10px"></div>
       <p class="small muted" style="margin-top:8px">${escapeHtml(
         nextUp ? `${nextUp.months - (myStanding?.monthsHeld ?? 0)} more month${nextUp.months - (myStanding?.monthsHeld ?? 0) === 1 ? '' : 's'} to ${nextUp.name}.`
@@ -244,7 +266,8 @@ export function home({ store, go }) {
     right.querySelector('.spark-slot')?.replaceChildren(sparkline(series.length ? series : [0, 0], { height: 46 }));
   }
   right.appendChild(el(`<div class="panel">
-      <p class="eyebrow">${icon('users')}This month in the Circle</p>
+      <div class="row-between"><p class="eyebrow">${icon('users')}This month in the Circle</p>
+        <a class="small" href="#/circle">Everyone</a></div>
       <div class="row" style="gap:14px;margin-top:12px;align-items:center">
         <span id="rollcall"></span>
         <div class="small"><b>${t.confirmedThisMonth} of ${t.expectedThisMonth}</b> contributions confirmed for ${escapeHtml(fmtMonth(month))}.
