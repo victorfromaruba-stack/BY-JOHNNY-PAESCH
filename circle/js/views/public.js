@@ -9,8 +9,34 @@ import { icon } from '../ui/icons.js';
 import { copyText } from '../core/share.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
+/**
+ * Which places we hold a real photograph of.
+ *
+ * Victor: "I don't want fantasy rooms only rooms that are actual there… it's all ghost fantasy
+ * pictures." Every card used to be a generated SVG of an imaginary beach. These six are
+ * photographs from the properties' own sites, fetched with .claude/skills/real-rooms with
+ * robots.txt honoured, and assets/stays/sources.json records the page and the date for each.
+ *
+ * The other seventeen still get the drawing, and that is deliberate rather than lazy: the
+ * illustration is plainly a drawing — flat shapes, no attempt at photography — so it reads as a
+ * placeholder rather than as a picture of somewhere you might be sent. Run the skill over the
+ * remaining properties and each one swaps itself out by appearing in this list.
+ */
+const REAL_PHOTOS = new Set(['stay_amsterdam', 'stay_boardwalk', 'stay_bucuti',
+  'stay_manchebo', 'stay_oceanvillas', 'stay_oceanz']);
+export const photoFor = (stay) => (REAL_PHOTOS.has(stay?.id)
+  ? `assets/stays/${stay.id.replace('stay_', '')}.jpg` : null);
+
 export const stayStrip = (stay) => {
   const d = document.createElement('div');
+  const photo = photoFor(stay);
+  if (photo) {
+    d.className = 'scene photo';
+    // The alt says what it is, not what it looks like: a member using a screen reader wants to
+    // know this is a picture of the property, not a description of the sea.
+    d.innerHTML = `<img src="${escapeHtml(photo)}" alt="${escapeHtml(stay.name)}" loading="lazy" decoding="async">`;
+    return d;
+  }
   d.className = 'scene';
   d.innerHTML = sceneSvg(stay);
   return d;
@@ -48,7 +74,7 @@ export function stayCard(stay, { store, href = null, footer = '' } = {}) {
   // must never do.
   const per = unitPoints(stay, store?.settings);
   const node = el(`<a class="stay-card" href="${escapeHtml(href || `#/${stay.kind === 'trip' ? 'trips' : 'stays'}/${stay.id}`)}">
-      <span class="strip"><span class="duo"></span><span class="ph-note">illustration</span></span>
+      <span class="strip"><span class="duo"></span>${photoFor(stay) ? '' : '<span class="ph-note">illustration</span>'}</span>
       <span class="body">
         <h3>${escapeHtml(stay.name)}</h3>
         <span class="where">${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}${stay.kind === 'trip' ? ` · ${stay.nights} nights` : stay.onSand ? ' · on the sand' : ' · across the road'}</span>

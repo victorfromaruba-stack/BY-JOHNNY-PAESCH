@@ -256,6 +256,12 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .stay-card .strip { position: relative; aspect-ratio: 3 / 1; background: var(--well); overflow: hidden; }
 .stay-card .strip .scene, .stay-card .strip img { display: block; width: 100%; height: 100%; }
 .stay-card .strip .scene svg { width: 100%; height: 100%; object-fit: cover; }
+/* A real photograph of the property, where we hold one. Same box as the drawing it replaces so
+   nothing reflows, and the same slow lift on hover so the two kinds of card feel like one set. */
+.stay-card .strip .scene.photo { position: absolute; inset: 0; }
+.stay-card .strip .scene.photo img { width: 100%; height: 100%; object-fit: cover; display: block;
+  transition: transform 700ms var(--ease-out); }
+.stay-card:hover .strip .scene.photo img { transform: scale(1.04); }
 /* A whisper of a vignette so the caption stays readable; the picture is the point, so it
    lifts entirely on hover rather than sitting under a slab of navy. */
 .stay-card .strip .duo { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(12,26,38,0) 55%, rgba(12,26,38,.28)); transition: opacity 600ms var(--ease-out); }

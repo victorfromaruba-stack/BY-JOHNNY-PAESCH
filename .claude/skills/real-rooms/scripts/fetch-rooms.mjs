@@ -207,6 +207,21 @@ function imagesFrom(html, base) {
     let abs; try { abs = new URL(src, base).href; } catch { return; }
     if (!/\.(jpe?g|png|webp|avif)(\?|$)/i.test(abs)) return;
     if (/sprite|logo|icon|favicon|pixel|1x1|blank|placeholder/i.test(abs)) return;
+    // Award badges and rating seals are the commonest junk on a hotel site and the likeliest to
+    // end up on a card looking like a room. A harvest of eight Aruba properties came back with
+    // Fodor's seals, a TripAdvisor medal and two "9.8 Exceptional" graphics — none of them a
+    // picture of anywhere anyone sleeps.
+    const junk = /award|badge|seal|winner|tripadvisor|fodor|forbes|travell?ers?[-_]?choice|certif|rating|review|logo|crest|medal|sticker|redes[-_]|social|facebook|instagram|whatsapp/i;
+    if (junk.test(abs) || junk.test(String(alt || ''))) return;
+    // Shape is the reliable tell the filename is not. Seals and social icons are small squares;
+    // a photograph of a room is wide and big. A filename carrying its own dimensions —
+    // "ta25-300x300.jpg", "aruba-certified-300x278.png" — hands us both for free.
+    const dim = abs.match(/(\d{2,4})x(\d{2,4})(?=\D*$)/);
+    if (dim) {
+      const w = +dim[1], h = +dim[2];
+      if (w < 640 || h < 360) return;              // too small to show a room
+      if (Math.abs(w / h - 1) < 0.15) return;      // square: a seal, not a scene
+    }
     if (!seen.has(abs)) seen.set(abs, decode(alt) || null);
     else if (!seen.get(abs) && alt) seen.set(abs, decode(alt));
   };

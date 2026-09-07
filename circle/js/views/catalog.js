@@ -3,7 +3,7 @@ import { escapeHtml, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, countdow
 import { VOCAB, tierName } from '../core/vocab.js';
 import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth } from '../core/money.js';
 import { ring, versusLine } from '../ui/pieces.js';
-import { stayCard, stayStrip } from './public.js';
+import { stayCard, stayStrip, photoFor } from './public.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
 import { shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
@@ -107,7 +107,7 @@ export function stayDetail({ store, params, go }) {
       <p class="eyebrow">${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}${isTrip ? '' : ` · ${stay.onSand ? 'on the sand' : 'across the road'}`}${stay.house ? ' · <span style="color:var(--good-text)">where we stay</span>' : ''}</p>
       <h1>${escapeHtml(stay.name)}</h1>
       <p class="lede" style="margin-top:12px">${escapeHtml(stay.vibe)}</p>
-      <div class="stay-card daylight" style="margin-top:20px;border-radius:var(--r-card)"><span class="strip"><span class="ph-note">illustration</span></span></div>
+      <div class="stay-card daylight" id="stay-hero" style="margin-top:20px;border-radius:var(--r-card)"><span class="strip"></span></div>
       <div class="row" style="margin-top:14px">${(stay.features || []).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</div>
       ${(() => {
         // Where the number came from, ALWAYS — including when the answer is "nowhere yet".
@@ -161,6 +161,13 @@ export function stayDetail({ store, params, go }) {
   wrap.querySelector('.strip').prepend(stayStrip(stay));
 
   // What you can actually be given here, and what each one costs a night.
+  {
+    const heroStrip = wrap.querySelector('#stay-hero .strip');
+    if (heroStrip) {
+      heroStrip.appendChild(stayStrip(stay));
+      if (!photoFor(stay)) heroStrip.insertAdjacentHTML('beforeend', '<span class="ph-note">illustration</span>');
+    }
+  }
   const roomsSlot = wrap.querySelector('#rooms');
   const rooms = store.roomTypesFor(stay.id);
   if (rooms.length && !isTrip) {
