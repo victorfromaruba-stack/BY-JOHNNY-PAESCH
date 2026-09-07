@@ -1101,6 +1101,24 @@ export class Store {
     const r = this.redemption(id); if (!r) throw new Error('No such request');
     if (r.status !== REDEMPTION_STATUS.requested) throw new Error('Only an open request can be quoted');
     const pts = Math.round(Number(points)); if (!(pts > 0)) throw new Error('Quote must be positive');
+    // The Circle's share has to be IN the quote, because every screen tells the member it is and
+    // because it is the club's only income. The composer once published the hotel's cash exactly
+    // and nobody noticed for months, so the arithmetic is checked here rather than trusted: when
+    // a stack is given, the points must equal the hotel lines plus the share on top. Mirrored in
+    // quote_redemption() — a rule enforced in one backend is not enforced.
+    if (stack && typeof stack === 'object') {
+      const hotel = Object.entries(stack)
+        .filter(([k]) => k !== 'share')
+        .reduce((sum, [, v]) => sum + (Number(v) || 0), 0);
+      if (hotel > 0) {
+        const want = Math.round(hotel * (1 + this.settings.serviceRate) * this.settings.pointsPerDollar);
+        // A dollar of slack: the sheet rounds the share to cents before adding it.
+        if (Math.abs(pts - want) > this.settings.pointsPerDollar) {
+          const n = (x) => Math.round(x).toLocaleString('en-US');
+          throw new Error(`That quote leaves out the Circle's share: ${n(hotel * this.settings.pointsPerDollar)} points of hotel should be quoted at ${n(want)}.`);
+        }
+      }
+    }
     // The gate. Mirrors quote_redemption() in SQL exactly — if these two disagree, the demo
     // teaches a rule the server does not enforce, which is the failure this whole app is about.
     let look = null;

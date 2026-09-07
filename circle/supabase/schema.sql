@@ -997,6 +997,28 @@ begin
   if p_points <= 0 then raise exception 'A quote must be positive'; end if;
   select * into s from settings where id = 1;
 
+  -- The Circle's share has to be IN the quote. Every screen tells the member it is, and it is
+  -- the club's only income — but the Desk's composer published the hotel's cash exactly and
+  -- nobody noticed, because its pre-filled defaults were fractions of the all-in price and
+  -- happened to add back up. So the arithmetic is checked rather than trusted: when a stack is
+  -- given, the points must be the hotel lines plus the share on top. Mirrors the same guard in
+  -- store.js quoteRedemption; a rule enforced in one backend is not enforced.
+  if p_stack is not null and jsonb_typeof(p_stack) = 'object' then
+    declare hotel numeric; want int;
+    begin
+      select coalesce(sum((value)::numeric), 0) into hotel
+        from jsonb_each_text(p_stack) where key <> 'share';
+      if hotel > 0 then
+        want := round(hotel * (1 + s.service_rate) * s.points_per_dollar);
+        -- A dollar of slack: the composer rounds the share to cents before adding it.
+        if abs(p_points - want) > s.points_per_dollar then
+          raise exception 'That quote leaves out the Circle''s share: % points of hotel should be quoted at %.',
+            round(hotel * s.points_per_dollar), want;
+        end if;
+      end if;
+    end;
+  end if;
+
   -- THE GATE. A trip is the Circle's own inventory with seats already enforced, so there is no
   -- public page to look at; requests older than settings.looks_from predate the gate and are
   -- exempt, so shipping it does not brick the open queue.

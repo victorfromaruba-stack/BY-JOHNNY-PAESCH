@@ -1,7 +1,7 @@
 // Stays, trips, requesting one, and the life of a request.
 import { escapeHtml, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, countdownTo, initials, nightsBetween, safeUrl } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
-import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth } from '../core/money.js';
+import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth, round2 } from '../core/money.js';
 import { ring, versusLine } from '../ui/pieces.js';
 import { effectiveTier } from '../core/standing.js';
 import { stayCard, stayStrip, photoFor } from './public.js';
@@ -841,35 +841,60 @@ export function requestDetail({ store, params, go, refresh }) {
   return wrap;
 }
 
-/** Victor's quote composer: build the all-in stack, and the points follow. */
+/**
+ * Victor's quote composer: he types what the hotel charges, and the Circle's share is added on
+ * top — visibly, as its own line, because that is what every screen already tells the member.
+ *
+ * This used to publish `total * pointsPerDollar` and nothing else, so the binding quote was the
+ * hotel's cash exactly and the Circle earned nothing on the booking. It hid because the
+ * pre-filled defaults were fractions of the ALL-IN indicative price (0.72 + 0.09 + 0.10 + 0.08
+ * ≈ 0.99 of it), so an untouched quote reconstructed roughly the right total by accident. The
+ * moment the Desk typed the real numbers off a hotel checkout page — the entire point of this
+ * sheet — the 15% vanished, on the club's only source of income. The defaults are now fractions
+ * of the ROOM-only figure, so the labels are true and the arithmetic does not depend on nobody
+ * touching them.
+ */
 export async function quoteSheet(store, r, stay) {
   const s = store.settings;
   const indicative = r.indicativePoints || 0;
+  // The indicative price already carries the share (money.js allIn), so take it back out to get
+  // what the hotel is likely to charge. These are a starting point Victor overwrites.
+  const hotelUsd = indicative / s.pointsPerDollar / (1 + s.serviceRate);
   const out = await sheet({ title: `Quote ${stay?.name || 'this stay'}`, wide: true, render: (body, close) => {
     body.innerHTML = `
-      <p class="sheet-text">Build the all-in cost. The member sees the stack and the points, and the quote is locked for ${s.quoteHours} hours.</p>
+      <p class="sheet-text">Type what the hotel charges. The Circle's ${Math.round(s.serviceRate * 100)}% is added on top and the member sees it as its own line. The quote is locked for ${s.quoteHours} hours.</p>
       <div class="grid g3">
-        <label class="field"><span>Room total</span><input name="room" type="number" step="0.01" value="${(indicative / s.pointsPerDollar * 0.72).toFixed(2)}" inputmode="decimal"></label>
-        <label class="field"><span>Tourist levy 12.5%</span><input name="levy" type="number" step="0.01" value="${(indicative / s.pointsPerDollar * 0.09).toFixed(2)}" inputmode="decimal"></label>
-        <label class="field"><span>Service charge</span><input name="service" type="number" step="0.01" value="${(indicative / s.pointsPerDollar * 0.1).toFixed(2)}" inputmode="decimal"></label>
-        <label class="field"><span>Resort fee</span><input name="resort" type="number" step="0.01" value="${(indicative / s.pointsPerDollar * 0.08).toFixed(2)}" inputmode="decimal"></label>
+        <label class="field"><span>Room total</span><input name="room" type="number" step="0.01" value="${(hotelUsd * 0.72).toFixed(2)}" inputmode="decimal"></label>
+        <label class="field"><span>Tourist levy 12.5%</span><input name="levy" type="number" step="0.01" value="${(hotelUsd * 0.09).toFixed(2)}" inputmode="decimal"></label>
+        <label class="field"><span>Service charge</span><input name="service" type="number" step="0.01" value="${(hotelUsd * 0.1).toFixed(2)}" inputmode="decimal"></label>
+        <label class="field"><span>Resort fee</span><input name="resort" type="number" step="0.01" value="${(hotelUsd * 0.08).toFixed(2)}" inputmode="decimal"></label>
         <label class="field"><span>Environmental levy</span><input name="env" type="number" step="0.01" value="${(r.nights * 6).toFixed(2)}" inputmode="decimal"></label>
-        <div class="stat"><span class="k">Quote</span><b class="num" id="q-total">—</b><span class="sub" id="q-pts">—</span></div>
+        <div class="stat"><span class="k">The hotel</span><b class="num" id="q-hotel">—</b><span class="sub">what we pay them</span></div>
+        <div class="stat"><span class="k">The Circle's ${Math.round(s.serviceRate * 100)}%</span><b class="num" id="q-share">—</b><span class="sub">what the club earns</span></div>
+        <div class="stat"><span class="k">The quote</span><b class="num" id="q-total">—</b><span class="sub" id="q-pts">—</span></div>
       </div>
       <label class="field"><span>Hotel’s cancellation terms</span><input name="terms" value="Free cancellation up to 30 days before arrival." ></label>
       <label class="field"><span>Free-cancellation deadline</span><input name="deadline" type="date" value="${new Date(new Date(r.checkIn).getTime() - 30 * 864e5).toISOString().slice(0, 10)}"></label>
       <label class="field"><span>A line for the member</span><textarea name="note" rows="2" placeholder="Lagoon view, high floor — and I got the resort fee waived."></textarea></label>
       <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Publish the quote</button></div>`;
-    const total = () => ['room', 'levy', 'service', 'resort', 'env'].reduce((sum, k) => sum + (Number(body.querySelector(`[name=${k}]`).value) || 0), 0);
+    const HOTEL_LINES = ['room', 'levy', 'service', 'resort', 'env'];
+    const hotel = () => HOTEL_LINES.reduce((sum, k) => sum + (Number(body.querySelector(`[name=${k}]`).value) || 0), 0);
+    const share = () => round2(hotel() * s.serviceRate);
+    const quoteUsd = () => hotel() + share();
     const sync = () => {
-      const t = total();
-      body.querySelector('#q-total').textContent = fmtUsd2(t);
-      body.querySelector('#q-pts').textContent = fmtPoints(Math.round(t * s.pointsPerDollar));
+      body.querySelector('#q-hotel').textContent = fmtUsd2(hotel());
+      body.querySelector('#q-share').textContent = fmtUsd2(share());
+      body.querySelector('#q-total').textContent = fmtUsd2(quoteUsd());
+      body.querySelector('#q-pts').textContent = fmtPoints(Math.round(quoteUsd() * s.pointsPerDollar));
     };
     sync(); body.addEventListener('input', sync);
     body.querySelector('[data-ok]').addEventListener('click', () => {
-      const stack = Object.fromEntries(['room', 'levy', 'service', 'resort', 'env'].map(k => [k, Number(body.querySelector(`[name=${k}]`).value) || 0]));
-      close({ points: Math.round(total() * s.pointsPerDollar), stack, terms: body.querySelector('[name=terms]').value,
+      // `share` rides in the stack so the member's breakdown shows it by name. Both backends
+      // re-derive it from the hotel lines and refuse a quote whose points do not match, so the
+      // rate cannot be dropped by a future caller the way it was dropped here.
+      const stack = Object.fromEntries(HOTEL_LINES.map(k => [k, Number(body.querySelector(`[name=${k}]`).value) || 0]));
+      stack.share = share();
+      close({ points: Math.round(quoteUsd() * s.pointsPerDollar), stack, terms: body.querySelector('[name=terms]').value,
         hotelDeadline: body.querySelector('[name=deadline]').value, note: body.querySelector('[name=note]').value });
     });
   } });
