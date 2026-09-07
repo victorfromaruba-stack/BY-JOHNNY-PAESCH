@@ -356,8 +356,8 @@ export class SupabaseStore extends Store {
   // nothing here to enforce twice. The one exception is making a crew, which has to insert the
   // crew and its first lead together — a half-made crew has no lead, and then nobody can add
   // one, which is exactly the hole create_crew() exists to close.
-  async createCrew({ name, about = '' }) {
-    const id = await this.rpc('create_crew', { p_name: name, p_about: about || null });
+  async createCrew({ name, about = '', redemptionId = null }) {
+    const id = await this.rpc('create_crew', { p_name: name, p_about: about || null, p_redemption: redemptionId });
     await this.reload();
     return this.crew(id) || { id, name, about };
   }

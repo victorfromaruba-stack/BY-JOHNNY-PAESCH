@@ -291,13 +291,42 @@ export class Store {
     return (this.state.crewMessages || []).filter(m => m.crewId === crewId).sort(asc('createdAt'));
   }
 
-  async createCrew({ name, about = '' }) {
+  /**
+   * A circle forms around a room, not around a name.
+   *
+   * Victor: "you can't make A circle without the room being approved." Before this, createCrew
+   * took a name and nothing else, so a circle was a title with a thread attached and had no
+   * connection to any room anyone was going to sleep in. Now it hangs off a booking you own
+   * that the Desk has already approved — held, confirmed or completed, which means the points
+   * are committed and the room is really yours. Anything earlier is a request, not a room.
+   *
+   * The same rule is enforced in SQL by create_crew(), because the local adapter is a
+   * convenience and the database is the one that has to be right.
+   */
+  approvedRoomsFor(memberId = this.session?.memberId) {
+    const ok = [REDEMPTION_STATUS.held, REDEMPTION_STATUS.confirmed, REDEMPTION_STATUS.completed];
+    return this.state.redemptions
+      .filter(r => r.memberId === memberId && ok.includes(r.status))
+      .filter(r => !(this.state.crews || []).some(c => c.redemptionId === r.id))
+      .sort((a, b) => String(b.checkIn || '').localeCompare(String(a.checkIn || '')));
+  }
+
+  async createCrew({ name, about = '', redemptionId = null }) {
     const me = this.me; if (!me) throw new Error('Sign in first');
     const clean = String(name || '').trim();
-    if (clean.length < 2) throw new Error('A crew needs a name');
+    if (clean.length < 2) throw new Error('A circle needs a name');
     if (clean.length > 40) throw new Error('That name is too long — 40 characters at most');
+    if (!redemptionId) throw new Error('Start a circle from a room the Desk has approved — that is what the circle is for');
+    const r = this.redemption(redemptionId);
+    if (!r) throw new Error('No such booking');
+    if (r.memberId !== me.id) throw new Error('That booking is not yours');
+    if (![REDEMPTION_STATUS.held, REDEMPTION_STATUS.confirmed, REDEMPTION_STATUS.completed].includes(r.status)) {
+      throw new Error(r.status === REDEMPTION_STATUS.quoted
+        ? 'Accept the quote first — once the points are committed the room is yours and the circle can start.'
+        : `That room is not approved yet — it is ${r.status}. Once the Desk quotes it and you accept, you can start the circle around it.`);
+    }
     const c = { id: uid('crw'), name: clean, about: String(about || '').trim() || null,
-      coverPath: null, createdBy: me.id, createdAt: nowIso(), archivedAt: null };
+      redemptionId, coverPath: null, createdBy: me.id, createdAt: nowIso(), archivedAt: null };
     (this.state.crews ||= []).push(c);
     // Naming it and being in it are one act. Splitting them is what made this unusable on the
     // server for everybody but an admin.

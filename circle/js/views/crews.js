@@ -7,7 +7,7 @@
 //
 // Deliberately small: a name, who is in it, and somewhere to talk. Everything the Circle
 // already does well — quoting, pledging, the board — stays where it is.
-import { escapeHtml, fmtDay, fmtDayTime } from '../core/util.js';
+import { escapeHtml, fmtDay, fmtDayTime, fmtPoints, fmtUsd2 } from '../core/util.js';
 import { toast, sheet, confirmDialog, avatar, setBusy } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 
@@ -29,26 +29,32 @@ export function crews({ store, go }) {
   const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:820px">
       <div class="sec-head">
         <div>
-          <p class="eyebrow">${icon('users')}Your crews</p>
-          <h1>Who you travel with</h1>
-          <p>A crew is the handful of you who actually go together — the four who split a villa,
-             the family group, the ones who always go in October. It has a name you choose and a
-             thread only the people in it can read.</p>
+          <p class="eyebrow">${icon('users')}Your circles</p>
+          <h1>Who you are going with</h1>
+          <p>A circle is the people on one booking — the four who split a villa, the family
+             group, the ones who always go in October. It starts from a room the Desk has
+             approved, it has a name you choose, and its thread is readable only by the people
+             in it.</p>
         </div>
-        <button class="btn" id="new-crew">${icon('plus', { size: 17 })}Start a crew</button>
+        ${store.approvedRoomsFor(me.id).length
+          ? `<button class="btn" id="new-crew">${icon('plus', { size: 17 })}Start a circle</button>`
+          : `<a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Find a room first</a>`}
       </div>
       <div class="stack" id="list" style="margin-top:22px"></div>
     </div></section></div>`);
 
   const list = wrap.querySelector('#list');
   if (!mine.length) {
+    const rooms = store.approvedRoomsFor(me.id);
     list.appendChild(el(`<div class="panel empty">
       <span class="ico">${icon('users', { size: 30, cls: 'ico-muted' })}</span>
-      <h2 style="margin-top:10px;font-size:1.15rem">You are not in a crew yet</h2>
-      <p class="small muted" style="margin-top:8px;max-width:52ch">Start one and name it whatever you
-        call yourselves. Add the people you go with, and the thread is yours — nobody else in the
-        Circle can read it — not the Desk, not the Banker.</p>
-      <p style="margin-top:14px"><button class="btn sm" id="new-crew-2">${icon('plus', { size: 16 })}Start a crew</button></p>
+      <h2 style="margin-top:10px;font-size:1.15rem">${rooms.length ? 'Start one around a room' : 'A circle starts with a room'}</h2>
+      <p class="small muted" style="margin-top:8px;max-width:54ch">${rooms.length
+        ? `You have ${rooms.length} approved booking${rooms.length === 1 ? '' : 's'} to build one around. Name it whatever you already call yourselves, add the people coming with you, and the thread is yours — nobody else in the Circle can read it, not the Desk, not the Banker.`
+        : 'A circle is the people on a booking, so it needs a booking first. Ask for a room, and once the Desk quotes it and you accept, you can start the circle around it and bring the others in.'}</p>
+      <p style="margin-top:14px">${rooms.length
+        ? `<button class="btn sm" id="new-crew-2">${icon('plus', { size: 16 })}Start a circle</button>`
+        : `<a class="btn sm" href="#/stays">${icon('bed', { size: 16 })}Find a room</a>`}</p>
     </div>`));
   }
   for (const c of mine) {
@@ -62,6 +68,13 @@ export function crews({ store, go }) {
             <h2 style="font-size:1.1rem">${escapeHtml(c.name)}${
               store.leadsCrew(c.id, me.id) ? '<span class="tag" style="margin-left:8px">you lead it</span>' : ''}</h2>
             ${c.about ? `<p class="small muted" style="margin-top:4px">${escapeHtml(c.about)}</p>` : ''}
+            ${(() => {
+              const r = c.redemptionId ? store.redemption(c.redemptionId) : null;
+              const st = r ? store.stay(r.stayId) : null;
+              if (!st) return '';
+              return `<p class="small" style="margin-top:6px">${icon('bed', { size: 14, cls: 'ico-muted' })}
+                ${escapeHtml(st.name)} · ${escapeHtml(fmtDay(r.checkIn))}${r.nights ? ` · ${r.nights} night${r.nights === 1 ? '' : 's'}` : ''}</p>`;
+            })()}
             <p class="small muted" style="margin-top:8px">${
               last
                 ? `<b>${escapeHtml(who?.name.split(' ')[0] || 'Someone')}:</b> ${escapeHtml((last.body || '(taken back)').slice(0, 70))}${(last.body || '').length > 70 ? '…' : ''}`
@@ -81,7 +94,7 @@ export function crews({ store, go }) {
     const made = await crewSheet({ store });
     if (made) { toast(`${made.name} it is.`, { kind: 'good' }); go(`/crews/${made.id}`); }
   };
-  wrap.querySelector('#new-crew').addEventListener('click', start);
+  wrap.querySelector('#new-crew')?.addEventListener('click', start);
   wrap.querySelector('#new-crew-2')?.addEventListener('click', start);
   return wrap;
 }
@@ -91,9 +104,19 @@ async function crewSheet({ store, crew = null }) {
   return sheet({
     title: crew ? 'Rename this crew' : 'Start a crew',
     render: (body, close) => {
+      const rooms = crew ? [] : store.approvedRoomsFor();
       body.innerHTML = `
-        <p class="sheet-text">Call it whatever you already call yourselves. Only the people you
-          add can see it or read what is said in it.</p>
+        <p class="sheet-text">${crew
+          ? 'Call it whatever you already call yourselves.'
+          : 'A circle is the people on one booking. Pick the room, name yourselves, and only the people you add can see it or read what is said in it.'}</p>
+        ${crew ? '' : `<label class="field"><span>The room</span>
+          <select name="redemptionId" required>
+            ${rooms.map(r => {
+              const st = store.stay(r.stayId);
+              return `<option value="${escapeHtml(r.id)}">${escapeHtml(st?.name || 'A stay')} · ${escapeHtml(fmtDay(r.checkIn))}${r.nights ? ` · ${r.nights} night${r.nights === 1 ? '' : 's'}` : ''}</option>`;
+            }).join('')}
+          </select>
+          <span class="hint">Only rooms the Desk has approved and that do not already have a circle.</span></label>`}
         <label class="field"><span>Name</span>
           <input name="name" required maxlength="40" autofocus placeholder="The October Four"
                  value="${escapeHtml(crew?.name || '')}"></label>
@@ -111,7 +134,7 @@ async function crewSheet({ store, crew = null }) {
         setBusy(e.target, true, crew ? 'Saving…' : 'Starting…');
         try {
           const out = crew ? await store.renameCrew(crew.id, { name, about })
-                           : await store.createCrew({ name, about });
+                           : await store.createCrew({ name, about, redemptionId: body.querySelector('[name=redemptionId]')?.value || null });
           close(out || { id: crew?.id, name, about });
         } catch (err) { setBusy(e.target, false); toast(err.message, { kind: 'bad' }); }
       });
