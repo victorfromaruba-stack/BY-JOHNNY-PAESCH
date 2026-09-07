@@ -77,7 +77,11 @@ export function live({ store, go }) {
     checkin: '', checkout: '', page: 1, houseOnly: true,
   };
 
-  const wrap = el(`<div><section class="sec"><div class="wrap">
+  const wrap = el(`<div>
+    <figure class="band" style="--ratio:32/9">
+      <img src="assets/band-open.jpg" alt="A sunlit colonnade of stone arches with the sea beyond" loading="lazy" decoding="async">
+    </figure>
+    <section class="sec"><div class="wrap">
       <div class="sec-head"><div>
         <p class="eyebrow">${icon('eye')}A window, not a shop</p>
         <h1>What is open right now</h1>

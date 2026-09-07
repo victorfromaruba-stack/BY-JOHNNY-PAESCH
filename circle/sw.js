@@ -1,7 +1,7 @@
 // Service worker: makes the app installable and instant on repeat visits.
 // Same-origin app files → stale-while-revalidate. CDN scripts/fonts → cache-first.
 // Anything to Supabase → network only (never cache money).
-const VERSION = 'hunto-v7';
+const VERSION = 'hunto-v8';
 const APP_SHELL = ['./', './index.html', './css/app.css', './css/tokens.css', './js/app.js', './config.js', './manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {

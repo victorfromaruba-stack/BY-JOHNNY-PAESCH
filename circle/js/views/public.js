@@ -50,6 +50,20 @@ export function stayCard(stay, { store, season = 'low', href = null, footer = ''
   return node;
 }
 
+/**
+ * A full-bleed photograph between two sections, with a line of type on it.
+ *
+ * These are atmosphere, not evidence: none of them is a picture of a room the Circle books, and
+ * none is captioned as though it were. Lazy below the fold, and every one carries an aspect
+ * ratio so the page does not jump when it loads.
+ */
+function band(src, alt, line, { ratio = '21/9' } = {}) {
+  return `<figure class="band" style="--ratio:${ratio}">
+      <img src="assets/${escapeHtml(src)}.jpg" alt="${escapeHtml(alt)}" loading="lazy" decoding="async">
+      ${line ? `<figcaption>${escapeHtml(line)}</figcaption>` : ''}
+    </figure>`;
+}
+
 export function landing({ store, go }) {
   const s = store.settings;
   const t = store.treasury();
@@ -154,6 +168,8 @@ export function landing({ store, go }) {
   choices.addEventListener('click', (e) => { const b = e.target.closest('[data-amt]'); if (!b) return; chosen = Number(b.dataset.amt); draw(); });
 
   // What each level is for
+  wrap.appendChild(el(band('band-circle', 'A long table laid for a dozen people, seen from above',
+    'Forty seats. Everyone comes on everything.')));
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>Everyone comes on everything</h2>
       <p>No level shuts anyone out of a stay or a trip. What the level changes is how quickly the points build — and that is what decides, in practice, whether you are doing long weekends on the island or leaving it with the group.</p></div></div>
@@ -186,6 +202,8 @@ export function landing({ store, go }) {
       </div></section>`));
 
   // How a contribution becomes a stay
+  wrap.appendChild(el(band('band-how', 'Stone steps descending to still water at first light',
+    'Four steps, in order, every time.')));
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>How a contribution becomes a stay</h2></div></div>
       <div class="grid g4">
@@ -207,6 +225,17 @@ export function landing({ store, go }) {
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>What a night costs</h2>
       <p>Published once a year and never changed after you have booked against them. Your binding quote is Victor’s negotiated all-in rate, which is usually better.</p></div></div>
+      <div class="seasons-row">
+        ${[['season-summer', 'Summer', SEASONS.low.range, 'The quiet half of the year, and the cheapest.'],
+           ['season-winter', 'Winter', SEASONS.high.range, 'When everyone wants to be here.'],
+           ['season-peak', 'Peak', SEASONS.peak.range, 'Christmas and New Year, priced accordingly.'],
+           ['season-carnival', 'Carnival', 'the weeks before Lent', 'Moves every year with Easter.']]
+          .map(([img, name, when, note]) => `<figure class="season-card">
+            <img src="assets/${img}.jpg" alt="" loading="lazy" decoding="async">
+            <figcaption><b>${escapeHtml(name)}</b><span class="tiny muted">${escapeHtml(when)}</span>
+              <span class="small muted">${escapeHtml(note)}</span></figcaption>
+          </figure>`).join('')}
+      </div>
       <div class="tablewrap"><table>
         <caption class="sr-only">Indicative points per night by category and season</caption>
         <thead><tr><th>Category</th><th>Summer · ${escapeHtml(SEASONS.low.range)}</th><th>Winter · ${escapeHtml(SEASONS.high.range)}</th></tr></thead>
@@ -226,6 +255,8 @@ export function landing({ store, go }) {
     { role: 'comms', job: 'The Voice', what: 'Every message from the Circle comes from one person, so nobody is chased in a group chat.' },
     { role: 'treasurer', job: 'The Banker', what: 'Holds the money and confirms every transfer. Points are minted only by him, and every line in your ledger carries his name and the time.' },
   ];
+  wrap.appendChild(el(band('band-pool', 'Salt pans from above, pale shapes divided by thin channels',
+    'The Reserve, checked against the bank every month.')));
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>Three people, three jobs</h2></div></div>
       <div class="jobs">${JOBS.map(({ role, job, what }) => {
@@ -279,7 +310,8 @@ export function rules({ store }) {
     ['You can chip in to each other’s bookings.', 'Open a booking to the Circle and anyone can add their own points to it — for a room you are sharing, or as a gift. Their points are committed the moment they chip in and released if it falls through; when the hotel is paid, each person’s share burns from their own ledger. Nobody can chip in more than the booking still needs, and points never change hands as points.'],
     [`${VOCAB.clubName} is a private members’ club for prepaid, club-arranged travel.`, 'Points are not deposits and not an investment. There is no interest, no return, and no payout that depends on new members joining: your points are backed by your own money, held in the Reserve.'],
   ];
-  const wrap = el(`<div><section class="sec"><div class="wrap">
+  const wrap = el(`<div>${band('band-rules', 'Still water at dawn, fine ripples catching cool light', '', { ratio: '32/9' })}
+    <section class="sec"><div class="wrap">
       <p class="eyebrow">Version ${escapeHtml(s.rulesVersion)} · ${escapeHtml(fmtDay(s.rulesDate))}</p>
       <h1>How the Circle works</h1>
       <p class="lede" style="margin-top:12px">In plain words. Everything the app does follows from these, and nothing here changes without telling you first.</p>
@@ -295,7 +327,10 @@ export function rules({ store }) {
 
 export function signIn({ store, go, refresh }) {
   const live = store.mode === 'supabase';
-  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:480px">
+  const wrap = el(`<div><section class="sec"><div class="wrap signin-wrap">
+      <figure class="signin-art"><img src="assets/signin.jpg"
+        alt="Dark water at dusk with the last of the light along the horizon" decoding="async"></figure>
+      <div class="signin-form">
       <h1>Sign in</h1>
       <p class="lede" style="margin-top:10px">Victor or Ian gives you a username and a password. Nothing is emailed to you.</p>
 
@@ -313,6 +348,7 @@ export function signIn({ store, go, refresh }) {
         Forgotten it? Ask Victor or Ian — they set you a new one and tell you what it is. Nobody,
         them included, can read the one you are using now.</p>
       <p class="small muted" style="margin-top:10px">Not an Insider yet? The Circle is capped at ${store.settings.memberCap} seats and everyone in it was asked personally. <a href="#/">What it is</a>.</p>
+      </div>
     </div></section></div>`);
 
   const form = wrap.querySelector('#pw');
