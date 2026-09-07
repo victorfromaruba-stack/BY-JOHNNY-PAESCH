@@ -431,7 +431,15 @@ export class SupabaseStore extends Store {
     const { data, error } = await this.sb.rpc(fn, args);
     if (error) throw new Error(error.message);
     await this.reload();
-    return data ? toCamel(data) : data;
+    // Only a row gets its keys camel-cased. A function that returns a bare value — create_crew
+    // returns a uuid, season_for returns text — must come back as that value: Object.entries on
+    // a string gives {0:'3', 1:'f', …}, so the caller got an object of single characters and
+    // every use of it read "[object Object]". Creating a crew made the crew and then sent the
+    // member to #/crews/[object Object], which answers "Not your crew" — the club's own
+    // "you cannot make a circle".
+    if (data === null || data === undefined) return data;
+    if (Array.isArray(data)) return data.map(r => (r && typeof r === 'object' ? toCamel(r) : r));
+    return typeof data === 'object' ? toCamel(data) : data;
   }
   log() { /* server writes audit */ }
   async reset() { throw new Error('Reset is only available in local mode'); }
