@@ -256,23 +256,31 @@ export function sceneSvg(stay, { w = W, h = H } = {}) {
   const isAway = scene.startsWith('away:');
   const pal = isAway ? (AWAY[scene.slice(5)] || AWAY.Japan) : SKIES[Math.floor(rand() * SKIES.length)];
   const uid = `a${(hash(key) % 1e6).toString(36)}`;
-  const horizon = 92 + rand() * 22;
-  const sandY = 168 + rand() * 12;
+  const horizon = 118 + rand() * 10;
   const ink = pal.ink;
 
-  let sky = `<rect width="${W}" height="${H}" fill="url(#${uid}s)"/>`;
-  sky += `<circle cx="${n1(70 + rand() * 500)}" cy="${n1(28 + rand() * 30)}" r="${n1(14 + rand() * 9)}" fill="${pal.sun}" opacity=".85"/>`;
-  for (let i = 0; i < 3; i++) sky += cloud(rand() * W, 22 + rand() * 46, 0.6 + rand() * 0.7, 0.2 + rand() * 0.35);
-  for (let i = 0; i < 3; i++) sky += bird(40 + rand() * 540, 24 + rand() * 40, 0.7 + rand() * 0.6, ink);
+  // Sky, sea, and the building. That is the whole picture.
+  //
+  // It used to be nine things in a 340x214 box: a gradient, a sun, three clouds, three birds,
+  // four wave bands, the buildings, a sand strip, up to five palm trees, a couple of palapas
+  // and a catamaran. Stacked in a space the size of a business card that is not a scene, it is
+  // a sticker sheet — which is exactly why Victor kept calling the site cheap. The house style
+  // this project already wrote down says one idea per image, silhouette first, two tones beat
+  // five, and "Aruba is the address, not the subject… a drawing does not need a palm tree in it
+  // to be from here". The old drawing broke every one of those lines.
+  //
+  // So: a two-stop sky, a calm sea, and the property's own roofline as a single flat shape,
+  // with two thirds of the frame left empty. The silhouette is the subject and the emptiness is
+  // what makes it look considered rather than decorated. Nothing here is random-looking any
+  // more, and nothing competes with the hotel's name sitting underneath it.
+  const sky = `<rect width="${W}" height="${H}" fill="url(#${uid}s)"/>`;
 
-  // The sea, then whatever stands in front of it.
-  let sea = `<path d="M0 ${n1(horizon)}H${W}V${H}H0Z" fill="url(#${uid}w)"/>`;
-  for (let i = 0; i < 4; i++) {
-    sea += band(horizon + 8 + i * 9, 2 + rand() * 3, 0.012 + rand() * 0.01, rand() * 6.28, '#ffffff', 0.06 + rand() * 0.07);
-  }
+  // One horizon, one sea. A single soft band where the water meets the light, not four.
+  const sea = `<path d="M0 ${n1(horizon)}H${W}V${H}H0Z" fill="url(#${uid}w)"/>`
+    + band(horizon + 5, 1.6, 0.011, rand() * 6.28, '#ffffff', 0.07);
 
-  let mid = '';
   const built = pal.built || ink;
+  let mid = '';
   if (scene === 'highrise') mid = highrise(rand, built, horizon);
   else if (scene === 'lowrise') mid = lowrise(rand, built, horizon);
   else if (scene === 'villa') mid = villa(rand, built, horizon);
@@ -281,30 +289,11 @@ export function sceneSvg(stay, { w = W, h = H } = {}) {
   else if (scene === 'overwater') mid = overwater(rand, built, horizon);
   else if (isAway) mid = away(scene.slice(5), rand, built, horizon);
 
-  // The beach and what stands on it. Overwater and the away scenes keep the water to the edge.
-  let fore = '';
-  if (!isAway && scene !== 'overwater') {
-    fore += band(sandY, 3 + rand() * 4, 0.006 + rand() * 0.006, rand() * 6.28, pal.sand, 1);
-    fore += band(sandY + 3, 3 + rand() * 4, 0.006 + rand() * 0.006, rand() * 6.28, '#ffffff', 0.35);
-    const trees = 2 + Math.floor(rand() * 3);
-    for (let i = 0; i < trees; i++) {
-      const x = 30 + (i * (W - 60)) / Math.max(1, trees - 1) + (rand() - 0.5) * 50;
-      fore += palm(x, sandY + 22 + rand() * 12, 42 + rand() * 34, (rand() - 0.55) * 20, ink);
-    }
-    if (scene === 'lowrise' || rand() > 0.6) {
-      const count = 2 + Math.floor(rand() * 2);
-      for (let i = 0; i < count; i++) fore += palapa(80 + rand() * 480, sandY + 20 + rand() * 10, 14 + rand() * 7, ink);
-    }
-  }
-  if (scene === 'wild' || scene === 'overwater' || (!isAway && rand() > 0.55)) {
-    fore += catamaran(60 + rand() * 460, horizon + 6 + rand() * 14, 0.7 + rand() * 0.6, ink);
-  }
-
-  // Windows are lit against a dark building and glazed dark against a pale one.
+  // Lit windows against a dark building, glazed dark against a pale one.
   const win = luminance(pal.built || ink) > 0.55 ? '#4E6B7C' : '#FFE9B8';
   return `<svg viewBox="0 0 ${W} ${H}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice" role="img" aria-hidden="true" focusable="false" style="--sceneWin:${win}">
     <defs>${grad(`${uid}s`, pal.sky)}${grad(`${uid}w`, pal.sea)}</defs>
-    ${sky}${sea}${mid}${fore}</svg>`;
+    ${sky}${sea}${mid}</svg>`;
 }
 
 /** The card's etched contour lines, as an inline SVG string. */

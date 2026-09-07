@@ -14,8 +14,23 @@ h1 { font-size: clamp(2rem, 5vw, 3.2rem); }
 h2 { font-size: clamp(1.35rem, 2.6vw, 1.75rem); letter-spacing: -.015em; }
 h3 { font-size: 1.05rem; letter-spacing: -.01em; }
 p { margin: 0; text-wrap: pretty; }
-a { color: inherit; text-decoration-color: var(--hairline); text-underline-offset: 3px; }
+/* Links are underlined where a link is a link — inside a sentence, where the underline is what
+   tells you it is one. They are NOT underlined when the whole element is already obviously
+   clickable: a card, a title on a card, a tile. Underlining everything was the single loudest
+   cheap tell on the site — twenty-three stay cards whose titles, locations and source lines all
+   carried a rule under them read as an unstyled document rather than a product. */
+a { color: inherit; text-decoration-color: var(--hairline); text-underline-offset: 3px;
+    text-decoration-thickness: 1px; }
 a:hover { text-decoration-color: currentColor; }
+/* A card is a link in its entirety; nothing inside it needs to advertise that separately. */
+.stay-card, .stay-card a, .crew-card, .deal a, .panel > a.stat, .job-list a, .live-card a.stay-ref,
+a.panel, a.stat, .lad-v a, .faces a, .rank-crest a { text-decoration: none; }
+.stay-card h3, .stay-card .where, .stay-card .price, .stay-card .flags, .stay-card .sourced,
+.stay-card .body span { text-decoration: none; }
+/* Headings never carry a rule, wherever they sit. */
+h1 a, h2 a, h3 a, h4 a { text-decoration: none; }
+h1 a:hover, h2 a:hover, h3 a:hover, h4 a:hover { text-decoration: underline;
+  text-decoration-color: var(--hairline); }
 button, input, select, textarea { font: inherit; color: inherit; }
 img, svg { display: block; max-width: 100%; }
 ul, ol { margin: 0; padding-left: 1.15em; }
@@ -36,9 +51,15 @@ ul, ol { margin: 0; padding-left: 1.15em; }
 .brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; }
 .brand .mark { width: 22px; height: 22px; flex: none; }
 .brand b { font-family: var(--font-display); font-variation-settings: "wdth" 125; font-weight: 700; font-size: 1.02rem; letter-spacing: .04em; }
-.brand small { font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
+.brand small { font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2);
+  white-space: nowrap; }
+/* Below this the strapline is the first thing to go: "HUNTO / THE INNER CIRCLE · / ARUBA" over
+   three ragged lines is worse than no strapline at all. */
+@media (max-width: 430px) { .brand small { display: none; } }
 .topbar nav.tabs { display: flex; gap: 2px; margin-left: auto; }
-.topbar nav.tabs a { font-size: .86rem; font-weight: 500; padding: 8px 11px; border-radius: var(--r-chip); color: var(--ink-2); text-decoration: none; }
+.topbar nav.tabs a { font-size: .86rem; font-weight: 500; padding: 8px 11px; border-radius: var(--r-chip);
+  color: var(--ink-2); text-decoration: none; white-space: nowrap; }
+@media (max-width: 1180px) { .topbar nav.tabs a { padding: 8px 8px; font-size: .82rem; } }
 .topbar nav.tabs a:hover { background: var(--raised); color: var(--ink); }
 .topbar nav.tabs a[aria-current="page"] { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1px var(--hairline); }
 @media (max-width: 860px) { .topbar nav.tabs { display: none; } }
@@ -152,7 +173,9 @@ main:focus { outline: none; }
 .balbar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--well); border: 1px solid var(--hairline); }
 .balbar span { display: block; height: 100%; transition: width var(--dur-fast) var(--ease-out); }
 .balbar .b-avail { background: var(--good); }
-.balbar .b-held { background: repeating-linear-gradient(135deg, var(--flight) 0 5px, transparent 5px 10px), var(--flight-soft); }
+/* Solid, not barber-pole. The diagonal hazard stripes read as roadworks tape across a member's
+   own committed points — a warning about something that is simply money already spoken for. */
+.balbar .b-held { background: var(--flight); }
 .balbar .b-gap { background: transparent; }
 
 /* ---------- tables & ledger ---------- */
@@ -266,8 +289,12 @@ fieldset { border: 0; margin: 0; padding: 0; }
    lifts entirely on hover rather than sitting under a slab of navy. */
 .stay-card .strip .duo { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(12,26,38,0) 55%, rgba(12,26,38,.28)); transition: opacity 600ms var(--ease-out); }
 .stay-card:hover .strip .duo, .stay-card:focus-within .strip .duo, .stay-card.daylight .strip .duo { opacity: 0; }
-.stay-card .strip .ph-note { position: absolute; right: 7px; bottom: 6px; padding: 2px 6px; border-radius: 999px;
-  font-size: .55rem; letter-spacing: .09em; text-transform: uppercase; color: rgba(255,255,255,.82); background: rgba(10,24,34,.34); }
+/* The "ILLUSTRATION" chip is gone from the card. It sat in the corner of all twenty-three,
+   in capitals, telling everyone the picture was not real — which is honest but is also the
+   loudest thing on the card and made the whole board look like a placeholder. The drawing is
+   plainly a drawing; it does not need a label to say so, and the stay page still says where a
+   real photograph came from. */
+.stay-card .strip .ph-note { display: none; }
 .stay-card:hover .strip .scene svg { transform: scale(1.04); }
 .stay-card .strip .scene svg { transition: transform 700ms var(--ease-out); }
 .stay-card .body { display: grid; gap: 8px; padding: 14px 16px 16px; align-content: start; }
@@ -524,6 +551,38 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 .book-lead { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--hairline-soft); }
 .book-now { font-size: clamp(1.7rem, 6.4vw, 2.3rem); line-height: 1.04; margin-top: 10px; }
 @media (min-width: 900px) { .book-now br { display: none; } }
+
+/* The filter bar. It was five bold words and a select in a row, which read as a sentence
+   rather than as controls — you could not tell it was a thing you could touch. Two groups now:
+   the four that narrow (where, price, size, order) as labelled selects, and the five on/off
+   ones as chips that plainly look pressed or not. */
+.filterbar { display: grid; gap: 10px; margin-top: 6px; }
+.fgroup { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.fsel { display: grid; gap: 4px; min-width: 0; }
+.fsel > span { font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); padding-left: 2px; }
+.fsel select { appearance: none; -webkit-appearance: none;
+  border: 1px solid var(--hairline); border-radius: var(--r-pill); background: var(--surface);
+  padding: 9px 32px 9px 14px; font-size: .86rem; font-weight: 500; color: var(--ink); cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: right 15px center, right 10px center; background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat; }
+.fsel select:hover { border-color: var(--ink-3); }
+.fsel select:focus-visible { outline: 2px solid var(--good); outline-offset: 1px; }
+/* A chip has to look like something you can press BEFORE you press it. These were .btn.quiet —
+   transparent, borderless — so the row read as five bold words in a sentence and nobody could
+   tell it was a control. Resting: a hairline and the card surface. Pressed: filled ink, which
+   is unmistakable at a glance rather than one shade different. */
+.fgroup .btn.quiet { border-color: var(--hairline); background: var(--surface); color: var(--ink-2);
+  font-weight: 500; }
+.fgroup .btn.quiet:hover { border-color: var(--ink-3); color: var(--ink); background: var(--surface); }
+.fgroup .btn[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink);
+  font-weight: 600; }
+.fgroup .btn[aria-pressed="true"]:hover { background: var(--ink); color: var(--on-ink); }
+@media (max-width: 560px) {
+  .fgroup { gap: 6px; }
+  .fsel select { padding: 8px 28px 8px 11px; font-size: .8rem; }
+  .fgroup .btn.sm { font-size: .78rem; padding: 6px 11px; }
+}
 
 /* Us against the published rate. Three states, and one of them says we are dearer this week —
    which is the reason this is a styled sentence and not a green badge: a comparison that can

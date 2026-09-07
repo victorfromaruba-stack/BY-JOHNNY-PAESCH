@@ -544,6 +544,9 @@ async function editStay(store, stay) {
         <label class="field"><span>Minimum, 20 Dec – 3 Jan</span><input name="peakMinNights" type="number" value="${stay?.peakMinNights || 7}" inputmode="numeric"></label>
         <label class="field"><span>Public rate US$</span><input name="retailUsd" type="number" value="${stay?.retailUsd || 0}" inputmode="decimal"></label>
       </div>
+      <label class="field"><span>Booking page</span>
+        <input name="site" type="url" value="${escapeHtml(stay?.site || '')}" placeholder="https://…" inputmode="url">
+        <span class="hint">Where you actually go to book this place. It is the link on every request for it, so when a member asks you are one tap from the room instead of searching for it again.</span></label>
       <p class="eyebrow" style="margin:20px 0 8px">What the booking sites are asking</p>
       <p class="small muted" style="margin-bottom:12px">Type what you actually saw and the day you saw it. This is what a member is shown under the price — with the date, always, so nobody is comparing against something six months old. Leave it empty and the page says plainly that nobody has checked.</p>
       <div class="grid g3">
@@ -569,7 +572,8 @@ async function editStay(store, stay) {
         active: body.querySelector('[name=active]').checked, country: stay?.country || 'Aruba', features: stay?.features || [] };
       if (isTrip) Object.assign(data, { pointsPerSeat: Math.round(usd('seat') * s.pointsPerDollar), guestCashUsd: Number(v('guestCashUsd')) || 0,
         dates: stay.dates, nights: stay.nights, seats: stay.seats, holdDeadline: stay.holdDeadline });
-      else Object.assign(data, { rates: { low: usd('low'), high: usd('high'), peak: usd('peak') },
+      else Object.assign(data, { site: v('site') || null,
+        rates: { low: usd('low'), high: usd('high'), peak: usd('peak') },
         sources: (() => {
           // Only ever stored WITH the date it was seen. A price with no date cannot be checked
           // by the member it is shown to, which is the whole point of showing it.

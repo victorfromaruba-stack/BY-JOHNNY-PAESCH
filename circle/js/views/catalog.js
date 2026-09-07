@@ -15,34 +15,65 @@ const AREAS = ['Palm Beach', 'Eagle Beach', 'Druif Beach', 'Oranjestad', 'Malmok
 export function stays({ store, query, go }) {
   const me = store.me, s = store.settings;
   const avail = store.availablePoints(me.id);
-  const state = { area: '', house: false, onSand: false, adultsOnly: false, allInclusive: false, affordable: false };
+  // What a member actually narrows by. The old row was five on/off toggles and an area select:
+  // no way to say "under $300" or "sleeps six", which are the first two questions anybody asks.
+  const state = { area: '', house: false, onSand: false, adultsOnly: false, allInclusive: false,
+                  affordable: false, maxUsd: 0, sleeps: 0, sort: 'price' };
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <div class="sec-head"><div><p class="eyebrow">${icon('palm')}Twenty-three places on the island</p><h1>Stays in Aruba</h1>
         <p>Every price is the Circle’s all-in rate per night — room, the 12.5% tourist levy, service charge, resort fee and the environmental levy. Your binding quote comes from Victor and is usually better.</p>
-        <p class="small muted" style="margin-top:8px">${icon('eye', { size: 14, cls: 'ico-muted' })}
-          <a href="#/live">See what is open right now</a> at these places — a window on what exists, so you know what to ask for.
-          You never book it yourself; you put points in and the Circle books it for you.</p>
-        <p class="small muted" style="margin-top:8px">Four of these are where we actually end up: the Marriott villas at the <a href="#/stays/stay_oceanclub">Ocean Club</a> and the <a href="#/stays/stay_surfclub">Surf Club</a>, the <a href="#/stays/stay_divi">Divi</a> on Druif, and the <a href="#/stays/stay_renaissance">Renaissance</a> in town. The rest of the list is here because Victor can get them, not because we have been.</p></div></div>
+        </div></div>
       <div class="row no-print" id="filters" style="margin-bottom:18px" role="group" aria-label="Filter stays"></div>
       <p class="small muted" id="count" style="margin-bottom:14px"></p>
       <div class="grid g3" id="list"></div>
-      <p class="small muted" style="margin-top:22px">Most resorts want a longer stay over Christmas and Carnival; the quote tells you when that applies to your dates. <a href="#/rules">The rules</a> explain how cancellations work.</p>
+      <p class="small muted" style="margin-top:18px">${icon('eye', { size: 14, cls: 'ico-muted' })} <a href="#/live">See what is open right now</a> · you never book it yourself — you put points in and the Circle books it for you. The four marked <em>Where we stay</em> are the ones we actually end up at; the rest are here because Victor can get them. Longer minimums apply over Christmas and Carnival, and the quote says when. <a href="#/rules">The rules</a>.</p>
     </div></section></div>`);
   const list = wrap.querySelector('#list'), filters = wrap.querySelector('#filters'), count = wrap.querySelector('#count');
 
   const draw = () => {
+    const on = (k) => (state[k] ? '' : 'quiet');
+    const dirty = state.area || state.house || state.onSand || state.adultsOnly || state.allInclusive
+      || state.affordable || state.maxUsd || state.sleeps;
     filters.innerHTML = `
-      <button class="btn ${state.house ? '' : 'quiet'} sm" data-flag="house" aria-pressed="${state.house}">Where we stay</button>
-      <select class="btn ghost sm" id="area" aria-label="Area" style="padding-inline:12px"><option value="">Anywhere on the island</option>${AREAS.map(a => `<option${a === state.area ? ' selected' : ''}>${a}</option>`).join('')}</select>
-      <button class="btn ${state.onSand ? '' : 'quiet'} sm" data-flag="onSand" aria-pressed="${state.onSand}">On the sand</button>
-      <button class="btn ${state.adultsOnly ? '' : 'quiet'} sm" data-flag="adultsOnly" aria-pressed="${state.adultsOnly}">Adults only</button>
-      <button class="btn ${state.allInclusive ? '' : 'quiet'} sm" data-flag="allInclusive" aria-pressed="${state.allInclusive}">All-inclusive</button>
-      <button class="btn ${state.affordable ? '' : 'quiet'} sm" data-flag="affordable" aria-pressed="${state.affordable}">I can afford it now</button>`;
+      <div class="filterbar">
+        <div class="fgroup">
+          <label class="fsel"><span>Where</span>
+            <select id="area" aria-label="Area"><option value="">Anywhere on the island</option>${AREAS.map(a => `<option${a === state.area ? ' selected' : ''}>${a}</option>`).join('')}</select></label>
+          <label class="fsel"><span>Up to</span>
+            <select id="maxUsd" aria-label="Most a night">
+              ${[[0, 'Any price'], [200, '$200 a night'], [300, '$300'], [400, '$400'], [600, '$600'], [900, '$900']]
+                .map(([v, t]) => `<option value="${v}"${state.maxUsd === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+          <label class="fsel"><span>Sleeps</span>
+            <select id="sleeps" aria-label="How many it sleeps">
+              ${[[0, 'Any'], [2, '2+'], [4, '4+'], [6, '6+'], [8, '8+']]
+                .map(([v, t]) => `<option value="${v}"${state.sleeps === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+          <label class="fsel"><span>Sort</span>
+            <select id="sort" aria-label="Sort">
+              ${[['price', 'Cheapest first'], ['dear', 'Dearest first'], ['name', 'By name']]
+                .map(([v, t]) => `<option value="${v}"${state.sort === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+        </div>
+        <div class="fgroup">
+          <button class="btn ${on('house')} sm" data-flag="house" aria-pressed="${state.house}">Where we stay</button>
+          <button class="btn ${on('onSand')} sm" data-flag="onSand" aria-pressed="${state.onSand}">On the sand</button>
+          <button class="btn ${on('adultsOnly')} sm" data-flag="adultsOnly" aria-pressed="${state.adultsOnly}">Adults only</button>
+          <button class="btn ${on('allInclusive')} sm" data-flag="allInclusive" aria-pressed="${state.allInclusive}">All-inclusive</button>
+          <button class="btn ${on('affordable')} sm" data-flag="affordable" aria-pressed="${state.affordable}">I can afford it now</button>
+          ${dirty ? `<button class="btn quiet sm" id="clear-f">${icon('x', { size: 15 })}Clear</button>` : ''}
+        </div>
+      </div>`;
     let items = store.arubaStays();
     if (state.area) items = items.filter(x => x.area === state.area);
     for (const f of ['house', 'onSand', 'adultsOnly', 'allInclusive']) if (state[f]) items = items.filter(x => x[f]);
     if (state.affordable) items = items.filter(x => avail >= fromPoints(x, s) * (x.minNights || 1));
-    items = items.slice().sort((a, b) => (b.house ? 1 : 0) - (a.house ? 1 : 0) || fromPoints(a, s) - fromPoints(b, s));
+    // Against the from-price, because that is the number on the card they are reading.
+    if (state.maxUsd) items = items.filter(x => fromPoints(x, s) / s.pointsPerDollar <= state.maxUsd);
+    // The biggest room the property actually publishes. A place whose rooms are all doubles is
+    // not a "sleeps 8" answer just because it has a lot of them.
+    if (state.sleeps) items = items.filter(x => Math.max(0, ...store.roomTypesFor(x.id).map(r => r.sleeps || 0)) >= state.sleeps);
+    const byPrice = (a, b) => fromPoints(a, s) - fromPoints(b, s);
+    items = items.slice().sort(state.sort === 'name' ? (a, b) => a.name.localeCompare(b.name)
+      : state.sort === 'dear' ? (a, b) => byPrice(b, a)
+      : (a, b) => (b.house ? 1 : 0) - (a.house ? 1 : 0) || byPrice(a, b));
     count.textContent = `${items.length} of ${store.arubaStays().length} places · from-price a night, all in`;
     list.replaceChildren(...items.map(st => {
       const per = fromPoints(st, s);
@@ -58,9 +89,22 @@ export function stays({ store, query, go }) {
   draw();
   filters.addEventListener('click', (e) => {
     const flagBtn = e.target.closest('[data-flag]');
-    if (flagBtn) { state[flagBtn.dataset.flag] = !state[flagBtn.dataset.flag]; draw(); }
+    if (flagBtn) { state[flagBtn.dataset.flag] = !state[flagBtn.dataset.flag]; draw(); return; }
+    if (e.target.closest('#clear-f')) {
+      Object.assign(state, { area: '', house: false, onSand: false, adultsOnly: false,
+        allInclusive: false, affordable: false, maxUsd: 0, sleeps: 0, sort: 'price' });
+      draw();
+    }
   });
-  filters.addEventListener('change', (e) => { if (e.target.id === 'area') { state.area = e.target.value; draw(); } });
+  filters.addEventListener('change', (e) => {
+    const id = e.target.id;
+    if (id === 'area') state.area = e.target.value;
+    else if (id === 'maxUsd') state.maxUsd = Number(e.target.value) || 0;
+    else if (id === 'sleeps') state.sleeps = Number(e.target.value) || 0;
+    else if (id === 'sort') state.sort = e.target.value;
+    else return;
+    draw();
+  });
   return wrap;
 }
 
@@ -332,6 +376,13 @@ export function book({ store, params, query = {}, go }) {
   const startIn = wantFrom || d(soon);
   const startOut = wantTo || d(new Date(Date.parse(startIn) + (stay.minNights || 2) * 864e5));
   const wantRoom = (store.roomTypesFor?.(stay.id) || []).find(r => r.id === query.room) || null;
+  // Where they were looking. A deal off the board knows its own listing; a week seen on
+  // Interval or RedWeek came in through the same link. Victor gets this on the request so he
+  // does not have to go and find it again.
+  const fromDeal = query.deal ? store.deal?.(query.deal) : null;
+  const cameFrom = fromDeal?.sourceUrl
+    ? { url: fromDeal.sourceUrl, label: fromDeal.source === 'other' ? 'The board' : (fromDeal.source || 'The board') }
+    : null;
   // The request has no room column, and inventing one across two backends to carry a
   // preference is the wrong trade — the note is the field for exactly this, and it reaches
   // Victor with everything else. It is prefilled, not locked: it is still the member's message.
@@ -398,6 +449,7 @@ export function book({ store, params, query = {}, go }) {
         checkIn: isTrip ? stay.dates.from : f.get('checkIn'), checkOut: isTrip ? stay.dates.to : f.get('checkOut'),
         guests: Number(f.get('guests') || 1), seats: Number(f.get('seats') || 1),
         note: f.get('note'), flexDays: Number(f.get('flexDays') || 0), shared: !!f.get('shared'),
+        sourceUrl: cameFrom?.url || '', sourceLabel: cameFrom?.label || '',
       });
       toast('Sent to Victor. He answers within 72 hours.', { kind: 'good' });
       go(`/requests/${r.id}`);
@@ -474,6 +526,21 @@ export function requestDetail({ store, params, go, refresh }) {
           <div class="panel" id="money"></div>
           <div id="chipin"></div>
           ${r.note ? `<div class="panel flat"><p class="eyebrow">${icon('user')}What they asked for</p><p class="small" style="margin-top:8px">${escapeHtml(r.note)}</p></div>` : ''}
+          ${(() => {
+            // Only the people who actually do the booking need this, and only while it is still
+            // a job — once the hotel is paid the link is history, not a task.
+            if (!store.canPlan?.() || ['completed', 'declined', 'cancelled', 'expired'].includes(r.status)) return '';
+            const links = store.whereToBook(r.id);
+            return `<div class="panel" style="border-color:var(--good)">
+              <p class="eyebrow">${icon('external')}Where to book it</p>
+              ${links.length ? `<ul class="stack" style="margin-top:10px;list-style:none;padding:0;gap:8px">
+                ${links.map(l => `<li><a class="btn ${l.exact ? '' : 'ghost'} sm" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">
+                  ${icon('external', { size: 15 })}${escapeHtml(l.label)}</a>${l.exact
+                    ? '<span class="small muted" style="margin-left:8px">the listing they were looking at</span>'
+                    : l.seenOn ? `<span class="small muted" style="margin-left:8px">seen ${escapeHtml(fmtDay(l.seenOn))}</span>` : ''}</li>`).join('')}
+              </ul>` : `<p class="small muted" style="margin-top:8px">No link on file for this one — the property has no booking page in the catalog and this request did not come from a listing. Add one in the Desk so the next request has somewhere to go.</p>`}
+            </div>`;
+          })()}
           ${r.decision ? `<div class="notice ${['declined', 'cancelled', 'expired'].includes(r.status) ? 'bad' : ''}">
             <b>${escapeHtml(['declined'].includes(r.status) ? 'Declined by ' : 'Note from ')}${escapeHtml(store.member(r.decidedBy || r.quotedBy)?.name.split(' ')[0] || 'the Desk')}</b>
             <p class="small">${escapeHtml(r.decision)}</p></div>` : ''}

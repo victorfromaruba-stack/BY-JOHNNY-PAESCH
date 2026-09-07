@@ -3,7 +3,7 @@
 //   SupabaseStore          – same API; every rule runs server-side (supabase/schema.sql).
 // Business rules live here so the demo and the real club produce identical numbers.
 
-import { uid, nowIso, sum, monthKey, fmtMonth, nightsBetween } from './util.js';
+import { uid, nowIso, sum, monthKey, fmtMonth, nightsBetween, safeUrl } from './util.js';
 import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, fromPoints, seatPoints, pointsPerMonth } from './money.js';
 import { initialsOf, refFor } from './vocab.js';
 import { standingFrom, rankFor, RANKS, effectiveTier } from './standing.js';
@@ -1168,6 +1168,25 @@ export class Store {
   roomTypes() { return (this.state.roomTypes || []).filter(r => r.active !== false); }
   roomTypesFor(stayId) { return this.roomTypes().filter(r => r.stayId === stayId).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (a.rateFactor || 1) - (b.rateFactor || 1)); }
   roomType(id) { return id ? (this.state.roomTypes || []).find(r => r.id === id) || null : null; }
+
+  /**
+   * Everywhere the Desk could go to book this request, best first.
+   *
+   * The member's own listing comes first because it is the one they were actually looking at —
+   * that price, that week. After it come the standing sources for the property, so there is
+   * always something to click even when somebody just browsed the catalog and picked dates.
+   */
+  whereToBook(redemptionId) {
+    const r = this.redemption(redemptionId); if (!r) return [];
+    const stay = this.stay(r.stayId);
+    const out = [];
+    if (r.sourceUrl) out.push({ label: r.sourceLabel || 'What they were looking at', url: r.sourceUrl, exact: true });
+    const src = stay?.sources || {};
+    if (src.interval?.url) out.push({ label: 'Interval', url: src.interval.url, seenOn: src.interval.seenOn });
+    if (src.redweek?.url) out.push({ label: 'RedWeek', url: src.redweek.url, seenOn: src.redweek.seenOn });
+    if (stay?.site) out.push({ label: `${stay.name} direct`, url: stay.site });
+    return out;
+  }
   /**
    * What a night in this particular room costs at its cheapest, in points.
    *
