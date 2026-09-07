@@ -430,11 +430,30 @@ Four ways to keep the card, in the order they cost anything:
    300dpi with the QR on it, so it is scannable on its own.
 2. **Print it, card sized** — the print dialog is set to 85.6 × 53.98 mm, so it comes out
    as a card rather than a card floating on A4.
-3. **Add the app to the home screen** — one tap to the card. On iPhone this is the Share
-   button in Safari, then *Add to Home Screen*; iOS gives no way for a page to offer it.
-4. **Add to Apple Wallet** — needs a signed pass, which needs a certificate. See below.
+3. **Put Hunto on the home screen** — this is the default and it costs nothing. On Chrome
+   and Edge the button triggers the browser's real install prompt; on iPhone it opens a
+   sheet with the two taps (Safari's Share button, then *Add to Home Screen*), because iOS
+   gives a page no way to offer it directly. Afterwards the card is one tap away and its QR
+   is always current, which a saved picture is not.
+4. **Add to Apple Wallet** — **off, and hidden**. See below; it is not needed.
 
-### Getting the card into Apple Wallet
+### Apple Wallet is optional, and the club does not have it
+
+**The button does not appear unless a signing certificate is configured**, because a button
+that cannot do what it says is worse than no button — it used to sit at the top of the card
+telling anyone who pressed it to go and read this file.
+
+A `.pkpass` is a zip containing `pass.json`, a `manifest.json` of SHA-1 hashes, a detached
+PKCS#7 `signature`, and the images. The signature has to be made with a certificate Apple
+issues, which is a **$99-a-year developer account**. There is no free way to make Apple's
+own pass format for your own club — that price is the whole obstacle, and Victor has
+decided against it.
+
+Nothing is lost by that. A pass shows a QR and some text; the home-screen app shows the same
+QR, always current, plus the balance, the ledger and everything else. The one thing Wallet
+does better is opening without unlocking, which is not worth $99 a year to a club of forty.
+
+If it is ever wanted anyway:
 
 A `.pkpass` is a zip containing `pass.json`, a `manifest.json` of SHA-1 hashes, a
 detached PKCS#7 `signature`, and the images. The signature has to be made with a
@@ -449,7 +468,7 @@ Three ways to get there, honestly compared:
 |---|---|---|---|
 | **Apple developer account** | $99 a year | Hunto's | You want the club to own its pass and control updates |
 | **A shared-certificate service** (PassSource is free; WalletWallet has a free tier well above 40 members) | $0 | Theirs | You want a pass in Wallet this weekend |
-| **QR and a saved image only** | $0 | — | Honestly, this is fine for a club that meets in person |
+| **Home screen app, QR and a saved image** | $0 | — | **What the club does.** Honestly fine for forty people who know each other |
 
 The paid path, end to end: enrol at developer.apple.com as an **Individual** (an
 organisation enrolment wants a D-U-N-S number and a company website, which a friends'

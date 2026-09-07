@@ -525,12 +525,13 @@ export function card({ store, go }) {
       </div>
 
       <div class="panel" style="margin-top:16px">
-        <p class="eyebrow">${icon('wallet')}Keep it on your phone</p>
+        <p class="eyebrow">${icon('idCard')}Keep it on your phone</p>
         <div class="stack" style="margin-top:12px">
-          <button class="btn block" id="wallet">Add to Apple Wallet</button>
-          <button class="btn ghost block" id="save">Save the card as an image</button>
+          <button class="btn block" id="install">Put Hunto on your home screen</button>
+          <button class="btn ghost block" id="save">Save the card to your photos</button>
           <button class="btn ghost block" id="print">Print it, card sized</button>
-        <button class="btn ghost block" id="share">Send it to someone</button>
+          <button class="btn ghost block" id="share">Send it to someone</button>
+          <button class="btn ghost block" id="wallet" hidden>Add to Apple Wallet</button>
         </div>
         <p class="small muted" id="wallet-note" style="margin-top:12px"></p>
       </div>
@@ -552,13 +553,46 @@ export function card({ store, go }) {
 
     const note = wrap.querySelector('#wallet-note');
     const walletBtn = wrap.querySelector('#wallet');
+    const installBtn = wrap.querySelector('#install');
+    // Apple Wallet only appears once the club actually holds a signing certificate. A button
+    // that cannot do the thing it says is worse than no button, and this one sat at the top of
+    // the list telling everybody who pressed it to go and read a README.
     const configured = !!store.walletConfig?.()?.url;
-    note.innerHTML = configured
-      ? 'Adding it puts the card in Wallet with the same QR, and it updates itself when your level changes.'
-      : `Wallet passes have to be signed with a certificate Apple issues to the club — it is a $99-a-year developer account and about an hour of setup, and it is written down in the README. Until Victor does that, saving the card as an image works on every phone, and adding this app to your home screen puts the card one tap away.${W.isIOS() ? ' On iPhone: the share button in Safari, then Add to Home Screen.' : ''}`;
+    walletBtn.hidden = !configured;
+
+    const standalone = window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+    if (standalone) {
+      installBtn.hidden = true;
+      note.textContent = 'Hunto is already on your home screen, so the card is one tap away — no pass needed.';
+    } else if (W.isIOS()) {
+      note.innerHTML = 'On an iPhone this is two taps and it is free: the <b>share</b> button at the bottom of Safari, then <b>Add to Home Screen</b>. Hunto then opens like an app and the card is one tap away, with the QR always current — which a printed pass never is.';
+    } else {
+      note.textContent = 'It opens like an app, works offline, and the card is one tap away — with the QR always current, which a saved picture is not.';
+    }
+    if (configured) note.textContent += ' A Wallet pass is also available below.';
+
+    installBtn.addEventListener('click', async () => {
+      // Chrome and Edge can do this properly. Everyone else gets told exactly which taps.
+      const outcome = await (window.__huntoInstall?.() ?? null);
+      if (outcome === 'accepted') { toast('Added. Hunto is on your home screen.', { kind: 'good' }); installBtn.hidden = true; return; }
+      if (outcome === 'dismissed') return;
+      await sheet({ title: 'Put Hunto on your home screen', render: (body, close) => {
+        body.innerHTML = W.isIOS()
+          ? `<p class="sheet-text">Two taps, and it costs nothing.</p>
+             <ol class="stack" style="gap:10px;padding-left:1.2em">
+               <li>Tap the <b>share</b> button — the square with the arrow, at the bottom of Safari.</li>
+               <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
+               <li>Tap <b>Add</b>.</li>
+             </ol>
+             <p class="small muted" style="margin-top:14px">It has to be Safari — Chrome on an iPhone cannot do this. Once it is there, Hunto opens full screen and your card is one tap away.</p>
+             <div class="sheet-actions"><button class="btn" data-close>Got it</button></div>`
+          : `<p class="sheet-text">Open your browser's menu and choose <b>Install</b> or <b>Add to Home screen</b>. Hunto then opens like an app, and your card is one tap away.</p>
+             <div class="sheet-actions"><button class="btn" data-close>Got it</button></div>`;
+      } });
+    });
 
     walletBtn.addEventListener('click', async () => {
-      if (!configured) { toast('The club has not set up Wallet passes yet — the README says how.', { timeout: 6000 }); return; }
+      if (!configured) return;
       setBusy(walletBtn, true, 'Making your pass…');
       try {
         const blob = await W.fetchApplePass(store, me);

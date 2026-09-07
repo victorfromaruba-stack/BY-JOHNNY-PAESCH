@@ -67,6 +67,22 @@ const wantsPreview = () => {
   } catch { return false; }
 };
 
+// Chrome and Edge offer a real one-tap install, but only if the event is caught and kept —
+// it fires once, early, and cannot be summoned later. Free, and the nearest thing to a Wallet
+// pass without paying Apple $99 a year for a signing certificate.
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; });
+window.addEventListener('appinstalled', () => { installPrompt = null; });
+/** The card screen asks for this. Returns 'accepted', 'dismissed', or null if not offerable. */
+window.__huntoInstall = async () => {
+  if (!installPrompt) return null;
+  installPrompt.prompt();
+  const { outcome } = await installPrompt.userChoice;
+  if (outcome === 'accepted') installPrompt = null;
+  return outcome;
+};
+window.__huntoCanInstall = () => !!installPrompt;
+
 async function boot() {
   const live = CONFIG.backend === 'supabase' && CONFIG.supabaseUrl && CONFIG.supabaseKey;
   if (live && !wantsPreview()) {
