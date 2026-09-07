@@ -7,7 +7,7 @@
 
 import { escapeHtml, fmtDay, fmtPoints, fmtRelative, fmtUsd2, nightsBetween, pointsUsd, safeUrl } from '../core/util.js';
 import { VOCAB } from '../core/vocab.js';
-import { seasonPoints } from '../core/money.js';
+import { seasonPoints, seatPoints } from '../core/money.js';
 import { icon } from '../ui/icons.js';
 import { toast, sheet, confirmDialog, setBusy, avatar } from '../ui/components.js';
 import { stayStrip } from './public.js';
@@ -323,7 +323,7 @@ export async function addWatchSheet({ store, prefill = {} }) {
         const stay = store.stay(v('stayId').value);
         const nights = Number(v('nights').value) || 1;
         const avail = Math.max(0, store.availablePoints(store.me.id));
-        const likely = stay && stay.kind !== 'trip' ? seasonPoints(stay, 'low', s) * nights : stay?.pointsPerSeat || 0;
+        const likely = stay && stay.kind !== 'trip' ? seasonPoints(stay, 'low', s) * nights : (stay ? seatPoints(stay, s) : 0);
         body.querySelector('#afford').innerHTML = likely
           ? `<b>${escapeHtml(fmtPoints(likely))} is roughly what that costs</b>
              <p class="small">You hold ${escapeHtml(fmtPoints(avail))}.${avail >= likely ? ' Enough already.' : ` About ${escapeHtml(fmtPoints(likely - avail))} short — you can still watch for it, and close the gap when it turns up.`}</p>`

@@ -5,44 +5,71 @@ import { VOCAB, tierName } from '../core/vocab.js';
 import { pointsPerMonth } from '../core/money.js';
 
 /**
- * What a level actually carries, one line per thing, with the ones that differ from the level
- * below marked. It used to be a single run-on line — "2 open requests · 12 months ahead · 3
- * guest passes · first look 48h early" — which is all of it and none of it: nobody comparing
- * three levels can hold that in their head, and the differences are the entire point.
+ * The three levels side by side, once.
  *
- * Every figure is read off settings.tiers, so a rule change in the app changes this page too.
+ * This used to be three identical panels, each repeating the same six labels with a different
+ * number in it — 2,812px of phone scroll, a quarter of the landing page, to convey six small
+ * differences. Nobody compares three levels by scrolling between three lists. One grid: the
+ * labels down the left, the levels across the top, the numbers where they meet.
+ *
+ * Every figure is read off settings.tiers, so a rule change in the Desk changes this too. The
+ * extra rows are the concrete ones the caller can price — "3 nights at Amsterdam Manor: 4
+ * months / 3 months / 2 months" — because a difference you can book beats a difference you
+ * have to work out.
  */
-export function tierTable(tier, s) {
+export function tierLadder(s, { mine = null, rows: extra = [], caption = '' } = {}) {
   const tiers = [...s.tiers].sort((a, b) => a.monthlyUsd - b.monthlyUsd);
-  const below = tiers[tiers.indexOf(tiers.find(x => x.monthlyUsd === tier.monthlyUsd)) - 1] || null;
+  // Days, not hours, once it divides evenly: "2 days" and "7 days" line up in a 74px column
+  // and read as the same kind of thing. "48 hours" wrapped onto two lines and made the row
+  // twice as tall as the ones around it.
+  const firstLook = (t) => (!t.firstLookHours ? 'Same time'
+    : t.firstLookHours % 24 === 0 ? `${t.firstLookHours / 24} day${t.firstLookHours === 24 ? '' : 's'}`
+    : `${t.firstLookHours} h`);
   const rows = [
-    ['Points a month', `${fmtPoints(pointsPerMonth(s, tier.monthlyUsd))}`,
-      tier.bonusRate ? `${Math.round(tier.bonusRate * 100)}% of it a bonus the Circle funds` : 'face value, nothing taken',
-      below && pointsPerMonth(s, tier.monthlyUsd) > pointsPerMonth(s, below.monthlyUsd)],
-    ['Open requests', `${tier.holds} at a time`,
-      'things you can have in front of the Desk at once',
-      below && tier.holds > below.holds],
-    ['Booking window', `${tier.windowMonths} months ahead`,
-      'how far out you can ask for a week in Aruba',
-      below && tier.windowMonths > below.windowMonths],
-    ['Guest passes', `${tier.guestCerts} a year`,
-      'for somebody who is not in the Circle; household is always free',
-      below && tier.guestCerts > below.guestCerts],
-    ['First look at a deal',
-      tier.firstLookHours >= 168 ? `${Math.round(tier.firstLookHours / 24)} days early`
-        : tier.firstLookHours ? `${tier.firstLookHours} hours early` : 'when it reaches the board',
-      'before a new week is shown to everyone',
-      below && tier.firstLookHours > below.firstLookHours],
-    ['Answered within', `${tier.slaHours ?? s.slaHours} hours`,
-      'how fast the Desk comes back with a price',
-      below && (tier.slaHours ?? 0) < (below.slaHours ?? 999)],
+    { k: 'Points a month', sub: 'what lands in your name',
+      vals: tiers.map(t => `<b class="num">${escapeHtml(fmtPoints(pointsPerMonth(s, t.monthlyUsd)))}</b>
+        <span class="lad-sub">${escapeHtml(fmtUsd2(pointsPerMonth(s, t.monthlyUsd) / s.pointsPerDollar))}</span>`) },
+    { k: 'Points on top', sub: 'a bonus the Circle funds out of its own share, on a full month',
+      vals: tiers.map(t => (t.bonusRate ? `<b class="good">+${Math.round(t.bonusRate * 100)}%</b>` : '<span class="lad-no">—</span>')) },
+    { k: 'Open requests', sub: 'how many can sit in front of the Desk at once',
+      vals: tiers.map(t => `<b>${t.holds}</b>`) },
+    { k: 'Book ahead', sub: 'how far out you can ask for a week',
+      vals: tiers.map(t => `<b>${t.windowMonths}</b><span class="lad-sub">months</span>`) },
+    { k: 'Guest passes', sub: 'for somebody not in the Circle; household is always free',
+      vals: tiers.map(t => `<b>${t.guestCerts}</b><span class="lad-sub">a year</span>`) },
+    { k: 'First look at a trip', sub: 'before a new week is shown to everyone',
+      vals: tiers.map(t => `<b>${escapeHtml(firstLook(t))}</b>${t.firstLookHours ? '<span class="lad-sub">early</span>' : ''}`) },
+    { k: 'Answered within', sub: 'the promise the Desk is held to, and you can see the clock',
+      vals: tiers.map(t => `<b>${t.slaHours ?? s.slaHours}</b><span class="lad-sub">hours</span>`) },
+    ...extra,
   ];
-  return `<dl class="tier-detail">${rows.map(([k, v, why, better]) => `
-    <div${better ? ' class="up"' : ''}>
-      <dt>${escapeHtml(k)}</dt>
-      <dd><b>${escapeHtml(v)}</b>${better ? '<span class="more" aria-label="more than the level below">▲</span>' : ''}
-        <span class="small muted">${escapeHtml(why)}</span></dd>
-    </div>`).join('')}</dl>`;
+  const head = `<div class="lad-r lad-head" role="row">
+      <div class="lad-k" role="columnheader"><span class="lad-cap">${escapeHtml(caption || 'A month costs')}</span></div>
+      ${tiers.map(t => `<div class="lad-v${t.monthlyUsd === mine ? ' mine' : ''}" role="columnheader">
+        ${t.monthlyUsd === mine ? '<span class="lad-you">You</span>' : ''}
+        <b class="lad-amt">$${t.monthlyUsd}</b>
+        <span class="lad-name">${escapeHtml(tierName(t.monthlyUsd))}</span>
+      </div>`).join('')}
+    </div>`;
+  return `<div class="ladder" role="table" aria-label="What each level carries">${head}
+    ${rows.map(r => `<div class="lad-r" role="row">
+      <div class="lad-k" role="rowheader"><b>${escapeHtml(r.k)}</b>${r.sub ? `<span class="lad-why">${escapeHtml(r.sub)}</span>` : ''}</div>
+      ${r.vals.map((v, i) => `<div class="lad-v${tiers[i].monthlyUsd === mine ? ' mine' : ''}" role="cell">${v}</div>`).join('')}
+    </div>`).join('')}</div>`;
+}
+
+/**
+ * One sentence about the published rate, whichever way it falls.
+ *
+ * It is a sentence rather than a badge because two of the three outcomes need a reason after
+ * them: being level with the published rate is fine, and being above it this week is a thing a
+ * member should be told plainly, with what to do about it.
+ */
+export function versusLine(v, unit = 'a night') {
+  if (!v) return '';
+  if (v.same) return `<p class="vs same">Level with the published ${escapeHtml(fmtUsd2(v.publicUsd))} ${escapeHtml(unit)}. What you are buying here is the booking being done for you.</p>`;
+  if (v.better) return `<p class="vs win">${escapeHtml(fmtUsd2(v.diffUsd))} under the published ${escapeHtml(fmtUsd2(v.publicUsd))} ${escapeHtml(unit)} — ${v.pct}% off, all in.</p>`;
+  return `<p class="vs over">Above the published ${escapeHtml(fmtUsd2(v.publicUsd))} ${escapeHtml(unit)} by ${escapeHtml(fmtUsd2(v.diffUsd))} at today\u2019s board rate. Ask anyway: what Victor quotes is the rate he finds on the day, and this is the one we publish in advance and do not move.</p>`;
 }
 
 /**

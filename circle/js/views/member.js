@@ -2,8 +2,8 @@
 import { escapeHtml, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDay, fmtDayTime, fmtMonth, fmtPct, monthKey, countdownTo, initials, toCsv, downloadText } from '../core/util.js';
 import { RANKS, nextRank } from '../core/standing.js';
 import { VOCAB, tierName, refFor } from '../core/vocab.js';
-import { splitContribution, tierFor, seasonPoints, SEASONS, isDushiSeason, pointsPerMonth } from '../core/money.js';
-import { memberCard, poolGauge, rankCrest, ring, splitBar, tierTable, badgeMark, badgeRow } from '../ui/pieces.js';
+import { splitContribution, tierFor, seasonPoints, seatPoints, SEASONS, isDushiSeason, pointsPerMonth } from '../core/money.js';
+import { memberCard, poolGauge, rankCrest, ring, splitBar, tierLadder, badgeMark, badgeRow } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel, avatar } from '../ui/components.js';
 import { sparkline, columns, tableFor } from '../ui/charts.js';
@@ -296,7 +296,7 @@ export async function goalSheet({ store }) {
         const isTrip = stay?.kind === 'trip';
         body.querySelector('#stay-only').hidden = isTrip;
         const nights = isTrip ? stay.nights : Math.max(Number(v('nights').value) || 1, stay?.minNights || 1);
-        const target = isTrip ? stay.pointsPerSeat : seasonPoints(stay, v('season').value, s) * nights;
+        const target = isTrip ? seatPoints(stay, s) : seasonPoints(stay, v('season').value, s) * nights;
         const have = Math.max(0, store.availablePoints(me.id));
         const short = Math.max(0, target - have);
         const perMonth = pointsPerMonth(s, me.monthlyUsd);
@@ -792,13 +792,7 @@ export function profile({ store, go, refresh }) {
         <p class="small muted" style="margin-top:6px">A change takes effect on your next contribution and nothing you already hold is affected. Every level can ask for every stay and every trip — what changes is how fast the points build, and the perks.</p>
         <div class="choices" id="tiers" style="margin-top:14px"></div>
         <p class="eyebrow" style="margin-top:22px">What each level carries</p>
-        <div class="grid g3" style="margin-top:10px">${s.tiers.map(t => `
-          <div class="tier-compare${t.monthlyUsd === me.monthlyUsd ? ' mine' : ''}">
-            <b>${escapeHtml(tierName(t.monthlyUsd))}</b>
-            <span class="tiny muted">${escapeHtml(fmtUsd2(t.monthlyUsd))} a month${t.monthlyUsd === me.monthlyUsd ? ' · the one you are on' : ''}</span>
-            ${tierTable(t, s)}
-          </div>`).join('')}</div>
-        <p class="tiny muted" style="margin-top:12px">▲ marks what is more than the level below it.</p>
+        <div style="margin-top:10px">${tierLadder(s, { mine: me.monthlyUsd })}</div>
       </div>
 
       <div class="panel" style="margin-top:16px">

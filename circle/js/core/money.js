@@ -176,6 +176,49 @@ export function seasonPoints(stay, season, settings = DEFAULT_SETTINGS) {
 }
 
 /**
+ * What a seat on a trip actually costs a member — `seasonPoints`' opposite number for trips.
+ *
+ * `pointsPerSeat` is stored the same way `rates` is: the room, before the Circle's share. Only
+ * quoteStay applied the 15%, so every screen that printed `pointsPerSeat` was quoting a member
+ * a price 15% below the one they would be charged, and the trip page printed it under the words
+ * "all-in". The savings line then subtracted that same understated figure from the public price
+ * and overstated the saving by the whole of the share. One helper, used everywhere a member
+ * sees a seat, so the card, the page, the goal and the quote cannot disagree again.
+ */
+export function seatPoints(stay, settings = DEFAULT_SETTINGS) {
+  return Math.round((stay?.pointsPerSeat || 0) * (1 + settings.serviceRate));
+}
+
+/** What a member pays for one of anything on the board: a night in a season, or a seat. */
+export function unitPoints(stay, season = 'low', settings = DEFAULT_SETTINGS) {
+  return stay?.kind === 'trip' ? seatPoints(stay, settings) : seasonPoints(stay, season, settings);
+}
+
+/**
+ * Us against the published rate, told straight — including when we lose.
+ *
+ * The old line was `Math.max(0, retail − ourRate)`, which cannot print anything but a win: at
+ * the Ritz our all-in Winter night is $1,357 against a published $1,341, and the page said
+ * "you save $0.00" rather than "booking direct is cheaper this week". A number that can only
+ * ever flatter us is not a price comparison, it is an advertisement, and the whole point of
+ * showing what Interval and RedWeek are asking is that a member can check us.
+ *
+ * `same` is a 50-cent band, because two all-in rates that land within a coin of each other are
+ * the same rate and calling either one a saving is noise.
+ */
+export function versusPublic(publicUsd, ourUsd) {
+  const pub = round2(publicUsd), ours = round2(ourUsd);
+  if (!pub || !ours) return null;
+  const diff = round2(pub - ours);
+  return {
+    publicUsd: pub, ourUsd: ours, diffUsd: Math.abs(diff),
+    pct: Math.round((Math.abs(diff) / pub) * 100),
+    same: Math.abs(diff) <= 0.5,
+    better: diff > 0.5,
+  };
+}
+
+/**
  * Quote for a stay over a date range, or a trip for N seats.
  * Indicative: Victor's binding quote may differ and is what the member accepts.
  */
@@ -184,7 +227,7 @@ export function quoteStay(stay, checkIn, checkOut, settings = DEFAULT_SETTINGS, 
   if (stay.kind === 'trip') {
     const nights = stay.nights || Math.max(1, Math.round((new Date(stay.dates.to) - new Date(stay.dates.from)) / 86400000));
     const basePoints = (stay.pointsPerSeat || 0) * seatsN;
-    const points = Math.round((stay.pointsPerSeat || 0) * (1 + settings.serviceRate)) * seatsN;
+    const points = seatPoints(stay, settings) * seatsN;
     const usd = points / settings.pointsPerDollar;
     const retail = (stay.retailUsd || 0) * seatsN;
     return { nights, points, basePoints, servicePoints: points - basePoints, usd: round2(usd),
@@ -214,7 +257,7 @@ export function quoteStay(stay, checkIn, checkOut, settings = DEFAULT_SETTINGS, 
 
 /** "You are 1.4 nights from Bucuti in Summer" */
 export function nightsAway(points, stay, season = 'low', settings = DEFAULT_SETTINGS) {
-  const per = stay.kind === 'trip' ? stay.pointsPerSeat : seasonPoints(stay, season, settings);
+  const per = unitPoints(stay, season, settings);
   if (!per) return null;
   const nights = points / per;
   const need = Math.max(0, (stay.minNights || 1) * per - points);

@@ -2,7 +2,7 @@
 // plus the two everyone can see: the Circle and the Pool.
 import { countdownTo, downloadText, escapeHtml, fmtAfl2, fmtDay, fmtDayTime, fmtMonth, fmtPct, fmtPoints, fmtUsd2, initials, monthKey, pointsUsd, safeUrl, sum, toCsv } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
-import { splitContribution, tierFor, seasonPoints, SEASONS } from '../core/money.js';
+import { splitContribution, tierFor, seasonPoints, seatPoints, SEASONS } from '../core/money.js';
 import { poolGauge, rankCrest, ring, splitBar } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel, avatar } from '../ui/components.js';
@@ -432,7 +432,7 @@ export function desk({ store, go }) {
           <td><b>${escapeHtml(st.name)}</b><br><span class="small muted">${st.kind === 'trip' ? `${escapeHtml(fmtDay(st.dates.from))} · ${st.nights} nights` : `min ${st.minNights} nights`}</span></td>
           <td class="small">${escapeHtml(st.area)}</td>
           ${st.kind === 'trip'
-            ? `<td class="num" colspan="3">${escapeHtml(fmtPoints(st.pointsPerSeat))} a seat</td>`
+            ? `<td class="num" colspan="3">${escapeHtml(fmtPoints(seatPoints(st, s)))} a seat</td>`
             : `<td class="num">${escapeHtml(fmtPoints(seasonPoints(st, 'low', s)))}</td>
                <td class="num">${escapeHtml(fmtPoints(seasonPoints(st, 'high', s)))}</td>
                <td class="num">${escapeHtml(fmtPoints(seasonPoints(st, 'peak', s)))}</td>`}
@@ -531,9 +531,9 @@ async function editStay(store, stay) {
         <label class="field"><span>Name</span><input name="name" value="${escapeHtml(stay?.name || '')}" required></label>
         <label class="field"><span>Area</span><input name="area" value="${escapeHtml(stay?.area || '')}"></label>
       </div>
-      <p class="eyebrow" style="margin-bottom:8px">${isTrip ? 'What a seat costs' : 'What a night costs, all in'}</p>
-      <p class="small muted" style="margin-bottom:12px">Type dollars or points — whichever you have in your head. The other follows, at ${s.pointsPerDollar} points to the dollar.</p>
-      ${isTrip ? `<div class="grid g2">${moneyPair('seat', 'A seat, all in', stay.pointsPerSeat / s.pointsPerDollar, s)}
+      <p class="eyebrow" style="margin-bottom:8px">${isTrip ? 'What a seat costs us' : 'What a night costs us'}</p>
+      <p class="small muted" style="margin-bottom:12px">The room, taxes and levies included — what the Circle pays. The member is charged ${escapeHtml(fmtPct(s.serviceRate, 0))} on top of this when they spend points, and that is the number every screen shows them. Type dollars or points, whichever you have in your head; the other follows at ${s.pointsPerDollar} points to the dollar.</p>
+      ${isTrip ? `<div class="grid g2">${moneyPair('seat', 'A seat, before our share', stay.pointsPerSeat / s.pointsPerDollar, s)}
           <label class="field"><span>Guest price in cash US$</span><input name="guestCashUsd" type="number" step="1" value="${stay.guestCashUsd || 0}" inputmode="decimal">
             <span class="hint">What a non-member pays the Banker, at face value.</span></label></div>`
         : `<div class="grid g3">

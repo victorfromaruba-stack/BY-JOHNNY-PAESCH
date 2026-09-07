@@ -1,8 +1,8 @@
 // Stays, trips, requesting one, and the life of a request.
 import { escapeHtml, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, countdownTo, initials, nightsBetween } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
-import { quoteStay, seasonPoints, SEASONS, seasonFor, tierFor, isDushiSeason, REACH, reachOf, pointsPerMonth } from '../core/money.js';
-import { ring } from '../ui/pieces.js';
+import { quoteStay, seasonPoints, seatPoints, unitPoints, versusPublic, SEASONS, seasonFor, tierFor, isDushiSeason, REACH, reachOf, pointsPerMonth } from '../core/money.js';
+import { ring, versusLine } from '../ui/pieces.js';
 import { stayCard, stayStrip } from './public.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
 import { shareText } from '../core/share.js';
@@ -84,9 +84,10 @@ export function trips({ store }) {
   list.replaceChildren(...all.map(t => {
     const held = store.seatsHeld(t.id);
     const mine = store.state.redemptions.some(r => r.memberId === me.id && r.stayId === t.id && ['requested', 'quoted', 'held', 'confirmed', 'completed'].includes(r.status));
-    const canAfford = avail >= t.pointsPerSeat;
+    const seat = seatPoints(t, s);
+    const canAfford = avail >= seat;
     const firstLook = t.isDrop && tier.firstLookHours > 0;
-    const months = canAfford ? 0 : Math.ceil((t.pointsPerSeat - Math.max(0, avail)) / pointsPerMonth(s, me.monthlyUsd));
+    const months = canAfford ? 0 : Math.ceil((seat - Math.max(0, avail)) / pointsPerMonth(s, me.monthlyUsd));
     const footer = `<span class="small muted" style="margin-top:4px">${escapeHtml(fmtDay(t.dates.from))} – ${escapeHtml(fmtDay(t.dates.to))} · ${held} of ${t.seats} seats held${mine ? ' · you are in' : ''}</span>
       <span class="small muted" style="margin-top:2px">${mine ? 'Your seat is held' : canAfford ? 'You can cover a seat now' : `About ${months} more month${months === 1 ? '' : 's'} of contributions`}</span>
       <span class="flags" style="margin-top:6px">
@@ -180,10 +181,10 @@ export function stayDetail({ store, params, go }) {
             <br><span class="flags">${r.kitchen === 'full' ? `<span class="tag">${icon('kitchen', { size: 13 })}Full kitchen</span>` : r.kitchen === 'kitchenette' ? '<span class="tag">Kitchenette</span>' : ''}
               ${(r.extras || []).slice(0, 2).map(x => `<span class="tag">${escapeHtml(x)}</span>`).join('')}
               ${r.source === 'inferred' ? '<span class="tag">inferred</span>' : ''}</span></td>
-          <td class="small">${r.sqft ? `${r.sqft.toLocaleString('en-US')} sq ft` : '<span class="muted">not published</span>'}
+          <td class="small" data-k="Size">${r.sqft ? `${r.sqft.toLocaleString('en-US')} sq ft` : '<span class="muted">not published</span>'}
             ${r.sqm ? `<br><span class="muted">${r.sqm} m²</span>` : ''}</td>
-          <td class="small">${icon('users', { size: 14, cls: 'ico-muted' })} ${r.sleeps}${r.bedrooms ? `<br><span class="muted">${r.bedrooms} bed${r.bedrooms > 1 ? 'rooms' : 'room'}</span>` : ''}</td>
-          <td class="num"><b>${escapeHtml(fmtPoints(per))}</b><br><span class="small muted">${escapeHtml(fmtUsd2(per / s.pointsPerDollar))}</span>
+          <td class="small" data-k="Sleeps">${icon('users', { size: 14, cls: 'ico-muted' })} ${r.sleeps}${r.bedrooms ? `<br><span class="muted">${r.bedrooms} bed${r.bedrooms > 1 ? 'rooms' : 'room'}</span>` : ''}</td>
+          <td class="num" data-k="A night"><b>${escapeHtml(fmtPoints(per))}</b><br><span class="small muted">${escapeHtml(fmtUsd2(per / s.pointsPerDollar))}</span>
             <br><span class="small ${can >= min ? 'muted' : ''}">${can >= min ? `covers ${Math.min(can, 14)} night${can === 1 ? '' : 's'}` : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of ${min}`}</span></td>
           <td><div class="row nowrap" style="gap:6px;justify-content:flex-end;flex-wrap:nowrap">
             <a class="btn ghost sm" href="#/book/${escapeHtml(stay.id)}?room=${escapeHtml(r.id)}">Ask</a>
@@ -208,14 +209,20 @@ export function stayDetail({ store, params, go }) {
     const held = store.seatsHeld(stay.id);
     const roster = store.rosterFor(stay.id);
     wrap.querySelector('#pricing').innerHTML = `
-      <h2>${escapeHtml(fmtPoints(stay.pointsPerSeat))} a seat</h2>
-      <p class="small muted" style="margin-top:4px">${escapeHtml(pointsUsd(stay.pointsPerSeat, s.pointsPerDollar))} all-in for ${stay.nights} nights · guests pay ${escapeHtml(fmtUsd2(stay.guestCashUsd))} in cash</p>
+      <h2>${escapeHtml(fmtPoints(seatPoints(stay, s)))} a seat</h2>
+      <p class="small muted" style="margin-top:4px">${escapeHtml(pointsUsd(seatPoints(stay, s), s.pointsPerDollar))} all-in for ${stay.nights} nights · the Circle’s 15% is inside it · guests pay ${escapeHtml(fmtUsd2(stay.guestCashUsd))} in cash</p>
       <ul class="ledger" style="margin-top:14px">
         <li><span class="what"><b>Dates</b></span><span class="delta"><b>${escapeHtml(fmtDay(stay.dates.from))} – ${escapeHtml(fmtDay(stay.dates.to))}</b></span></li>
         <li><span class="what"><b>Seats</b><span class="meta">${roster.length ? roster.map(m => escapeHtml(m.name.split(' ')[0])).join(', ') + ' are in' : 'Nobody yet'}</span></span><span class="delta"><b>${held} / ${stay.seats}</b></span></li>
         <li><span class="what"><b>Hold deadline</b><span class="meta">Victor releases the block after this</span></span><span class="delta"><b>${escapeHtml(fmtDay(stay.holdDeadline))}</b></span></li>
-        <li><span class="what"><b>Public price</b><span class="meta">What the same trip costs booked alone</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(stay.retailUsd))}</b><small>you save ${escapeHtml(fmtUsd2(Math.max(0, stay.retailUsd - stay.pointsPerSeat / s.pointsPerDollar)))}</small></span></li>
-      </ul>`;
+        ${(() => {
+          const v = versusPublic(stay.retailUsd, seatPoints(stay, s) / s.pointsPerDollar);
+          if (!v) return '';
+          return `<li><span class="what"><b>Booked alone</b><span class="meta">What the same trip costs on your own</span></span>
+            <span class="delta"><b>${escapeHtml(fmtUsd2(v.publicUsd))}</b></span></li>`;
+        })()}
+      </ul>
+      ${versusLine(versusPublic(stay.retailUsd, seatPoints(stay, s) / s.pointsPerDollar), 'a seat')}`;
   } else {
     wrap.querySelector('#pricing').innerHTML = `
       <h2>What a night costs</h2>
@@ -226,9 +233,10 @@ export function stayDetail({ store, params, go }) {
       </table></div>
       <p class="small muted" style="margin-top:12px">Minimum ${stay.minNights} night${stay.minNights > 1 ? 's' : ''}${stay.peakMinNights > stay.minNights ? `, ${stay.peakMinNights} at Peak` : ''}.
       ${stay.taxesIncluded ? 'Taxes and breakfast are already in this rate.' : 'Room, 12.5% tourist levy, service charge, resort fee and environmental levy are all included.'}
-      Booked alone, a Winter night here runs about ${escapeHtml(fmtUsd2(stay.retailUsd))} — you save ${escapeHtml(fmtUsd2(Math.max(0, stay.retailUsd - stay.rates.high)))} a night.</p>`;
+      </p>
+      ${versusLine(versusPublic(stay.retailUsd, seasonPoints(stay, 'high', s) / s.pointsPerDollar), 'Winter night')}`;
   }
-  const per = isTrip ? stay.pointsPerSeat : seasonPoints(stay, 'low', s);
+  const per = unitPoints(stay, 'low', s);
   const min = isTrip ? 1 : (stay.minNights || 1);
   const canCover = Math.floor(avail / per);
   wrap.querySelector('#afford').innerHTML = `
@@ -242,7 +250,7 @@ export function stayDetail({ store, params, go }) {
   {
     // Nobody is turned away from a trip. If it is more than they hold, say plainly how
     // long it takes at their level — and how long it would take at the others.
-    const price = isTrip ? stay.pointsPerSeat : seasonPoints(stay, 'low', s) * (stay.minNights || 1);
+    const price = isTrip ? seatPoints(stay, s) : seasonPoints(stay, 'low', s) * (stay.minNights || 1);
     const pace = store.monthsToAfford(price);
     const mineRow = pace?.find(x => x.mine);
     if (mineRow && mineRow.months > 0) {
@@ -276,7 +284,7 @@ export function book({ store, params, go }) {
       <p class="lede" style="margin-top:10px">${escapeHtml(stay.name)}. He answers within ${tierFor(s, me.monthlyUsd).slaHours ?? s.slaHours} hours with an all-in price in points, locked for ${s.quoteHours} hours. Nothing is committed until you accept it.</p>
       <form class="panel" id="form" style="margin-top:20px">
         ${isTrip ? `<div class="notice"><b>${escapeHtml(fmtDay(stay.dates.from))} – ${escapeHtml(fmtDay(stay.dates.to))}</b>
-            <p class="small">${stay.nights} nights · ${escapeHtml(fmtPoints(stay.pointsPerSeat))} a seat · ${store.seatsHeld(stay.id)} of ${stay.seats} seats held</p></div>
+            <p class="small">${stay.nights} nights · ${escapeHtml(fmtPoints(seatPoints(stay, s)))} a seat · ${store.seatsHeld(stay.id)} of ${stay.seats} seats held</p></div>
           <label class="field" style="margin-top:14px"><span>Seats</span><input name="seats" type="number" min="1" max="4" value="1" inputmode="numeric"></label>`
         : `<div class="grid g2">
             <label class="field"><span>Check in</span><input name="checkIn" type="date" required value="${d(soon)}" min="${d(today)}"></label>

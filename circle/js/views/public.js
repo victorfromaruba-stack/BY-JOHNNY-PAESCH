@@ -1,8 +1,8 @@
 // Public and entry screens: the landing page, the rules, sign-in, and the invitation.
 import { escapeHtml, html, raw, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, fmtDay, fmtPct, initials } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
-import { splitContribution, tierFor, projectPoints, seasonPoints, SEASONS, REACH, pointsPerMonth, monthsToAfford } from '../core/money.js';
-import { splitBar, poolGauge, memberCard, ring, tierTable } from '../ui/pieces.js';
+import { splitContribution, tierFor, projectPoints, seasonPoints, seatPoints, unitPoints, SEASONS, REACH, pointsPerMonth, monthsToAfford } from '../core/money.js';
+import { splitBar, poolGauge, memberCard, ring, tierLadder } from '../ui/pieces.js';
 import { sceneSvg, treeSvg, starSvg } from '../ui/art.js';
 import { toast, setBusy, sheet, avatar } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
@@ -39,7 +39,7 @@ export function stayCard(stay, { store, season = 'low', href = null, footer = ''
   // DEFAULT_SETTINGS and silently ignored every rate Victor edits in the Desk — so the number
   // on the card and the number in the quote could disagree, which is the one thing a price
   // must never do.
-  const per = stay.kind === 'trip' ? stay.pointsPerSeat : seasonPoints(stay, season, store?.settings);
+  const per = unitPoints(stay, season, store?.settings);
   const node = el(`<a class="stay-card" href="${escapeHtml(href || `#/${stay.kind === 'trip' ? 'trips' : 'stays'}/${stay.id}`)}">
       <span class="strip"><span class="duo"></span><span class="ph-note">illustration</span></span>
       <span class="body">
@@ -174,34 +174,27 @@ export function landing({ store, go }) {
   // What each level is for
   wrap.appendChild(el(band('band-circle', 'A long table laid for a dozen people, seen from above',
     'Forty seats. Everyone comes on everything.')));
+  // How long each level takes to reach three things you can actually book. A difference you can
+  // book beats a difference you have to work out, so these sit in the same grid as the perks
+  // rather than in a bullet list under three repeated panels.
+  const ladderTiers = [...s.tiers].sort((a, b) => a.monthlyUsd - b.monthlyUsd);
+  const waitRow = (k, sub, points) => (points > 0 ? [{
+    k, sub, vals: ladderTiers.map(t => `<b>${monthsToAfford(s, points, t.monthlyUsd)}</b><span class="lad-sub">months</span>`),
+  }] : []);
+  const aruba = store.stayLike('stay_amsterdam'), villa = store.stayLike('stay_surfclub'), trip = store.stayLike('trip_samana');
+  // A Surf Club villa sleeps eight and rents by the week; four of you chipping in is the real number.
+  // Any of these can come back empty on a catalog that has been edited — a missing place costs
+  // its own row, never the section.
+  const waitRows = [
+    ...waitRow('3 nights at Amsterdam Manor', 'in Summer, all in', aruba ? seasonPoints(aruba, 'low', s) * 3 : 0),
+    ...waitRow('A week in a Surf Club villa', 'your quarter of it, four of you chipping in',
+      villa ? Math.round(seasonPoints(villa, 'low', s) * (villa.minNights || 7) / 4) : 0),
+    ...waitRow('A seat on the Samaná week', 'flights not included', trip ? seatPoints(trip, s) : 0),
+  ];
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>Everyone comes on everything</h2>
-      <p>No level shuts anyone out of a stay or a trip. What the level changes is how quickly the points build — and that is what decides, in practice, whether you are doing long weekends on the island or leaving it with the group.</p></div></div>
-      <div class="grid g3">
-        ${s.tiers.map(t => {
-          const perMonth = pointsPerMonth(s, t.monthlyUsd);
-          const aruba = store.stayLike('stay_amsterdam'), villa = store.stayLike('stay_surfclub'), trip = store.stayLike('trip_samana'), far = store.stayLike('trip_japan');
-          const nights = 3;
-          // A Surf Club villa sleeps eight and rents by the week; four of you chipping in is the real number.
-          // Every one of these is a lookup that can come back empty on a catalog that has been
-          // edited, and a missing place must cost one bullet, not the whole page.
-          const villaShare = villa ? Math.round(seasonPoints(villa, 'low', s) * (villa.minNights || 7) / 4) : 0;
-          const line = (ok, text) => (ok ? `<li class="small muted">${text}</li>` : '');
-          return `<div class="panel">
-          <div class="row-between"><div><p class="eyebrow" style="color:var(--ink-2)">$${t.monthlyUsd} a month</p>
-            <h3 style="margin-top:6px">${escapeHtml(tierName(t.monthlyUsd))}</h3></div>${treeSvg(VOCAB.tierLean[t.monthlyUsd], { size: 26 })}</div>
-          <p class="small" style="margin-top:10px"><b>${escapeHtml(fmtPoints(perMonth))} a month</b>${t.bonusRate ? `, including a ${Math.round(t.bonusRate * 100)}% bonus the Circle funds` : ''} — ${escapeHtml(fmtUsd2(perMonth / s.pointsPerDollar))} of hotel.</p>
-          <ul class="stack" style="margin-top:10px;padding-left:1.1em;gap:6px">
-            ${line(aruba, `${monthsToAfford(s, seasonPoints(aruba, 'low', s) * nights, t.monthlyUsd)} months for ${nights} nights at ${escapeHtml(aruba?.name || '')} in Summer`)}
-            ${line(villa, `${monthsToAfford(s, villaShare, t.monthlyUsd)} months for your quarter of a Surf Club villa for a week`)}
-            ${line(trip, `${monthsToAfford(s, trip?.pointsPerSeat, t.monthlyUsd)} months for a seat on the Samaná week`)}
-            ${line(far, `${monthsToAfford(s, far?.pointsPerSeat, t.monthlyUsd)} months for ten nights in Japan`)}
-          </ul>
-          <p class="eyebrow" style="margin-top:16px">What the level carries</p>
-          ${tierTable(t, s)}
-          </div>`;
-        }).join('')}
-      </div>
+      <p>No level shuts anyone out of a stay or a trip. A level changes how fast the points build and how far in front of everyone else you stand — that is the whole of it.</p></div></div>
+      ${tierLadder(s, { rows: waitRows })}
       <p class="small muted" style="margin-top:16px">Move between levels any month; it starts on your next contribution and nothing you already hold changes. Short of a trip you want? Ask for it anyway — Victor quotes it and you accept when the points are there, or you close the gap with a cash top-up.</p>
       </div></section>`));
 

@@ -438,6 +438,26 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 .deal.matched { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
 .rooms-table td .row.nowrap { flex-wrap: nowrap; }
 .rooms-table { min-width: 620px; }
+/* Below that, it stops being a table. Five columns in 620px inside a 322px card meant swiping
+   a hidden scroller sideways to reach the price — on the screen where somebody is choosing a
+   room. Each room becomes a block instead: name, then the three facts on labelled lines, then
+   the two buttons at full reach. */
+@media (max-width: 620px) {
+  .rooms-table { min-width: 0; display: block; font-size: .88rem; }
+  .rooms-table thead { display: none; }
+  .rooms-table tbody, .rooms-table tr { display: block; }
+  .rooms-table tr { padding: 14px 0 16px; border-top: 1px solid var(--hairline-soft); }
+  .rooms-table tr:first-child { border-top: 0; padding-top: 4px; }
+  .rooms-table td { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 4px 12px;
+    align-items: baseline; padding: 4px 0; border: 0; }
+  .rooms-table td::before { content: attr(data-k); font-size: .68rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-3); }
+  .rooms-table td.num { text-align: left; }
+  .rooms-table td:first-child, .rooms-table td:last-child { grid-template-columns: minmax(0, 1fr); }
+  .rooms-table td:first-child::before, .rooms-table td:last-child::before { content: none; }
+  .rooms-table td:last-child { margin-top: 10px; }
+  .rooms-table td:last-child .row { justify-content: flex-start; }
+}
 
 /* Nav badges: how many deals are waiting that you asked for. */
 .nav-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px;
@@ -452,30 +472,70 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 .live-card.beats { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
 .live-card h3 { overflow-wrap: anywhere; }
 
-/* What a level carries — one line per thing, so three levels can be compared at a glance.
-   Stacked rather than label-left: these sit in narrow cards three across, and a two-column row
-   wrapped "First look at a deal" onto four lines and made the whole column look broken.
-   The ▲ marks what is more than the level below; that difference is the entire point of the
-   list, and colour alone would not carry it for anyone who cannot see the difference. */
-.tier-detail { margin: 10px 0 0; display: grid; gap: 0; }
-.tier-detail > div { padding: 10px 0; border-top: 1px solid var(--hairline-soft); }
-.tier-detail > div:first-child { border-top: 0; padding-top: 4px; }
-.tier-detail dt { font-size: .74rem; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--ink-3); }
-.tier-detail dd { margin: 3px 0 0; }
-.tier-detail dd b { font-variant-numeric: tabular-nums; font-size: 1.02rem; }
-.tier-detail dd .small { display: block; margin-top: 2px; }
-.tier-detail .more { color: var(--good-text); font-size: .72em; margin-left: 6px;
-  vertical-align: 1px; }
-.tier-detail .up dt { color: var(--good-text); }
-/* The same three tables again on a profile, where somebody is actually deciding. The one they
-   are on is outlined so the comparison has a starting point. */
-.tier-compare { padding: 14px; border: 1px solid var(--hairline); border-radius: var(--r-card);
-  background: var(--raised); }
-.tier-compare > b, .tier-compare > .tiny { display: block; }
-.tier-compare > .tiny { margin-top: 2px; }
-.tier-compare.mine { border-color: var(--ink); background: var(--surface); }
-.tier-compare .tier-detail > div:first-child { padding-top: 10px; border-top: 1px solid var(--hairline-soft); }
+/* Tables on a phone. The season table is Season / When / Points / Value, and at the default
+   14px with 14px padding it needed 449px inside a 358px column — so the Value column, the one
+   thing a member came for, sat off the right edge behind a scrollbar they had to find. Tighter
+   padding, a smaller face and headers allowed to wrap bring it inside the column. */
+@media (max-width: 560px) {
+  .tablewrap table { font-size: .8rem; }
+  .tablewrap thead th { padding: 9px 8px; white-space: normal; }
+  .tablewrap tbody td { padding: 10px 8px; }
+}
+
+/* Us against the published rate. Three states, and one of them says we are dearer this week —
+   which is the reason this is a styled sentence and not a green badge: a comparison that can
+   only ever come out in our favour is an advertisement, and a member can check us on RedWeek
+   in ten seconds. */
+.vs { margin: 10px 0 0; padding: 10px 12px; border-radius: var(--r-input); font-size: .85rem;
+  line-height: 1.5; border: 1px solid transparent; }
+.vs.win { background: var(--good-soft); border-color: var(--good); color: var(--good-text); font-weight: 500; }
+.vs.same { background: var(--raised); border-color: var(--hairline); color: var(--ink-2); }
+.vs.over { background: var(--raised); border-color: var(--hairline); color: var(--ink-2); }
+
+/* The ladder: three levels across, what they carry down the left, once.
+   It replaced three identical panels that repeated the same six labels with a different number
+   in each — a quarter of the landing page's height to convey six small differences. Nobody
+   compares three levels by scrolling between three lists.
+   It is a grid rather than a <table> so the label column can shrink on a phone while the three
+   value columns stay equal; at 390px that is a 104px label against three 74px columns, which is
+   why every value is written short ("9" over "months", not "9 months ahead"). */
+.ladder { margin: 0; border: 1px solid var(--hairline); border-radius: var(--r-card);
+  background: var(--surface); overflow: hidden; }
+.lad-r { display: grid; grid-template-columns: minmax(0, 1.15fr) repeat(3, minmax(0, 1fr));
+  gap: 0 8px; align-items: center; padding: 11px 14px; border-top: 1px solid var(--hairline-soft); }
+.lad-r:nth-child(even) { background: var(--raised); }
+.lad-head { position: sticky; top: 0; z-index: 1; align-items: end; border-top: 0;
+  padding-top: 14px; padding-bottom: 12px; background: var(--surface);
+  border-bottom: 1px solid var(--hairline); }
+.lad-cap { font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.lad-k b { display: block; font-weight: 600; font-size: .92rem; line-height: 1.25; }
+.lad-why { display: block; margin-top: 2px; font-size: .74rem; line-height: 1.35; color: var(--ink-3); }
+.lad-v { text-align: center; min-width: 0; }
+.lad-v b { display: block; font-weight: 600; font-size: 1.05rem; line-height: 1.15;
+  font-variant-numeric: tabular-nums slashed-zero; overflow-wrap: anywhere; }
+.lad-v b.num { font-family: var(--font-mono); font-size: .95rem; }
+.lad-v b.good { color: var(--good-text); }
+.lad-sub { display: block; margin-top: 1px; font-size: .7rem; color: var(--ink-3); }
+.lad-no { color: var(--ink-3); }
+.lad-amt { display: block; font-size: 1.15rem; font-weight: 700; }
+.lad-name { display: block; margin-top: 2px; font-size: .7rem; color: var(--ink-2); white-space: nowrap; }
+.lad-you { display: inline-block; margin-bottom: 3px; padding: 1px 7px; border-radius: var(--r-chip);
+  background: var(--ink); color: var(--ground); font-size: .62rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; }
+/* The level you are on, marked down the whole column rather than only in the header — otherwise
+   you lose your place halfway down and have to count across again. */
+.lad-v.mine { background: var(--good-soft); border-radius: var(--r-input); }
+.lad-head .lad-v.mine { background: none; }
+.lad-head .lad-v.mine .lad-amt { color: var(--good-text); }
+@media (max-width: 560px) {
+  .lad-r { grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr)); gap: 0 5px; padding: 10px 11px; }
+  .lad-k b { font-size: .85rem; }
+  .lad-why { display: none; }             /* the label carries it; the gloss is desktop-only */
+  .lad-v b { font-size: .95rem; }
+  .lad-v b.num { font-size: .82rem; }
+  .lad-name { font-size: .62rem; }
+  .lad-name svg { display: none; }
+}
 
 /* Crews: who you travel with, and their thread. A conversation, not a feed — so the bubbles
    are close together, the day rules are quiet, and your own words sit on the right. */

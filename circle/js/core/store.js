@@ -4,7 +4,7 @@
 // Business rules live here so the demo and the real club produce identical numbers.
 
 import { uid, nowIso, sum, monthKey, fmtMonth, nightsBetween } from './util.js';
-import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, seasonPoints, pointsPerMonth } from './money.js';
+import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, seasonPoints, seatPoints, pointsPerMonth } from './money.js';
 import { initialsOf, refFor } from './vocab.js';
 import { standingFrom, rankFor, RANKS } from './standing.js';
 
@@ -499,7 +499,7 @@ export class Store {
     const isTrip = stay.kind === 'trip';
     const nights = isTrip ? stay.nights : Math.max(Number(g.nights) || 0, stay.minNights || 1);
     const season = g.season || 'low';
-    const target = isTrip ? (stay.pointsPerSeat || 0) : seasonPoints(stay, season, this.settings) * nights;
+    const target = isTrip ? seatPoints(stay, this.settings) : seasonPoints(stay, season, this.settings) * nights;
     const have = Math.max(0, this.availablePoints(memberId));
     const short = Math.max(0, target - have);
     const perMonth = pointsPerMonth(this.settings, m.monthlyUsd);
