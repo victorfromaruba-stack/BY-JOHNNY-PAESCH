@@ -4,7 +4,7 @@
 // Business rules live here so the demo and the real club produce identical numbers.
 
 import { uid, nowIso, sum, monthKey, fmtMonth, nightsBetween, safeUrl } from './util.js';
-import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, fromPoints, seatPoints, pointsPerMonth } from './money.js';
+import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, fromPoints, seatPoints, pointsPerMonth, hotelOwedUsd } from './money.js';
 import { initialsOf, refFor } from './vocab.js';
 import { standingFrom, rankFor, RANKS, effectiveTier } from './standing.js';
 
@@ -1222,7 +1222,7 @@ export class Store {
       if (this.availablePoints(p.memberId) + p.points < p.points) throw new Error(`${this.member(p.memberId)?.name || 'A member'} no longer has the points they chipped in`);
     }
     const stay = this.stay(r.stayId); const at = nowIso();
-    Object.assign(r, { status: REDEMPTION_STATUS.confirmed, confirmedAt: at, paidUsd: paidUsd == null ? round(r.quotedPoints / this.settings.pointsPerDollar) : Number(paidUsd), confirmationRef, decidedBy: actorId, decidedAt: at });
+    Object.assign(r, { status: REDEMPTION_STATUS.confirmed, confirmedAt: at, paidUsd: paidUsd == null ? hotelOwedUsd(r, this.settings) : Number(paidUsd), confirmationRef, decidedBy: actorId, decidedAt: at });
     const burn = (memberId, points, note) => this.state.ledger.push({ id: uid('led'), memberId, kind: LEDGER_KIND.burn, points: -points, usd: -round(points / this.settings.pointsPerDollar), refType: 'redemption', refId: r.id, note, at, by: actorId });
     if (r.points > 0) burn(r.memberId, r.points, `${stay?.name || 'Stay'} · ${r.nights} nights`);
     for (const p of r.pledges || []) {

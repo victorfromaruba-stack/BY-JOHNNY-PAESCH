@@ -981,6 +981,27 @@ end $$;
 -- Same overload trap as above: adding p_look would leave the ungated six-argument function live.
 drop function if exists quote_redemption(uuid, int, jsonb, text, date, text);
 
+-- Out of an all-in quote, what the HOTEL is owed — the figure that actually leaves the Reserve.
+-- quoted_points includes the Circle's share, so paying the whole of it books the club's own
+-- income as cash handed over: service_earned reads ~$0 for ever and the Reserve looks 15%
+-- emptier than it is, on every booking. Prefer the quote's own stack, which carries the hotel
+-- lines the Desk typed; otherwise take the share back out arithmetically. Twin of
+-- hotelOwedUsd() in js/core/money.js.
+create or replace function hotel_owed_usd(p_quoted_points int, p_stack jsonb)
+returns numeric language plpgsql stable set search_path = public as $$
+declare s settings; hotel numeric;
+begin
+  select * into s from settings where id = 1;
+  if p_stack is not null and jsonb_typeof(p_stack) = 'object' then
+    select coalesce(sum((value)::numeric), 0) into hotel
+      from jsonb_each_text(p_stack) where key <> 'share';
+    if hotel > 0 then return round(hotel, 2); end if;
+  end if;
+  return round(coalesce(p_quoted_points, 0)::numeric / (1 + s.service_rate) / s.points_per_dollar, 2);
+end $$;
+revoke all on function hotel_owed_usd(int, jsonb) from public, anon;
+grant execute on function hotel_owed_usd(int, jsonb) to authenticated;
+
 create or replace function quote_redemption(p_id uuid, p_points int, p_stack jsonb default null,
   p_terms text default '', p_deadline date default null, p_note text default '',
   p_look uuid default null)
@@ -1185,7 +1206,7 @@ begin
   end if;
 
   update redemptions set status='confirmed', confirmed_at=now(), decided_by=current_member_id(), decided_at=now(),
-         paid_usd = coalesce(p_paid_usd, round(r.quoted_points::numeric / s.points_per_dollar, 2)),
+         paid_usd = coalesce(p_paid_usd, hotel_owed_usd(r.quoted_points, r.quote_stack)),
          confirmation_ref = p_confirmation
   where id = p_id returning * into r;
   if r.points > 0 then

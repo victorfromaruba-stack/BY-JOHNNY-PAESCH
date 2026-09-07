@@ -190,6 +190,26 @@ export function rateBandFor(dateLike) {
  * check it by multiplying.
  */
 const allIn = (usd, settings) => Math.round((Number(usd) || 0) * settings.pointsPerDollar * (1 + settings.serviceRate));
+/**
+ * Out of an all-in quote, what the HOTEL is owed — the figure that actually leaves the Reserve.
+ *
+ * quotedPoints includes the Circle's 15%, so paying the whole of it to the hotel books the
+ * club's own income as money handed over: serviceEarned reads ~$0 for ever and the Reserve
+ * looks 15% emptier than it is, on every booking. Prefer the quote's own stack, which carries
+ * the hotel lines the Desk typed; fall back to taking the share back out arithmetically.
+ */
+export function hotelOwedUsd(r, settings = DEFAULT_SETTINGS) {
+  const stack = r?.quoteStack || r?.quote_stack;
+  if (stack && typeof stack === 'object') {
+    const hotel = Object.entries(stack)
+      .filter(([k]) => k !== 'share')
+      .reduce((sum, [, v]) => sum + (Number(v) || 0), 0);
+    if (hotel > 0) return round2(hotel);
+  }
+  const pts = Number(r?.quotedPoints ?? r?.quoted_points) || 0;
+  return round2(pts / (1 + settings.serviceRate) / settings.pointsPerDollar);
+}
+
 /** The room on its own, without the Circle's share. For showing the split, never for charging. */
 export const roomOnlyPoints = (usd, settings = DEFAULT_SETTINGS) => Math.round((Number(usd) || 0) * settings.pointsPerDollar);
 

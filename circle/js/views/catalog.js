@@ -1,7 +1,7 @@
 // Stays, trips, requesting one, and the life of a request.
 import { escapeHtml, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, countdownTo, initials, nightsBetween, safeUrl } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
-import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth, round2 } from '../core/money.js';
+import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth, round2, hotelOwedUsd } from '../core/money.js';
 import { ring, versusLine } from '../ui/pieces.js';
 import { effectiveTier } from '../core/standing.js';
 import { stayCard, stayStrip, photoFor } from './public.js';
@@ -810,8 +810,14 @@ export function requestDetail({ store, params, go, refresh }) {
       if (act === 'topup') { await store.confirmTopUp(r.id, me.id); toast('Top-up marked as received.'); }
       if (act === 'pay') {
         const out = await sheet({ title: 'Pay the hotel', render: (body, close) => {
-          body.innerHTML = `<p class="sheet-text">This burns ${escapeHtml(fmtPoints(r.points))} from ${escapeHtml(member?.name || 'the member')} and records what the Reserve actually paid.</p>
-            <label class="field"><span>Amount paid to the hotel</span><input name="paid" type="number" step="0.01" value="${(r.quotedPoints / s.pointsPerDollar).toFixed(2)}" inputmode="decimal"></label>
+          // What the HOTEL is owed, not what the member was charged. Those differ by the
+          // Circle's 15%, and pre-filling the member's price booked the club's own income as
+          // cash handed to the hotel — so serviceEarned read ~$0 for ever and the Reserve
+          // looked 15% emptier than it was, on every booking, silently.
+          const owed = hotelOwedUsd(r, s);
+          body.innerHTML = `<p class="sheet-text">This burns ${escapeHtml(fmtPoints(r.points))} from ${escapeHtml(member?.name || 'the member')} and records what the Reserve actually paid.
+            The member was quoted ${escapeHtml(fmtUsd2(r.quotedPoints / s.pointsPerDollar))}; the difference is the Circle's ${Math.round(s.serviceRate * 100)}%.</p>
+            <label class="field"><span>Amount paid to the hotel</span><input name="paid" type="number" step="0.01" value="${owed.toFixed(2)}" inputmode="decimal"></label>
             <label class="field"><span>Hotel confirmation number</span><input name="ref" placeholder="e.g. BT-2026-4471" required></label>
             <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn good" data-ok>Pay and burn</button></div>`;
           body.querySelector('[data-ok]').addEventListener('click', () => {
