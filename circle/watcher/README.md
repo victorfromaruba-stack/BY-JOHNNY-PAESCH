@@ -115,6 +115,12 @@ site rather than guessed:
    browser while the bot layer finishes and then moves on — sometimes by itself, sometimes only
    when its Continue button is pressed. Navigating away too early leaves the session signed
    out, which looks identical to a wrong password.
+5. **A cookie-consent panel covers the login form.** It is a fixed overlay, so an automated
+   click on Sign In lands on the banner instead and the form is never submitted — which again
+   looks identical to a wrong password. The banner is dismissed first (known handlers, then
+   acceptance words inside something that mentions cookies), and if the click still cannot
+   land the form is submitted through its own `requestSubmit()`, which runs Interval's
+   `onSubmit="return submitOnce(this)"` where `form.submit()` would skip it.
 
 The same credentials were signed in by hand and worked, so the password was never the problem
 and (3) is established rather than inferred.
@@ -191,12 +197,16 @@ Two suites, both stub-driven, no network and no credentials:
 
 ```sh
 node session.test.mjs    # 48 assertions — the fetch client, cookie scoping, the host guard
-node browser.test.mjs    # 17 assertions — the browser client end to end (skips if no Playwright)
+node browser.test.mjs    # 23 assertions — the browser client end to end (skips if no Playwright)
 ```
 
 The ones that matter most: a refused login that still redirects to a normal page is reported
 as **refused**; a redirect off Interval is never followed; `www`'s session cookie is never
 sent to `vip`; and the password appears in none of the dumped files.
+
+Every failure so far has looked the same from the outside — a polite 200 carrying the
+signed-out page — which is why the dump now names which step it was: consent panel, form
+submission, waiting room, or the session itself.
 
 The browser suite covers all three shapes of holding page: one that moves on its own, one that
 only moves when Continue is pressed, and one that never moves at all — which must be reported

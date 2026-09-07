@@ -41,13 +41,32 @@ vipPort = await new Promise(r => vip.listen(0, '127.0.0.1', () => r(vip.address(
 
 const www = http.createServer((req, res) => {
   if (req.url.includes('/auth/loginPage')) {
+    // With a cookie-consent panel laid over the whole page, exactly as the real site does.
+    // Nothing under it is clickable until it is dealt with — which is the point.
     res.writeHead(200, { 'content-type': 'text/html' });
-    return res.end(`<html><body><form name="loginForm" action="/web/my/auth/login" method="POST">
+    return res.end(`<html><body>
+      <div id="cookie-consent-banner" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999">
+        <p>We use cookies. This site needs your consent.</p>
+        <button id="onetrust-accept-btn-handler"
+                onclick="document.getElementById('cookie-consent-banner').remove()">Accept All</button>
+      </div>
+      <form name="loginForm" action="/web/my/auth/login" method="POST" onsubmit="return true">
       <input name="j_username" type="text" maxlength="33">
       <input name="j_password" type="password" maxlength="14">
       <input name="_spring_security_remember_me" type="checkbox" checked>
       <input type="submit" value="Sign In"></form>
       <a href="/web/my/auth/loginPage">Sign In</a></body></html>`);
+  }
+  // The same login page, but with a banner that has no accept button at all — the form has to
+  // be submitted directly, or nothing happens.
+  if (req.url.includes('/stubborn-banner')) {
+    res.writeHead(200, { 'content-type': 'text/html' });
+    return res.end(`<html><body>
+      <div style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999">
+        <p>Cookies. No way to dismiss this.</p></div>
+      <form name="loginForm" action="/web/my/auth/login" method="POST">
+      <input name="j_username"><input name="j_password" type="password">
+      <input type="submit" value="Sign In"></form></body></html>`);
   }
   if (req.url.includes('/auth/login')) {
     // The real shape, found on the VPS: a CORRECT password lands on a "Please wait…" holding
@@ -83,6 +102,9 @@ const r = await iv.attemptSignIn();
 
 ok(r.limits.j_password === 14 && r.limits.j_username === 33,
    `the browser reads the form's own limits (${JSON.stringify(r.limits)})`);
+ok(r.consent === '#onetrust-accept-btn-handler',
+   `the cookie-consent panel covering the form was dismissed (${r.consent})`);
+ok(/clicked/.test(r.submitted || ''), `and the form was then actually submitted (${r.submitted})`);
 ok(r.interstitial === true, 'the "Please wait…" holding page was recognised');
 ok(r.interstitialCleared === true, 'and it was cleared by pressing Continue rather than navigated away from');
 ok(r.landedOn.includes(String(vipPort)),
@@ -119,6 +141,18 @@ ok(!JSON.stringify(out).includes('shortpw'), 'the password appears in none of th
   const tookMs = Number(process.hrtime.bigint() - started) / 1e6;
   ok(cleared === false, 'a page that never moves and offers nothing is reported as NOT cleared');
   ok(tookMs < 5000, `and it gives up rather than hanging the pass (${Math.round(tookMs)}ms)`);
+}
+
+// A banner with nothing to accept: the click cannot land, so the form itself has to be asked.
+{
+  const page = await iv.open();
+  await page.goto(`http://127.0.0.1:${wwwPort}/stubborn-banner`, { waitUntil: 'domcontentloaded' });
+  ok(await iv.dismissConsent(page) === null, 'a banner with no accept button is correctly not dismissed');
+  await page.fill('input[name="j_username"]', 'victor');
+  await page.fill('input[name="j_password"]', 'shortpw');
+  const how = await iv.submitLogin(page);
+  ok(/asked the form/.test(how), `so the form was submitted directly instead (${how})`);
+  ok(!page.url().includes('/stubborn-banner'), `and the page moved (${page.url()})`);
 }
 
 // A real page that merely contains the words is not a holding page.

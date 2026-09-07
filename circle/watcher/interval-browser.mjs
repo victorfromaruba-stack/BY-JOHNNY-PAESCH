@@ -152,6 +152,84 @@ export class IntervalBrowser {
     return !(await this.isWaitingRoom(page));
   }
 
+  /**
+   * Get the cookie-consent panel out of the way.
+   *
+   * These are fixed-position overlays. A person clicks Accept without thinking about it; an
+   * automated click on the button underneath either hits the banner instead or is refused as
+   * intercepted, and either way the form is never submitted — which looks like a wrong
+   * password, because everything downstream is the signed-out page.
+   *
+   * Known handlers first, then the words on the button. The word list is deliberately narrow
+   * and does NOT include "continue": that is the interstitial's button, and pressing it here
+   * would be pressing the wrong thing at the wrong time.
+   */
+  async dismissConsent(page) {
+    const KNOWN = [
+      '#onetrust-accept-btn-handler',                 // OneTrust
+      '#truste-consent-button',                       // TrustArc
+      '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',  // Cookiebot
+      '.cc-allow', '.cookie-accept', '[data-testid="accept-all"]',
+    ];
+    for (const sel of KNOWN) {
+      const hit = page.locator(sel).first();
+      if (await hit.count().catch(() => 0)) {
+        if (await hit.isVisible().catch(() => false)) {
+          await hit.click({ timeout: 4000 }).catch(() => {});
+          await page.waitForTimeout(250);
+          return sel;
+        }
+      }
+    }
+    // Nothing known. Look for a button whose words are an acceptance, inside something that
+    // says it is about cookies or privacy — so an ordinary "I agree" on a real form is safe.
+    return page.evaluate(() => {
+      const yes = /^\s*(accept|accept all|allow all|agree|i agree|got it|i understand|ok)\s*$/i;
+      const about = /cookie|consent|privacy|gdpr/i;
+      const els = [...document.querySelectorAll('button,a,input[type=button],input[type=submit]')];
+      for (const el of els) {
+        const words = (el.value || el.textContent || '').trim();
+        if (!yes.test(words)) continue;
+        const box = el.closest('[id],[class]');
+        const context = `${box?.id || ''} ${box?.className || ''} ${box?.getAttribute('aria-label') || ''}`;
+        if (!about.test(context) && !about.test(document.body.innerText.slice(0, 600))) continue;
+        el.click();
+        return words;
+      }
+      return null;
+    }).catch(() => null);
+  }
+
+  /**
+   * Submit the login form, and be sure it actually went.
+   *
+   * A plain click is what a person does, so it is tried first — but a click can be swallowed by
+   * an overlay that is still in the way. requestSubmit() is the fallback because it goes through
+   * the form's own onsubmit handler (Interval's form has `onSubmit="return submitOnce(this)"`,
+   * which form.submit() would skip entirely).
+   */
+  async submitLogin(page) {
+    const before = page.url();
+    const clicked = await page.click('input[type="submit"], button[type="submit"]', { timeout: 6000 })
+      .then(() => true).catch(() => false);
+    const moved = await page.waitForURL((u) => u.toString() !== before, { timeout: 8000 })
+      .then(() => true).catch(() => false);
+    if (moved) return clicked ? 'clicked' : 'submitted';
+
+    // It did not go. Ask the form itself.
+    const asked = await page.evaluate(() => {
+      const form = document.querySelector('form[name="loginForm"]')
+        || document.querySelector('input[name="j_password"]')?.form;
+      if (!form) return false;
+      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+      else form.submit();
+      return true;
+    }).catch(() => false);
+    if (!asked) return clicked ? 'clicked, went nowhere' : 'could not submit at all';
+    await page.waitForURL((u) => u.toString() !== before, { timeout: 10000 }).catch(() => {});
+    return clicked ? 'clicked, then asked the form' : 'asked the form directly';
+  }
+
   /** Is this the holding page rather than a real one? */
   async isWaitingRoom(page) {
     return page.evaluate(() => {
@@ -212,15 +290,17 @@ export class IntervalBrowser {
         ? `the password is ${this.password.length} characters and the form accepts ${limits.j_password}` : null,
     ].filter(Boolean);
 
+    // The consent panel goes first. It is a fixed overlay, and with it still up the click on
+    // the submit button lands on the banner instead — the form is never submitted, and every
+    // page after that is the signed-out one.
+    const consent = await this.dismissConsent(page);
+
     await page.fill('input[name="j_username"]', this.username);
     await page.fill('input[name="j_password"]', this.password);
-    // Submitting and then waiting for things to settle, rather than waiting for one particular
-    // navigation: the answer moves the page with script, so there is more than one hop.
-    await Promise.all([
-      page.waitForLoadState('networkidle').catch(() => {}),
-      page.click('input[type="submit"], button[type="submit"]'),
-    ]);
+    const submitted = await this.submitLogin(page);
     await page.waitForLoadState('networkidle').catch(() => {});
+    // Whatever came back may raise its own banner.
+    await this.dismissConsent(page);
     // A right password lands on a holding page, not on the account. Sit through it before
     // reading anything — asking for a page while it is still working interrupts it, and
     // everything after that comes back signed out.
@@ -240,7 +320,7 @@ export class IntervalBrowser {
     this.signedIn = (probeSays ?? readsAsSignedIn(answer) ?? false) === true;
     return {
       ok: this.signedIn, landedOn, loginPage, answer, probe, probePath: PROBE, probeSays,
-      interstitial: waited, interstitialCleared: cleared,
+      interstitial: waited, interstitialCleared: cleared, consent, submitted,
       answerSays: readsAsSignedIn(answer), limits, tooLong, said: said && said.trim(),
       cookies: await this.cookieNames(),
     };
@@ -301,6 +381,8 @@ export class IntervalBrowser {
       `  browser:        ${this.browserName}`,
       `  signed in:      ${r?.ok ?? 'could not get that far'}`,
       `  landed on:      ${r?.landedOn || '(nowhere)'}`,
+      `  consent panel:  ${r?.consent ? `dismissed via ${r.consent}` : 'none in the way'}`,
+      `  the form was:   ${r?.submitted || '(never reached)'}`,
       `  waiting room:   ${r?.interstitial ? (r.interstitialCleared ? 'yes, and it cleared' : 'YES, AND IT NEVER CLEARED') : 'none'}`,
       `  probe page:     ${PROBE} -> ${say(r?.probeSays)}`,
       `  login answer:   ${say(r?.answerSays)}`,
