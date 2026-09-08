@@ -57,7 +57,18 @@ async function getJson(path, params = {}) {
   const url = `${BASE}${path}${qs.toString() ? `?${qs}` : ''}`;
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.value;
+  try {
+    return await once(url);
+  } catch (err) {
+    // A phone on mobile data drops the odd connection. One quiet second later is usually a
+    // different network moment; a second failure is the real answer.
+    if (!err.retryable) throw err;
+    await new Promise(r => setTimeout(r, 1500));
+    return once(url);
+  }
+}
 
+async function once(url) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
@@ -71,9 +82,13 @@ async function getJson(path, params = {}) {
     cache.set(url, { at: Date.now(), value: body });
     return body;
   } catch (err) {
-    if (err.name === 'AbortError') throw new Error('VakayMood did not answer in time.');
-    // A failed fetch from the browser is almost always the network, not them.
-    if (/failed to fetch|networkerror/i.test(err.message)) throw new Error('Could not reach VakayMood from this device.');
+    if (err.name === 'AbortError') throw Object.assign(new Error('VakayMood did not answer in time.'), { retryable: true });
+    // A fetch that never got an answer is the device's network path, not their server: Chrome
+    // says "Failed to fetch", Firefox "NetworkError", Safari just "Load failed". Say that, and
+    // let the caller retry it — the message a member sees should never be a browser's own.
+    if (/failed to fetch|networkerror|load failed|network connection was lost|not connected to the internet/i.test(err.message)) {
+      throw Object.assign(new Error('Could not reach VakayMood from this device.'), { retryable: true });
+    }
     throw err;
   } finally { clearTimeout(timer); }
 }

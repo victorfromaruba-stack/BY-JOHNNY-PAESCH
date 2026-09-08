@@ -333,10 +333,12 @@ export function liveSection(ctx, { compact = false, slug = null, first = compact
     } catch (err) {
       count.textContent = '';
       more.innerHTML = '';
-      // A browser that refused the request — an ad-blocker or a DNS filter, usually — is not a
-      // problem with the Circle and does not deserve a warning box on the member's Deals page.
+      // A request that never got an answer is this phone's network path — mobile data, a
+      // content blocker, a DNS filter — not a problem with the Circle, and it does not deserve a
+      // warning box on the member's Deals page. One quiet line, and a way to try again.
       if (/from this device/i.test(err.message)) {
-        list.innerHTML = `<p class="small muted">${icon('eye', { size: 14, cls: 'ico-muted' })} Your browser would not reach VakayMood — an ad-blocker or filter, usually. The board above is unaffected.</p>`;
+        list.innerHTML = `<p class="small muted">${icon('eye', { size: 14, cls: 'ico-muted' })} This phone could not reach VakayMood just now — mobile data, or a content blocker. The board above is unaffected.
+          <button class="btn quiet sm" id="retry" style="margin-left:8px">${icon('refresh', { size: 14 })}Try again</button></p>`;
         return;
       }
       list.innerHTML = `<div class="notice warn"><b>${icon('alert', { size: 16 })} VakayMood is not answering right now</b>
