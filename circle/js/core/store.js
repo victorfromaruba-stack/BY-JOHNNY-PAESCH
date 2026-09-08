@@ -1048,7 +1048,10 @@ export class Store {
     if (!q.ok) throw new Error(`Minimum ${q.minNights} nights for these dates`);
     // Standing counts here, not just on the home screen. Anchor promises one more open request
     // than your level allows and the Desk was refusing it — the cap read tier.holds alone.
-    const allow = effectiveTier(tier, this.standing(memberId));
+    // standingOf(), not standing(): standing() is the balance-and-streak summary and carries no
+    // rankIndex, so effectiveTier() always saw rank 0 and Anchor's extra open request — printed
+    // on the home screen and the trips page — was refused here while the server honoured it.
+    const allow = effectiveTier(tier, this.standingOf(memberId));
     if (this.openHolds(memberId) >= allow.holds) {
       throw new Error(allow.fromStanding.extraHolds
         ? `That is ${allow.holds} open requests — ${tier.holds} for ${tierName(this.settings, m.monthlyUsd)} and ${allow.fromStanding.extraHolds} for your standing. Close one and ask again.`

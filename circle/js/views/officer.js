@@ -414,11 +414,6 @@ export function desk({ store, go }) {
           </div></div>`;
       }).join('') : `<div class="empty"><b>No open requests</b><p class="small muted">Everything has been quoted, booked or answered.</p></div>`}
     </div>`));
-    panel.addEventListener('click', async (e) => {
-      const b = e.target.closest('[data-quote]'); if (!b) return;
-      const r = store.redemption(b.dataset.quote);
-      await quoteSheet(store, r, store.stay(r.stayId));
-    });
   };
 
   const drawCatalog = () => {
@@ -439,11 +434,6 @@ export function desk({ store, go }) {
       </table></div>
       <p class="small muted" style="margin-top:12px">The cheapest night of the year at each place — open one to set all three of its rates. Members see the points; you edit the dollars.</p>
     </div>`));
-    panel.addEventListener('click', async (e) => {
-      const ed = e.target.closest('[data-edit]');
-      if (ed) return editStay(store, store.stay(ed.dataset.edit));
-      if (e.target.id === 'add') return editStay(store, null);
-    });
   };
 
   const drawNotes = () => {
@@ -473,17 +463,32 @@ export function desk({ store, go }) {
       await store.postAnnouncement({ authorId: me.id, title: f.get('title'), body: f.get('body'), pinned: !!f.get('pinned') });
       toast('Published to the Circle.', { kind: 'good' });
     });
-    panel.addEventListener('click', async (e) => {
-      const d = e.target.closest('[data-del]'); if (!d) return;
-      const yes = await confirmDialog({ title: 'Delete this note?', message: 'It disappears from everyone’s Circle page.', confirmText: 'Delete', danger: true });
-      if (yes) { await store.deleteAnnouncement(d.dataset.del, me.id); toast('Deleted.'); }
-    });
   };
 
   const draw = () => { ({ requests: drawRequests, wanted: drawWanted, deals: drawDeals, catalog: drawCatalog, notes: drawNotes })[tab](); };
   draw();
-  // Posting a deal, and taking one down, from either of the two new tabs.
+  // ONE listener on the panel, attached once. The Requests, Stays and Notes tabs each used to add
+  // their own inside draw*(), and replaceChildren() does not remove a listener from the node it
+  // is called on — so Deals → Requests → "Quote it" opened two quote sheets stacked, and on Stays
+  // a save wrote twice, the second overwriting the first with untouched values.
   panel.addEventListener('click', async (e) => {
+    if (tab === 'requests') {
+      const b = e.target.closest('[data-quote]');
+      if (b) { const r = store.redemption(b.dataset.quote); return quoteSheet(store, r, store.stay(r.stayId)); }
+    }
+    if (tab === 'catalog') {
+      const ed = e.target.closest('[data-edit]');
+      if (ed) return editStay(store, store.stay(ed.dataset.edit));
+      if (e.target.id === 'add') return editStay(store, null);
+    }
+    if (tab === 'notes') {
+      const d = e.target.closest('[data-del]');
+      if (d) {
+        const yes = await confirmDialog({ title: 'Delete this note?', message: 'It disappears from everyone’s Circle page.', confirmText: 'Delete', danger: true });
+        if (yes) { await store.deleteAnnouncement(d.dataset.del, me.id); toast('Deleted.'); }
+        return;
+      }
+    }
     const post = e.target.closest('[data-post]') || e.target.closest('#post-deal');
     if (post) {
       const { postDealSheet } = await import('./deals.js');

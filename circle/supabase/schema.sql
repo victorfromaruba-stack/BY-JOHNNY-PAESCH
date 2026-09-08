@@ -730,6 +730,10 @@ end $$;
 -- the quote and a member can check it by multiplying — applying the rate to the total instead
 -- would be off by a point or two on some rates, and a member who checks the arithmetic by hand
 -- and finds it wrong has every right to distrust the rest of the books.
+-- quote_points changed its OUT list, and create or replace cannot replace a function whose
+-- return columns differ — running this file against a mid-2026 database aborted here. Every
+-- caller is plpgsql and resolves it at run time, so dropping first is safe.
+drop function if exists quote_points(uuid, date, date, int);
 create or replace function quote_points(p_stay uuid, p_in date, p_out date, p_seats int default 1,
   out points int, out base_points int, out service_points int,
   out min_nights int, out nights int, out seasons jsonb)
@@ -782,6 +786,10 @@ language sql stable security definer set search_path = public as $$
     ))::int
 $$;
 
+-- The two-argument form predates the currency columns. Left in place it stays callable and,
+-- worse, the lock-down loop below matches on name and re-GRANTS it. Same mechanism that kept an
+-- ungated create_crew(text,text) live for weeks.
+drop function if exists confirm_contribution(uuid, text);
 create or replace function confirm_contribution(p_id uuid, p_received_usd numeric default null,
   p_currency text default 'USD', p_native numeric default null, p_note text default '')
 returns contributions language plpgsql security definer set search_path = public as $$
@@ -933,6 +941,7 @@ end $$;
 -- The old 8-argument signature is DROPPED, not left beside the new one: adding a parameter in
 -- Postgres overloads rather than replaces, and an ungated older path stays callable forever.
 drop function if exists request_redemption(uuid, date, date, int, int, text, int, boolean);
+drop function if exists request_redemption(uuid, date, date, int, text);
 
 create or replace function request_redemption(p_stay uuid, p_check_in date, p_check_out date,
   p_guests int default 2, p_seats int default 1, p_note text default '', p_flex int default 0,
@@ -1317,6 +1326,7 @@ begin
   return r;
 end $$;
 
+drop function if exists cancel_redemption(uuid, text);
 create or replace function cancel_redemption(p_id uuid, p_reason text default '', p_penalty_points int default 0)
 returns redemptions language plpgsql security definer set search_path = public as $$
 declare r redemptions; s settings; st stays; me uuid; refund int;
@@ -2171,6 +2181,14 @@ begin
   end loop;
 end $$;
 
+-- Helpers nobody outside the database should call. They were revoked only from authenticated,
+-- which leaves the EXECUTE TO PUBLIC every function is born with — and assert_cosigner is
+-- SECURITY DEFINER, reads members past RLS, and raises "% has left the Circle" / "% is not an
+-- officer" with the name in it, so anyone holding the publishable key could turn a member id
+-- into a name, a status and whether they hold office. Their only callers are definer functions.
+revoke all on function valid_username(text), assert_cosigner(uuid), clean_link(text)
+  from public, anon, authenticated;
+
 -- Triggers, and helpers that take a member id. Nothing outside the database should be able
 -- to call these, not even a signed-in member.
 --
@@ -2322,8 +2340,13 @@ $$;
 -- Who exists is not a secret among forty friends; what is said inside one is.
 drop policy if exists crews_read on crews;
 create policy crews_read on crews for select to authenticated using (current_member_id() is not null);
+-- No direct INSERT. create_crew() is the only door, because it is the only place the rule "a
+-- circle needs an approved room" is checked — a raw insert bypassed every one of those checks
+-- and, with redemption_id unchecked, could point a crew at somebody else's shared booking and
+-- silently remove it from their list. Same shape as the create_crew(text,text) hole, reached
+-- through the table instead of the function. UPDATE stays: renameCrew relies on crews_edit.
 drop policy if exists crews_make on crews;
-create policy crews_make on crews for insert to authenticated with check (created_by = current_member_id());
+revoke insert, delete on crews from authenticated;
 drop policy if exists crews_edit on crews;
 create policy crews_edit on crews for update to authenticated
   using ((select leads_crew(id)) or (select has_role('admin')))
@@ -2443,6 +2466,9 @@ grant execute on function create_crew(text, text, uuid) to authenticated;
 revoke all on function in_crew(uuid), leads_crew(uuid) from public, anon;
 grant execute on function in_crew(uuid), leads_crew(uuid) to authenticated;
 grant select, insert, update, delete on crews, crew_members, crew_messages, moments, moment_reactions to authenticated;
+-- Order matters: the revoke at the crews policies runs BEFORE this grant and was undone by it.
+-- A crew is made by create_crew() and nothing else (see crews_make, above).
+revoke insert, delete on crews from authenticated;
 grant usage, select on sequence crew_messages_id_seq to authenticated;
 revoke all on crews, crew_members, crew_messages, moments, moment_reactions from anon;
 
@@ -2762,9 +2788,17 @@ begin
 end $$;
 
 -- Standing for everyone at once, for the roll-call. Robots are not on the ladder.
-create or replace view standing_v as
-  select m.id as member_id, st.months_held, st.months_paid, st.owing,
-         st.rank_index, st.rank_name, st.badges
+-- What one Insider may see of another: a rank and a list of badges. NOT months paid and NOT
+-- months owing — this view runs as its owner and ignores RLS, and it is pulled into every
+-- screen, so those two columns handed any of the forty exactly who was behind and by how much
+-- from a single line in the console. In a club of friends that is the most sensitive fact in
+-- the database, and the club's rule is that nobody is ever shown a late list. A member's own
+-- full standing, and the officers' view of everyone's, still comes through standing_of().
+-- Dropped and recreated rather than replaced: create or replace refuses to REMOVE columns, and
+-- against a database that still has the two we are taking away it would abort here.
+drop view if exists standing_v;
+create view standing_v as
+  select m.id as member_id, st.months_held, st.rank_index, st.rank_name, st.badges
     from members m
     cross join lateral standing_of(m.id) st
    where not m.bot;

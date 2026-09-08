@@ -73,8 +73,9 @@ export class SupabaseStore extends Store {
       'badge_catalog', 'member_badges'];
     // members comes from a view that leaves out auth_user_id and the officer's private notes;
     // it is security_invoker, so the members_read policy still decides which rows come back.
-    // standing_v answers for everybody — it returns a rank and a list of badges and nothing
-    // else, so one Insider seeing another's standing learns no amount and no date.
+    // standing_v answers for everybody — months held, a rank and a list of badges, and nothing
+    // else. It carried months_paid and owing until the audit caught it: that was the late list
+    // the club promises never to show, readable by anyone from the console.
     const source = { members: 'members_v', standings: 'standing_v' };
     const results = await Promise.all(tables.map(t => this.sb.from(source[t] || t).select('*')));
     results.forEach((r, i) => { if (!r.error) this.state[tables[i]] = (r.data || []).map(toCamel); });

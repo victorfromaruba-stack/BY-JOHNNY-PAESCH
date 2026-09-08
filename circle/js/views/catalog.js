@@ -141,7 +141,9 @@ export function trips({ store }) {
   // What this member may actually do — their level plus what standing has added. The screen and
   // the Desk now read the same number; they used to disagree by exactly the amount the home
   // screen was promising.
-  const look = effectiveTier(tier, store.standing(me.id));
+  // standingOf(), not standing() — see requestRedemption. With standing() this screen told a
+  // member on the LIVE backend they had one fewer open request than the server actually allows.
+  const look = effectiveTier(tier, store.standingOf(me.id));
   const all = store.trips();
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <!-- This header used to run 892px before the first trip: a lede, a paragraph naming the
@@ -914,5 +916,16 @@ export async function quoteSheet(store, r, stay) {
         hotelDeadline: body.querySelector('[name=deadline]').value, note: body.querySelector('[name=note]').value });
     });
   } });
-  if (out) { await store.quoteRedemption(r.id, store.me.id, out); toast('Quote published. It is locked for 72 hours.', { kind: 'good' }); }
+  if (!out) return;
+  // The refusal has to show wherever this is called from. From the Desk — the normal path — the
+  // write was bare, so quote_redemption's good reasons ("That quote leaves out the Circle's
+  // share", "Open the link and say what you saw before you price it", "The last look says that
+  // week was gone") closed the sheet and said nothing, and the one guard built to stop an
+  // unbacked quote was invisible exactly when it fired.
+  try {
+    await store.quoteRedemption(r.id, store.me.id, out);
+    toast(`Quote published. It is locked for ${s.quoteHours} hours.`, { kind: 'good' });
+  } catch (err) {
+    toast(err.message, { kind: 'bad', timeout: 8000 });
+  }
 }
