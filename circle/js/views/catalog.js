@@ -671,8 +671,18 @@ export function requestDetail({ store, params, go, refresh }) {
       <li><span class="what"><b>${r.nights} night${r.nights > 1 ? 's' : ''} all-in</b>
         <span class="meta">${r.quoteStack ? Object.entries(r.quoteStack).map(([k, v]) => `${k} ${fmtUsd2(v)}`).join(' · ') : 'Room, levies, service and resort fees included'}</span></span>
         <span class="delta"><b>${escapeHtml(fmtPoints(pts))}</b><small>${escapeHtml(pointsUsd(pts, s.pointsPerDollar))}</small></span></li>
-      ${r.topUpUsd ? `<li><span class="what"><b>Top-up in cash</b><span class="meta">Beyond the points held, at face value — the share is already in the quote.</span></span>
-        <span class="delta"><b>${escapeHtml(fmtUsd2(r.topUpUsd))}</b><small>${r.topUpConfirmed ? 'received' : 'to the Banker'}</small></span></li>` : ''}
+      ${(r.topUpUsd || r.topUpReceivedUsd) ? (() => {
+        // Owed and received are two numbers, and the line has to say both when they differ:
+        // a pledge after the cash arrived leaves the Banker holding money to give back, and a
+        // withdrawal after it leaves more to collect. Either way the member sees it.
+        const due = r.topUpUsd || 0, got = r.topUpReceivedUsd;
+        const state = got == null ? 'to the Banker'
+          : got > due ? `${fmtUsd2(got)} received · ${fmtUsd2(got - due)} comes back to you`
+          : got < due ? `${fmtUsd2(got)} received · ${fmtUsd2(due - got)} still to the Banker`
+          : 'received';
+        return `<li><span class="what"><b>Top-up in cash</b><span class="meta">Beyond the points held, at face value — the share is already in the quote.</span></span>
+        <span class="delta"><b>${escapeHtml(fmtUsd2(due))}</b><small>${escapeHtml(state)}</small></span></li>`;
+      })() : ''}
       ${r.retailUsd ? `<li><span class="what"><b>Booked on your own</b><span class="meta">Same room, public all-in rate</span></span>
         <span class="delta"><b>${escapeHtml(fmtUsd2(r.retailUsd))}</b><small>you save ${escapeHtml(fmtUsd2(Math.max(0, r.retailUsd - pts / s.pointsPerDollar)))}</small></span></li>` : ''}
       ${r.confirmationRef ? `<li><span class="what"><b>Hotel confirmation</b></span><span class="delta"><b class="num">${escapeHtml(r.confirmationRef)}</b></span></li>` : ''}

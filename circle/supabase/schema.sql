@@ -302,6 +302,13 @@ create table if not exists redemptions (
   quote_stack       jsonb,
   top_up_usd        numeric(10,2) not null default 0,
   top_up_confirmed  boolean not null default false,
+  -- The cash actually handed to the Banker, in dollars, written by confirm_top_up and never
+  -- recomputed. top_up_usd is what is OWED and moves with every pledge; this is what was
+  -- RECEIVED and does not. Without it a confirmed top-up was a bare boolean over a number that
+  -- a later pledge could rewrite to zero, and $120 of a member's cash vanished from every
+  -- treasury line with no refund path — or, run the other way, the flag stayed true after a
+  -- pledge was withdrawn and the Reserve funded a gap nobody had paid.
+  top_up_received_usd numeric(10,2),
   hotel_terms       text,
   hotel_deadline    date,
   quoted_by         uuid references members(id),
@@ -1124,14 +1131,26 @@ begin
   return r;
 end $$;
 
+-- A database that already exists gets the column here; a fresh build has it in the table.
+alter table redemptions add column if not exists top_up_received_usd numeric(10,2);
+
 create or replace function confirm_top_up(p_id uuid)
 returns redemptions language plpgsql security definer set search_path = public as $$
 declare r redemptions;
 begin
   if not has_role('treasurer','deputy','admin') then raise exception 'Only the Banker can confirm a top-up'; end if;
-  update redemptions set top_up_confirmed = true where id = p_id returning * into r;
+  select * into r from redemptions where id = p_id for update;
   if r.id is null then raise exception 'No such request'; end if;
-  perform log_audit('redemption.topup','redemption',r.id::text, jsonb_build_object('topUpUsd', r.top_up_usd));
+  if r.status not in ('quoted','held') then raise exception 'A top-up is only owed on a live quote'; end if;
+  if coalesce(r.top_up_usd, 0) <= 0 then raise exception 'No top-up is owed on this booking'; end if;
+  -- Recorded as a fact, at the moment the Banker says he has it. A later pledge changes what
+  -- is owed, never what was received — and confirming again can only ever raise it: a second
+  -- tap while less is owed must not erase the record of cash already in hand.
+  update redemptions set top_up_confirmed = true,
+         top_up_received_usd = greatest(coalesce(top_up_received_usd, 0), r.top_up_usd)
+    where id = p_id returning * into r;
+  perform log_audit('redemption.topup','redemption',r.id::text,
+    jsonb_build_object('topUpUsd', r.top_up_usd, 'receivedUsd', r.top_up_received_usd));
   return r;
 end $$;
 
@@ -1158,7 +1177,11 @@ begin
     on conflict (redemption_id, member_id) do update set points = pledges.points + excluded.points;
   select * into s from settings where id = 1;
   update redemptions set top_up_usd = round(greatest(0, coalesce(quoted_points,0) - covered_points(p_id))::numeric / s.points_per_dollar, 2)
-    where id = p_id returning * into r;
+    where id = p_id;
+  -- What was received is a fact; whether it still covers what is owed is not.
+  update redemptions set top_up_confirmed = (top_up_received_usd >= top_up_usd)
+    where id = p_id and top_up_received_usd is not null;
+  select * into r from redemptions where id = p_id;
   perform log_audit('redemption.pledge','redemption',p_id::text, jsonb_build_object('points', amount));
   return r;
 end $$;
@@ -1177,7 +1200,11 @@ begin
   if n = 0 then raise exception 'You have not chipped in to this one'; end if;
   select * into s from settings where id = 1;
   update redemptions set top_up_usd = round(greatest(0, coalesce(quoted_points,0) - covered_points(p_id))::numeric / s.points_per_dollar, 2)
-    where id = p_id returning * into r;
+    where id = p_id;
+  -- What was received is a fact; whether it still covers what is owed is not.
+  update redemptions set top_up_confirmed = (top_up_received_usd >= top_up_usd)
+    where id = p_id and top_up_received_usd is not null;
+  select * into r from redemptions where id = p_id;
   perform log_audit('redemption.pledge.withdraw','redemption',p_id::text, jsonb_build_object('memberId', target));
   return r;
 end $$;
@@ -1190,8 +1217,9 @@ begin
   select * into r from redemptions where id = p_id for update;
   if r.id is null then raise exception 'No such request'; end if;
   if r.status <> 'held' then raise exception 'The member has not accepted a quote yet'; end if;
-  if r.top_up_usd > 0 and not r.top_up_confirmed then
-    raise exception 'The top-up of $% has not been confirmed as received', to_char(r.top_up_usd,'FM999999.00');
+  if coalesce(r.top_up_usd, 0) > coalesce(r.top_up_received_usd, 0) then
+    raise exception 'The top-up of $% has not been received — the Banker has $%',
+      to_char(r.top_up_usd,'FM999999.00'), to_char(coalesce(r.top_up_received_usd,0),'FM999999.00');
   end if;
   select * into s from settings where id = 1;
   select * into st from stays where id = r.stay_id;
@@ -1367,7 +1395,9 @@ with confirmed as (select * from contributions where status = 'confirmed'),
      parts as (
        select round(coalesce((select sum(backing_usd) from confirmed),0),2) as backing,
               round((select pts from promo) / (select points_per_dollar from s), 2) as promo_usd,
-              round(coalesce((select sum(top_up_usd) from settled where top_up_confirmed),0),2) as top_ups,
+              -- what the Banker actually received; a row confirmed before the column existed
+              -- falls back to what was owed at the time
+              round(coalesce((select sum(coalesce(top_up_received_usd, case when top_up_confirmed then top_up_usd else 0 end)) from settled),0),2) as top_ups,
               round(coalesce((select sum(coalesce(paid_usd,0)) from settled),0),2) as paid_out,
               round(coalesce((select sum(points) from ledger where kind='refund'),0)::numeric / (select points_per_dollar from s),2) as refunded,
               round(coalesce((select sum(points) from ledger where kind='adjust'),0)::numeric / (select points_per_dollar from s),2) as adjust,

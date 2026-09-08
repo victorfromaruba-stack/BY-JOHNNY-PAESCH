@@ -702,7 +702,9 @@ export class Store {
     // ones later cancelled — whatever the hotel gave back comes in again as a refund line.
     const settled = this.state.redemptions.filter(r => !!r.confirmedAt);
     const paidOutUsd = sum(settled, r => (r.paidUsd == null ? r.points / ppd : r.paidUsd));
-    const topUpsUsd = sum(settled.filter(r => r.topUpConfirmed), r => r.topUpUsd || 0);
+    // What the Banker actually received; a row confirmed before the field existed falls back to
+    // what was owed at the time.
+    const topUpsUsd = sum(settled, r => (r.topUpReceivedUsd ?? (r.topUpConfirmed ? r.topUpUsd || 0 : 0)));
     const burnedUsd = -sum(led.filter(l => l.kind === LEDGER_KIND.burn), l => l.points) / ppd;
     const refundedUsd = sum(led.filter(l => l.kind === LEDGER_KIND.refund), l => l.points) / ppd;
     const adjustUsd = sum(led.filter(l => l.kind === LEDGER_KIND.adjust), l => l.points) / ppd;
@@ -1186,6 +1188,8 @@ export class Store {
     if (existing) existing.points += amount; else r.pledges.push({ id: uid('pld'), memberId, points: amount, at: nowIso() });
     // Once a booking is fully covered, no cash top-up is owed any more.
     r.topUpUsd = round(Math.max(0, (r.quotedPoints || 0) - this.coveredPoints(r)) / this.settings.pointsPerDollar);
+    // What was received is a fact; whether it still covers what is owed is not.
+    if (r.topUpReceivedUsd != null) r.topUpConfirmed = r.topUpReceivedUsd >= r.topUpUsd;
     this.log(memberId, 'redemption.pledge', 'redemption', id, { points: amount });
     await this.commit('redemptions');
     return r;
@@ -1197,6 +1201,8 @@ export class Store {
     r.pledges = (r.pledges || []).filter(p => p.memberId !== memberId);
     if (r.pledges.length === before) throw new Error('You have not chipped in to this one');
     r.topUpUsd = round(Math.max(0, (r.quotedPoints || 0) - this.coveredPoints(r)) / this.settings.pointsPerDollar);
+    // What was received is a fact; whether it still covers what is owed is not.
+    if (r.topUpReceivedUsd != null) r.topUpConfirmed = r.topUpReceivedUsd >= r.topUpUsd;
     this.log(actorId, 'redemption.pledge.withdraw', 'redemption', id, { memberId });
     await this.commit('redemptions');
     return r;
@@ -1206,7 +1212,7 @@ export class Store {
   async payRedemption(id, actorId, { paidUsd = null, confirmationRef = '' } = {}) {
     const r = this.redemption(id); if (!r) throw new Error('No such request');
     if (r.status !== REDEMPTION_STATUS.held) throw new Error('The member has not accepted a quote yet');
-    if (r.topUpUsd > 0 && !r.topUpConfirmed) throw new Error(`Top-up of $${r.topUpUsd.toFixed(2)} has not been confirmed as received`);
+    if ((r.topUpUsd || 0) > (r.topUpReceivedUsd ?? 0)) throw new Error(`The top-up of $${(r.topUpUsd || 0).toFixed(2)} has not been received — the Banker has $${(r.topUpReceivedUsd ?? 0).toFixed(2)}`);
     // The gate on the quote protects what the member expects. THIS one protects the money: this
     // is the irreversible act — points burn here, the pledgers' points burn here, and paid_usd
     // leaves the club here. Days pass between a member accepting and the Desk booking, and a week
@@ -1239,7 +1245,19 @@ export class Store {
     r.lastLookId = this.state.looks[this.state.looks.length - 1].id;
     this.log(actorId, 'redemption.pay', 'redemption', id, { points: r.points, paidUsd: r.paidUsd, confirmationRef }); await this.commit('redemptions', 'looks'); return r;
   }
-  async confirmTopUp(id, actorId) { const r = this.redemption(id); if (!r) throw new Error('No such request'); r.topUpConfirmed = true; r.topUpConfirmedAt = nowIso(); this.log(actorId, 'redemption.topup', 'redemption', id, { topUpUsd: r.topUpUsd }); await this.commit('redemptions'); return r; }
+  async confirmTopUp(id, actorId) {
+    const r = this.redemption(id); if (!r) throw new Error('No such request');
+    if (![REDEMPTION_STATUS.quoted, REDEMPTION_STATUS.held].includes(r.status)) throw new Error('A top-up is only owed on a live quote');
+    if (!(r.topUpUsd > 0)) throw new Error('No top-up is owed on this booking');
+    // Recorded as a fact, at the moment the Banker says he has it. A later pledge changes what
+    // is owed, never what was received — and confirming again can only ever raise it: a second
+    // tap while less is owed must not erase the record of cash already in hand. Mirrors
+    // confirm_top_up().
+    r.topUpConfirmed = true; r.topUpConfirmedAt = nowIso();
+    r.topUpReceivedUsd = Math.max(r.topUpReceivedUsd ?? 0, r.topUpUsd);
+    this.log(actorId, 'redemption.topup', 'redemption', id, { topUpUsd: r.topUpUsd, receivedUsd: r.topUpReceivedUsd });
+    await this.commit('redemptions'); return r;
+  }
   async completeRedemption(id, actorId) {
     const r = this.redemption(id); if (!r) throw new Error('No such request');
     if (r.status !== REDEMPTION_STATUS.confirmed) throw new Error('Only a confirmed stay can be completed');
