@@ -306,6 +306,13 @@ export function liveSection(ctx, { compact = false, slug = null, first = compact
         serverMore = res.page * res.limit < res.total;
       }
       loaded = groupCopies(rows);
+      // What answers a watch comes first. The stay page shows six of a resort's cheapest weeks,
+      // and the two-bedroom somebody asked for is rarely among the six cheapest; the sort is
+      // stable, so within each group the price order stands.
+      if (ctx.me) {
+        const hit = new Map(loaded.map(d => [d, draftMatch(store, d, ctx.me.id) ? 1 : 0]));
+        loaded.sort((a, b) => hit.get(b) - hit.get(a));
+      }
       if (append) state.revealed = 1;
 
       const at = generatedAt ? new Date(generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';

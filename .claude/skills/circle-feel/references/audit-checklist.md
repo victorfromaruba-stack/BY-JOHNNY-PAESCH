@@ -15,9 +15,9 @@ are density and touch, not breakage.
 | `/` | 9 | 789 | 3 | 6425 |
 | `/home` | 4.2 | 132 | 11 | 2576 |
 | `/stays` | 10 | 780 | 11 | 5023 |
-| `/stays/:id` | 10.4 | 552 | 27 | 5799 |
+| `/stays/:id` | 10.1 | 552 | 5 | 7509 |
 | `/trips` | 2.4 | 892 | 1 | 1541 |
-| `/deals` | 1.1 | — | 4 | 534 |
+| `/deals` | 8.3 | 1072 | 1 | 6292 |
 | `/requests` | 1.0 | — | 1 | **102** |
 | `/pay` | 2.0 | 516 | 4 | 1364 |
 | `/ledger` | 4.6 | 245 | 3 | 3507 |
@@ -138,3 +138,7 @@ like it:
   looked plausible enough to believe.
 - **Hidden is not dead.** A control inside a collapsed pane still matches `querySelectorAll` and
   still takes a `.click()`, and reports dead because it is not there to react.
+
+## Re-baselined 8 Sept, after the live feed folded into Deals (390px, as admin)
+
+`/deals` went from 1.1 screens of nothing to 8.3 screens of twelve live cards under an empty board; the first figure is the live section's count line at 1072px, because the board's one-line empty state and the section head sit above it. `/stays/:id` gained the "Open right now" panel and the room lines and stayed at 10.1 screens. `/live` is gone (it redirects). No overflow, no errors at 390 or 1440.
