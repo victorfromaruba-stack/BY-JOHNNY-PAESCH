@@ -11,7 +11,7 @@ import { standingFrom, rankFor, RANKS, effectiveTier } from './standing.js';
 export const CONTRIBUTION_STATUS = Object.freeze({ pending: 'pending', confirmed: 'confirmed', rejected: 'rejected', withdrawn: 'withdrawn', reversed: 'reversed' });
 export const REDEMPTION_STATUS = Object.freeze({ requested: 'requested', quoted: 'quoted', held: 'held', confirmed: 'confirmed', completed: 'completed', declined: 'declined', expired: 'expired', cancelled: 'cancelled' });
 export const OPEN_REDEMPTION = [REDEMPTION_STATUS.requested, REDEMPTION_STATUS.quoted, REDEMPTION_STATUS.held];
-export const LEDGER_KIND = Object.freeze({ earn: 'earn', bonus: 'bonus', streak: 'streak', founding: 'founding', burn: 'burn', refund: 'refund', adjust: 'adjust', expire: 'expire', reverse: 'reverse' });
+export const LEDGER_KIND = Object.freeze({ earn: 'earn', bonus: 'bonus', streak: 'streak', founding: 'founding', burn: 'burn', refund: 'refund', adjust: 'adjust', expire: 'expire', reverse: 'reverse', badge: 'badge' });
 export const PROMO_KINDS = [LEDGER_KIND.bonus, LEDGER_KIND.streak, LEDGER_KIND.founding];
 export const ROLES = Object.freeze(['member', 'treasurer', 'deputy', 'planner', 'comms', 'admin']);
 export const COLLECTIONS = ['members', 'badgeCatalog', 'memberBadges', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes', 'pledges', 'looks', 'standings', 'crews', 'crewMembers', 'crewMessages', 'moments', 'momentReactions'];
@@ -433,8 +433,8 @@ export class Store {
     if (this.hasBadge(key, me.id)) throw new Error(`You already have ${b.name}`);
     const lt = this.lifetime(me.id);
     if (lt.available < b.pricePoints) throw new Error(`That is ${b.pricePoints} points and you have ${lt.available} available`);
-    (this.state.ledger ||= []).push({ id: uid('lg'), memberId: me.id, kind: 'badge', points: -b.pricePoints,
-      usd: b.pricePoints / this.settings.pointsPerDollar, refType: 'badge', note: b.name, by: me.id, at: nowIso() });
+    (this.state.ledger ||= []).push({ id: uid('lg'), memberId: me.id, kind: LEDGER_KIND.badge, points: -b.pricePoints,
+      usd: -b.pricePoints / this.settings.pointsPerDollar, refType: 'badge', note: b.name, by: me.id, at: nowIso() });
     (this.state.memberBadges ||= []).push({ memberId: me.id, badgeKey: key, paidPoints: b.pricePoints, at: nowIso() });
     await this.commit('ledger', 'memberBadges');
     return b;

@@ -51,6 +51,11 @@ const NOT_FOUND = { path: '*', view: pub.notFound, title: 'Not found' };
 
 const app = document.getElementById('app');
 const liveRegion = document.getElementById('route-live');
+// The skip link is href="#app", and a hash router reads "#app" as the route "app" — which
+// matches nothing and repainted the whole page as "Nothing here", wiping whatever a keyboard
+// user had half-filled. The one control that exists to help them was the one that hurt them.
+// Move focus and go no further.
+document.querySelector('a.skip')?.addEventListener('click', (e) => { e.preventDefault(); app.focus(); });
 let store, router, disposer;
 
 // Preview data is for a developer's machine and for anyone who deliberately asks for it.
@@ -175,7 +180,23 @@ function render(current = router?.current) {
   }
   const paint = () => {
     disposer?.(); disposer = null;
-    const out = route.view(ctx(current));
+    let out;
+    try { out = route.view(ctx(current)); }
+    catch (err) {
+      // A view that throws used to leave the LAST screen up, frozen, with nothing said — and
+      // inside a view transition the rejection was swallowed entirely. Say so instead, and keep
+      // the way home open. It is this screen that failed, not the member's money.
+      console.error(err);
+      const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      app.innerHTML = `<section class="sec"><div class="wrap" style="max-width:540px">
+        <h1>That screen could not be drawn</h1>
+        <p class="lede" style="margin-top:12px">Nothing is lost — your points and bookings are untouched. <a href="#/home">Go to your home screen</a>, or reload.</p>
+        <p class="small muted" style="margin-top:14px">${esc(String(err?.message || err).slice(0, 140))}</p>
+      </div></section>`;
+      document.title = `${route.title} · ${VOCAB.clubName}`;
+      updateChrome(current);
+      return;
+    }
     const node = out instanceof Node ? out : Object.assign(document.createElement('div'), { innerHTML: String(out) });
     if (typeof out?.dispose === 'function') disposer = out.dispose;
     app.replaceChildren(node);

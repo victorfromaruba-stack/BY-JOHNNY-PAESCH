@@ -223,19 +223,19 @@ export function home({ store, go }) {
   for (const q of quoted) {
     const st = store.stay(q.stayId); const left2 = countdownTo(q.quoteExpiresAt);
     blocks.push(`<div class="notice warn"><b>A quote is waiting for you</b>
-      <p class="small">${escapeHtml(st.name)} · ${q.nights} nights from ${escapeHtml(fmtDay(q.checkIn))} · ${escapeHtml(fmtPoints(q.quotedPoints))}${q.topUpUsd ? ` plus ${escapeHtml(fmtUsd2(q.topUpUsd))} top-up` : ''}.
+      <p class="small">${escapeHtml(st?.name || 'a stay')} · ${q.nights} nights from ${escapeHtml(fmtDay(q.checkIn))} · ${escapeHtml(fmtPoints(q.quotedPoints))}${q.topUpUsd ? ` plus ${escapeHtml(fmtUsd2(q.topUpUsd))} top-up` : ''}.
       ${left2 ? `Expires in <span class="num">${escapeHtml(left2)}</span>.` : 'It has expired.'}</p>
       <p style="margin-top:8px"><a class="btn sm" href="#/requests/${q.id}">Look at it</a></p></div>`);
   }
   for (const h of held) {
     const st = store.stay(h.stayId);
-    blocks.push(`<div class="notice"><b>${escapeHtml(fmtPoints(h.points))} committed to ${escapeHtml(st.name)}</b>
+    blocks.push(`<div class="notice"><b>${escapeHtml(fmtPoints(h.points))} committed to ${escapeHtml(st?.name || 'a stay')}</b>
       <p class="small">${h.nights} nights from ${escapeHtml(fmtDay(h.checkIn))}. Victor is confirming with the hotel; your points burn when it is paid.</p>
       <p style="margin-top:8px"><a class="btn ghost sm" href="#/requests/${h.id}">Details</a></p></div>`);
   }
   for (const u of upcoming) {
     const st = store.stay(u.stayId);
-    blocks.push(`<div class="notice good"><b>Booked: ${escapeHtml(st.name)}</b>
+    blocks.push(`<div class="notice good"><b>Booked: ${escapeHtml(st?.name || 'a stay')}</b>
       <p class="small">${u.nights} nights from ${escapeHtml(fmtDay(u.checkIn))} · confirmation <span class="num">${escapeHtml(u.confirmationRef)}</span>${u.hotelDeadline ? ` · free cancellation until ${escapeHtml(fmtDay(u.hotelDeadline))}` : ''}.</p></div>`);
   }
   const chipIn = store.openToChipIn().filter(r => r.memberId !== me.id);

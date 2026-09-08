@@ -48,8 +48,14 @@ do $$ begin create type contribution_status as enum ('pending','confirmed','reje
 exception when duplicate_object then null; end $$;
 do $$ begin create type redemption_status as enum ('requested','quoted','held','confirmed','completed','declined','expired','cancelled');
 exception when duplicate_object then null; end $$;
-do $$ begin create type ledger_kind as enum ('earn','bonus','streak','founding','burn','refund','adjust','expire','reverse');
+do $$ begin create type ledger_kind as enum ('earn','bonus','streak','founding','burn','refund','adjust','expire','reverse','badge');
 exception when duplicate_object then null; end $$;
+
+-- buy_badge() writes kind 'badge'. The enum never had it, so on the live backend every purchase
+-- aborted with "invalid input value for enum" shown raw to the member — while the preview,
+-- which does not use the enum, sold badges happily. A database that already exists gets the
+-- value here; a fresh build has it in the create above.
+alter type ledger_kind add value if not exists 'badge';
 
 -- ---------- settings (one row) ----------
 create table if not exists settings (
@@ -1178,7 +1184,7 @@ end $$;
 
 create or replace function pay_redemption(p_id uuid, p_paid_usd numeric default null, p_confirmation text default '')
 returns redemptions language plpgsql security definer set search_path = public as $$
-declare r redemptions; s settings; st stays; l looks;
+declare r redemptions; s settings; st stays; l looks; pl pledges;
 begin
   if not has_role('treasurer','deputy','planner','admin') then raise exception 'Only the Banker or the Desk can pay a hotel'; end if;
   select * into r from redemptions where id = p_id for update;
@@ -1204,6 +1210,19 @@ begin
       raise exception 'The last look says that week was %. Do not pay for it.', l.found;
     end if;
   end if;
+
+  -- Days pass between accepting and paying, and in that time a Month Close can expire
+  -- promotional points or a correction can post. accept_quote clamped to what was available
+  -- THEN; this burns NOW, so ask again. The local store already refused this spend and the
+  -- server did not — the ledger went below its commitments and the next close failed its
+  -- variance check with no line saying why.
+  if available_points(r.member_id) < 0 then raise exception 'Member no longer has enough points'; end if;
+  for pl in select * from pledges where redemption_id = r.id loop
+    if available_points(pl.member_id) < 0 then
+      raise exception '% no longer has the points they chipped in',
+        coalesce((select name from members where id = pl.member_id), 'A member');
+    end if;
+  end loop;
 
   update redemptions set status='confirmed', confirmed_at=now(), decided_by=current_member_id(), decided_at=now(),
          paid_usd = coalesce(p_paid_usd, hotel_owed_usd(r.quoted_points, r.quote_stack)),
@@ -1920,6 +1939,12 @@ drop policy if exists contributions_insert on contributions;
 create policy contributions_insert on contributions for insert to authenticated
   with check (member_id = current_member_id() and status = 'pending' and reviewed_by is null
               and points is null and share_usd is null and received_usd is null
+              -- Only record_direct_contribution may stamp a row as the Banker's, and a proof
+              -- must be the member's own upload: without these a member could insert a row that
+              -- renders in the Banker's queue as "entered by the Banker" with somebody else's
+              -- screenshot attached, inviting a one-tap confirm for money nobody sent.
+              and recorded_by is null
+              and (proof_path is null or proof_path like current_member_id()::text || '/%')
               -- A robot has no money to send, and one pending row against it would wedge
               -- every future close, which waits for the queue to be empty.
               and not exists (select 1 from members m where m.id = member_id and m.bot));
@@ -2660,7 +2685,8 @@ begin
 
   insert into ledger (member_id, kind, points, usd, ref_type, note, by_id)
     values (me, 'badge', -b.price_points,
-            round(b.price_points::numeric / (select points_per_dollar from settings where id = 1), 2),
+            -- negative, like every other burn: points leave and so does their dollar value
+            -round(b.price_points::numeric / (select points_per_dollar from settings where id = 1), 2),
             'badge', b.name, me);
   insert into member_badges (member_id, badge_key, paid_points)
     values (me, p_key, b.price_points) returning * into out_row;
