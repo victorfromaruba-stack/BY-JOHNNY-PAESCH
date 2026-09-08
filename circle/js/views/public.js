@@ -12,20 +12,24 @@ import { normName } from '../core/names.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 /**
- * Which places we hold a real photograph of.
+ * Which places we hold a real photograph of, and where each one came from.
  *
  * Victor: "I don't want fantasy rooms only rooms that are actual there… it's all ghost fantasy
- * pictures." Every card used to be a generated SVG of an imaginary beach. These eight are
+ * pictures." Every card used to be a generated SVG of an imaginary beach. Eight of these are
  * photographs from the properties' own sites, fetched with .claude/skills/real-rooms with
- * robots.txt honoured, and assets/stays/sources.json records the page and the date for each.
+ * robots.txt honoured. Four are openly licensed photographs of the property from Wikimedia
+ * Commons (CC BY-SA), reached through the category and File pages its robots.txt allows, and
+ * their author and licence are shown under the picture — that is the licence's one condition.
+ * assets/stays/sources.json records the page, the date and the licence for every one.
  *
- * The other fifteen are chains — Marriott, Hilton, Hyatt, IHG, Radisson — and every one of them
- * refuses an automated fetch: Marriott and Hilton answer the page request with 403, and Hyatt,
+ * The other eleven are chains — Marriott, Hilton, IHG, Radisson, Barceló — and every one of them
+ * refuses an automated fetch of its own site (Marriott and Hilton answer the page with 403; Hyatt,
  * IHG and Radisson return 403 on robots.txt itself, which is a site saying plainly that it does
- * not want to be read by a script. We take the no. Working around bot management to take a
- * property's copyrighted photographs would be wrong twice over.
+ * not want to be read by a script), and nobody has published a licensed photograph of them. We
+ * take the no. Working around bot management to take a property's copyrighted photographs would
+ * be wrong twice over, and a picture that is not of the place is worse than none.
  *
- * So those fifteen get no picture at all — see plateSvg — unless the Desk uploads one it holds the
+ * So those eleven get no picture at all — see plateSvg — unless the Desk uploads one it holds the
  * rights to, which arrives on the stay as `photoUrl` and wins over anything bundled here.
  *
  * The set is keyed by the BUNDLED ids, and that was the whole bug: on the live backend every stay
@@ -35,7 +39,27 @@ const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; re
  * normalisation stayLike() uses, before the set is consulted.
  */
 const REAL_PHOTOS = new Set(['stay_amsterdam', 'stay_boardwalk', 'stay_bucuti', 'stay_divi',
-  'stay_manchebo', 'stay_oceanvillas', 'stay_oceanz', 'stay_tamarijn']);
+  'stay_manchebo', 'stay_oceanvillas', 'stay_oceanz', 'stay_tamarijn',
+  'stay_renaissance', 'stay_marriott', 'stay_riu', 'stay_hyatt']);
+/** The credit under each bundled photograph. Mirrors assets/stays/sources.json. */
+const PHOTO_CREDITS = Object.freeze({
+  stay_amsterdam:  { from: 'amsterdammanor.com', page: 'https://www.amsterdammanor.com/' },
+  stay_boardwalk:  { from: 'boardwalkaruba.com', page: 'https://www.boardwalkaruba.com/' },
+  stay_bucuti:     { from: 'bucuti.com', page: 'https://www.bucuti.com/' },
+  stay_divi:       { from: 'diviandtamarijnaruba.com', page: 'https://www.diviandtamarijnaruba.com/divi-rooms.htm' },
+  stay_manchebo:   { from: 'manchebo.com', page: 'https://www.manchebo.com/' },
+  stay_oceanvillas:{ from: 'arubaoceanvillas.com', page: 'https://www.arubaoceanvillas.com/' },
+  stay_oceanz:     { from: 'oceanzaruba.com', page: 'https://www.oceanzaruba.com/' },
+  stay_tamarijn:   { from: 'diviandtamarijnaruba.com', page: 'https://www.diviandtamarijnaruba.com/tamarijn-rooms.htm' },
+  stay_renaissance:{ what: 'The resort at night, from the marina side', author: 'Caribiana', license: 'CC BY-SA 4.0',
+                     licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0', page: 'https://commons.wikimedia.org/wiki/File:Renaissance_resort_Aruba_2.jpg' },
+  stay_marriott:   { what: 'The entrance on the Palm Beach strip', author: 'LittleT889', license: 'CC BY-SA 4.0',
+                     licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0', page: 'https://commons.wikimedia.org/wiki/File:Aruba_Marriott_Resort_%26_Stellaris_Casino.jpg' },
+  stay_riu:        { what: 'The pool and the beach, from the hotel’s 12th floor', author: 'Exceptionalimages', license: 'CC BY-SA 4.0',
+                     licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0', page: 'https://commons.wikimedia.org/wiki/File:RIU_Palace_Antillas_-_Aruba.jpg' },
+  stay_hyatt:      { what: 'Palm Beach, photographed from the pier at the Hyatt Regency', author: 'Bjørn Christian Tørrissen', license: 'CC BY-SA 3.0',
+                     licenseUrl: 'https://creativecommons.org/licenses/by-sa/3.0', page: 'https://commons.wikimedia.org/wiki/File:Palm-Beach-Aruba-2013.JPG' },
+});
 const SEED_BY_NAME = new Map(Object.entries(CATALOG_NAMES).map(([id, n]) => [normName(n), id]));
 const seedIdOf = (stay) => (stay?.id && REAL_PHOTOS.has(stay.id) ? stay.id : SEED_BY_NAME.get(normName(stay?.name)));
 export const photoFor = (stay) => {
@@ -45,6 +69,34 @@ export const photoFor = (stay) => {
   return seed && REAL_PHOTOS.has(seed) ? `assets/stays/${seed.replace('stay_', '')}.jpg` : null;
 };
 
+/**
+ * Who the photograph is by and where it came from — as plain text for an image title, and as
+ * HTML for the line under the hero. A licensed photograph carries its author and licence, which
+ * is what the licence asks; a property's own photograph names the site; the Desk's upload
+ * carries the note the Desk wrote. Null when there is no photograph.
+ */
+export function photoCredit(stay) {
+  if (!stay) return null;
+  const ext = (href, label) => `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
+  if (stay.photoUrl) {
+    const note = String(stay.photoNote || '').trim();
+    return note ? { text: `Photograph: ${note}`, html: `Photograph: ${escapeHtml(note)}` } : null;
+  }
+  const seed = seedIdOf(stay);
+  const c = seed && REAL_PHOTOS.has(seed) ? PHOTO_CREDITS[seed] : null;
+  if (!c) return null;
+  if (c.author) {
+    return {
+      text: `${c.what}. Photograph by ${c.author}, ${c.license}, via Wikimedia Commons.`,
+      html: `${escapeHtml(c.what)}. Photograph by ${ext(c.page, c.author)}, ${ext(c.licenseUrl, c.license)}, via Wikimedia Commons.`,
+    };
+  }
+  return {
+    text: `Photograph from the property’s own site, ${c.from}.`,
+    html: `Photograph from the property’s own site, ${ext(c.page, c.from)}.`,
+  };
+}
+
 export const stayStrip = (stay) => {
   const d = document.createElement('div');
   const photo = photoFor(stay);
@@ -52,7 +104,8 @@ export const stayStrip = (stay) => {
     d.className = 'scene photo';
     // The alt says what it is, not what it looks like: a member using a screen reader wants to
     // know this is a picture of the property, not a description of the sea.
-    d.innerHTML = `<img src="${escapeHtml(photo)}" alt="${escapeHtml(stay.name)}" loading="lazy" decoding="async">`;
+    const credit = photoCredit(stay);
+    d.innerHTML = `<img src="${escapeHtml(photo)}" alt="${escapeHtml(stay.name)}"${credit ? ` title="${escapeHtml(credit.text)}"` : ''} loading="lazy" decoding="async">`;
     return d;
   }
   // The three trips keep their drawing: there is one of each, they are drawn as the thing people

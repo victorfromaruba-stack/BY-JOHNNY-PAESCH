@@ -1,5 +1,5 @@
 {
- "note": "Photographs from each property's own website. Fetched with .claude/skills/real-rooms, robots.txt honoured. These are the properties' copyright — shown to members to identify a room the Circle books for them. Ask for a media kit before any public use.",
+ "note": "Photographs of each place. Eight are from the properties' own websites, fetched with .claude/skills/real-rooms with robots.txt honoured — the properties' copyright, shown to members to identify a room the Circle books for them; ask for a media kit before any public use. The rest are openly licensed photographs from Wikimedia Commons (CC BY / CC BY-SA), fetched through the category and File pages its robots.txt allows, with author and licence recorded here and shown under the picture. Nothing here is generated, and nothing was taken from a site that refused a scripted fetch.",
  "stays": {
   "stay_amsterdam": {
    "file": "stays/amsterdam.jpg",
@@ -64,6 +64,58 @@
    "alt": "Tamarijn Beach and Rooms",
    "seenOn": "2026-09-07",
    "bytes": 416568
+  },
+  "stay_renaissance": {
+   "file": "stays/renaissance.jpg",
+   "source": "https://upload.wikimedia.org/wikipedia/commons/3/30/Renaissance_resort_Aruba_2.jpg",
+   "page": "https://commons.wikimedia.org/wiki/File:Renaissance_resort_Aruba_2.jpg",
+   "what": "The resort's façade at night, from the marina side",
+   "author": "Caribiana",
+   "license": "CC BY-SA 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "taken": "17 December 2020 (according to Exif data)",
+   "note": "Openly licensed photograph from Wikimedia Commons; the author and licence are shown under the picture on the stay page.",
+   "seenOn": "2026-09-08",
+   "bytes": 186518
+  },
+  "stay_marriott": {
+   "file": "stays/marriott.jpg",
+   "source": "https://upload.wikimedia.org/wikipedia/commons/5/58/Aruba_Marriott_Resort_%26_Stellaris_Casino.jpg",
+   "page": "https://commons.wikimedia.org/wiki/File:Aruba_Marriott_Resort_%26_Stellaris_Casino.jpg",
+   "what": "The entrance on the Palm Beach strip",
+   "author": "LittleT889",
+   "license": "CC BY-SA 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "taken": "26 October 2023",
+   "note": "Openly licensed photograph from Wikimedia Commons; the author and licence are shown under the picture on the stay page.",
+   "seenOn": "2026-09-08",
+   "bytes": 393963
+  },
+  "stay_riu": {
+   "file": "stays/riu.jpg",
+   "source": "https://upload.wikimedia.org/wikipedia/commons/6/62/RIU_Palace_Antillas_-_Aruba.jpg",
+   "page": "https://commons.wikimedia.org/wiki/File:RIU_Palace_Antillas_-_Aruba.jpg",
+   "what": "The pool and the beach, from the hotel's 12th floor",
+   "author": "Exceptionalimages",
+   "license": "CC BY-SA 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "taken": "5 November 2018, 10:41:53",
+   "note": "Openly licensed photograph from Wikimedia Commons; the author and licence are shown under the picture on the stay page.",
+   "seenOn": "2026-09-08",
+   "bytes": 491124
+  },
+  "stay_hyatt": {
+   "file": "stays/hyatt.jpg",
+   "source": "https://upload.wikimedia.org/wikipedia/commons/f/f8/Palm-Beach-Aruba-2013.JPG",
+   "page": "https://commons.wikimedia.org/wiki/File:Palm-Beach-Aruba-2013.JPG",
+   "what": "Palm Beach, photographed from the pier at the Hyatt Regency",
+   "author": "Bjørn Christian Tørrissen",
+   "license": "CC BY-SA 3.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+   "taken": "20 February 2013, 21:20:27",
+   "note": "Openly licensed photograph from Wikimedia Commons; the author and licence are shown under the picture on the stay page.",
+   "seenOn": "2026-09-08",
+   "bytes": 232299
   }
  }
 }

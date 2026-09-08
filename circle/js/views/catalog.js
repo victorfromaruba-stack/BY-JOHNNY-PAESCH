@@ -4,7 +4,7 @@ import { VOCAB, tierName } from '../core/vocab.js';
 import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth, round2, hotelOwedUsd } from '../core/money.js';
 import { ring, versusLine } from '../ui/pieces.js';
 import { effectiveTier } from '../core/standing.js';
-import { stayCard, stayStrip, photoFor } from './public.js';
+import { stayCard, stayStrip, photoFor, photoCredit } from './public.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
 import { shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
@@ -268,9 +268,11 @@ export function stayDetail({ store, params, go }) {
     const hero = wrap.querySelector('#stay-hero');
     if (hero && (photoFor(stay) || isTrip)) {
       hero.querySelector('.strip').appendChild(stayStrip(stay));
-      // Where the picture came from, in the Desk's own words. A caption cannot live inside the
-      // strip (it is a span), so it sits under the hero.
-      if (stay.photoNote) hero.insertAdjacentHTML('afterend', `<p class="tiny muted" style="margin-top:6px">Photograph: ${escapeHtml(stay.photoNote)}</p>`);
+      // Where the picture came from: the Desk's own words, the property's site, or the author
+      // and licence of an openly licensed photograph. A caption cannot live inside the strip (it
+      // is a span), so it sits under the hero.
+      const credit = photoCredit(stay);
+      if (credit) hero.insertAdjacentHTML('afterend', `<p class="tiny muted" style="margin-top:6px">${credit.html}</p>`);
     } else if (hero) hero.remove();
   }
   // Which sizes an owner has open on VakayMood right now, filled in when the feed answers. The
