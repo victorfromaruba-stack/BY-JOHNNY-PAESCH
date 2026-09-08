@@ -61,7 +61,8 @@ const PHOTO_CREDITS = Object.freeze({
                      licenseUrl: 'https://creativecommons.org/licenses/by-sa/3.0', page: 'https://commons.wikimedia.org/wiki/File:Palm-Beach-Aruba-2013.JPG' },
 });
 const SEED_BY_NAME = new Map(Object.entries(CATALOG_NAMES).map(([id, n]) => [normName(n), id]));
-const seedIdOf = (stay) => (stay?.id && REAL_PHOTOS.has(stay.id) ? stay.id : SEED_BY_NAME.get(normName(stay?.name)));
+/** The bundled catalog id for a stay on either backend: its own id, or the id whose name it carries. */
+export const seedIdOf = (stay) => (stay?.id && (REAL_PHOTOS.has(stay.id) || SEED_BY_NAME.has(normName(CATALOG_NAMES[stay.id] || ''))) ? stay.id : SEED_BY_NAME.get(normName(stay?.name)));
 export const photoFor = (stay) => {
   if (!stay) return null;
   if (stay.photoUrl) return stay.photoUrl;

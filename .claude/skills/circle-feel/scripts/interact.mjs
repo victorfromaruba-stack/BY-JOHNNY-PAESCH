@@ -45,7 +45,8 @@ const EXPECTED_INERT = [[/^Skip to/, 'a skip link only moves focus, and not obse
 // matches EVERY link on the page — so this swept in the topbar and the bottom nav, could not
 // find them again under #app, and quietly skipped three quarters of what it claimed to test.
 const SCOPE = '#app';
-const SEL = ['button:not([disabled])', 'a[href]:not([href^="mailto"])', '[role=button]', 'summary']
+// A phone or text link hands off to another app, like mailto: — nothing on the page can change.
+const SEL = ['button:not([disabled])', 'a[href]:not([href^="mailto"]):not([href^="tel"]):not([href^="sms"])', '[role=button]', 'summary']
   .map(s => `${SCOPE} ${s}`).join(', ');
 
 /** Tag every control fresh. A click can redraw the list its neighbours lived in, and a stale

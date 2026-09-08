@@ -4,7 +4,9 @@ import { VOCAB, tierName } from '../core/vocab.js';
 import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth, round2, hotelOwedUsd } from '../core/money.js';
 import { ring, versusLine } from '../ui/pieces.js';
 import { effectiveTier } from '../core/standing.js';
-import { stayCard, stayStrip, photoFor, photoCredit } from './public.js';
+import { stayCard, stayStrip, photoFor, photoCredit, seedIdOf } from './public.js';
+import { PLACES } from '../data/places.js';
+import { normName } from '../core/names.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
 import { shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
@@ -195,6 +197,7 @@ export function stayDetail({ store, params, go }) {
       <p class="lede" style="margin-top:12px">${escapeHtml(stay.vibe)}</p>
       <div class="stay-card daylight" id="stay-hero" style="margin-top:20px;border-radius:var(--r-card)"><span class="strip"></span></div>
       <div class="row" style="margin-top:14px">${(stay.features || []).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</div>
+      <div id="place"></div>
       ${(() => {
         // Where the number came from, ALWAYS — including when the answer is "nowhere yet".
         //
@@ -275,6 +278,69 @@ export function stayDetail({ store, params, go }) {
       if (credit) hero.insertAdjacentHTML('afterend', `<p class="tiny muted" style="margin-top:6px">${credit.html}</p>`);
     } else if (hero) hero.remove();
   }
+  // What the place publishes about itself: address, phone, check-in, what is on site, and the
+  // pictures it publishes of the property and its rooms. Every fact comes from the property's own
+  // site or, for the timeshare resorts whose sites refuse a scripted fetch, from VakayMood's resort
+  // page — and the panel says which. Nothing typed in, nothing inferred.
+  const place = isTrip ? null : PLACES[seedIdOf(stay)] || null;
+  const roomPhotos = new Map();   // normName(catalog room) → [photo]
+  for (const ph of place?.photos || []) if (ph.room) (roomPhotos.get(normName(ph.room)) || roomPhotos.set(normName(ph.room), []).get(normName(ph.room))).push(ph);
+  const photoSheet = (title, photos, facts = '') => sheet({ title, wide: true, render: (body) => {
+    body.innerHTML = `${facts}<div class="stack" style="margin-top:${facts ? 14 : 0}px">${photos.map(ph => `
+      <figure class="place-photo"><img src="assets/${escapeHtml(ph.file)}" alt="${escapeHtml(ph.alt || title)}" loading="lazy" decoding="async">
+        <figcaption class="tiny muted">${escapeHtml(ph.alt || (ph.room ? ph.room : 'The property'))} · from ${escapeHtml(new URL(ph.page || ph.source).host.replace(/^www\./, ''))}, seen ${escapeHtml(fmtDay(ph.seenOn))}</figcaption></figure>`).join('')}</div>
+      <p class="tiny muted" style="margin-top:12px">These are the property's own photographs, shown so you know the room you are asking for. They are the property's copyright.</p>`;
+  } });
+  if (place) {
+    const groups = [['onsite', 'On site'], ['services', 'Services'], ['nearby', 'Nearby']].filter(([k]) => (place.amenities?.[k] || []).length);
+    const allAmen = groups.flatMap(([k, label]) => (place.amenities[k]).map(a => ({ a, label })));
+    const propertyPhotos = (place.photos || []).filter(ph => !ph.room);
+    const facts = [];
+    if (place.address) facts.push(`${icon('mapPin', { size: 14, cls: 'ico-muted' })} ${place.geo
+      ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(stay.name)}&ll=${place.geo.lat},${place.geo.lng}" target="_blank" rel="noopener noreferrer">${escapeHtml(place.address)}</a>`
+      : escapeHtml(place.address)}`);
+    if (place.phone) facts.push(`${icon('phone', { size: 14, cls: 'ico-muted' })} <a href="tel:${escapeHtml(place.phone.replace(/[^+\d]/g, ''))}">${escapeHtml(place.phone)}</a>`);
+    if (place.checkIn || place.checkOut) facts.push(`${icon('clock', { size: 14, cls: 'ico-muted' })} ${place.checkIn ? `check-in ${escapeHtml(place.checkIn)}` : ''}${place.checkIn && place.checkOut ? ' · ' : ''}${place.checkOut ? `check-out ${escapeHtml(place.checkOut)}` : ''}`);
+    if (place.policies?.children != null || place.policies?.dogs != null) facts.push(`${icon('users', { size: 14, cls: 'ico-muted' })} ${[place.policies.children === true ? 'children welcome' : place.policies.children === false ? 'adults only' : '', place.policies.dogs === false ? 'no dogs' : place.policies.dogs === true ? 'dogs allowed' : ''].filter(Boolean).join(' · ')}`);
+    const SHOW = 10;
+    const srcLine = (place.sources || []).map(x => `<a href="${escapeHtml(x.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(x.label)}</a>, seen ${escapeHtml(fmtDay(x.seenOn))}`).join('; ');
+    wrap.querySelector('#place').innerHTML = `<section class="panel" style="margin-top:16px" id="the-place">
+      <div><p class="eyebrow">${icon('home')}The place</p>
+        <h2 style="font-size:1.15rem;margin-top:6px">What ${escapeHtml(stay.name)} publishes about itself</h2></div>
+      ${facts.length ? `<ul class="facts" style="margin-top:10px">${facts.map(f => `<li>${f}</li>`).join('')}</ul>` : ''}
+      ${propertyPhotos.length ? `<div class="gallery" style="margin-top:14px" role="list">${propertyPhotos.map((ph, i) => `
+        <button type="button" class="gallery-tile" role="listitem" data-gallery="${i}" aria-label="${escapeHtml(ph.alt || 'A photograph of the property')}"><img src="assets/${escapeHtml(ph.thumb || ph.file)}" alt="" loading="lazy" decoding="async"></button>`).join('')}</div>` : ''}
+      ${allAmen.length ? `<div class="flags" id="amen" style="margin-top:14px">${allAmen.slice(0, SHOW).map(({ a, label }) => `<span class="tag" title="${escapeHtml(label)}">${escapeHtml(a)}</span>`).join('')}
+        ${allAmen.length > SHOW ? `<button type="button" class="btn quiet sm" id="amen-more">All ${allAmen.length} on the list</button>` : ''}</div>` : ''}
+      ${!facts.length && !allAmen.length && !propertyPhotos.length ? `<p class="small muted" style="margin-top:8px">Nothing this place publishes in a form we can read yet.</p>` : ''}
+      ${!store.roomTypesFor(stay.id).length && (place.rooms || []).length ? `
+        <div style="margin-top:16px"><p class="eyebrow">${icon('bed', { size: 14 })}Rooms, as the property lists them</p>
+        <ul class="ledger" id="site-rooms" style="margin-top:8px">${place.rooms.map((r, i) => {
+          const pics = roomPhotos.get(normName(r.catalogName || r.name)) || [];
+          const bits = [r.sqft ? `${r.sqft.toLocaleString('en-US')} sq ft` : r.sqm ? `${r.sqm} m²` : '', r.sleeps ? `sleeps ${r.sleeps}` : '', r.beds || '', r.view || ''].filter(Boolean);
+          return `<li><span class="what">${pics.length ? `<button type="button" class="room-thumb" data-site-room="${i}" aria-label="Photographs of ${escapeHtml(r.name)}"><img src="assets/${escapeHtml(pics[0].thumb || pics[0].file)}" alt="" loading="lazy" decoding="async"></button>` : ''}<b>${escapeHtml(r.name)}</b>
+            ${bits.length ? `<span class="meta">${escapeHtml(bits.join(' · '))}</span>` : ''}${r.description ? `<span class="meta">${escapeHtml(r.description)}</span>` : ''}</span></li>`; }).join('')}</ul>
+        <p class="tiny muted" style="margin-top:6px">Sizes and sleeps are the property's own published figures; a blank means it publishes none. These rooms are not priced in the catalog yet — ask, and Victor prices the nights.</p></div>` : ''}
+      <p class="tiny muted" style="margin-top:12px">Facts and pictures from ${srcLine}. What is not stated there is not stated here.</p>
+    </section>`;
+    wrap.querySelector('#place').addEventListener('click', (e) => {
+      const sr = e.target.closest('[data-site-room]');
+      if (sr) {
+        const r = place.rooms[Number(sr.dataset.siteRoom)];
+        const pics = roomPhotos.get(normName(r.catalogName || r.name)) || [];
+        photoSheet(r.name, pics, r.description ? `<p class="small muted">“${escapeHtml(r.description)}”</p>` : '');
+        return;
+      }
+      const t = e.target.closest('[data-gallery]');
+      if (t) { const i = Number(t.dataset.gallery); photoSheet(stay.name, [propertyPhotos[i], ...propertyPhotos.filter((_, j) => j !== i)]); return; }
+      if (e.target.closest('#amen-more')) {
+        wrap.querySelector('#amen').innerHTML = allAmen.map(({ a, label }) => `<span class="tag" title="${escapeHtml(label)}">${escapeHtml(a)}</span>`).join('');
+      }
+    });
+  } else {
+    wrap.querySelector('#place')?.remove();
+  }
+
   // Which sizes an owner has open on VakayMood right now, filled in when the feed answers. The
   // rooms table draws before that and once more after, so first paint never waits on a third party.
   let openByBeds = new Map();
@@ -308,8 +374,9 @@ export function stayDetail({ store, params, go }) {
         const per = store.roomPointsFrom(stay.id, r.id);
         const min = stay.minNights || 1;
         const can = Math.floor(avail / (per || 1));
+        const pics = roomPhotos.get(normName(r.name)) || [];
         return `<tr>
-          <td><b>${escapeHtml(r.name)}</b>
+          <td>${pics.length ? `<button type="button" class="room-thumb" data-room-photos="${escapeHtml(r.id)}" aria-label="Photographs of ${escapeHtml(r.name)}"><img src="assets/${escapeHtml(pics[0].thumb || pics[0].file)}" alt="" loading="lazy" decoding="async"></button>` : ''}<b>${escapeHtml(r.name)}</b>
             ${r.beds ? `<br><span class="small muted">${escapeHtml(r.beds)}</span>` : ''}
             <br><span class="flags">${r.kitchen === 'full' ? `<span class="tag">${icon('kitchen', { size: 13 })}Full kitchen</span>` : r.kitchen === 'kitchenette' ? '<span class="tag">Kitchenette</span>' : ''}
               ${(r.extras || []).slice(0, 2).map(x => `<span class="tag">${escapeHtml(x)}</span>`).join('')}
@@ -335,6 +402,19 @@ export function stayDetail({ store, params, go }) {
     }
     drawRooms();
     roomsSlot.addEventListener('click', async (e) => {
+      const rp = e.target.closest('[data-room-photos]');
+      if (rp) {
+        const r = rooms.find(x => x.id === rp.dataset.roomPhotos);
+        const pics = roomPhotos.get(normName(r?.name)) || [];
+        const published = (place?.rooms || []).find(x => normName(x.catalogName || x.name) === normName(r?.name));
+        const facts = `<p class="sheet-text">${[
+          r?.sqft ? `${r.sqft.toLocaleString('en-US')} sq ft` : r?.sqm ? `${r.sqm} m²` : 'size not published',
+          r?.sleeps ? `sleeps ${r.sleeps}` : '', r?.beds || published?.beds || '', published?.view || r?.view || '',
+          r?.kitchen === 'full' ? 'full kitchen' : r?.kitchen === 'kitchenette' ? 'kitchenette' : ''].filter(Boolean).map(escapeHtml).join(' · ')}</p>
+          ${published?.description ? `<p class="small muted">“${escapeHtml(published.description)}”</p>` : ''}`;
+        photoSheet(r?.name || 'The room', pics, facts);
+        return;
+      }
       const w = e.target.closest('[data-watch-room]');
       if (w) { const { addWatchSheet } = await import('./deals.js'); addWatchSheet({ store, prefill: { stayId: stay.id, roomTypeId: w.dataset.watchRoom, nights: stay.minNights || 3 } }); }
     });

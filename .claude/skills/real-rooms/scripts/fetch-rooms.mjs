@@ -112,6 +112,34 @@ function jsonLd(html) {
   return out;
 }
 
+/**
+ * The property itself, as its own structured data states it: address, phone, check-in and
+ * check-out, the amenities it lists, its own description. The same principle as the rooms —
+ * schema.org is the hotel's own claim, so nothing here is inferred — and the same nulls where
+ * it says nothing.
+ */
+function hotelFromLd(nodes) {
+  const pick = nodes.find(n => /Hotel|LodgingBusiness|Resort|LocalBusiness/i.test([].concat(n['@type'] || []).join(' ')) && (n.address || n.telephone || n.name));
+  if (!pick) return null;
+  const a = pick.address && typeof pick.address === 'object' ? pick.address : null;
+  const amen = [].concat(pick.amenityFeature || []).map(f => decode(f?.name || (typeof f === 'string' ? f : ''))).filter(Boolean);
+  return {
+    name: decode(pick.name) || null,
+    address: a ? [a.streetAddress, a.addressLocality, a.addressRegion, a.postalCode, a.addressCountry].map(decode).filter(Boolean).join(', ') || null
+               : (typeof pick.address === 'string' ? decode(pick.address) : null),
+    telephone: decode(pick.telephone) || null,
+    geo: pick.geo?.latitude != null ? { lat: Number(pick.geo.latitude), lng: Number(pick.geo.longitude) } : null,
+    checkinTime: decode(pick.checkinTime) || null,
+    checkoutTime: decode(pick.checkoutTime) || null,
+    starRating: pick.starRating?.ratingValue ?? null,
+    amenities: amen,
+    description: decode(pick.description || '') || null,
+    image: [].concat(pick.image || []).map(i => (typeof i === 'string' ? i : i?.url)).filter(Boolean).slice(0, 8),
+    url: decode(pick.url) || null,
+    type: [].concat(pick['@type'] || []).join(' '),
+  };
+}
+
 const SIZE_RE = /(\d[\d,.]*)\s*(?:sq\.?\s*(?:ft|feet)|square\s*feet|ft²|sqft)/i;
 const SQM_RE = /(\d[\d,.]*)\s*(?:m²|sq\.?\s*m|square\s*met(?:er|re)s?|sqm)/i;
 const SLEEPS_RE = /(?:sleeps|accommodates|max(?:imum)?\s+occupancy|up to)\D{0,12}(\d{1,2})/i;
@@ -371,6 +399,7 @@ const result = {
   // property's, all rights reserved" — a picture being reachable is not a licence. Recorded so
   // whoever publishes it is deciding knowingly rather than by accident.
   rights: 'Unless the page states otherwise, these images are the property\'s copyright. Reachable is not licensed. For a private members\' club showing a member the room being booked for them this is ordinary use; publishing them on an open marketing page is a different question. Ask the property for a media kit if in doubt.',
+  hotel: hotelFromLd(ldNodes),
   rooms,
   images,
   rendered,
