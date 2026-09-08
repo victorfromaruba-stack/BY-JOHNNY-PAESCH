@@ -61,7 +61,12 @@ export class SupabaseStore extends Store {
     // Calling it threw before the sign-in could finish, so every member on the real backend
     // met "The Circle is not answering" while the Circle was answering perfectly well.
     try { await this.sb.rpc('release_expired_quotes'); } catch { /* a lapsed quote can wait */ }
-    const { data: me } = await this.sb.rpc('claim_membership');
+    const { data: me, error } = await this.sb.rpc('claim_membership');
+    // supabase-js resolves a FAILED fetch into { data: null, error } — it does not throw. Without
+    // reading `error`, a blip on hotel wifi left `me` null and the code below signed the member
+    // out with "not on the Circle's list". A transport failure is a transport failure: say so,
+    // keep the session, and let init()'s catch show "The Circle is not answering".
+    if (error) throw new Error('The Circle is not answering right now. Check the connection and try again.');
     if (me?.id) { this.state.session = { memberId: me.id, at: new Date().toISOString() }; this.strandedEmail = null; }
     else this.strandedEmail = (await this.sb.auth.getUser())?.data?.user?.email || 'that account';
     await this.reload();
@@ -77,8 +82,24 @@ export class SupabaseStore extends Store {
     // else. It carried months_paid and owing until the audit caught it: that was the late list
     // the club promises never to show, readable by anyone from the console.
     const source = { members: 'members_v', standings: 'standing_v' };
-    const results = await Promise.all(tables.map(t => this.sb.from(source[t] || t).select('*')));
+    const fetch1 = (t) => this.sb.from(source[t] || t).select('*');
+    let results = await Promise.all(tables.map(fetch1));
+    // A table that fails to load used to stay silently empty: a member three years in was shown
+    // "0 points · No lines yet" as fact, and a missing settings row priced every screen off the
+    // defaults. Failures are retried once; on the FIRST load any that still fail abort the load,
+    // so init() falls through to the honest "not answering" screen; on a later reload the last
+    // known rows are kept and the app is told which tables are stale.
+    const failedOnce = tables.map((t, i) => (results[i].error ? i : -1)).filter(i => i >= 0);
+    if (failedOnce.length) {
+      const again = await Promise.all(failedOnce.map(i => fetch1(tables[i])));
+      failedOnce.forEach((i, k) => { results[i] = again[k]; });
+    }
+    const failed = tables.filter((t, i) => results[i].error);
+    if (failed.length && !this._loadedOnce) {
+      throw new Error(`The Circle is not answering right now (${failed.slice(0, 3).join(', ')}${failed.length > 3 ? '…' : ''}).`);
+    }
     results.forEach((r, i) => { if (!r.error) this.state[tables[i]] = (r.data || []).map(toCamel); });
+    this.partial = failed;
     this.state.monthCloses = this.state.month_closes || this.state.monthCloses || [];
     this.state.promoDeferrals = this.state.promo_deferrals || this.state.promoDeferrals || [];
     this.state.roomTypes = this.state.room_types || this.state.roomTypes || [];
@@ -122,9 +143,12 @@ export class SupabaseStore extends Store {
       const { ARUBA_STAYS, WORLD_TRIPS } = await import('../data/stays.js');
       this.state.stays = [...ARUBA_STAYS, ...WORLD_TRIPS].map(x => ({ ...x, active: true }));
     }
-    const { data: s } = await this.sb.from('settings').select('*').eq('id', 1).maybeSingle();
+    const { data: s, error: sErr } = await this.sb.from('settings').select('*').eq('id', 1).maybeSingle();
+    if (sErr && !this._loadedOnce) throw new Error('The Circle is not answering right now (settings).');
+    if (sErr) this.partial = [...(this.partial || []), 'settings'];
     if (s) this.state.settings = { ...DEFAULT_SETTINGS, serviceRate: Number(s.service_rate), pointsPerDollar: Number(s.points_per_dollar), awgPerUsd: Number(s.awg_per_usd), tiers: s.tiers, streakBonuses: s.streak_bonuses, foundingBonus: s.founding_bonus, memberCap: s.member_cap, exitFeeUsd: Number(s.exit_fee_usd), quoteHours: s.quote_hours, lookHours: s.look_hours || DEFAULT_SETTINGS.lookHours, minQuoteHours: s.min_quote_hours ?? 12, looksFrom: s.looks_from || null, bankerSlaHours: s.banker_sla_hours, reserveAccount: s.reserve_account, operatingAccount: s.operating_account, reserveVerified: s.reserve_verified, wallet: s.wallet, clubName: s.club_name, momentsOn: !!s.moments_on };
-    this.notify('reload');
+    this._loadedOnce = true;
+    this.notify(this.partial?.length ? 'partial' : 'reload');
   }
   subscribeRealtime() {
     if (this.channel) return;

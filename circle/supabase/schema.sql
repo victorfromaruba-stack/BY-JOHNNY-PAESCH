@@ -736,9 +736,9 @@ end $$;
 drop function if exists quote_points(uuid, date, date, int);
 create or replace function quote_points(p_stay uuid, p_in date, p_out date, p_seats int default 1,
   out points int, out base_points int, out service_points int,
-  out min_nights int, out nights int, out seasons jsonb)
+  out min_nights int, out nights int, out seasons jsonb, out retail_usd numeric)
 language plpgsql stable security definer set search_path = public as $$
-declare st stays; s settings; d date; sea text; rate numeric; n_low int := 0; n_high int := 0; n_peak int := 0;
+declare st stays; s settings; d date; sea text; rate numeric; n_low int := 0; n_high int := 0; n_peak int := 0; anchor numeric;
 begin
   select * into st from stays where id = p_stay;
   if st.id is null then raise exception 'No such stay'; end if;
@@ -749,17 +749,26 @@ begin
     service_points := points - base_points;
     nights := st.nights; min_nights := st.nights;
     seasons := '{}'::jsonb;
+    retail_usd := coalesce(st.retail_usd, 0) * greatest(p_seats, 1);
     return;
   end if;
-  base_points := 0; points := 0; nights := p_out - p_in; d := p_in;
+  -- The public rate has to move with the calendar the same way ours does, or the comparison is
+  -- theatre. retail_usd on the row is a DEAR-season figure, so held flat across a September
+  -- week it compared a cheap week of ours against a Christmas week of theirs. Scaled by the same
+  -- band ratio our own rates carry, exactly as quoteStay() does in money.js — request_redemption
+  -- used to store the flat product, so every low-season booking overstated its saving for ever.
+  anchor := coalesce(st.rate_high_usd, 0);
+  base_points := 0; points := 0; retail_usd := 0; nights := p_out - p_in; d := p_in;
   while d < p_out loop
     sea := season_for(d);
     rate := case sea when 'peak' then st.rate_peak_usd when 'high' then st.rate_high_usd else st.rate_low_usd end;
     base_points := base_points + round(rate * s.points_per_dollar);
     points := points + round(rate * s.points_per_dollar * (1 + s.service_rate));
+    retail_usd := retail_usd + coalesce(st.retail_usd, 0) * case when anchor > 0 then rate / anchor else 1 end;
     if sea = 'peak' then n_peak := n_peak + 1; elsif sea = 'high' then n_high := n_high + 1; else n_low := n_low + 1; end if;
     d := d + 1;
   end loop;
+  retail_usd := round(retail_usd, 2);
   service_points := points - base_points;
   min_nights := case when n_peak > 0 then greatest(coalesce(st.min_nights,1), coalesce(st.peak_min_nights, st.min_nights, 1))
                      else coalesce(st.min_nights,1) end;
@@ -995,7 +1004,7 @@ begin
     values (me, p_stay, st.kind, coalesce(st.starts_on, p_check_in), coalesce(st.ends_on, p_check_out), q.nights,
             case when st.kind = 'trip' then p_seats else p_guests end,
             case when st.kind = 'trip' then p_seats else null end, p_flex, p_note,
-            q.points, q.seasons, coalesce(st.retail_usd,0) * case when st.kind='trip' then p_seats else q.nights end,
+            q.points, q.seasons, q.retail_usd,
             q.points, 'requested', p_shared,
             -- The listing they were looking at. clean_link() is the same guard the deals board
             -- uses: http/https only. A member-supplied URL lands on a screen the Desk clicks.
@@ -1856,9 +1865,25 @@ declare m members; me uuid;
 begin
   me := current_member_id();
   if p_status not in ('active','paused','left') then raise exception 'You can pause, resume or leave'; end if;
+  if p_status = 'paused' and p_paused_until !~ '^\d{4}-\d{2}$' then raise exception 'Say which month you will resume from'; end if;
+  -- Every month from now up to the resume month is a paused month, so the streak steps over
+  -- each one and none is counted as owed. This appended exactly ONE month per call, so a
+  -- three-month pause still counted two as owed. An early return drops the months that never
+  -- came. Twin of pauseMember()/resumeMember() in the store.
   update members set status = p_status,
     paused_until = case when p_status = 'paused' then p_paused_until else null end,
-    paused_months = case when p_status = 'paused' then paused_months || to_char(now(),'YYYY-MM') else paused_months end,
+    paused_months = case
+      when p_status = 'paused' then (
+        select coalesce(array_agg(distinct x order by x), '{}')
+          from unnest(coalesce(paused_months, '{}') || coalesce((
+            select array_agg(to_char(d, 'YYYY-MM'))
+              from generate_series(date_trunc('month', now()),
+                                   (p_paused_until || '-01')::date - interval '1 month',
+                                   interval '1 month') d), '{}')) x)
+      when p_status = 'active' then (
+        select coalesce(array_agg(x order by x), '{}')
+          from unnest(coalesce(paused_months, '{}')) x where x <= to_char(now(), 'YYYY-MM'))
+      else paused_months end,
     left_at = case when p_status = 'left' then now() else null end
   where id = me returning * into m;
   perform log_audit('member.status','member',me::text, jsonb_build_object('status', p_status));

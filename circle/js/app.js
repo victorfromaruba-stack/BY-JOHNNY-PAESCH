@@ -104,7 +104,14 @@ async function boot() {
   }
   window.__hunto = { store };            // test hook: lets the smoke suite switch persona
   document.documentElement.dataset.mode = store.mode;
-  store.subscribe((reason) => { if (reason !== 'render') render(); });
+  store.subscribe((reason) => {
+    if (reason === 'partial') {
+      // Some tables failed to reload and the last known rows are being shown. Say so, rather
+      // than presenting a half-loaded screen as the truth.
+      toast(`Some of this could not be refreshed (${(store.partial || []).slice(0, 3).join(', ')}). Showing what was last known.`, { kind: 'bad', timeout: 8000 });
+    }
+    if (reason !== 'render') render();
+  });
   router = new Router({ routes: ROUTES, notFound: NOT_FOUND, onChange: render });
   mountChrome();
   router.start();

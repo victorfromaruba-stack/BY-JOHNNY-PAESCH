@@ -877,8 +877,27 @@ export class Store {
     Object.assign(m, patch); this.log(actorId, 'member.update', 'member', id, { before, after: patch }); await this.commit('members'); return m;
   }
   // Pausing and leaving are your own to do; being made inactive by someone else is not.
-  async pauseMember(id, untilMonth, actorId) { this.assertSelfOrAdmin(id); return this._writeMember(id, { status: 'paused', pausedUntil: untilMonth }, actorId); }
-  async resumeMember(id, actorId) { this.assertSelfOrAdmin(id); return this._writeMember(id, { status: 'active', pausedUntil: null }, actorId); }
+  // The freeze the pause sheet promises depends entirely on pausedMonths: the streak steps over
+  // a month only if it is in that set, and the rank refuses every rung above Seated while a
+  // month is owed. Nothing wrote it except the demo seeder — so a member who took the offered
+  // three months came back to a streak of zero and a rank reset, while the sheet, the toast,
+  // the home notice and rule 8 all promised the opposite. Every month from now up to the
+  // resume month goes in; an early return drops the months that never came. Twin of
+  // set_my_status().
+  async pauseMember(id, untilMonth, actorId) {
+    this.assertSelfOrAdmin(id);
+    if (!/^\d{4}-\d{2}$/.test(String(untilMonth || ''))) throw new Error('Say which month you will resume from');
+    const m = this.member(id); const months = [];
+    for (let k = monthKey(); k < untilMonth; k = shiftMonth(k, 1)) months.push(k);
+    const pausedMonths = [...new Set([...(m?.pausedMonths || []), ...months])].sort();
+    return this._writeMember(id, { status: 'paused', pausedUntil: untilMonth, pausedMonths }, actorId);
+  }
+  async resumeMember(id, actorId) {
+    this.assertSelfOrAdmin(id);
+    const now = monthKey();
+    const pausedMonths = (this.member(id)?.pausedMonths || []).filter(k => k <= now);
+    return this._writeMember(id, { status: 'active', pausedUntil: null, pausedMonths }, actorId);
+  }
   assertSelfOrAdmin(id) { if (id !== this.session?.memberId && !this.hasRole('admin')) throw new Error('That is not yours to change'); }
   exitQuote(memberId) {
     const base = this.basePoints(memberId); const promo = this.promoPoints(memberId); const ppd = this.settings.pointsPerDollar;
@@ -915,6 +934,10 @@ export class Store {
   }
   /** The Banker confirms money arrived. Points follow the amount actually received. */
   async confirmContribution(id, actorId, { receivedUsd = null, currency = 'USD', native = null, note = '' } = {}) {
+    // Every one of these gates is the first line of the SQL twin. Without them the preview could
+    // never show an officer the refusal they will meet live, and the demo's whole authorisation
+    // model lived in which buttons a screen chose to draw.
+    if (!(this.canConfirmMoney() || this.hasRole('admin'))) throw new Error('Only the Banker can confirm money');
     const c = this.contribution(id); if (!c) throw new Error('No such contribution');
     if (c.status !== CONTRIBUTION_STATUS.pending) throw new Error('This contribution is not waiting for the Banker');
     const m = this.member(c.memberId); const s = this.settings;
@@ -1006,6 +1029,7 @@ export class Store {
     return out;
   }
   async rejectContribution(id, actorId, reason) {
+    if (!(this.canConfirmMoney() || this.hasRole('admin'))) throw new Error('Only the Banker can return a transfer');
     const c = this.contribution(id); if (!c) throw new Error('No such contribution');
     if (c.status !== CONTRIBUTION_STATUS.pending) throw new Error('This contribution is not waiting for the Banker');
     if (!reason?.trim()) throw new Error('A reason is required so the member knows what to fix');
@@ -1015,6 +1039,7 @@ export class Store {
   canReverse(c, actorId) { return c?.status === CONTRIBUTION_STATUS.confirmed && c.reviewedBy === actorId && (Date.now() - new Date(c.reviewedAt).getTime()) < this.settings.undoSeconds * 1000; }
   /** Undo a confirmation: reversing ledger rows, contribution reopened as pending. */
   async reverseContribution(id, actorId) {
+    if (!(this.canConfirmMoney() || this.hasRole('admin'))) throw new Error('Only the Banker can undo a confirmation');
     const c = this.contribution(id); if (!this.canReverse(c, actorId)) throw new Error('This confirmation can no longer be undone');
     const at = nowIso();
     for (const l of this.state.ledger.filter(l => l.refType === 'contribution' && l.refId === c.id)) {
@@ -1131,6 +1156,7 @@ export class Store {
   /** Planner publishes the binding all-in quote. Top-up = points beyond Available, payable in cash. */
   async quoteRedemption(id, actorId, { points, stack = null, terms = '', hotelDeadline = null, note = '', lookId = null }) {
     const r = this.redemption(id); if (!r) throw new Error('No such request');
+    if (!this.canQuote(r)) throw new Error('Only the Desk can quote a stay');
     if (r.status !== REDEMPTION_STATUS.requested) throw new Error('Only an open request can be quoted');
     const pts = Math.round(Number(points)); if (!(pts > 0)) throw new Error('Quote must be positive');
     // The Circle's share has to be IN the quote, because every screen tells the member it is and
@@ -1185,6 +1211,7 @@ export class Store {
   /** Member accepts → points Committed. */
   async acceptQuote(id, actorId) {
     const r = this.redemption(id); if (!r) throw new Error('No such request');
+    if (r.memberId !== this.session?.memberId) throw new Error('Only the member can accept their quote');
     this.releaseExpired();
     if (r.status !== REDEMPTION_STATUS.quoted) throw new Error('There is no open quote to accept');
     if (r.memberId !== actorId) throw new Error('Only the member can accept their quote');
@@ -1200,6 +1227,7 @@ export class Store {
    * same points cannot be spent twice, and it is released if the booking falls through.
    */
   async pledgeToRedemption(id, memberId, points) {
+    if (memberId !== this.session?.memberId) throw new Error('You can only chip in as yourself');
     const r = this.redemption(id); if (!r) throw new Error('No such request');
     if (!r.shared) throw new Error('This booking is not open for the Circle to chip in');
     if (![REDEMPTION_STATUS.quoted, REDEMPTION_STATUS.held].includes(r.status)) throw new Error('This booking is not taking contributions right now');
@@ -1225,6 +1253,7 @@ export class Store {
     return r;
   }
   async withdrawPledge(id, memberId, actorId = memberId) {
+    if (memberId !== this.session?.memberId && !this.hasRole('planner', 'admin')) throw new Error('Not your contribution');
     const r = this.redemption(id); if (!r) throw new Error('No such request');
     if (r.status === REDEMPTION_STATUS.confirmed || r.status === REDEMPTION_STATUS.completed) throw new Error('The hotel is already paid');
     const before = (r.pledges || []).length;
@@ -1240,6 +1269,7 @@ export class Store {
 
   /** Banker (or planner) pays the hotel: points burn, booking confirmed. */
   async payRedemption(id, actorId, { paidUsd = null, confirmationRef = '' } = {}) {
+    if (!this.hasRole('treasurer', 'deputy', 'planner', 'admin')) throw new Error('Only the Banker or the Desk can pay a hotel');
     const r = this.redemption(id); if (!r) throw new Error('No such request');
     if (r.status !== REDEMPTION_STATUS.held) throw new Error('The member has not accepted a quote yet');
     if ((r.topUpUsd || 0) > (r.topUpReceivedUsd ?? 0)) throw new Error(`The top-up of $${(r.topUpUsd || 0).toFixed(2)} has not been received — the Banker has $${(r.topUpReceivedUsd ?? 0).toFixed(2)}`);
@@ -1276,6 +1306,7 @@ export class Store {
     this.log(actorId, 'redemption.pay', 'redemption', id, { points: r.points, paidUsd: r.paidUsd, confirmationRef }); await this.commit('redemptions', 'looks'); return r;
   }
   async confirmTopUp(id, actorId) {
+    if (!(this.canConfirmMoney() || this.hasRole('admin'))) throw new Error('Only the Banker can confirm a top-up');
     const r = this.redemption(id); if (!r) throw new Error('No such request');
     if (![REDEMPTION_STATUS.quoted, REDEMPTION_STATUS.held].includes(r.status)) throw new Error('A top-up is only owed on a live quote');
     if (!(r.topUpUsd > 0)) throw new Error('No top-up is owed on this booking');
@@ -1296,6 +1327,7 @@ export class Store {
   }
   async declineRedemption(id, actorId, reason) {
     const r = this.redemption(id); if (!r) throw new Error('No such request');
+    if (!this.canQuote(r)) throw new Error('Only the Desk can decline a request');
     if (![REDEMPTION_STATUS.requested, REDEMPTION_STATUS.quoted].includes(r.status)) throw new Error('This request cannot be declined now');
     if (!reason?.trim()) throw new Error('A reason is required — the member reads it verbatim');
     Object.assign(r, { status: REDEMPTION_STATUS.declined, decidedBy: actorId, decidedAt: nowIso(), decision: reason.trim() });
@@ -1306,6 +1338,7 @@ export class Store {
     const r = this.redemption(id); if (!r) throw new Error('No such request');
     const at = nowIso(); const stay = this.stay(r.stayId);
     if (OPEN_REDEMPTION.includes(r.status)) {
+      if (r.memberId !== this.session?.memberId && !this.hasRole('planner', 'admin', 'treasurer')) throw new Error('Not your request');
       Object.assign(r, { status: REDEMPTION_STATUS.cancelled, decidedBy: actorId, decidedAt: at, decision: reason });
     } else if (r.status === REDEMPTION_STATUS.confirmed) {
       if (!this.hasRole('planner', 'admin', 'treasurer')) throw new Error('Only the Desk or the Banker can cancel a confirmed booking');
@@ -1534,6 +1567,7 @@ export class Store {
 
   // ---------- adjustments (admin, with a written reason) ----------
   async adjustPoints(memberId, points, note, actorId) {
+    if (!this.hasRole('admin')) throw new Error('Only an admin can adjust points');
     if (!note?.trim()) throw new Error('A written reason is required');
     const pts = Math.round(points); if (!pts) throw new Error('Nothing to adjust');
     this.state.ledger.push({ id: uid('led'), memberId, kind: LEDGER_KIND.adjust, points: pts, usd: round(pts / this.settings.pointsPerDollar), refType: 'adjust', refId: null, note: note.trim(), at: nowIso(), by: actorId });

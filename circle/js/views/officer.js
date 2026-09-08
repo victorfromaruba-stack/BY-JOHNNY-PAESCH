@@ -131,11 +131,27 @@ export function bank({ store, go }) {
     } catch (err) { toast(err.message, { kind: 'bad', timeout: 6000 }); }
     finally { setBusy(btn, false); }
   });
-  wrap.querySelector('#confirm-all')?.addEventListener('click', async () => {
+  wrap.querySelector('#confirm-all')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
     const yes = await confirmDialog({ title: `Confirm all ${pending.length}?`, confirmText: 'Confirm them', message: 'Only do this once you have matched every reference on the bank statement. Each one can still be undone for a minute afterwards.' });
     if (!yes) return;
-    for (const c of pending) { try { await store.confirmContribution(c.id, me.id, {}); } catch (err) { toast(err.message, { kind: 'bad' }); } }
-    toast(`${pending.length} confirmed. Points are minted and dated.`, { kind: 'good' });
+    // Count what actually happened. This used to toast "12 confirmed" whatever the outcome —
+    // the connection drops at number three, nine red toasts fade in four seconds, and a green
+    // "12 confirmed. Points are minted and dated." is what the Banker closes the app on.
+    setBusy(btn, true, 'Confirming…');
+    let done = 0; const failed = [];
+    try {
+      for (const c of pending) {
+        try { await store.confirmContribution(c.id, me.id, {}); done++; }
+        catch (err) {
+          failed.push(`${store.member(c.memberId)?.name.split(' ')[0] || 'one'}: ${err.message}`);
+          // A dead connection will fail every remaining one the same way; stop and say so.
+          if (/not answering|fetch|network|connection|timeout/i.test(err.message)) break;
+        }
+      }
+    } finally { setBusy(btn, false); }
+    if (!failed.length) toast(`${done} confirmed. Points are minted and dated.`, { kind: 'good' });
+    else toast(`${done} confirmed · ${pending.length - done} not — ${failed[0]}${failed.length > 1 ? ` (and ${failed.length - 1} more)` : ''}`, { kind: 'bad', timeout: 10000 });
   });
   const missing = store.expectedMembers(month).filter(m2 => store.monthStatus(m2.id, month) === 'due');
   wrap.querySelector('#missing').innerHTML = missing.length
@@ -459,9 +475,15 @@ export function desk({ store, go }) {
     panel.querySelector('#templates').innerHTML = store.expectedMembers(month).slice(0, 6).map(m => `
       <a class="btn ghost sm" target="_blank" rel="noopener" href="${escapeHtml(waLink(m.phone, TEMPLATES.reminder({ member: m, amountUsd: m.monthlyUsd, month, reference: `${VOCAB.refPrefix}-${initials(m.name)}-${month}`, v: VOCAB })))}">${escapeHtml(m.name.split(' ')[0])}</a>`).join('');
     panel.querySelector('#note-form').addEventListener('submit', async (e) => {
-      e.preventDefault(); const f = new FormData(e.target);
-      await store.postAnnouncement({ authorId: me.id, title: f.get('title'), body: f.get('body'), pinned: !!f.get('pinned') });
-      toast('Published to the Circle.', { kind: 'good' });
+      e.preventDefault(); const f = new FormData(e.target); const btn = e.submitter || e.target.querySelector('[type=submit]');
+      // Busy while it goes, so a double-tap cannot send the same note to forty people twice;
+      // and a failure is SAID, not swallowed as an unhandled rejection.
+      setBusy(btn, true, 'Publishing…');
+      try {
+        await store.postAnnouncement({ authorId: me.id, title: f.get('title'), body: f.get('body'), pinned: !!f.get('pinned') });
+        toast('Published to the Circle.', { kind: 'good' });
+      } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
+      finally { setBusy(btn, false); }
     });
   };
 
@@ -485,7 +507,7 @@ export function desk({ store, go }) {
       const d = e.target.closest('[data-del]');
       if (d) {
         const yes = await confirmDialog({ title: 'Delete this note?', message: 'It disappears from everyone’s Circle page.', confirmText: 'Delete', danger: true });
-        if (yes) { await store.deleteAnnouncement(d.dataset.del, me.id); toast('Deleted.'); }
+        if (yes) { try { await store.deleteAnnouncement(d.dataset.del, me.id); toast('Deleted.'); } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); } }
         return;
       }
     }
@@ -934,17 +956,23 @@ export function settings({ store, go }) {
     say();
   }
   wrap.querySelector('#wallet-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    await store.updateSettings({ wallet: { url: new FormData(e.target).get('walletUrl').trim(), token: '' } }, me.id);
-    toast('Saved.', { kind: 'good' });
+    e.preventDefault(); const btn = e.submitter || e.target.querySelector('[type=submit]');
+    setBusy(btn, true, 'Saving…');
+    try { await store.updateSettings({ wallet: { url: new FormData(e.target).get('walletUrl').trim(), token: '' } }, me.id); toast('Saved.', { kind: 'good' }); }
+    catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
+    finally { setBusy(btn, false); }
   });
   wrap.querySelector('#accounts').addEventListener('submit', async (e) => {
-    e.preventDefault(); const f = new FormData(e.target);
-    await store.updateSettings({
-      reserveAccount: { bank: f.get('rBank'), holder: f.get('rHolder'), number: f.get('rNumber') },
-      operatingAccount: { bank: f.get('oBank'), holder: f.get('oHolder'), number: f.get('oNumber') },
-    }, me.id);
-    toast('Saved.', { kind: 'good' });
+    e.preventDefault(); const f = new FormData(e.target); const btn = e.submitter || e.target.querySelector('[type=submit]');
+    setBusy(btn, true, 'Saving…');
+    try {
+      await store.updateSettings({
+        reserveAccount: { bank: f.get('rBank'), holder: f.get('rHolder'), number: f.get('rNumber') },
+        operatingAccount: { bank: f.get('oBank'), holder: f.get('oHolder'), number: f.get('oNumber') },
+      }, me.id);
+      toast('Saved.', { kind: 'good' });
+    } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
+    finally { setBusy(btn, false); }
   });
   wrap.querySelector('#rules-form')?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = new FormData(e.target);

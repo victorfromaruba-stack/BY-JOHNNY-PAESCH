@@ -197,7 +197,7 @@ export function live({ store, go }) {
         checkin: state.checkin || null,
         checkout: state.checkout || null,
         page: state.page, limit: 24,
-        pointsPerDollar: s.pointsPerDollar,
+        pointsPerDollar: s.pointsPerDollar, serviceRate: s.serviceRate,
       });
       // With "our four only" on and no single resort chosen, filter client-side: the API
       // takes one resort at a time, and four calls to show one list is wasteful.

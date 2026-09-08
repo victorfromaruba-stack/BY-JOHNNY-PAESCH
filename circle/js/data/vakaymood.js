@@ -85,7 +85,11 @@ async function getJson(path, params = {}) {
  * `total` is the honest number: what is charged at booking PLUS the fees the resort takes at
  * the desk. Quoting the nightly rate alone would understate a week by a few hundred dollars.
  */
-export function toDeal(listing, { pointsPerDollar = 100 } = {}) {
+export function toDeal(listing, { pointsPerDollar = 100, serviceRate = 0 } = {}) {
+  // All-in, like every other points figure in the app: the club side of the comparison goes
+  // through nightPoints(), which carries the Circle's share, and this side did not — so "under
+  // our own rate" overstated the advantage by 15% and "you hold enough" understated the charge.
+  const allIn = (usd) => Math.round(usd * pointsPerDollar * (1 + serviceRate));
   const p = listing.pricing || {};
   const usdTotal = Number(p.total ?? p.subtotal ?? 0);
   const nights = Number(listing.nights) || 1;
@@ -108,8 +112,8 @@ export function toDeal(listing, { pointsPerDollar = 100 } = {}) {
     usdFees: Number(p.feesTotal ?? 0),
     feeLines: (p.fees || []).map(f => ({ name: f.name, amount: Number(f.amount) })),
     usdTotal,
-    pointsTotal: Math.round(usdTotal * pointsPerDollar),
-    pointsPerNight: Math.round((usdTotal / nights) * pointsPerDollar),
+    pointsTotal: allIn(usdTotal),
+    pointsPerNight: allIn(usdTotal / nights),
     bookingUrl: listing.bookingUrl || '',
   };
 }
@@ -121,7 +125,7 @@ export function toDeal(listing, { pointsPerDollar = 100 } = {}) {
 export async function availability({
   slug = null, location = 'Aruba', checkin = null, checkout = null,
   sleeps = null, maxNightlyUsd = null, brand = null,
-  sort = 'start_asc', page = 1, limit = 40, pointsPerDollar = 100,
+  sort = 'start_asc', page = 1, limit = 40, pointsPerDollar = 100, serviceRate = 0,
 } = {}) {
   const body = await getJson('/availability', {
     resort: slug, location: slug ? null : location,
@@ -129,7 +133,7 @@ export async function availability({
     sort, page, limit: Math.min(100, Math.max(1, limit)),
   });
   return {
-    deals: (body.results || []).map(l => toDeal(l, { pointsPerDollar })),
+    deals: (body.results || []).map(l => toDeal(l, { pointsPerDollar, serviceRate })),
     total: body.pagination?.total ?? 0,
     page: body.pagination?.page ?? page,
     limit: body.pagination?.limit ?? limit,

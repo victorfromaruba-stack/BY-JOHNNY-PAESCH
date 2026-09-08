@@ -195,8 +195,10 @@ export function home({ store, go }) {
   goalPanel.addEventListener('click', async (e) => {
     if (!e.target.closest('#set-goal')) return;
     const picked = await goalSheet({ store });
-    if (picked === CLEAR_GOAL) { await store.setGoal(me.id, null, me.id); drawGoal(); }
-    else if (picked?.stayId) { await store.setGoal(me.id, picked, me.id); drawGoal(); }
+    try {
+      if (picked === CLEAR_GOAL) { await store.setGoal(me.id, null, me.id); drawGoal(); }
+      else if (picked?.stayId) { await store.setGoal(me.id, picked, me.id); drawGoal(); }
+    } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
   });
 
   // 3 — what needs you, in the order it needs you
@@ -943,13 +945,20 @@ export function profile({ store, go, refresh }) {
   wrap.querySelector('#tiers').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-amt]'); if (!b) return;
     const amt = Number(b.dataset.amt); if (amt === me.monthlyUsd) return;
-    await store.updateMember(me.id, { monthlyUsd: amt }, me.id);
-    toast(`${VOCAB.pap.congrats[0]}! From your next contribution you are ${tierName(amt)}.`, { kind: 'good' });
+    try {
+      await store.updateMember(me.id, { monthlyUsd: amt }, me.id);
+      wrap.querySelectorAll('#tiers [data-amt]').forEach(x => x.setAttribute('aria-pressed', String(Number(x.dataset.amt) === amt)));
+      toast(`${VOCAB.pap.congrats[0]}! From your next contribution you are ${tierName(amt)}.`, { kind: 'good' });
+    } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
   });
   wrap.querySelector('#details').addEventListener('submit', async (e) => {
-    e.preventDefault(); const f = new FormData(e.target);
-    await store.updateMember(me.id, { name: f.get('name'), phone: f.get('phone'), dreamStayId: f.get('dreamStayId'), standingOrder: !!f.get('standingOrder'), showOnRollcall: !!f.get('showOnRollcall') }, me.id);
-    toast('Saved.', { kind: 'good' });
+    e.preventDefault(); const f = new FormData(e.target); const btn = e.submitter || e.target.querySelector('[type=submit]');
+    setBusy(btn, true, 'Saving…');
+    try {
+      await store.updateMember(me.id, { name: f.get('name'), phone: f.get('phone'), dreamStayId: f.get('dreamStayId'), standingOrder: !!f.get('standingOrder'), showOnRollcall: !!f.get('showOnRollcall') }, me.id);
+      toast('Saved.', { kind: 'good' });
+    } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
+    finally { setBusy(btn, false); }
   });
   wrap.querySelector('#pause')?.addEventListener('click', async () => {
     const until = await sheet({ title: 'Pause your contributions', render: (body, close) => {
@@ -958,13 +967,15 @@ export function profile({ store, go, refresh }) {
         <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Pause</button></div>`;
       body.querySelector('[data-ok]').addEventListener('click', () => close(body.querySelector('select').value));
     } });
-    if (until) { await store.pauseMember(me.id, until, me.id); toast(`Paused until ${fmtMonth(until)}. Your streak is frozen, not reset.`); }
+    if (until) { try { await store.pauseMember(me.id, until, me.id); toast(`Paused until ${fmtMonth(until)}. Your streak is frozen, not reset.`); } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); } }
   });
-  wrap.querySelector('#resume')?.addEventListener('click', async () => { await store.resumeMember(me.id, me.id); toast('Welcome back.', { kind: 'good' }); });
+  wrap.querySelector('#resume')?.addEventListener('click', async () => { try { await store.resumeMember(me.id, me.id); toast('Welcome back.', { kind: 'good' }); } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); } });
   wrap.querySelector('#leave').addEventListener('click', async () => {
     const yes = await confirmDialog({ title: 'Leave the Circle?', danger: true, confirmText: 'Give notice',
       message: `You hold ${fmtPoints(exit.basePoints)} base points. You have twelve months to use them on stays; after that ${fmtUsd2(exit.refundUsd)} comes back to you at face value. Bonus points are not refunded. Ian will be in touch.` });
-    if (yes) { await store.leaveMember(me.id, me.id); toast('Notice given. Ian will be in touch this week.'); go('/home'); }
+    // The one that must never fail silently: a member who confirmed "Give notice" and then saw
+    // nothing had no idea whether they had resigned.
+    if (yes) { try { await store.leaveMember(me.id, me.id); toast('Notice given. Ian will be in touch this week.'); go('/home'); } catch (err) { toast(`That did not go through — you have NOT left. ${err.message}`, { kind: 'bad', timeout: 9000 }); } }
   });
   drawBadges(wrap.querySelector('#badges-panel'), { store, me, refresh });
   drawCorner(wrap.querySelector('#corner-panel'), { store, me, refresh });

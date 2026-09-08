@@ -686,7 +686,12 @@ export function requestDetail({ store, params, go, refresh }) {
         <span class="delta"><b>${escapeHtml(fmtUsd2(due))}</b><small>${escapeHtml(state)}</small></span></li>`;
       })() : ''}
       ${r.retailUsd ? `<li><span class="what"><b>Booked on your own</b><span class="meta">Same room, public all-in rate</span></span>
-        <span class="delta"><b>${escapeHtml(fmtUsd2(r.retailUsd))}</b><small>you save ${escapeHtml(fmtUsd2(Math.max(0, r.retailUsd - pts / s.pointsPerDollar)))}</small></span></li>` : ''}
+        <span class="delta"><b>${escapeHtml(fmtUsd2(r.retailUsd))}</b><small>${escapeHtml((() => {
+          // Honest in both directions, like versusPublic three screens away. The old clamp could
+          // only ever print a win, and printed "you save $0.00" on the Ritz for ever.
+          const v = versusPublic(r.retailUsd, pts / s.pointsPerDollar);
+          return !v ? '' : v.same ? 'about the same as booking direct' : v.better ? `you save ${fmtUsd2(v.diffUsd)}` : `direct is ${fmtUsd2(v.diffUsd)} cheaper`;
+        })())}</small></span></li>` : ''}
       ${r.confirmationRef ? `<li><span class="what"><b>Hotel confirmation</b></span><span class="delta"><b class="num">${escapeHtml(r.confirmationRef)}</b></span></li>` : ''}
     </ul>`;
 
