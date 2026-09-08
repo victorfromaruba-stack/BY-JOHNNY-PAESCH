@@ -172,7 +172,7 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
     const q = quoteOf('stay_hyatt', '2026-11-12', '2026-11-15');
     add({ id: uid('red'), memberId: 'mem_jeroen', stayId: 'stay_hyatt', kind: 'stay', checkIn: '2026-11-12', checkOut: '2026-11-15', nights: q.nights,
       guests: 2, seats: null, note: '', flexDays: 1, maxPoints: null, shared: false, pledges: [], indicativePoints: q.points, seasons: q.breakdown, retailUsd: q.retailUsd,
-      points: q.points, quotedPoints: q.points, topUpUsd: 0, quoteStack: { room: 900, levy: 112.5, service: 112.5, resort: 60, env: 12 },
+      points: q.points, quotedPoints: q.points, topUpUsd: 0, quoteStack: { room: 900, taxes: 112.5, service: 112.5, resort: 60, env: 12 },
       hotelTerms: 'Free cancellation up to 7 days before arrival.', hotelDeadline: '2026-11-05',
       quotedBy: 'mem_victor', quotedAt: '2026-09-01T16:00:00Z', quoteExpiresAt: '2026-09-04T16:00:00Z',
       status: 'held', requestedAt: '2026-08-31T20:12:00Z', decidedBy: 'mem_victor', decidedAt: '2026-09-01T16:00:00Z',

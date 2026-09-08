@@ -28,7 +28,7 @@ export function stays({ store, query, go }) {
       <div class="sec-head tight"><div><h1>Stays in Aruba</h1>
         <p class="small muted" id="count"></p>
         <details class="fineprint"><summary>What is in the price</summary>
-          <p class="small muted">Every price is the Circle’s all-in rate per night — room, the 12.5% tourist levy, service charge, resort fee and the environmental levy. Your binding quote comes from Victor and is usually better.</p>
+          <p class="small muted">Every price is the Circle’s all-in rate per night — room, taxes, service charge and resort fee. Your binding quote comes from Victor and is usually better.</p>
         </details>
         </div></div>
       <!-- On a phone the filter bar was 244px — four selects and five chips, 29% of the screen,
@@ -374,7 +374,7 @@ export function stayDetail({ store, params, go }) {
         </div>
         ${q.ok ? versusLine(versusPublic(q.retailUsd, q.points / s.pointsPerDollar), `for ${q.nights} night${q.nights > 1 ? 's' : ''}`) : ''}
         <p style="margin-top:12px"><a class="btn" href="#/book/${escapeHtml(stay.id)}?from=${escapeHtml(ci)}&to=${escapeHtml(co)}">${icon('send', { size: 17 })}Ask for these dates</a></p>
-        <p class="small muted" style="margin-top:10px">${stay.taxesIncluded ? 'Taxes and breakfast are already in this.' : 'Room, the 12.5% tourist levy, service charge, resort fee and environmental levy are all in this.'} Victor's binding quote is usually better.</p>`;
+        <p class="small muted" style="margin-top:10px">${stay.taxesIncluded ? 'Taxes and breakfast are already in this.' : 'Room, taxes, service charge and resort fee are all in this.'} Victor's binding quote is usually better.</p>`;
     };
     drawQuote();
     wrap.querySelector('#pricing').addEventListener('change', (e) => { if (e.target.id === 'q-in' || e.target.id === 'q-out') drawQuote(); });
@@ -871,7 +871,7 @@ export async function quoteSheet(store, r, stay) {
       <p class="sheet-text">Type what the hotel charges. The Circle's ${Math.round(s.serviceRate * 100)}% is added on top and the member sees it as its own line. The quote is locked for ${s.quoteHours} hours.</p>
       <div class="grid g3">
         <label class="field"><span>Room total</span><input name="room" type="number" step="0.01" value="${(hotelUsd * 0.72).toFixed(2)}" inputmode="decimal"></label>
-        <label class="field"><span>Tourist levy 12.5%</span><input name="levy" type="number" step="0.01" value="${(hotelUsd * 0.09).toFixed(2)}" inputmode="decimal"></label>
+        <label class="field"><span>Taxes</span><input name="taxes" type="number" step="0.01" value="${(hotelUsd * 0.09).toFixed(2)}" inputmode="decimal"></label>
         <label class="field"><span>Service charge</span><input name="service" type="number" step="0.01" value="${(hotelUsd * 0.1).toFixed(2)}" inputmode="decimal"></label>
         <label class="field"><span>Resort fee</span><input name="resort" type="number" step="0.01" value="${(hotelUsd * 0.08).toFixed(2)}" inputmode="decimal"></label>
         <label class="field"><span>Environmental levy</span><input name="env" type="number" step="0.01" value="${(r.nights * 6).toFixed(2)}" inputmode="decimal"></label>
@@ -883,7 +883,7 @@ export async function quoteSheet(store, r, stay) {
       <label class="field"><span>Free-cancellation deadline</span><input name="deadline" type="date" value="${new Date(new Date(r.checkIn).getTime() - 30 * 864e5).toISOString().slice(0, 10)}"></label>
       <label class="field"><span>A line for the member</span><textarea name="note" rows="2" placeholder="Lagoon view, high floor — and I got the resort fee waived."></textarea></label>
       <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Publish the quote</button></div>`;
-    const HOTEL_LINES = ['room', 'levy', 'service', 'resort', 'env'];
+    const HOTEL_LINES = ['room', 'taxes', 'service', 'resort', 'env'];
     const hotel = () => HOTEL_LINES.reduce((sum, k) => sum + (Number(body.querySelector(`[name=${k}]`).value) || 0), 0);
     const share = () => round2(hotel() * s.serviceRate);
     const quoteUsd = () => hotel() + share();

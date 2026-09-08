@@ -1,5 +1,5 @@
 // The catalog. `rates` are the Circle's ALL-IN member cost per night in USD
-// (room + 12.5% tourist levy + service charge + resort fee + environmental levy),
+// (room + taxes + service charge + resort fee + environmental levy),
 // which is also the points price: 100 points = $1.00. Three rates per place, by the dates they
 // apply to — Apr 6–Dec 19, Jan 4–Apr 5, and Dec 20–Jan 3 with Carnival week. These are never
 // named or shown to a member: they give their dates and quoteStay prices those exact nights.
@@ -40,7 +40,7 @@ export const ARUBA_STAYS = [
     },
     vibe: 'Aruba’s largest villa resort, at the north end of Palm Beach: 450 villas across the Lighthouse, Compass and Spyglass towers, wrapped around the lazy river, with a side gate onto the restaurant strip.',
     features: ['Villas sleep up to 8', 'Full kitchen', 'Washer-dryer in villa', 'Lazy river', 'On the sand'],
-    dealNote: 'One of the four we keep coming back to. Owner weeks rent Saturday to Saturday, so this is a seven-night booking — but a two-bedroom villa sleeps eight, and split three or four ways it is the cheapest good week on Palm Beach. No resort fee; the 12.5% levy is already in the price.' },
+    dealNote: 'One of the four we keep coming back to. Owner weeks rent Saturday to Saturday, so this is a seven-night booking — but a two-bedroom villa sleeps eight, and split three or four ways it is the cheapest good week on Palm Beach. No resort fee, and taxes are already in the price.' },
   { id: 'stay_oceanclub', site: 'https://www.marriott.com/en-us/hotels/auaao-marriotts-aruba-ocean-club/overview/', kind: 'aruba', name: 'Marriott’s Aruba Ocean Club', area: 'Palm Beach', country: 'Aruba', category: 4, house: true,
     // Same repricing, same caveat: the cheap-months rate is anchored to Interval having it at US$167.50 the
     // same week the Surf Club was at $90.50 — which is itself the reason to check both every
@@ -66,7 +66,7 @@ export const ARUBA_STAYS = [
     rates: { low: 420, high: 640, peak: 930 }, retailUsd: 800, minNights: 2, peakMinNights: 5, onSand: false, adultsOnly: false,
     vibe: 'A marina hotel in the middle of the capital with a forty-acre private island: flamingos, iguanas, and a water taxi that leaves from the lobby.',
     features: ['Private island', 'Flamingo Beach', 'Adults-only tower', 'Casino', 'Renaissance Mall'],
-    dealNote: 'One of the four we keep coming back to. Marina tower is 18+ (297 rooms); Ocean Suites is the family side (258 one-bedroom suites with kitchenettes). Renaissance Island is free for guests of both — outsiders queue for about thirty day passes a day at $130 a head. The $65 resort fee and the 12.5% levy are already in our price.' },
+    dealNote: 'One of the four we keep coming back to. Marina tower is 18+ (297 rooms); Ocean Suites is the family side (258 one-bedroom suites with kitchenettes). Renaissance Island is free for guests of both — outsiders queue for about thirty day passes a day at $130 a head. The $65 resort fee and taxes are already in our price.' },
   { id: 'stay_manchebo', site: 'https://www.manchebo.com/', kind: 'aruba', name: 'Manchebo Beach Resort & Spa', area: 'Eagle Beach', country: 'Aruba', category: 3,
     rates: { low: 340, high: 510, peak: 612 }, retailUsd: 694, minNights: 3, peakMinNights: 7, onSand: true, adultsOnly: false,
     vibe: 'Barefoot boutique with a yoga pavilion on the sand and not a high-rise in sight.',
@@ -95,7 +95,7 @@ export const ARUBA_STAYS = [
     rates: { low: 520, high: 700, peak: 950 }, retailUsd: 850, minNights: 3, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: true,
     vibe: '203 rooms in low buildings on Druif Beach, five minutes from Oranjestad and ten from the airport; every room has a patio facing the sea or the garden.',
     features: ['All inclusive', '15 restaurants', 'Alhambra casino', 'Tamarijn included'],
-    dealNote: 'One of the four we keep coming back to. Rate is all-inclusive for two adults and it buys the Tamarijn next door as well — the two together are fifteen restaurants, twelve bars and eleven pools. On an all-inclusive the tourist levy only applies to half the package, which is why this looks better against retail than it should.' },
+    dealNote: 'One of the four we keep coming back to. Rate is all-inclusive for two adults and it buys the Tamarijn next door as well — the two together are fifteen restaurants, twelve bars and eleven pools. On an all-inclusive, tax applies to only part of the package, which is why this looks better against retail than it should.' },
   { id: 'stay_embassy', site: 'https://www.hilton.com/en/hotels/auajmes-embassy-suites-aruba-resort/', kind: 'aruba', name: 'Embassy Suites by Hilton Aruba Resort', area: 'Eagle Beach', country: 'Aruba', category: 2,
     rates: { low: 290, high: 440, peak: 528 }, retailUsd: 600, minNights: 2, peakMinNights: 7, onSand: false, adultsOnly: false,
     vibe: 'New-build all-suite resort: cooked breakfast, evening reception, rooftop pool, beach club across the road.',

@@ -320,7 +320,7 @@ export function landing({ store, go }) {
     // from the start on a wide screen, where eight rows cost nothing.
     const costs = el(`<section class="sec"><div class="wrap">
       <div class="sec-head tight"><div><h2>What a night costs</h2>
-      <p>From <b class="num">${escapeHtml(fmtUsd2(cheapest.from / s.pointsPerDollar))}</b> a night at ${escapeHtml(cheapest.st.name)} to <b class="num">${escapeHtml(fmtUsd2(dearest.from / s.pointsPerDollar))}</b> at ${escapeHtml(dearest.st.name)} — the Circle&rsquo;s all-in rate, with the room, the 12.5% levy, the service charge and the resort fee already in it. Nothing is added later.</p></div>
+      <p>From <b class="num">${escapeHtml(fmtUsd2(cheapest.from / s.pointsPerDollar))}</b> a night at ${escapeHtml(cheapest.st.name)} to <b class="num">${escapeHtml(fmtUsd2(dearest.from / s.pointsPerDollar))}</b> at ${escapeHtml(dearest.st.name)} — the Circle&rsquo;s all-in rate, with the room, taxes, the service charge and the resort fee already in it. Nothing is added later.</p></div>
       <a class="btn ghost sm" href="${blind ? '#/sign-in' : '#/stays'}">${icon('chevronRight', { size: 15 })}${blind ? 'Sign in for all ' + priced.length : 'All ' + priced.length}</a></div>
 
       <details class="fineprint" id="cost-table"><summary>${priced.length > 8 ? `The four cheapest and the four dearest of ${priced.length}` : `All ${priced.length}, cheapest first`}</summary>
