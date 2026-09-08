@@ -7,6 +7,8 @@ import { uid, nowIso, sum, monthKey, fmtMonth, nightsBetween, safeUrl } from './
 import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, fromPoints, seatPoints, pointsPerMonth, hotelOwedUsd } from './money.js';
 import { initialsOf, refFor } from './vocab.js';
 import { standingFrom, rankFor, RANKS, effectiveTier } from './standing.js';
+import { sameName } from './names.js';
+import { shrinkImage, blobToDataUrl } from './image.js';
 
 export const CONTRIBUTION_STATUS = Object.freeze({ pending: 'pending', confirmed: 'confirmed', rejected: 'rejected', withdrawn: 'withdrawn', reversed: 'reversed' });
 export const REDEMPTION_STATUS = Object.freeze({ requested: 'requested', quoted: 'quoted', held: 'held', confirmed: 'confirmed', completed: 'completed', declined: 'declined', expired: 'expired', cancelled: 'cancelled' });
@@ -49,7 +51,7 @@ export const CATALOG_NAMES = Object.freeze({
   'stay_boardwalk': 'Boardwalk Boutique Hotel Aruba',
   'stay_amsterdam': 'Amsterdam Manor Beach Resort',
   'stay_voco': 'voco Surfside Aruba',
-  'stay_eagle': 'Eagle Aruba Resort & Casino',
+  'stay_eagle': 'Eagle Aruba Resort',
   'trip_samana': 'Samaná, whale season',
   'trip_oaxaca': 'Mexico City & Oaxaca',
   'trip_japan': 'Kyoto & Tokyo, early December',
@@ -1465,7 +1467,11 @@ export class Store {
     if (direct) return direct;
     const name = CATALOG_NAMES[seedId];
     if (!name) return undefined;
-    return this.state.stays.find(x => x.name === name);
+    // Not `x.name === name`: the Desk can retype a name with a straight apostrophe, and the
+    // catalog's own entry for Eagle Aruba carried "& Casino" while the row did not. Either way
+    // an exact comparison returned undefined and the live listing at that place said "not in our
+    // catalog yet" with no button.
+    return this.state.stays.find(x => sameName(x.name, name));
   }
 
   async markWatchesSeen(memberId) {
@@ -1615,10 +1621,40 @@ export class Store {
   }
 
   // ---------- catalog ----------
+  /**
+   * Create or edit a place. `photoFile` (a File) puts a photograph on it, `photoRemove` takes it
+   * off, and a photograph never arrives without `photoNote` — where it came from, in the Desk's
+   * words. The database refuses the same thing with a check constraint; a rule enforced in one
+   * backend is not enforced.
+   */
   async upsertStay(data, actorId) {
-    let s = data.id ? this.stay(data.id) : null;
-    if (s) Object.assign(s, data); else { s = { id: uid(data.kind === 'trip' ? 'trip' : 'stay'), active: true, createdAt: nowIso(), ...data }; this.state.stays.push(s); }
-    this.log(actorId, 'stay.upsert', 'stay', s.id, { name: s.name }); await this.commit('stays'); return s;
+    if (!this.hasRole('planner', 'comms', 'admin')) throw new Error('Only the Desk can edit the catalog');
+    const { photoFile = null, photoRemove = false, photoNote, ...rest } = data;
+    if (photoFile && !String(photoNote || '').trim()) throw new Error('Say where the photograph came from before saving it.');
+    let s = rest.id ? this.stay(rest.id) : null;
+    const before = s ? { photoUrl: s.photoUrl ?? null, photoNote: s.photoNote ?? null, photoBy: s.photoBy ?? null, photoAt: s.photoAt ?? null } : null;
+    if (s) Object.assign(s, rest); else { s = { id: uid(rest.kind === 'trip' ? 'trip' : 'stay'), active: true, createdAt: nowIso(), ...rest }; this.state.stays.push(s); }
+    if (photoFile) {
+      // Drawn down before it is kept: the preview backend lives in localStorage, where one
+      // three-megabyte phone photo would be most of the budget.
+      s.photoUrl = await blobToDataUrl(await shrinkImage(photoFile));
+      s.photoNote = String(photoNote).trim(); s.photoBy = actorId; s.photoAt = nowIso();
+    } else if (photoRemove) {
+      s.photoUrl = null; s.photoNote = null; s.photoBy = null; s.photoAt = null;
+    } else if (photoNote !== undefined && s.photoUrl && String(photoNote).trim()) {
+      s.photoNote = String(photoNote).trim();
+    }
+    this.log(actorId, 'stay.upsert', 'stay', s.id, { name: s.name, photo: photoFile ? 'set' : photoRemove ? 'removed' : undefined });
+    await this.commit('stays');
+    // localStorage refused the write. The screen would show the photo until the next reload and
+    // then lose it, which is worse than saying so now.
+    if (photoFile && this.adapter?.lastError?.name === 'QuotaExceededError') {
+      Object.assign(s, before || { photoUrl: null, photoNote: null, photoBy: null, photoAt: null });
+      this.adapter.lastError = null;
+      await this.commit('stays');
+      throw new Error("This browser's preview cannot hold another photograph — its storage is full. On the real Circle photographs live on the server, so this only affects the preview.");
+    }
+    return s;
   }
   async removeStay(id, actorId) { const s = this.stay(id); if (!s) return; s.active = false; this.log(actorId, 'stay.retire', 'stay', id, {}); await this.commit('stays'); }
 
@@ -1670,7 +1706,11 @@ export class LocalAdapter {
   }
   async save(state) {
     const { session, ...rest } = state;
-    try { localStorage.setItem(this.key, JSON.stringify(rest)); this.channel?.postMessage('saved'); } catch (e) { console.warn('Could not persist state', e); }
+    // A refused write is recorded rather than only logged, so a caller that just stored
+    // something large (a photograph) can find out and say so.
+    this.lastError = null;
+    try { localStorage.setItem(this.key, JSON.stringify(rest)); this.channel?.postMessage('saved'); }
+    catch (e) { this.lastError = e; console.warn('Could not persist state', e); }
   }
   loadSession() { try { return JSON.parse(sessionStorage.getItem(`${this.key}.session`) || 'null'); } catch { return null; } }
   saveSession(s) { try { if (s) sessionStorage.setItem(`${this.key}.session`, JSON.stringify(s)); else sessionStorage.removeItem(`${this.key}.session`); } catch { /* ignore */ } }

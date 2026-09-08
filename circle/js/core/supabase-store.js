@@ -131,6 +131,8 @@ export class SupabaseStore extends Store {
       // What the public sites were asking, and when. toCamel does not recurse, so the nested
       // keys arrive exactly as stored. Defaulted so every reader can assume an object.
       sources: (s.sources && typeof s.sources === 'object') ? s.sources : {},
+      // The Desk's photograph, as a public URL. photoFor() prefers it over anything bundled.
+      photoUrl: s.photoPath ? this.sb.storage.from('stay-photos').getPublicUrl(s.photoPath).data.publicUrl : null,
       dates: s.startsOn ? { from: s.startsOn, to: s.endsOn } : undefined }));
     // Nobody signed in can read the stays table — every policy is `to authenticated`, on
     // purpose. But the public page still has to show what the Circle is for, and the same
@@ -349,15 +351,50 @@ export class SupabaseStore extends Store {
   }
 
   // ---------- catalog, notes, settings ----------
+  /**
+   * Create or edit a place; optionally put a photograph on it or take one off. The row is
+   * written first, so a NEW stay has the uuid its photo is filed under, then the object goes to
+   * the bucket and the four photo columns are set. If the second half fails the first has
+   * already happened, and the error says exactly that.
+   */
   async upsertStay(data) {
-    const { rates = {}, id, dates, ...rest } = data;
+    const { rates = {}, id, dates, photoFile = null, photoRemove = false, photoNote, photoUrl, photoBy, photoAt, ...rest } = data;
+    if (photoFile && !String(photoNote || '').trim()) throw new Error('Say where the photograph came from before saving it.');
     const row = toSnake({ ...rest, rateLowUsd: rates.low, rateHighUsd: rates.high, ratePeakUsd: rates.peak,
       startsOn: dates?.from, endsOn: dates?.to });
     for (const k of Object.keys(row)) if (row[k] === undefined) delete row[k];
     if (id && /^[0-9a-f-]{36}$/.test(id)) row.id = id;
-    const { error } = await this.sb.from('stays').upsert(row);
+    // A note edited on its own is fine while a photo is there; the constraint only insists that
+    // a path never sits without one.
+    if (!photoFile && !photoRemove && photoNote !== undefined && String(photoNote).trim()) row.photo_note = String(photoNote).trim();
+    const { data: saved, error } = await this.sb.from('stays').upsert(row).select('id, photo_path').single();
     if (error) throw new Error(error.message);
+    const stayId = saved.id;
+    const old = saved.photo_path || null;
+    try {
+      if (photoFile) {
+        const { shrinkImage } = await import('./image.js');
+        const blob = await shrinkImage(photoFile);
+        const path = `stays/${stayId}/${Date.now()}.jpg`;
+        const { error: upErr } = await this.sb.storage.from('stay-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+        if (upErr) throw new Error(upErr.message);
+        const { error: setErr } = await this.sb.from('stays')
+          .update({ photo_path: path, photo_note: String(photoNote).trim(), photo_by: this.me?.id || null, photo_at: new Date().toISOString() })
+          .eq('id', stayId);
+        if (setErr) throw new Error(setErr.message);
+        if (old && old !== path) await this.sb.storage.from('stay-photos').remove([old]).catch(() => {});
+      } else if (photoRemove && old) {
+        const { error: clrErr } = await this.sb.from('stays')
+          .update({ photo_path: null, photo_note: null, photo_by: null, photo_at: null }).eq('id', stayId);
+        if (clrErr) throw new Error(clrErr.message);
+        await this.sb.storage.from('stay-photos').remove([old]).catch(() => {});
+      }
+    } catch (err) {
+      await this.reload();
+      throw new Error(`The stay was saved, but the photograph was not: ${err.message}`);
+    }
     await this.reload();
+    return stayId;
   }
   // ---------- room types, the watch list and deals ----------
   // Without these the base class would happily mutate its own copy of the state and never

@@ -34,7 +34,7 @@ export const RESORTS = Object.freeze([
   { slug: 'marriotts-aruba-ocean-club-palm-beach-RR64522038', name: "Marriott's Aruba Ocean Club", stayId: 'stay_oceanclub', house: true },
   { slug: 'renaissance-wind-creek-aruba-resort-oranjestad-RR42744828', name: 'Renaissance Wind Creek Aruba Resort', stayId: 'stay_renaissance', house: true },
   { slug: 'barcelo-aruba-palm-beach-RR08981265', name: 'Barceló Aruba', stayId: 'stay_barcelo' },
-  { slug: 'eagle-aruba-resort-oranjestad-RR74926333', name: 'Eagle Aruba Resort & Casino', stayId: 'stay_eagle' },
+  { slug: 'eagle-aruba-resort-oranjestad-RR74926333', name: 'Eagle Aruba Resort', stayId: 'stay_eagle' },
   { slug: 'divi-aruba-phoenix-beach-resort-palm-beach-RR30631633', name: 'Divi Aruba Phoenix Beach Resort', stayId: null },
   { slug: 'divi-village-golf-and-beach-resort-oranjestad-RR78228943', name: 'Divi Village Golf & Beach Resort', stayId: null },
   { slug: 'divi-dutch-village-beach-resort-oranjestad-RR61073401', name: 'Divi Dutch Village Beach Resort', stayId: null },

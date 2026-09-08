@@ -148,12 +148,15 @@ across fourteen resorts, including **Marriott's Aruba Surf Club** (roughly 1,700
 **Marriott's Aruba Ocean Club** and the **Renaissance Wind Creek** — three of our four. The
 Divi is all-inclusive rather than a timeshare, so owner weeks for it do not exist.
 
-**What is open** (`#/live`) is the section — and it is deliberately an extra, not a
-destination. It is not in the thumb bar; it sits at the end of the top bar and is linked
-from Stays, because the Circle's model is that **members never book anything themselves**.
+**Open right now** is the third section of **Deals** (`#/deals`; the old `#/live` address
+redirects there) and the "Open right now at …" panel on every stay page VakayMood carries,
+where each room row also says when an owner has that size open. It used to be a screen of its
+own, ten tabs along, that nobody opened while Deals sat empty. It stays an extra, not a
+destination, because the Circle's model is that **members never book anything themselves**.
 They put points in, alone or pooled with others, and Victor books the room in their name.
 That is the whole product, and a feed of clickable outside inventory would quietly route
-members around the club and around the 15%.
+members around the club and around the 15%. The copy calls it what it is — owner rentals on
+VakayMood, never "Interval" and never "available".
 
 So the outbound "go and book it" link is **planner-and-comms only**. A member sees the week,
 sees what it costs in points, and gets one button: *Ask the Circle for it*. Verified by
@@ -161,7 +164,10 @@ role in the suite — a member's view contains zero links to the outside site, V
 contains one per card.
 
 It shows live weeks priced in points at the club's own rate, filterable by resort, size,
-price and dates, and says plainly when a week comes in under our own published rate.
+price and dates, says plainly when a week comes in under our own published rate, and badges a
+week "You asked for this" when it answers a watch the member set — matched on room size, never
+guessed. The default view asks VakayMood once per catalog resort and merges: one island-wide
+page filtered afterwards showed five of ours under a count of two thousand.
 
 Two things it is careful about, both learned by getting them wrong first:
 

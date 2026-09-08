@@ -582,9 +582,18 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
   background: var(--good); box-shadow: 0 0 0 2px var(--surface); }
 .empty .ico { display: block; }
 
-/* Live availability: a card that shouts only when the week beats our own rate. */
+/* Live listings: a card shouts when the owner's ask beats our own rate, and shouts differently
+   when it answers something this member is watching for. The second ring is heavier so a card
+   that does both is still readable as "you asked for this". */
 .live-card.beats { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+.live-card.matched { border-color: var(--good); box-shadow: inset 0 0 0 2px var(--good); }
 .live-card h3 { overflow-wrap: anywhere; }
+/* The line under a room on a stay page: an owner has that size open right now. */
+.rooms-table .open-line { display: inline-block; margin-top: 6px; color: var(--good-text); }
+
+/* The Desk's photograph field: what is on the stay now, or what was just chosen. */
+.photo-preview { margin-top: 6px; }
+.photo-preview img { display: block; max-width: 100%; max-height: 200px; border-radius: var(--r-card); object-fit: cover; }
 
 /* The band table on a phone. Two mono ranges take 190px of a 358px card, which leaves the
    category — the half a reader is actually scanning — squeezed into 130px: "Boutique and

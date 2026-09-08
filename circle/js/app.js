@@ -12,7 +12,6 @@ import * as member from './views/member.js';
 import * as catalog from './views/catalog.js';
 import * as officer from './views/officer.js';
 import * as dealsView from './views/deals.js';
-import * as liveView from './views/live.js';
 import * as crewsView from './views/crews.js';
 import { icon } from './ui/icons.js';
 
@@ -36,7 +35,8 @@ const ROUTES = [
   { path: '/requests', view: catalog.requests, title: 'Your requests', auth: true },
   { path: '/requests/:id', view: catalog.requestDetail, title: 'Request', auth: true },
   { path: '/deals', view: dealsView.deals, title: 'Deals', auth: true },
-  { path: '/live', view: liveView.live, title: 'Open right now', auth: true },
+  // "What is open" is a section of Deals now. Old links and bookmarks still land somewhere.
+  { path: '/live', redirect: '/deals', title: 'Deals' },
   { path: '/watching', view: dealsView.watching, title: 'What you are watching', auth: true },
   { path: '/crews', view: crewsView.crews, title: 'Your crews', auth: true },
   { path: '/crews/:id', view: crewsView.crewDetail, title: 'Crew', auth: true },
@@ -169,6 +169,9 @@ function ctx(current) {
 function render(current = router?.current) {
   if (!current) return;
   const { route } = current;
+  // A route that only exists to send people on. `replace` so Back does not bounce off it; one
+  // hop, because the destination has no redirect of its own.
+  if (route.redirect) { router.go(route.redirect, { replace: true }); return; }
   if (route.auth && !store.session) { router.go('/sign-in', { replace: true }); return; }
   // A password somebody else chose is a password somebody else knows. No screen opens until it
   // has been replaced — including by the back button.
@@ -281,7 +284,7 @@ function updateChrome(current) {
   // extra tabs that only three people can open.
   const main = me ? [{ path: '/home', label: 'Home' }, { path: '/stays', label: 'Stays' }, { path: '/trips', label: 'Trips' },
                      { path: '/deals', label: 'Deals', badge: unseen }, { path: '/pay', label: 'Send' },
-                     { path: '/circle', label: 'Circle' }, { path: '/crews', label: 'Crews' }, { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }, { path: '/live', label: 'What is open' }]
+                     { path: '/circle', label: 'Circle' }, { path: '/crews', label: 'Crews' }, { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }]
                   : [{ path: '/rules', label: 'How it works' }];
   tabs.innerHTML = main.map(n => `<a href="#${n.path}"${path === n.path ? ' aria-current="page"' : ''}>${escapeHtml(n.label)}${
     n.badge ? `<span class="nav-badge">${n.badge > 9 ? '9+' : n.badge}</span>` : ''}</a>`).join('');

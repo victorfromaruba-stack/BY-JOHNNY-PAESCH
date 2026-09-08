@@ -18,7 +18,6 @@ are density and touch, not breakage.
 | `/stays/:id` | 10.4 | 552 | 27 | 5799 |
 | `/trips` | 2.4 | 892 | 1 | 1541 |
 | `/deals` | 1.1 | — | 4 | 534 |
-| `/live` | 1.4 | — | 9 | 1066 |
 | `/requests` | 1.0 | — | 1 | **102** |
 | `/pay` | 2.0 | 516 | 4 | 1364 |
 | `/ledger` | 4.6 | 245 | 3 | 3507 |
@@ -104,7 +103,7 @@ Cheapest first, because each one is independently shippable:
    already exists in tokens — the sizes drifted, the token did not.
 2. **Get the first figure above the fold** on `/stays`, `/settings`, `/trips`, `/`. Mostly
    deleting headings that repeat the nav and eyebrows that repeat their content.
-3. **Fold the near-empty routes together.** `/deals`, `/live` and `/watching` are one idea.
+3. **Fold the near-empty routes together.** `/deals`, `/live` and `/watching` are one idea. *Done for `/live`: it is the third section of Deals and redirects; `/watching` stays a screen because it is a form.*
 4. **Shorten the long pages** with progressive disclosure, not by removing information.
 5. **Motion and state feedback** last — it is the layer that makes the rest feel intentional,
    and it is wasted effort under a layout that is still wrong.

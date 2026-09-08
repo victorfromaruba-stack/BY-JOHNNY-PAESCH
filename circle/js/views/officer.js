@@ -9,6 +9,7 @@ import { toast, sheet, confirmDialog, setBusy, chip, statusLabel, avatar } from 
 import { columns, tableFor, sparkline } from '../ui/charts.js';
 import { waLink, TEMPLATES, copyText, shareText } from '../core/share.js';
 import { quoteSheet } from './catalog.js';
+import { photoFor } from './public.js';
 import { icon } from '../ui/icons.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -583,6 +584,19 @@ async function editStay(store, stay) {
       </div>`}
       <label class="field"><span>What it is like</span><textarea name="vibe" rows="2">${escapeHtml(stay?.vibe || '')}</textarea></label>
       <label class="field"><span>Note from Victor</span><input name="dealNote" value="${escapeHtml(stay?.dealNote || '')}"></label>
+      <div class="field" id="photo-block">
+        <span>Photograph</span>
+        <div id="photo-preview" class="photo-preview">${photoFor(stay)
+          ? `<img src="${escapeHtml(photoFor(stay))}" alt="">${stay?.photoUrl ? '' : '<span class="tiny muted" style="display:block;margin-top:4px">From the property\'s own site, with its page and date on record. One you upload replaces it.</span>'}`
+          : '<span class="small muted">No photograph yet — the card shows a blank plate until there is one.</span>'}</div>
+        <div class="row" style="margin-top:8px">
+          <label class="btn ghost sm" style="cursor:pointer">${icon('camera', { size: 15 })}Choose a photograph<input type="file" name="photo" accept="image/jpeg,image/png,image/webp" hidden></label>
+          ${stay?.photoUrl ? `<button type="button" class="btn quiet sm" id="photo-remove">${icon('x', { size: 15 })}Take it off</button>` : ''}
+        </div>
+        <label class="field" style="margin-top:10px"><span>Where it came from</span>
+          <input name="photoNote" value="${escapeHtml(stay?.photoNote || '')}" placeholder="Our own photo, March 2026 · the resort's media kit, with their OK">
+          <span class="hint">Only a photograph the Circle may use: one you took, or one from the resort's media kit with their permission. Not a picture copied off their website — those are the hotel's copyright, and the Circle does not take what it has not been given. Members see this line under the picture.</span></label>
+      </div>
       <label class="row" style="gap:10px;margin-bottom:12px"><input type="checkbox" name="active" ${stay?.active !== false ? 'checked' : ''} style="width:20px;height:20px"><span class="small">Live for members</span></label>
       ${isTrip ? '' : `<label class="row" style="gap:10px;margin-bottom:12px"><input type="checkbox" name="house" ${stay?.house ? 'checked' : ''} style="width:20px;height:20px"><span class="small">One of the places we actually use — shows first, with a badge</span></label>`}
       <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Save</button></div>`;
@@ -591,6 +605,20 @@ async function editStay(store, stay) {
       const usd = e.target.closest('[data-usd]'); const pts = e.target.closest('[data-pts]');
       if (usd) { const p = body.querySelector(`[data-pts="${usd.dataset.usd}"]`); if (p) p.value = Math.round((Number(usd.value) || 0) * s.pointsPerDollar); }
       if (pts) { const u = body.querySelector(`[data-usd="${pts.dataset.pts}"]`); if (u) u.value = (Math.round(Number(pts.value) || 0) / s.pointsPerDollar).toFixed(2); }
+    });
+    // The photograph: show what was chosen, or mark the current one to come off on save.
+    const preview = body.querySelector('#photo-preview');
+    body.querySelector('[name=photo]')?.addEventListener('change', (e) => {
+      const f = e.target.files?.[0]; if (!f) return;
+      delete body.dataset.photoRemove;
+      preview.innerHTML = `<img src="${URL.createObjectURL(f)}" alt="">`;
+      body.querySelector('#photo-remove')?.remove();
+      body.querySelector('[name=photoNote]')?.focus();
+    });
+    body.querySelector('#photo-remove')?.addEventListener('click', (e) => {
+      body.dataset.photoRemove = '1';
+      preview.innerHTML = '<span class="small muted">The photograph comes off when you save.</span>';
+      e.currentTarget.remove();
     });
     body.querySelector('[data-ok]').addEventListener('click', () => {
       const v = (n) => body.querySelector(`[name=${n}]`)?.value;
@@ -615,10 +643,24 @@ async function editStay(store, stay) {
         minNights: Number(v('minNights')), peakMinNights: Number(v('peakMinNights')), retailUsd: Number(v('retailUsd')),
         onSand: stay?.onSand ?? true, adultsOnly: stay?.adultsOnly ?? false, category: stay?.category || 2,
         house: !!body.querySelector('[name=house]')?.checked });
+      // A photograph never leaves the sheet without its provenance. The stores refuse it too.
+      const photoFile = body.querySelector('[name=photo]')?.files?.[0] || null;
+      const photoNote = v('photoNote') || '';
+      if (photoFile && !photoNote.trim()) {
+        toast('Say where the photograph came from before saving it.', { kind: 'bad' });
+        body.querySelector('[name=photoNote]')?.focus();
+        return;
+      }
+      Object.assign(data, { photoFile, photoNote, photoRemove: !!body.dataset.photoRemove });
       close(data);
     });
   } });
-  if (out) { await store.upsertStay(out, store.me.id); toast('Saved. Members see the new points immediately.', { kind: 'good' }); }
+  if (out) {
+    try {
+      await store.upsertStay(out, store.me.id);
+      toast(out.photoFile ? 'Saved. The photograph is on the stay now.' : out.photoRemove ? 'Saved. The photograph is off.' : 'Saved. Members see the new points immediately.', { kind: 'good' });
+    } catch (err) { toast(err.message, { kind: 'bad', timeout: 8000 }); }
+  }
 }
 
 // ---------------------------------------------------------------- the Pool

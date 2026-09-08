@@ -464,7 +464,7 @@ create table if not exists deals (
   retail_usd    numeric(10,2),
   -- where it came from. `source_url` is the link the Desk clicks to go and book it.
   source        text not null default 'other'
-                check (source in ('interval','redweek','iberostar','airbnb','vrbo','hotel','member','other')),
+                check (source in ('interval','redweek','iberostar','airbnb','vrbo','hotel','member','vakaymood','other')),
   source_url    text,
   source_ref    text,
   units         int not null default 1 check (units > 0),
@@ -2529,6 +2529,24 @@ drop policy if exists moments_file_own on storage.objects;
 create policy moments_file_own on storage.objects for delete to authenticated
   using (bucket_id = 'moments' and (storage.foldername(name))[1] = current_member_id()::text);
 
+-- Stay photographs. One per stay, uploaded by the Desk, public to read (a stay card is not a
+-- secret). Written only under stays/<stay uuid>/ by planner, comms or admin — the folder test is
+-- in BOTH halves so a Desk member can neither read-through nor delete outside that folder.
+-- A photograph goes in here only when the Desk holds the rights to it: their own, or the
+-- resort's media kit. Never a picture copied off a website — see the provenance check on stays.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('stay-photos', 'stay-photos', true, 5242880, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do update set public = excluded.public,
+  file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+drop policy if exists stay_photos_read on storage.objects;
+create policy stay_photos_read on storage.objects for select to public using (bucket_id = 'stay-photos');
+drop policy if exists stay_photos_desk on storage.objects;
+create policy stay_photos_desk on storage.objects for all to authenticated
+  using (bucket_id = 'stay-photos' and (storage.foldername(name))[1] = 'stays'
+         and (select has_role('planner','comms','admin')))
+  with check (bucket_id = 'stay-photos' and (storage.foldername(name))[1] = 'stays'
+              and (select has_role('planner','comms','admin')));
+
 -- =====================================================================
 --  Standing, badges and provenance
 --
@@ -2552,6 +2570,25 @@ alter table members add column if not exists cover       text;
 -- and when anyone last looked, site is the page the Desk books from.
 alter table stays add column if not exists sources jsonb;
 alter table stays add column if not exists site    text;
+
+-- One photograph per stay, only ever one the Desk holds the rights to: their own, or the
+-- resort's media kit. Never a picture copied off a website — the property's photographs are
+-- the property's copyright, and "reachable" is not "licensed". The note is the provenance and
+-- it is not optional: a photo without one is refused here and in the app. Members see the note
+-- under the picture.
+alter table stays add column if not exists photo_path text;
+alter table stays add column if not exists photo_note text;
+alter table stays add column if not exists photo_by   uuid references members(id);
+alter table stays add column if not exists photo_at   timestamptz;
+alter table stays drop constraint if exists stays_photo_needs_provenance;
+alter table stays add constraint stays_photo_needs_provenance
+  check (photo_path is null or nullif(trim(photo_note), '') is not null);
+
+-- VakayMood is a source in its own right: the Desk's "Put it on the board" posts from it. The
+-- inline check on the table is for a fresh build; this is for a database that already exists.
+alter table deals drop constraint if exists deals_source_check;
+alter table deals add constraint deals_source_check
+  check (source in ('interval','redweek','iberostar','airbnb','vrbo','hotel','member','vakaymood','other'));
 
 -- What the member was looking at when they asked, so the Desk can open the same page.
 alter table redemptions add column if not exists source_url   text;

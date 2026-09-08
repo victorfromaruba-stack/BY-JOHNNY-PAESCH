@@ -8,6 +8,8 @@ import { stayCard, stayStrip, photoFor } from './public.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
 import { shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
+import { dealCard } from './deals.js';
+import { liveSection, resortForStay } from './live.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 const AREAS = ['Palm Beach', 'Eagle Beach', 'Druif Beach', 'Oranjestad', 'Malmok', 'Savaneta', 'Noord'];
@@ -37,7 +39,7 @@ export function stays({ store, query, go }) {
       <button class="btn ghost sm no-print" id="ftoggle" type="button" aria-expanded="false" aria-controls="filters"></button>
       <div class="row no-print filterbar" id="filters" style="margin-bottom:14px" role="group" aria-label="Filter stays"></div>
       <div class="grid g3" id="list"></div>
-      <p class="small muted" style="margin-top:18px">${icon('eye', { size: 14, cls: 'ico-muted' })} <a href="#/live">See what is open right now</a> · you never book it yourself — you put points in and the Circle books it for you. The four marked <em>Where we stay</em> are the ones we actually end up at; the rest are here because Victor can get them. Longer minimums apply over Christmas and Carnival, and the quote says when. <a href="#/rules">The rules</a>.</p>
+      <p class="small muted" style="margin-top:18px">${icon('eye', { size: 14, cls: 'ico-muted' })} <a href="#/deals">See everything open right now, on Deals</a> · you never book it yourself — you put points in and the Circle books it for you. The four marked <em>Where we stay</em> are the ones we actually end up at; the rest are here because Victor can get them. Longer minimums apply over Christmas and Carnival, and the quote says when. <a href="#/rules">The rules</a>.</p>
     </div></section></div>`);
   const list = wrap.querySelector('#list'), filters = wrap.querySelector('#filters'), count = wrap.querySelector('#count');
   const ftoggle = wrap.querySelector('#ftoggle');
@@ -237,6 +239,7 @@ export function stayDetail({ store, params, go }) {
              ${site ? `<p class="small" style="margin-top:10px">Their own page is
                <a href="${escapeHtml(site)}" target="_blank" rel="noopener noreferrer">${escapeHtml(new URL(site).host.replace(/^www\./, ''))} ${icon('external', { size: 13 })}</a>
                &mdash; what it is asking today is the number to beat.</p>` : ''}`}
+          <p class="small" id="live-line" hidden style="margin-top:10px"></p>
         </div>`;
       })()}
       ${stay.dealNote ? `<div class="notice" style="margin-top:16px"><b>From Victor</b><p class="small">${escapeHtml(stay.dealNote)}</p></div>` : ''}
@@ -244,6 +247,7 @@ export function stayDetail({ store, params, go }) {
         <div class="panel" id="pricing"></div>
         <div class="panel flat" id="afford"></div>
       </div>
+      <div id="open"></div>
       <div id="rooms"></div>
       <div id="reach-note"></div>
       <div class="row" style="margin-top:20px">
@@ -251,18 +255,28 @@ export function stayDetail({ store, params, go }) {
         <button class="btn ghost" id="share">${icon('share', { size: 16 })}Share</button>
       </div>
     </div></section></div>`);
-  wrap.querySelector('.strip').prepend(stayStrip(stay));
 
   // What you can actually be given here, and what each one costs a night.
   {
+    // This block is the only thing that fills #stay-hero. A line above it used to prepend a
+    // second stayStrip into the same .strip — invisible for years because photoFor() was null on
+    // the live backend and the hero was removed, and a double-height drawing on every trip page.
     // On a card the blank plate earns its place: it holds the grid's rhythm and carries the
     // beach. Here it earns nothing — a full-width empty box under a heading that has just said
     // the same beach in the breadcrumb. Where there is no photograph the hero simply goes, and
     // the page starts on the thing a member actually came for, the price and where it came from.
     const hero = wrap.querySelector('#stay-hero');
-    if (hero && (photoFor(stay) || isTrip)) hero.querySelector('.strip').appendChild(stayStrip(stay));
-    else if (hero) hero.remove();
+    if (hero && (photoFor(stay) || isTrip)) {
+      hero.querySelector('.strip').appendChild(stayStrip(stay));
+      // Where the picture came from, in the Desk's own words. A caption cannot live inside the
+      // strip (it is a span), so it sits under the hero.
+      if (stay.photoNote) hero.insertAdjacentHTML('afterend', `<p class="tiny muted" style="margin-top:6px">Photograph: ${escapeHtml(stay.photoNote)}</p>`);
+    } else if (hero) hero.remove();
   }
+  // Which sizes an owner has open on VakayMood right now, filled in when the feed answers. The
+  // rooms table draws before that and once more after, so first paint never waits on a third party.
+  let openByBeds = new Map();
+  let drawRooms = null;
   const roomsSlot = wrap.querySelector('#rooms');
   const rooms = store.roomTypesFor(stay.id);
   if (rooms.length && !isTrip) {
@@ -277,13 +291,14 @@ export function stayDetail({ store, params, go }) {
         <button class="btn ghost sm" id="r-more" type="button" style="margin-top:12px" hidden></button>
         <p class="small muted" style="margin-top:12px">${icon('scale', { size: 14, cls: 'ico-muted' })}
           Every room is priced off this property's own rate, so when Victor negotiates a better one they all move together.
-          Sizes are the property's own published figures. Where a room says <em>size not published</em>, nobody publishes one and we would rather leave it blank than guess at it.</p>
+          Sizes are the property's own published figures. Where a room says <em>size not published</em>, nobody publishes one and we would rather leave it blank than guess at it.
+          A green line under a room means an owner has that size open on VakayMood right now; the link goes with your request so Victor knows where it was seen, and what you pay is his quote.</p>
       </section>`));
     // Thirteen rooms here, twenty-three at the Hilton. Nobody reads to the end of that, and it
     // buried everything below it — so the page opens with a handful and says how many more.
     const FIRST = 6;
     let showAll = rooms.length <= FIRST + 2;
-    const drawRooms = () => {
+    drawRooms = () => {
       const shown = showAll ? rooms : rooms.slice(0, FIRST);
       const more = roomsSlot.querySelector('#r-more');
       if (more) more.hidden = showAll;
@@ -296,7 +311,11 @@ export function stayDetail({ store, params, go }) {
             ${r.beds ? `<br><span class="small muted">${escapeHtml(r.beds)}</span>` : ''}
             <br><span class="flags">${r.kitchen === 'full' ? `<span class="tag">${icon('kitchen', { size: 13 })}Full kitchen</span>` : r.kitchen === 'kitchenette' ? '<span class="tag">Kitchenette</span>' : ''}
               ${(r.extras || []).slice(0, 2).map(x => `<span class="tag">${escapeHtml(x)}</span>`).join('')}
-              ${r.source === 'size-unpublished' ? '<span class="tag">size not published</span>' : ''}</span></td>
+              ${r.source === 'size-unpublished' ? '<span class="tag">size not published</span>' : ''}</span>
+            ${(() => {
+              const o = openByBeds.get(r.bedrooms ?? -1);
+              return o ? `<br><a class="small open-line" href="#/book/${escapeHtml(stay.id)}?from=${escapeHtml(o.from)}&to=${escapeHtml(o.to)}&room=${escapeHtml(r.id)}${o.bookingUrl ? `&src=${encodeURIComponent(o.bookingUrl)}&srcLabel=VakayMood` : ''}">${icon('eye', { size: 13 })} an owner is asking ${escapeHtml(fmtUsd2(o.usdNightly))} a night on VakayMood · ${escapeHtml(fmtDay(o.from))} – ${escapeHtml(fmtDay(o.to))}</a>` : '';
+            })()}</td>
           <td class="small" data-k="Size"><span>${r.sqft ? `${r.sqft.toLocaleString('en-US')} sq ft` : '<span class="muted">not published</span>'}</span>${r.sqm ? `<span class="muted">${r.sqm} m²</span>` : ''}</td>
           <td class="small" data-k="Sleeps"><span>${icon('users', { size: 14, cls: 'ico-muted' })} ${r.sleeps}</span>${r.bedrooms ? `<span class="muted">${r.bedrooms} bed${r.bedrooms > 1 ? 'rooms' : 'room'}</span>` : ''}</td>
           <td class="num" data-k="A night"><span><b>${escapeHtml(fmtPoints(per))}</b></span><span class="small muted">${escapeHtml(fmtUsd2(per / s.pointsPerDollar))}</span><span class="small ${can >= min ? 'muted' : ''}">${can >= min ? `covers ${Math.min(can, 14)} night${can === 1 ? '' : 's'}` : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of ${min}`}</span></td>
@@ -317,6 +336,59 @@ export function stayDetail({ store, params, go }) {
       const w = e.target.closest('[data-watch-room]');
       if (w) { const { addWatchSheet } = await import('./deals.js'); addWatchSheet({ store, prefill: { stayId: stay.id, roomTypeId: w.dataset.watchRoom, nights: stay.minNights || 3 } }); }
     });
+  }
+
+  // What is open here right now: posted deals for this place, then owner rentals live from
+  // VakayMood where it carries this resort. The rooms table above learns which sizes are open
+  // from the same fetch, so "the room packages reflect what is open" without a second request.
+  {
+    const resort = isTrip ? null : resortForStay(store, stay);
+    const posted = store.liveDeals().filter(d => d.stayId === stay.id);
+    const liveLine = wrap.querySelector('#live-line');
+    if (resort || posted.length) {
+      const panel = el(`<section class="panel" style="margin-top:22px" id="open-now">
+        <div><p class="eyebrow">${icon('eye')}Open right now</p>
+          <h2 style="font-size:1.15rem;margin-top:6px">Open right now at ${escapeHtml(stay.name)}</h2>
+          <p class="small muted" style="margin-top:6px;max-width:62ch">${resort
+            ? 'Owner rentals open on VakayMood at the time shown, cheapest first, plus anything the Desk has posted for this place. Not Interval — what Victor finds on Interval arrives on the board.'
+            : 'What the Desk has posted for this place.'}</p></div>
+        <div id="open-posted" style="margin-top:12px"></div>
+        <div id="open-live"></div>
+      </section>`);
+      wrap.querySelector('#open').appendChild(panel);
+      if (posted.length) {
+        const grid = el('<div class="grid g2"></div>');
+        for (const d of posted) {
+          const match = store.watchesFor(me.id).map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
+          grid.appendChild(dealCard(d, { store, match, canEdit: store.canPostDeals() }));
+        }
+        panel.querySelector('#open-posted').appendChild(grid);
+        // The card's "Gone" button is the Desk's; on the Deals page the board handles it, here
+        // the panel does, so it is never a button that does nothing.
+        panel.addEventListener('click', async (e) => {
+          const retire = e.target.closest('[data-act="retire"]');
+          if (!retire) return;
+          const id = retire.closest('[data-deal]')?.dataset.deal;
+          const yes = await confirmDialog({ title: 'Take it off the board?', confirmText: 'It is gone',
+            message: 'It stays in the record, but it comes off the board for everyone.' });
+          if (yes) { try { await store.retireDeal(id, me.id, 'Taken'); toast('Off the board.'); } catch (err) { toast(err.message, { kind: 'bad' }); } }
+        });
+      }
+      if (resort) {
+        panel.querySelector('#open-live').appendChild(liveSection(
+          { store, me, s, canPost: store.canPostDeals(), go },
+          { compact: true, slug: resort.slug, first: 6,
+            onLoaded: (byBeds, res) => {
+              openByBeds = byBeds;
+              drawRooms?.();
+              if (liveLine && res.cheapest) {
+                const at = res.generatedAt ? new Date(res.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                liveLine.innerHTML = `${icon('eye', { size: 14, cls: 'ico-muted' })} On VakayMood right now: ${res.total.toLocaleString('en-US')} owner week${res.total === 1 ? '' : 's'} open here, asking from ${escapeHtml(fmtUsd2(res.cheapest.usdNightly))} a night${at ? ` · as of ${escapeHtml(at)}` : ''}.`;
+                liveLine.hidden = false;
+              }
+            } }));
+      }
+    }
   }
 
   if (isTrip) {

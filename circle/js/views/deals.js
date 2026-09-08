@@ -11,6 +11,7 @@ import { quoteStay, fromPoints, seatPoints } from '../core/money.js';
 import { icon } from '../ui/icons.js';
 import { toast, sheet, confirmDialog, setBusy, avatar } from '../ui/components.js';
 import { stayStrip } from './public.js';
+import { liveSection } from './live.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 
@@ -22,6 +23,7 @@ export const SOURCES = Object.freeze({
   vrbo:     { label: 'Vrbo', icon: 'home', note: 'A whole place, usually by the week' },
   hotel:    { label: 'Direct', icon: 'phone', note: 'Straight from the hotel, on our rate' },
   member:   { label: 'An Insider', icon: 'users', note: 'Someone in the Circle passed it on' },
+  vakaymood:{ label: 'VakayMood', icon: 'eye', note: 'An owner renting their week, booked through VakayMood' },
   other:    { label: 'Elsewhere', icon: 'compass', note: '' },
 });
 
@@ -52,7 +54,7 @@ export function dealCard(deal, { store, match = null, canEdit = false } = {}) {
         </div>
         <p class="small" style="margin-top:10px">${icon('calendar', { size: 15, cls: 'ico-muted' })}
           ${escapeHtml(fmtDay(deal.from))} – ${escapeHtml(fmtDay(deal.to))}
-          ${deal.units > 1 ? ` · ${deal.units} available` : ''}</p>
+          ${deal.units > 1 ? ` · ${deal.units} of them` : ''}</p>
         ${saveUsd > 0 ? `<p class="small" style="margin-top:6px;color:var(--good-text)">${icon('trend', { size: 15 })}About ${escapeHtml(fmtUsd2(saveUsd))} under the public rate</p>` : ''}
         ${deal.note ? `<p class="small muted" style="margin-top:10px">“${escapeHtml(deal.note)}”</p>` : ''}
         <div class="flags" style="margin-top:10px">
@@ -84,8 +86,8 @@ export function deals({ store, go }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <div class="row-between">
         <div><p class="eyebrow">${icon('zap')}As they turn up</p><h1>Deals</h1>
-          <p class="lede" style="margin-top:10px;max-width:60ch">Rooms that became available somewhere Victor or Ian was looking. They go as fast as they come, so anything here is worth asking about the same day.
-            <b>You do not book these yourself</b> — put your points in, alone or with others, and the Circle books it in your name.</p></div>
+          <p class="lede" style="margin-top:10px;max-width:62ch">Everything open that the Circle can book for you: what answers a watch you set, what Victor and Ian have put on the board from Interval, RedWeek and the phone, and what owners have open right now on VakayMood.
+            <b>You do not book any of it yourself</b> — put your points in, alone or with others, and the Circle books it in your name.</p></div>
         ${canEdit ? `<div class="row no-print"><button class="btn sm" id="paste">${icon('copy', { size: 16 })}Paste a listing</button>
           <button class="btn ghost sm" id="post">${icon('plus', { size: 16 })}By hand</button></div>` : ''}
       </div>
@@ -96,6 +98,7 @@ export function deals({ store, go }) {
 
       <div id="mine" style="margin-top:22px"></div>
       <div id="all" style="margin-top:22px"></div>
+      <div id="open" style="margin-top:30px"></div>
     </div></section></div>`);
 
   const mineSlot = wrap.querySelector('#mine'), allSlot = wrap.querySelector('#all');
@@ -112,25 +115,35 @@ export function deals({ store, go }) {
     if (store.unseenMatches(me.id).length) store.markWatchesSeen(me.id);
   }
 
-  allSlot.appendChild(el(`<div class="sec-head"><div><p class="eyebrow">${mine.length ? 'Everything else' : 'On the board'}</p>
-    <h2 style="font-size:1.2rem">${rest.length} live right now</h2></div></div>`));
+  allSlot.appendChild(el(`<div class="sec-head"><div><p class="eyebrow">${mine.length ? 'Everything else on the board' : 'On the board'}</p>
+    <h2 style="font-size:1.2rem">${rest.length ? `${rest.length} posted by the Desk` : 'Nothing posted by the Desk yet'}</h2></div></div>`));
   if (rest.length) {
     const grid = el('<div class="grid g2"></div>');
     rest.forEach(d => grid.appendChild(dealCard(d, { store, canEdit })));
     allSlot.appendChild(grid);
   } else {
-    allSlot.appendChild(el(`<div class="empty">${icon('compass', { size: 30, cls: 'ico-muted' })}
-      <b style="display:block;margin-top:10px">Nothing on the board today</b>
-      <p class="small muted">This is normal — good weeks appear and go within hours. Tell the Circle what you are after and you will hear the moment one does.</p>
-      <p style="margin-top:12px"><a class="btn sm" href="#/watching">${icon('bell', { size: 16 })}Add a watch</a></p></div>`));
+    // One line, not a screen: what owners have open is right below, and an empty-state box the
+    // height of a phone would push it out of sight — which is how "Deals is empty" read to Victor.
+    allSlot.appendChild(el(`<p class="small muted" style="margin-top:8px">What Victor and Ian find on Interval, RedWeek and the phone lands here. What owners have open right now is below —
+      and <a href="#/watching">a watch</a> is how you hear first.</p>`));
   }
+
+  // Everything open on VakayMood, live from the member's own browser. Owner rentals, not
+  // Interval — the copy says so, because a member who reads "Interval" here would think the
+  // Getaway price applies.
+  const openSlot = wrap.querySelector('#open');
+  openSlot.appendChild(el(`<div class="sec-head"><div><p class="eyebrow">${icon('eye')}Owners renting, live</p>
+    <h2 style="font-size:1.2rem">Open right now on VakayMood</h2>
+    <p class="small muted" style="margin-top:8px;max-width:62ch">Owners renting their weeks on VakayMood, as of the time shown — proof a week is physically open, and what that owner is asking.
+      Not Interval Getaways: what Victor finds on Interval reaches you through the board above. Our own rate for the same room is under each card, and what you accept is Victor's quote.</p></div></div>`));
+  openSlot.appendChild(liveSection({ store, me, s: store.settings, canPost: canEdit, go }));
 
   wrap.addEventListener('click', async (e) => {
     const retire = e.target.closest('[data-act="retire"]');
     if (retire) {
       const id = retire.closest('[data-deal]').dataset.deal;
       const yes = await confirmDialog({ title: 'Take it off the board?', confirmText: 'It is gone',
-        message: 'It stays in the record, but nobody sees it as available any more.' });
+        message: 'It stays in the record, but it comes off the board for everyone.' });
       if (yes) { try { await store.retireDeal(id, store.me.id, 'Taken'); toast('Off the board.'); } catch (err) { toast(err.message, { kind: 'bad' }); } }
     }
   });

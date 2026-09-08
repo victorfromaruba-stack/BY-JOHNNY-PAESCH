@@ -7,13 +7,15 @@ import { sceneSvg, plateHtml, treeSvg, starSvg } from '../ui/art.js';
 import { toast, setBusy, sheet, avatar } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { copyText } from '../core/share.js';
+import { CATALOG_NAMES } from '../core/store.js';
+import { normName } from '../core/names.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 /**
  * Which places we hold a real photograph of.
  *
  * Victor: "I don't want fantasy rooms only rooms that are actual there… it's all ghost fantasy
- * pictures." Every card used to be a generated SVG of an imaginary beach. These six are
+ * pictures." Every card used to be a generated SVG of an imaginary beach. These eight are
  * photographs from the properties' own sites, fetched with .claude/skills/real-rooms with
  * robots.txt honoured, and assets/stays/sources.json records the page and the date for each.
  *
@@ -23,13 +25,25 @@ const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; re
  * not want to be read by a script. We take the no. Working around bot management to take a
  * property's copyrighted photographs would be wrong twice over.
  *
- * So those fifteen get no picture at all — see plateSvg. Run the skill over a property that will
- * answer and it swaps itself out by appearing in this list.
+ * So those fifteen get no picture at all — see plateSvg — unless the Desk uploads one it holds the
+ * rights to, which arrives on the stay as `photoUrl` and wins over anything bundled here.
+ *
+ * The set is keyed by the BUNDLED ids, and that was the whole bug: on the live backend every stay
+ * is a uuid, so `REAL_PHOTOS.has(stay.id)` was false for every signed-in member and these eight
+ * photographs had only ever been seen by strangers on the landing page, who get the bundled
+ * catalog. A stay is therefore matched back to its bundled id by name, through the same
+ * normalisation stayLike() uses, before the set is consulted.
  */
 const REAL_PHOTOS = new Set(['stay_amsterdam', 'stay_boardwalk', 'stay_bucuti', 'stay_divi',
   'stay_manchebo', 'stay_oceanvillas', 'stay_oceanz', 'stay_tamarijn']);
-export const photoFor = (stay) => (REAL_PHOTOS.has(stay?.id)
-  ? `assets/stays/${stay.id.replace('stay_', '')}.jpg` : null);
+const SEED_BY_NAME = new Map(Object.entries(CATALOG_NAMES).map(([id, n]) => [normName(n), id]));
+const seedIdOf = (stay) => (stay?.id && REAL_PHOTOS.has(stay.id) ? stay.id : SEED_BY_NAME.get(normName(stay?.name)));
+export const photoFor = (stay) => {
+  if (!stay) return null;
+  if (stay.photoUrl) return stay.photoUrl;
+  const seed = seedIdOf(stay);
+  return seed && REAL_PHOTOS.has(seed) ? `assets/stays/${seed.replace('stay_', '')}.jpg` : null;
+};
 
 export const stayStrip = (stay) => {
   const d = document.createElement('div');
