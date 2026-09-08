@@ -12,13 +12,11 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sweep, ARUBA, sameName } from './redweek.mjs';
+import { sweep, ARUBA } from './redweek.mjs';
 import { Interval } from './interval.mjs';
 import { Circle } from './circle.mjs';
-// The app's own season rules, not a copy of them. Carnival moves with Easter, and a second
-// implementation would drift — which is exactly how the watcher would end up judging a week
-// against the wrong rate.
-import { rateBandFor } from '../js/core/money.js';
+// Which finds go up, and what they look like when they do. Pure, and on trial in judge.test.mjs.
+import { worthPosting, asDeal, resolveStay, capPerResortMonth, dedupeKey } from './judge.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const args = new Set(process.argv.slice(2));
@@ -51,71 +49,16 @@ const CFG = {
   minNights:     num('WATCH_MIN_NIGHTS', 0),
   onlyOurStays:  flag('WATCH_ONLY_OUR_STAYS', true),
   pointsPerUsd:  num('CIRCLE_POINTS_PER_DOLLAR', 100),
-  // Only shout about something cheaper than what the Circle already charges. Without this it
-  // finds a hundred open weeks a day, which is a list, not news.
+  // Owner weeks (RedWeek) go up only when they undercut the resort's PUBLIC rate by this much,
+  // and only the cheapest few per resort per month. Interval is never filtered: every Getaway at
+  // one of our places is news. Without the cap it finds a hundred open weeks a day, which is a
+  // list, not news.
   mustBeatOurs:  flag('WATCH_MUST_BEAT_OURS', true),
   beatBy:        num('WATCH_BEAT_BY_PCT', 15) / 100,
+  maxPerResortMonth: num('WATCH_MAX_PER_RESORT_MONTH', 3),
 };
 
-/**
- * What the Circle would charge for this week, in dollars. Null when we do not carry it.
- *
- * Priced a night at a time. Taking the check-in date's rate and multiplying got the shoulder
- * weeks badly wrong: a week beginning 17 December is three nights at the cheap rate and four at
- * the Christmas one, and pricing all seven as cheap made an ordinary listing look like a steal.
- */
-function ourPrice(stay, from, nights) {
-  if (!stay) return null;
-  const rates = { low: stay.rate_low_usd, high: stay.rate_high_usd, peak: stay.rate_peak_usd };
-  const start = Date.parse(`${from}T12:00:00Z`);
-  if (!Number.isFinite(start) || !(nights > 0)) return null;
-  let total = 0;
-  for (let i = 0; i < nights; i++) {
-    const night = new Date(start + i * 864e5).toISOString().slice(0, 10);
-    const n = Number(rates[rateBandFor(`${night}T12:00:00Z`)]);
-    if (!Number.isFinite(n) || n <= 0) return null;   // one unpriced night and we cannot judge it
-    total += n;
-  }
-  return total;
-}
 const log = (...a) => console.log(new Date().toISOString().slice(0, 19).replace('T', ' '), ...a);
-
-/** Worth telling the Circle about? */
-function worthPosting(f, catalog) {
-  if (f.taken) return false;
-  if (CFG.onlyOurStays && !f.stayId) return false;         // not in the catalog, cannot be priced
-  if (CFG.minNights && f.nights < CFG.minNights) return false;
-  if (CFG.maxNightly && f.usdNightly > CFG.maxNightly) return false;
-  if (!(f.usdTotal > 0) || !f.from || !f.to) return false;
-  // Price it whether or not the filter is on, so the saving can be shown either way.
-  const ours = ourPrice(catalog?.get(f.stayId), f.from, f.nights || 1);
-  if (ours != null) { f.ourPrice = ours; f.saves = Math.round(ours - f.usdTotal); }
-  if (!CFG.mustBeatOurs) return true;
-  // "We could not price it" used to mean "post it anyway", which is the wrong way round: the
-  // whole promise of this filter is that everything on the board undercuts our own rate, and a
-  // week nobody could price does not. Silence is the honest answer.
-  if (ours == null) return false;
-  return f.usdTotal <= ours * (1 - CFG.beatBy);
-}
-
-const asDeal = (f) => {
-  // RedWeek rows carry the resort under `ourName` (the catalog's spelling), Interval's under
-  // `resortName`. Taking only one of them left every RedWeek deal on the board titled "3 Bedroom
-  // Villa, Ocean view" with no hint of where it was.
-  const place = f.resortName || f.ourName || '';
-  return {
-    stayId: f.stayId, from: f.from, to: f.to, nights: f.nights,
-    usdTotal: f.usdTotal, pointsPerDollar: CFG.pointsPerUsd,
-    // externalId is already unique within a source; prefixing here and there gave
-    // "interval:interval:…" and, worse, let two resorts sharing a week and a price collide.
-    sourceRef: String(f.externalId).startsWith(`${f.source}:`) ? String(f.externalId) : `${f.source}:${f.externalId}`,
-    source: f.source, url: f.url || '',
-    title: [place, f.unit].filter(Boolean).join(' · ') || 'A week that came up',
-    note: [f.unit, f.sleeps ? `sleeps ${f.sleeps}` : '', f.view, f.protected ? 'RedWeek protects the payment' : '',
-             f.saves > 0 ? `$${f.saves} under our rate` : ''].filter(Boolean).join(' · '),
-    retailUsd: f.ourPrice || null,
-  };
-};
 
 async function pass(circle) {
   const found = [];
@@ -209,33 +152,46 @@ async function pass(circle) {
   }
 
   // Attach the live catalog row by name, because ids differ between the bundled catalog and
-  // the database. Without this nothing can be priced and everything looks like a bargain.
-  if (catalog) {
-    for (const f of found) {
-      if (f.stayId) continue;
-      const row = f.ourName ? [...catalog.values()].find(r => sameName(r.name, f.ourName)) : null;
-      if (row) f.stayId = row.id;
-    }
+  // the database. A find that cannot be placed can never be posted — a deal must belong to a
+  // stay — so the Interval ones are named in the log for Victor to add in the Desk.
+  if (catalog) for (const f of found) f.stayId = resolveStay(f, catalog);
+  const ivUnplaced = found.filter(f => f.source === 'interval' && !f.stayId);
+  if (ivUnplaced.length) {
+    const names = [...new Set(ivUnplaced.map(f => f.resortName || f.ourName || '(no name read)'))].slice(0, 8);
+    log(`Interval: ${ivUnplaced.length} week${ivUnplaced.length === 1 ? '' : 's'} at places not in the catalog — add them in the Desk to see them here: ${names.join('; ')}`);
   }
-  const good = found.filter(f => worthPosting(f, catalog));
-  log(`${found.length} found, ${good.length} worth posting${CFG.mustBeatOurs && catalog ? ` (at least ${Math.round(CFG.beatBy * 100)}% under our rate)` : ''}`);
+  const good = capPerResortMonth(found.filter(f => worthPosting(f, catalog, CFG)), CFG.maxPerResortMonth);
+  const ivGood = good.filter(f => f.source === 'interval').length;
+  log(`${found.length} found, ${good.length} worth posting — ${ivGood} from Interval (every one at our places), ${good.length - ivGood} owner week${good.length - ivGood === 1 ? '' : 's'}`
+    + (CFG.mustBeatOurs ? ` at least ${Math.round(CFG.beatBy * 100)}% under the public rate` : '')
+    + `, cheapest ${CFG.maxPerResortMonth} a resort a month`);
 
   if (DRY) {
     log('dry run — nothing is posted');
-    for (const f of good.sort((a, b) => (b.saves || 0) - (a.saves || 0)).slice(0, 20)) {
-      log(`  ${f.from} → ${f.to}  ${String(f.nights).padStart(2)}n  $${String(f.usdNightly).padStart(7)}/n  $${String(f.usdTotal).padStart(7)}${f.saves ? `  saves $${f.saves}` : ''}  ${f.unit || ''}`);
+    for (const f of good.sort((a, b) => (a.usdNightly || 0) - (b.usdNightly || 0)).slice(0, 30)) {
+      log(`  ${f.source.padEnd(8)} ${f.from} → ${f.to}  ${String(f.nights).padStart(2)}n  $${String(f.usdNightly).padStart(7)}/n  $${String(f.usdTotal).padStart(7)}${f.retailPrice ? `  public $${f.retailPrice}` : ''}${f.saves ? `  vs ours ${f.saves > 0 ? '−' : '+'}$${Math.abs(f.saves)}` : ''}  ${f.unit || f.unitCode || ''}`);
     }
     return { found: good, posted: 0 };
   }
 
   if (!circle) { log('no CIRCLE_URL set — nothing to post to. Use --dry, or fill in .env.'); return { found: good, posted: 0 }; }
+  // Points are all-in at the Circle's own two numbers. Posting without them would put a week on
+  // the board fifteen per cent cheaper than the website shows the same week — so no settings,
+  // no posts.
+  let settings;
+  try { settings = await circle.settings(); }
+  catch (err) { log(`could not read the Circle's settings (${err.message}) — nothing posted this pass`); return { found: good, posted: 0 }; }
   const already = await circle.knownRefs();
   let posted = 0;
   for (const f of good) {
-    const deal = asDeal(f);
-    if (already.has(deal.sourceRef)) continue;
-    try { await circle.post(deal); posted++; log(`  posted ${deal.title} ${deal.from} $${f.usdTotal}`); }
-    catch (err) { log(`  could not post ${deal.sourceRef}: ${err.message}`); }
+    const deal = asDeal(f, CFG, settings);
+    if (!deal) { log(`  could not price ${f.source} ${f.from} at ${f.resortName || f.ourName || '?'} — skipped`); continue; }
+    if (already.refs.has(deal.sourceRef) || already.weeks.has(dedupeKey(deal))) continue;
+    try {
+      await circle.post(deal); posted++;
+      already.refs.add(deal.sourceRef); already.weeks.add(dedupeKey(deal));
+      log(`  posted ${deal.title} ${deal.from} $${deal.usdTotal} → ${deal.pointsTotal} pts`);
+    } catch (err) { log(`  could not post ${deal.sourceRef}: ${err.message}`); }
     await new Promise(r => setTimeout(r, 400));
   }
   log(`${posted} new on the board`);

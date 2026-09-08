@@ -21,7 +21,7 @@ export const ARUBA = Object.freeze({
   'P148-marriotts-aruba-ocean-club': "Marriott's Aruba Ocean Club",
   'P6494-renaissance-wind-creek-aruba-ocean': 'Renaissance Wind Creek Aruba Resort',
   'P134-barcelo-aruba': 'Barceló Aruba',
-  'P146-eagle-aruba-resort': 'Eagle Aruba Resort & Casino',
+  'P146-eagle-aruba-resort': 'Eagle Aruba Resort',
   'P6631-amsterdam-manor-beach-resort': 'Amsterdam Manor Beach Resort',
   'P137-divi-aruba-phoenix-beach-resort': null,
   'P144-divi-dutch-village-beach-resort': null,
@@ -37,10 +37,9 @@ export const ARUBA = Object.freeze({
   'P4734-the-mill-resort-suites': null,
 });
 
-/** Apostrophes differ between sites and our data; compare without them. */
-export const sameName = (a, b) =>
-  String(a).toLowerCase().replace(/[’'`]/g, '').replace(/\s+/g, ' ').trim()
-  === String(b).toLowerCase().replace(/[’'`]/g, '').replace(/\s+/g, ' ').trim();
+// Apostrophes, accents and "&" differ between sites and our data. One normaliser for the whole
+// app, so the watcher and the website agree on which resort a name means.
+export { sameName } from '../js/core/names.js';
 
 const day = (s) => (/^\d{8}$/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6)}` : null);
 const num = (s) => { const n = Number(String(s).replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? n : 0; };

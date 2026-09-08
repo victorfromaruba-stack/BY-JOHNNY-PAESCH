@@ -12,6 +12,8 @@
 // human still has to confirm. It cannot mint a point, move money, change a member, or touch
 // the catalog.
 
+import { normName } from '../js/core/names.js';
+
 const REST = (url, path) => `${url.replace(/\/$/, '')}${path}`;
 
 /** Every call gets a clock. This runs unattended for months; a hung socket must not stall it. */
@@ -81,9 +83,27 @@ export class Circle {
    * "nothing is on the board yet", which would repost the lot.
    */
   async knownRefs() {
-    const res = await this.call('/rest/v1/deals?select=source_ref');
+    const res = await this.call('/rest/v1/deals?select=source_ref,stay_id,from_date,to_date,title');
     if (!res.ok) throw new Error(`Could not read what is already on the board: ${res.status}`);
-    return new Set((await res.json()).map(d => d.source_ref).filter(Boolean));
+    const rows = await res.json();
+    // Two keys. The source's own reference stops the same listing going up twice; the week key
+    // stops the SAME WEEK going up twice from two sources — an owner lists on RedWeek and on
+    // VakayMood alike, and the Desk may have put the VakayMood one up by hand. The unit is read
+    // back out of the title the watcher itself writes ("place · unit · owner asking …").
+    const unitOf = (t) => String(t || '').split(' · ')[1] || '';
+    return {
+      refs: new Set(rows.map(d => d.source_ref).filter(Boolean)),
+      weeks: new Set(rows.map(d => `${d.stay_id}|${d.from_date}|${d.to_date}|${normName(unitOf(d.title))}`)),
+    };
+  }
+
+  /** The two numbers a post is priced with. Any signed-in member may read them. */
+  async settings() {
+    const res = await this.call('/rest/v1/settings?select=points_per_dollar,service_rate&id=eq.1');
+    if (!res.ok) throw new Error(`Could not read the Circle's settings: ${res.status}`);
+    const row = (await res.json())[0];
+    if (!row) throw new Error('The Circle has no settings row');
+    return { pointsPerDollar: Number(row.points_per_dollar) || 100, serviceRate: Number(row.service_rate) || 0 };
   }
 
   /**
@@ -91,7 +111,7 @@ export class Circle {
    * every open week it finds, which is a hundred a day and tells nobody anything.
    */
   async stays() {
-    const res = await this.call('/rest/v1/stays?select=id,name,kind,rate_low_usd,rate_high_usd,rate_peak_usd,min_nights&active=eq.true');
+    const res = await this.call('/rest/v1/stays?select=id,name,kind,rate_low_usd,rate_high_usd,rate_peak_usd,retail_usd,min_nights&active=eq.true');
     if (!res.ok) throw new Error(`Could not read the catalog: ${res.status}`);
     return res.json();
   }
@@ -101,8 +121,10 @@ export class Circle {
     return this.rpc('post_deal', {
       p_stay: find.stayId,
       p_from: find.from, p_to: find.to,
-      p_points: Math.round(find.usdTotal * (find.pointsPerDollar || 100)),
+      // All-in, computed by the judge from the Circle's own settings — never recomputed here.
+      p_points: find.pointsTotal ?? Math.round(find.usdTotal * (find.pointsPerDollar || 100)),
       p_nights: find.nights || null,
+      p_expires_at: find.expiresAt || null,
       p_title: find.title, p_note: find.note || '',
       p_retail_usd: find.retailUsd || null,
       p_source: find.source, p_source_url: find.url || '', p_source_ref: find.sourceRef,

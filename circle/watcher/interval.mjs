@@ -556,13 +556,18 @@ export function parseGetaways(html, { location = 'Aruba' } = {}) {
     const nights = Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 864e5);
     const per = nightly ? Number(nightly.replace(/,/g, '')) : 0;
     const tot = weekly ? Number(weekly.replace(/,/g, '')) : (per && nights ? Math.round(per * nights * 100) / 100 : 0);
-    if (!per && !tot) continue;
+    // A row whose price the regex missed is still a Getaway week that exists. It used to be
+    // dropped here in silence, which is the one failure the watcher must not have — the judge
+    // posts it at the Circle's own rate with a note, and Victor confirms before he quotes.
     out.push({
       source: 'interval', location, from, to, nights,
       resortName: (chunk.match(/([A-Z][A-Za-z'’&.\- ]{6,50}(?:Club|Resort|Village|Villas|Beach|Suites))/) || [])[1]?.trim() || '',
       unitCode: (chunk.match(/\b([A-Z]{3})\b/) || [])[1] || '',
+      // The run of text the row was cut from, so a resort whose name the heading regex only
+      // half-caught ("Aruba Marriott Resort & Stellaris Casino") can still be placed in the catalog.
+      text: chunk.replace(/\s+/g, ' ').trim().slice(0, 400),
       usdNightly: per, usdTotal: tot,
-      externalId: `interval:${from}:${to}:${per || tot}`,
+      externalId: `interval:${from}:${to}:${per || tot || 'unpriced'}`,
     });
   }
   return out;

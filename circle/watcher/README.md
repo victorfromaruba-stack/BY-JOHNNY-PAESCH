@@ -8,6 +8,13 @@ credential is read from `.env` on that machine.
 
 ## What it does
 
+Two rules, and they are different on purpose. **Every Interval Getaway week at a place in the
+catalog goes on the board**, whatever it costs — Interval is the Circle's own channel and a week
+there is news. **A RedWeek week goes up only when the owner's ask is well under the resort's
+public rate**, and only the cheapest few per resort per month. It used to compare RedWeek
+against the Circle's own rate, which is anchored to a $90 Getaway that no owner will ever
+undercut, and so in all its months of running it never posted a single thing.
+
 **RedWeek** needs no login. Each listing carries its own data attributes — check-in, check-out,
 nights, bedrooms, sleeps, view, price — so this reads structured values rather than guessing at
 text. One request per resort, 2.5 seconds apart, identifying itself in the user agent.
@@ -225,8 +232,9 @@ message rather than reporting a wrong password.
 Two suites, both stub-driven, no network and no credentials:
 
 ```sh
-node session.test.mjs    # 48 assertions — the fetch client, cookie scoping, the host guard
-node browser.test.mjs    # 29 assertions — the browser client end to end (skips if no Playwright)
+node --test judge.test.mjs   # the posting rules: Interval always, RedWeek under the public rate, the cap, all-in points
+node session.test.mjs        # 48 assertions — the fetch client, cookie scoping, the host guard
+node browser.test.mjs        # 29 assertions — the browser client end to end (skips if no Playwright)
 ```
 
 The ones that matter most: a refused login that still redirects to a normal page is reported
@@ -245,18 +253,29 @@ What no stub can prove is the Radware challenge itself, which only the real site
 
 ## What it will and will not post
 
-`WATCH_MUST_BEAT_OURS=true` means it only speaks up about a week that undercuts the Circle's
-own rate by at least `WATCH_BEAT_BY_PCT`. Without it, RedWeek alone finds around a hundred
-open weeks a day at our resorts, which is a list rather than news.
+| find | catalog stay | posts? |
+|---|---|---|
+| Interval, priced | yes | always — points are Interval's total × points to the dollar × (1 + the Circle's share) |
+| Interval, price not read | yes | yes, at the Circle's own rate for those nights; the note says so and Victor confirms before he quotes |
+| RedWeek | yes | only when the ask is at least `WATCH_BEAT_BY_PCT` under the resort's **public rate** × nights, the cheapest `WATCH_MAX_PER_RESORT_MONTH` per resort per check-in month; a stay with no public rate on file never posts |
+| any | no | never — a deal must belong to a stay. The Interval ones are named in the log: add the place in the Desk and the next pass posts them |
 
-One consequence worth knowing: now that the Marriott villa rates are set against what Interval
-charges, RedWeek rarely beats them. That is the point — but it means most of what this finds
-at the Surf Club and Ocean Club will come from Interval, and RedWeek will earn its keep at the
-resorts where our published rate is higher.
+The rules live in `judge.mjs` and are on trial in `judge.test.mjs`. `WATCH_MUST_BEAT_OURS=false`
+turns the RedWeek filter off (the cap still applies). Points are read from the Circle's own
+settings on every pass — the same two numbers the website prices with — so a week on the board
+is the same number as the same week on a live card; if the settings cannot be read, nothing is
+posted that pass rather than something fifteen per cent wrong.
 
-A week it cannot price against the catalog is not posted either. "We could not work out what
-this is worth" is not a reason to put something in front of forty people.
+Every post carries an expiry of its own check-in day, so a week that has started drops off the
+board by itself.
+
+**VakayMood** — the owner-rental feed the website shows live on Deals — is deliberately not
+swept here. It lists the same owner inventory RedWeek does (the same Surf Club studio, the same
+week, $166.50 against $166.43), so posting from both would put every week on the board twice.
+The Desk can put a VakayMood week on the board by hand from the live card.
 
 It never posts the same week twice. Each find carries a `source_ref` — RedWeek's own posting
 id, not the price, so a listing that drops a dollar is still the same week — and that is checked
 against **every** deal on the board, not only the live ones. A deal you take down stays down.
+The same stay, dates and unit from a *different* source is also treated as the same week, so a
+VakayMood week the Desk put up by hand is not doubled by its RedWeek twin.
