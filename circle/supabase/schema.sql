@@ -775,7 +775,10 @@ language sql stable security definer set search_path = public as $$
         * (select service_rate * points_per_dollar * promo_cap_rate from settings where id = 1)
       - coalesce((select sum(l.points) from ledger l
                   join contributions c2 on c2.id = l.ref_id and l.ref_type = 'contribution'
-                  where l.kind in ('bonus','streak','founding') and c2.for_month = p_month),0)
+                  where l.kind in ('bonus','streak','founding') and c2.for_month = p_month
+                    -- a reversed confirmation's promo has been handed back by its reverse line;
+                    -- counting it here consumed the month's room for a bonus nobody holds
+                    and c2.status <> 'reversed'),0)
     ))::int
 $$;
 
@@ -842,7 +845,9 @@ begin
     sb := (s.streak_bonuses ->> n_streak::text)::int;
     if sb is not null and not exists (
       select 1 from ledger l where l.member_id = c.member_id and l.kind = 'streak'
-        and l.note = n_streak || ' consecutive contributions') then
+        and l.note = n_streak || ' consecutive contributions'
+        -- a reversed confirmation leaves its line in the append-only ledger; it does not count
+        and not exists (select 1 from contributions cx where cx.id = l.ref_id and cx.status = 'reversed')) then
       room := promo_room(c.for_month);
       if sb > room then
         insert into promo_deferrals(member_id, kind, points, reason, for_month, ref_id)
@@ -858,7 +863,8 @@ begin
   end if;
 
   if (not c.extra) and m.founding and s.founding_bonus > 0
-     and not exists (select 1 from ledger l where l.member_id = c.member_id and l.kind = 'founding') then
+     and not exists (select 1 from ledger l where l.member_id = c.member_id and l.kind = 'founding'
+                     and not exists (select 1 from contributions cx where cx.id = l.ref_id and cx.status = 'reversed')) then
     room := promo_room(c.for_month);
     if s.founding_bonus > room then
       insert into promo_deferrals(member_id, kind, points, reason, for_month, ref_id)

@@ -618,8 +618,39 @@ export class Store {
     };
   }
   availablePoints(memberId) { return this.ledgerBalance(memberId) - this.committedPoints(memberId); }
-  promoPoints(memberId) { return sum(this.ledgerFor(memberId).filter(l => PROMO_KINDS.includes(l.kind)), l => l.points); }
+  /**
+   * Promotional points this member holds, net of the lines that cancelled them — twin of the
+   * treasury's own reckoning. The naive sum counted a bonus that had since EXPIRED, or whose
+   * contribution was REVERSED, as if it were still there; basePoints is balance minus this, so
+   * a founding member who booked nothing was told at the door that $20 of their own cash was
+   * a bonus and kept it back, having already lost that bonus once when it expired.
+   */
+  promoPoints(memberId) {
+    const led = this.ledgerFor(memberId);
+    const reversed = (l) => l.refType === 'contribution' && this.contribution(l.refId)?.status === CONTRIBUTION_STATUS.reversed;
+    const promo = led.filter(l => PROMO_KINDS.includes(l.kind) && !reversed(l));
+    const promoIds = new Set(promo.map(l => l.id));
+    const minted = sum(promo, l => l.points);
+    const expired = sum(led.filter(l => l.kind === LEDGER_KIND.expire && l.refType === 'ledger' && promoIds.has(l.refId)), l => l.points);
+    return Math.max(0, minted + expired);
+  }
   basePoints(memberId) { return Math.max(0, this.ledgerBalance(memberId) - this.promoPoints(memberId)); }
+  /**
+   * Promotional room left in a month — twin of promo_room() in SQL, and the ONE place the
+   * budget is reckoned. It is a fraction of that month's confirmed contributions, less what has
+   * already been minted against them. Two things it deliberately does not count: an extra,
+   * which has no month and used to be swept into whichever month its confirmation landed in
+   * (raising that month's ceiling by 3,000 points for $500 of cash the server never counted),
+   * and promo whose contribution was reversed, which the reverse line has already handed back.
+   */
+  promoRoom(month) {
+    const s = this.settings;
+    const monthShare = sum(this.state.contributions.filter(x => x.forMonth === month && x.status === CONTRIBUTION_STATUS.confirmed), x => x.receivedUsd)
+      * s.serviceRate * s.pointsPerDollar * s.promoCapRate;
+    const monthPromo = sum(this.state.ledger.filter(l => PROMO_KINDS.includes(l.kind) && l.refType === 'contribution'
+      && this.contribution(l.refId)?.forMonth === month && this.contribution(l.refId)?.status !== CONTRIBUTION_STATUS.reversed), l => l.points);
+    return Math.max(0, Math.floor(monthShare - monthPromo));
+  }
   /**
    * What being in the Circle has actually been worth to this member, in dollars.
    *
@@ -900,15 +931,7 @@ export class Store {
     push(LEDGER_KIND.earn, split.basePoints, split.backingUsd, 'contribution', c.id,
       c.extra ? (c.note?.trim() || 'Extra contribution') : `${fmtMonth(c.forMonth)} contribution${split.full ? '' : ' · part of it'}`);
     // Promotional points: tier bonus, streak, founding — all funded from the share, capped per month.
-    const promoRoom = () => {
-      const bucket = c.forMonth || at.slice(0, 7);
-      // The promo budget, rebased like promo_room() in SQL: nothing is taken at the door any
-    // more, so the same fraction of the same money, reckoned from what came in.
-    const monthShare = sum(this.state.contributions.filter(x => (x.forMonth || x.reviewedAt?.slice(0, 7)) === bucket && x.status === CONTRIBUTION_STATUS.confirmed), x => x.receivedUsd)
-      * s.serviceRate * s.pointsPerDollar * s.promoCapRate;
-      const monthPromo = sum(this.state.ledger.filter(l => PROMO_KINDS.includes(l.kind) && this.contribution(l.refId)?.forMonth === c.forMonth), l => l.points);
-      return Math.max(0, Math.floor(monthShare - monthPromo));
-    };
+    const promoRoom = () => this.promoRoom(c.forMonth);
     const mint = (kind, points, note) => {
       if (points <= 0) return 0;
       const room = promoRoom();
@@ -920,9 +943,13 @@ export class Store {
     if (full) {
       const streakNow = this.consecutiveMonthsThrough(c.memberId, c.forMonth);
       const sb = s.streakBonuses?.[streakNow];
-      if (sb && !this.state.ledger.some(l => l.memberId === c.memberId && l.kind === LEDGER_KIND.streak && l.note.startsWith(`${streakNow} `))) c.streakPoints = mint(LEDGER_KIND.streak, sb, `${streakNow} consecutive contributions`);
+      // A reversed confirmation leaves its promo line in the append-only ledger, cancelled by a
+      // reverse line. The guard used to see the cancelled line and refuse to mint again, so an
+      // undo inside the sixty-second window cost the member the bonus for good.
+      const stillStands = (l) => this.contribution(l.refId)?.status !== CONTRIBUTION_STATUS.reversed;
+      if (sb && !this.state.ledger.some(l => l.memberId === c.memberId && l.kind === LEDGER_KIND.streak && l.note.startsWith(`${streakNow} `) && stillStands(l))) c.streakPoints = mint(LEDGER_KIND.streak, sb, `${streakNow} consecutive contributions`);
     }
-    if (!c.extra && m.founding && s.foundingBonus > 0 && !this.state.ledger.some(l => l.memberId === c.memberId && l.kind === LEDGER_KIND.founding)) c.foundingPoints = mint(LEDGER_KIND.founding, s.foundingBonus, 'Founding Insider · 2026');
+    if (!c.extra && m.founding && s.foundingBonus > 0 && !this.state.ledger.some(l => l.memberId === c.memberId && l.kind === LEDGER_KIND.founding && this.contribution(l.refId)?.status !== CONTRIBUTION_STATUS.reversed)) c.foundingPoints = mint(LEDGER_KIND.founding, s.foundingBonus, 'Founding Insider · 2026');
     c.points = split.basePoints + c.bonusPoints + c.streakPoints + c.foundingPoints;
     this.log(actorId, 'contribution.confirm', 'contribution', id, { receivedUsd: split.amountUsd, points: c.points, full: split.full });
     await this.commit('contributions');
@@ -1534,8 +1561,14 @@ export class Store {
       if (this.state.ledger.some(x => x.kind === LEDGER_KIND.expire && x.refId === l.id)) continue;
       this.state.ledger.push({ id: uid('led'), memberId: l.memberId, kind: LEDGER_KIND.expire, points: -l.points, usd: -(l.usd || 0), refType: 'ledger', refId: l.id, note: `Expired · ${l.note}`, at, by: actorId });
     }
-    // mint deferred promotional points where room exists this month
-    for (const d of p.deferrals) { d.mintedAt = at; this.state.ledger.push({ id: uid('led'), memberId: d.memberId, kind: d.kind, points: d.points, usd: round(d.points / this.settings.pointsPerDollar), refType: 'contribution', refId: d.refId, note: `Deferred ${d.kind} minted at ${month} close`, at, by: actorId, expiresAt: addMonthsIso(at, this.settings.bonusExpireMonths) }); }
+    // Deferred promotional points are minted only where the month has room for them — the twin
+    // of the loop in close_month(). They were deferred BECAUSE the cap was hit; this loop used
+    // to hand every one of them over at close, minting exactly the points the cap had refused,
+    // and teaching the Banker that a close always clears the backlog when the server's does not.
+    for (const d of p.deferrals) {
+      if (d.points > this.promoRoom(month)) break;
+      d.mintedAt = at; this.state.ledger.push({ id: uid('led'), memberId: d.memberId, kind: d.kind, points: d.points, usd: round(d.points / this.settings.pointsPerDollar), refType: 'contribution', refId: d.refId, note: `Deferred ${d.kind} minted at ${month} close`, at, by: actorId, expiresAt: addMonthsIso(at, this.settings.bonusExpireMonths) });
+    }
     const close = { id: uid('cls'), month, closedBy: actorId, cosignedBy: cosignerId, bankBalanceUsd: bal, ledgerReserveUsd: p.treasury.reserveExpectedUsd, varianceUsd: variance, coverage: p.treasury.coverage, grossUsd: p.grossUsd, shareUsd: p.shareUsd, confirmedCount: p.confirmedCount, missingCount: p.missingCount, note, closedAt: at };
     this.state.monthCloses.push(close);
     this.state.settings.reserveVerified = { balanceUsd: bal, at, byId: actorId };
