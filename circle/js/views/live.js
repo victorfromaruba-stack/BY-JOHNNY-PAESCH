@@ -24,7 +24,7 @@ import { escapeHtml, fmtUsd2, fmtPoints, fmtDay, pointsUsd } from '../core/util.
 import { nightPoints } from '../core/money.js';
 import { icon } from '../ui/icons.js';
 import { toast, setBusy, confirmDialog } from '../ui/components.js';
-import { availability, RESORTS } from '../data/vakaymood.js';
+import { availability, toDeal, RESORTS } from '../data/vakaymood.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 
@@ -140,6 +140,34 @@ export function groupCopies(list) {
   return out;
 }
 
+/**
+ * The Circle's own copy of what is open, published with the site by .github/workflows/open-weeks.yml
+ * every half hour. A phone in Aruba could not reach vakaymood.com at all — every call failed,
+ * twice — so when the live feed does not answer, the page reads this from its own address and
+ * says when the copy was taken. Fetched once per page load; a missing file is simply "no copy".
+ */
+let copyPromise = null;
+const loadCopy = () => (copyPromise ||= fetch('data/open-weeks.json', { cache: 'no-cache' })
+  .then(r => (r.ok ? r.json() : null)).catch(() => null));
+
+/** The copy's listings for these slugs, priced like the live ones and filtered like them. */
+function fromCopy(copy, slugs, state, s) {
+  const rows = [];
+  let total = 0;
+  for (const slug of slugs) {
+    const r = copy?.resorts?.[slug];
+    if (!r) continue;
+    total += r.total || 0;
+    for (const l of r.listings || []) rows.push(toDeal(l, { pointsPerDollar: s.pointsPerDollar, serviceRate: s.serviceRate }));
+  }
+  const kept = rows.filter(d =>
+    (!state.sleeps || (d.sleeps || 0) >= Number(state.sleeps))
+    && (!state.maxNightlyUsd || d.usdNightly <= Number(state.maxNightlyUsd))
+    && (!state.checkin || d.from >= state.checkin)
+    && (!state.checkout || d.to <= state.checkout));
+  return { rows: kept.sort(SORTS[state.sort] || SORTS.price_asc), total, generatedAt: copy?.generatedAt || null };
+}
+
 const SORTS = {
   price_asc: (a, b) => a.pointsTotal - b.pointsTotal,
   price_desc: (a, b) => b.pointsTotal - a.pointsTotal,
@@ -223,7 +251,8 @@ export function liveSection(ctx, { compact = false, slug = null, first = compact
   const FIRST = first;
 
   const wrap = el(`<div class="live-section">
-    ${compact ? '' : `<div class="row no-print" id="filters" style="margin-top:14px" role="group" aria-label="Filter what is open"></div>`}
+    ${compact ? '' : `<button type="button" class="btn ghost sm no-print" id="live-ftoggle" aria-expanded="false" aria-controls="live-filters" style="margin-top:14px">${icon('filter', { size: 15 })}Filters</button>
+    <div class="row no-print" id="live-filters" style="margin-top:14px" role="group" aria-label="Filter what is open"></div>`}
     <p class="small muted" id="count" style="margin-top:${compact ? 8 : 14}px"></p>
     <div id="list" style="margin-top:14px"></div>
     <div class="row" id="more" style="margin-top:16px"></div>
@@ -231,10 +260,18 @@ export function liveSection(ctx, { compact = false, slug = null, first = compact
 
   const list = wrap.querySelector('#list');
   const count = wrap.querySelector('#count');
-  const filters = wrap.querySelector('#filters');
+  // Its own id, not #filters: the stays list owns that one, and the stylesheet hides it on a
+  // phone behind that page's toggle — which is how this section's filters vanished on every
+  // phone with no way to open them.
+  const filters = wrap.querySelector('#live-filters');
+  const ftoggle = wrap.querySelector('#live-ftoggle');
+  const activeFilters = () => ['slug', 'sleeps', 'maxNightlyUsd', 'checkin', 'checkout'].filter(k => state[k]).length + (state.oursOnly ? 0 : 1);
+  const drawToggle = () => { if (!ftoggle) return; const n = activeFilters(); ftoggle.innerHTML = `${icon('filter', { size: 15 })}Filters${n ? ` · ${n}` : ''}`; };
+  ftoggle?.addEventListener('click', () => { const open = filters.classList.toggle('open'); ftoggle.setAttribute('aria-expanded', String(open)); });
   const more = wrap.querySelector('#more');
 
   const drawFilters = () => {
+    drawToggle();
     if (!filters) return;
     const shown = state.oursOnly ? CATALOG_RESORTS : RESORTS;
     filters.innerHTML = `
@@ -268,6 +305,7 @@ export function liveSection(ctx, { compact = false, slug = null, first = compact
 
   let loaded = [];
   let serverMore = false;   // the API has another page in single-resort / island-wide mode
+  let fromTheCopy = false;  // this paint is the Circle's own copy, not the live feed
   const paint = () => {
     const shown = state.revealed ? loaded : loaded.slice(0, FIRST);
     const hidden = loaded.length - shown.length;
@@ -305,6 +343,7 @@ export function liveSection(ctx, { compact = false, slug = null, first = compact
         total = res.total; generatedAt = res.generatedAt;
         serverMore = res.page * res.limit < res.total;
       }
+      fromTheCopy = false;
       loaded = groupCopies(rows);
       // What answers a watch comes first. The stay page shows six of a resort's cheapest weeks,
       // and the two-bedroom somebody asked for is rarely among the six cheapest; the sort is
@@ -331,6 +370,31 @@ export function liveSection(ctx, { compact = false, slug = null, first = compact
         try { onLoaded(byBeds, { total, generatedAt, cheapest: loaded.slice().sort(SORTS.price_asc)[0] || null }); } catch (e) { console.error(e); }
       }
     } catch (err) {
+      // The live feed did not answer. The Circle keeps its own copy, taken every half hour and
+      // served from this site's own address, which a phone can always reach. Show that, and say
+      // when it was taken — never as if it were live.
+      const copy = await loadCopy();
+      const slugs = state.slug ? [state.slug] : CATALOG_RESORTS.map(r => r.slug);
+      if (copy && slugs.some(sl => copy.resorts?.[sl])) {
+        const got = fromCopy(copy, slugs, state, s);
+        fromTheCopy = true; serverMore = false;
+        loaded = groupCopies(got.rows);
+        if (ctx.me) {
+          const hit = new Map(loaded.map(d => [d, draftMatch(store, d, ctx.me.id) ? 1 : 0]));
+          loaded.sort((a, b) => hit.get(b) - hit.get(a));
+        }
+        const at = got.generatedAt ? new Date(got.generatedAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) : '';
+        const where = state.slug ? (RESORTS.find(r => r.slug === state.slug)?.name || 'this place') : 'the places we book';
+        count.innerHTML = `${got.total.toLocaleString('en-US')} open at ${escapeHtml(where)}${at ? ` · the Circle’s copy, taken ${escapeHtml(at)}` : ''}
+          <span class="muted">· this phone could not reach VakayMood live${state.slug || state.oursOnly ? '' : '; the copy covers the places we book'}</span>`;
+        paint();
+        if (onLoaded) {
+          const byBeds = new Map();
+          for (const d of loaded) { const beds = bedroomsOf(d); if (beds == null) continue; if (!byBeds.has(beds) || d.usdNightly < byBeds.get(beds).usdNightly) byBeds.set(beds, d); }
+          try { onLoaded(byBeds, { total: got.total, generatedAt: got.generatedAt, cheapest: loaded.slice().sort(SORTS.price_asc)[0] || null, fromCopy: true }); } catch (e) { console.error(e); }
+        }
+        return;
+      }
       count.textContent = '';
       more.innerHTML = '';
       // A request that never got an answer is this phone's network path — mobile data, a

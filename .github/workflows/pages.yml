@@ -38,6 +38,16 @@ jobs:
             || { echo "::error::sw.js cache version was not stamped — browsers would keep serving the old app"; exit 1; }
           grep -n "^const VERSION" circle/sw.js
 
+      # The Circle's own copy of what is open on VakayMood (see open-weeks.yml). Taken here too, so
+      # a code deploy carries a fresh copy rather than whatever was committed. If VakayMood is
+      # down the deploy still goes out: the page handles a missing or stale copy.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Take the open-weeks copy
+        continue-on-error: true
+        run: node circle/scripts/open-weeks.mjs
+
       - uses: actions/configure-pages@v5
         with:
           enablement: true

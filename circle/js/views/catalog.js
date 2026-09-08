@@ -465,7 +465,7 @@ export function stayDetail({ store, params, go }) {
               drawRooms?.();
               if (liveLine && res.cheapest) {
                 const at = res.generatedAt ? new Date(res.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                liveLine.innerHTML = `${icon('eye', { size: 14, cls: 'ico-muted' })} On VakayMood right now: ${res.total.toLocaleString('en-US')} owner week${res.total === 1 ? '' : 's'} open here, asking from ${escapeHtml(fmtUsd2(res.cheapest.usdNightly))} a night${at ? ` · as of ${escapeHtml(at)}` : ''}.`;
+                liveLine.innerHTML = `${icon('eye', { size: 14, cls: 'ico-muted' })} On VakayMood${res.fromCopy ? '' : ' right now'}: ${res.total.toLocaleString('en-US')} owner week${res.total === 1 ? '' : 's'} open here, asking from ${escapeHtml(fmtUsd2(res.cheapest.usdNightly))} a night${at ? ` · ${res.fromCopy ? 'the Circle’s copy, taken' : 'as of'} ${escapeHtml(at)}` : ''}.`;
                 liveLine.hidden = false;
               }
             } }));

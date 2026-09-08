@@ -901,6 +901,13 @@ button.badge-card:hover { border-color: var(--ink-3); }
   #filters.open { display: block; }
 }
 @media (min-width: 780px) { #ftoggle { display: none; } }
+/* The live section on Deals has the same shape: seven controls that would be four rows on a
+   phone, behind one button that says how many are set. */
+@media (max-width: 779px) {
+  #live-filters { display: none; }
+  #live-filters.open { display: flex; }
+}
+@media (min-width: 780px) { #live-ftoggle { display: none; } }
 
 /* The hero video sits over the still that already painted, and only becomes visible once it can
    actually play. Fading in over its own first frame means the swap is invisible — the water

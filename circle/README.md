@@ -169,6 +169,13 @@ week "You asked for this" when it answers a watch the member set — matched on 
 guessed. The default view asks VakayMood once per catalog resort and merges: one island-wide
 page filtered afterwards showed five of ours under a count of two thousand.
 
+A phone in Aruba could not reach vakaymood.com at all, so the Circle keeps its own copy:
+`.github/workflows/open-weeks.yml` runs `circle/scripts/open-weeks.mjs` every half hour and
+publishes `data/open-weeks.json` with the site (no commit, no credential — a scheduled fetch of a
+public API and a Pages deploy), and `pages.yml` takes a fresh copy on every code deploy. When the
+live feed does not answer, the page reads the copy from its own address and says when it was
+taken. It is never presented as live.
+
 Two things it is careful about, both learned by getting them wrong first:
 
 - **It compares like with like.** Each property's catalog rate is modelled on one room — a

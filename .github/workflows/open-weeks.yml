@@ -1,0 +1,54 @@
+name: Refresh the open-weeks copy
+
+# The Circle's own copy of what is open on VakayMood, taken every half hour and published with
+# the site. A member's phone that cannot reach vakaymood.com reads this instead, from the site's
+# own address. No credential, no server: a scheduled fetch of a public API and a Pages deploy.
+#
+# Nothing is committed. The copy is generated into the artifact at deploy time, here and in
+# pages.yml, so a code deploy never publishes a stale one and this job never writes to main.
+
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Shares the pages group with pages.yml so two deploys never race, but never cancels a code
+# deploy that is already running.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Take the copy
+        run: node circle/scripts/open-weeks.mjs
+
+      - name: Stamp the service worker with this commit
+        run: |
+          set -euo pipefail
+          sed -i "s/^const VERSION = '[^']*';/const VERSION = 'hunto-${GITHUB_SHA:0:12}';/" circle/sw.js
+          grep -q "hunto-${GITHUB_SHA:0:12}" circle/sw.js
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+      - id: deployment
+        uses: actions/deploy-pages@v4
