@@ -605,51 +605,128 @@ export function book({ store, params, query = {}, go }) {
     wantRoom ? `${wantRoom.name}, if it is free.` : '',
     query.deal ? 'Asking against a deal from the board.' : '',
   ].filter(Boolean).join(' ');
+  const sla = tier.slaHours ?? s.slaHours;
+  const rooms = isTrip ? [] : (store.roomTypesFor?.(stay.id) || []);
+  const wd = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short' });
+  const dm = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const yr = (iso) => new Date(iso + 'T12:00:00').getFullYear();
+  // The ask is not a form to fill in, it is a brief to Victor: the place, the nights, who is
+  // coming, a word — and, before anything is sent, what it costs and what happens next. Every
+  // control here answers when touched, and every number is the mono face.
   const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:720px">
-      <p class="eyebrow">${escapeHtml(stay.area)}</p>
-      <h1>${isTrip ? 'Ask for a seat' : 'Ask Victor for dates'}</h1>
-      <p class="lede" style="margin-top:10px">${escapeHtml(stay.name)}. He answers within ${tierFor(s, me.monthlyUsd).slaHours ?? s.slaHours} hours with an all-in price in points, locked for ${s.quoteHours} hours. Nothing is committed until you accept it.</p>
-      <form class="panel" id="form" style="margin-top:20px">
-        ${isTrip ? `<div class="notice"><b>${escapeHtml(fmtDay(stay.dates.from))} – ${escapeHtml(fmtDay(stay.dates.to))}</b>
-            <p class="small">${stay.nights} nights · ${escapeHtml(fmtPoints(seatPoints(stay, s)))} a seat · ${store.seatsHeld(stay.id)} of ${stay.seats} seats held</p></div>
-          <label class="field" style="margin-top:14px"><span>Seats</span><input name="seats" type="number" min="1" max="4" value="1" inputmode="numeric"></label>`
-        : `${wantFrom ? `<div class="notice" style="margin-bottom:14px"><b>${escapeHtml(fmtDay(startIn))} – ${escapeHtml(fmtDay(startOut))}</b>
-              <p class="small">The dates you came in with. Change them if you meant others.</p></div>` : ''}
-          <div class="grid g2">
-            <label class="field"><span>Check in</span><input name="checkIn" type="date" required value="${escapeHtml(startIn)}" min="${d(today)}"></label>
-            <label class="field"><span>Check out</span><input name="checkOut" type="date" required value="${escapeHtml(startOut)}" min="${d(today)}"></label>
-          </div>
-          ${wantRoom ? `<div class="notice" style="margin-bottom:14px"><b>${escapeHtml(wantRoom.name)}</b>
-              <p class="small">From ${escapeHtml(fmtPoints(store.roomPointsFrom(stay.id, wantRoom.id)))} a night. It is in your note below, so Victor prices that room — ask for another and he will price that instead.</p></div>` : ''}
-          <div class="grid g2">
-            <label class="field"><span>Guests</span><input name="guests" type="number" min="1" max="8" value="2" inputmode="numeric"></label>
-            <label class="field"><span>Flexible by</span><select name="flexDays"><option value="0">Exact dates</option><option value="1">A day either way</option><option value="3">Three days either way</option><option value="7">A week either way</option></select></label>
-          </div>`}
-        <label class="field"><span>Anything Victor should know</span><textarea name="note" rows="3" placeholder="Ground floor if possible, arriving late, celebrating something…">${escapeHtml(openingNote)}</textarea></label>
-        <label class="row" style="gap:10px;align-items:flex-start;margin-bottom:14px">
-          <input type="checkbox" name="shared">
-          <span class="small">Let the Circle chip in. <span class="muted">Anyone can add their own points toward this booking — for a room you are sharing, or a gift. Their points are committed the moment they chip in, and released if it falls through.</span></span></label>
-        <div id="preview" class="notice" style="margin-bottom:16px"></div>
-        <button class="btn block" type="submit">Send the request</button>
-        <p class="small muted" style="margin-top:12px">You currently hold ${escapeHtml(fmtPoints(avail))} available and can have ${tier.holds} open request${tier.holds > 1 ? 's' : ''} at a time as ${escapeHtml(tierName(me.monthlyUsd))}.</p>
+      <p class="eyebrow">${escapeHtml(stay.area)}${stay.country && stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}</p>
+      <h1>${isTrip ? 'Ask for a seat' : 'Have Victor book it'}</h1>
+      <p class="lede" style="margin-top:10px">${escapeHtml(stay.name)}. You never book it yourself: Victor checks the room, prices it in points, and books it in your name once you say yes.</p>
+      <form class="panel ask" id="form">
+        ${photoFor(stay) ? '<div class="ask-shot" aria-hidden="true"></div>' : ''}
+        ${isTrip ? `
+        <div class="ask-block">
+          <div class="ask-tile static"><span class="k">The trip</span><b>${escapeHtml(fmtDay(stay.dates.from))} – ${escapeHtml(fmtDay(stay.dates.to))}</b>
+            <em>${stay.nights} nights · ${escapeHtml(fmtPoints(seatPoints(stay, s)))} a seat · ${store.seatsHeld(stay.id)} of ${stay.seats} seats held</em></div>
+          <div class="ask-row"><span class="k">Seats</span>
+            <div class="stepper" data-for="seats" data-min="1" data-max="4"><button type="button" data-step="-1" aria-label="One seat fewer">−</button><output aria-live="polite">1</output><button type="button" data-step="1" aria-label="One seat more">+</button></div>
+            <input type="hidden" name="seats" value="1"></div>
+        </div>`
+        : `
+        <div class="ask-dates">
+          <label class="ask-tile"><span class="k">Check in</span><b data-dm="checkIn">${escapeHtml(dm(startIn))}</b><em><span data-wd="checkIn">${escapeHtml(wd(startIn))}</span> · <span data-yr="checkIn">${yr(startIn)}</span></em>
+            <input name="checkIn" type="date" required value="${escapeHtml(startIn)}" min="${d(today)}" aria-label="Check in"></label>
+          <div class="ask-nights" aria-live="polite"><b id="nights">–</b><span>nights</span></div>
+          <label class="ask-tile"><span class="k">Check out</span><b data-dm="checkOut">${escapeHtml(dm(startOut))}</b><em><span data-wd="checkOut">${escapeHtml(wd(startOut))}</span> · <span data-yr="checkOut">${yr(startOut)}</span></em>
+            <input name="checkOut" type="date" required value="${escapeHtml(startOut)}" min="${d(today)}" aria-label="Check out"></label>
+        </div>
+        ${wantFrom ? `<p class="tiny muted ask-hint">${fromDeal ? 'The dates of the deal you tapped.' : cameFrom ? 'The dates of the week you were looking at.' : 'The dates you came in with.'} Tap either to change them.</p>` : ''}
+        <div class="ask-block">
+          <div class="ask-row"><span class="k">Guests</span>
+            <div class="stepper" data-for="guests" data-min="1" data-max="8"><button type="button" data-step="-1" aria-label="One guest fewer">−</button><output aria-live="polite">2</output><button type="button" data-step="1" aria-label="One guest more">+</button></div>
+            <input type="hidden" name="guests" value="2"></div>
+          <div class="ask-row"><span class="k">Flexible</span>
+            <div class="chips" role="radiogroup" aria-label="Flexible by" data-for="flexDays">
+              <button type="button" class="chip-btn" data-v="0" aria-pressed="true">Exact dates</button>
+              <button type="button" class="chip-btn" data-v="1" aria-pressed="false">±1 day</button>
+              <button type="button" class="chip-btn" data-v="3" aria-pressed="false">±3 days</button>
+              <button type="button" class="chip-btn" data-v="7" aria-pressed="false">±7 days</button>
+            </div><input type="hidden" name="flexDays" value="0"></div>
+          ${rooms.length ? `<div class="ask-row"><span class="k">Room</span>
+            <div class="chips" role="radiogroup" aria-label="Which room" data-for="room">
+              <button type="button" class="chip-btn" data-v="" aria-pressed="${wantRoom ? 'false' : 'true'}">Any room</button>
+              ${(wantRoom ? [wantRoom, ...rooms.filter(r => r.id !== wantRoom.id).slice(0, 3)] : rooms.slice(0, 4)).map(r => `<button type="button" class="chip-btn" data-v="${escapeHtml(r.id)}" aria-pressed="${wantRoom?.id === r.id ? 'true' : 'false'}">${escapeHtml(r.name)}</button>`).join('')}
+              ${rooms.length > 4 ? `<a class="chip-btn quiet" href="#/stays/${escapeHtml(stay.id)}">${rooms.length - 4} more on the stay page</a>` : ''}
+            </div><input type="hidden" name="room" value="${escapeHtml(wantRoom?.id || '')}"></div>` : ''}
+        </div>`}
+        <label class="field ask-note"><span>A word for Victor</span>
+          <textarea name="note" rows="2" placeholder="${isTrip ? 'Who is coming, anything he should know…' : 'Ground floor if you can, arriving late, celebrating something…'}">${escapeHtml(openingNote)}</textarea></label>
+        <label class="ask-row ask-switch">
+          <span><b>Let the Circle chip in</b><span class="small muted">Anyone can put their own points toward this one — a room you are sharing, or a gift. Theirs commit the moment they chip in and come back if it falls through.</span></span>
+          <input type="checkbox" name="shared" role="switch" class="switch" aria-label="Let the Circle chip in">
+        </label>
+        <div class="ask-quote" id="preview" aria-live="polite"></div>
+        <ol class="ask-steps" aria-label="What happens next">
+          <li class="now"><b>You ask</b><span>dates, guests, a word for Victor</span></li>
+          <li><b>Victor prices it</b><span>within ${sla} hours, all-in, in points</span></li>
+          <li><b>You say yes</b><span>the price holds ${s.quoteHours} hours · your points commit</span></li>
+          <li><b>Victor books it</b><span>himself, in your name · then it is confirmed</span></li>
+        </ol>
+        <button class="btn block" type="submit">${isTrip ? 'Ask for the seat' : 'Ask Victor to book it'}</button>
+        <p class="small muted ask-foot">He answers within ${sla} hours${isTrip ? '' : ' with an all-in price'}. Nothing is committed until you say yes to it.
+          You hold ${escapeHtml(fmtPoints(avail))} and can have ${tier.holds} open request${tier.holds > 1 ? 's' : ''} at a time as ${escapeHtml(tierName(me.monthlyUsd))}.${cameFrom ? ` <span class="nowrap">${icon('external', { size: 13, cls: 'ico-muted' })} Victor gets the ${escapeHtml(cameFrom.label)} link you were looking at.</span>` : ''}</p>
       </form>
     </div></section></div>`);
+  wrap.querySelector('.ask-shot')?.appendChild(stayStrip(stay));
   const form = wrap.querySelector('#form'), preview = wrap.querySelector('#preview');
+  const v = (n) => form.querySelector(`[name=${n}]`);
+
+  // Steppers and chip groups write to hidden inputs, so the submit reads one FormData like
+  // before, and every press answers: the number changes, the chip fills, the price re-runs.
+  form.addEventListener('click', (e) => {
+    const stepBtn = e.target.closest('[data-step]');
+    if (stepBtn) {
+      const box = stepBtn.closest('.stepper'); const inp = v(box.dataset.for); const out = box.querySelector('output');
+      const n = Math.min(Number(box.dataset.max), Math.max(Number(box.dataset.min), Number(inp.value) + Number(stepBtn.dataset.step)));
+      inp.value = n; out.textContent = n;
+      box.querySelector('[data-step="-1"]').disabled = n <= Number(box.dataset.min);
+      box.querySelector('[data-step="1"]').disabled = n >= Number(box.dataset.max);
+      form.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    const chipBtn = e.target.closest('.chip-btn[data-v]');
+    if (chipBtn) {
+      const group = chipBtn.closest('.chips'); const inp = v(group.dataset.for);
+      group.querySelectorAll('.chip-btn[data-v]').forEach(c => c.setAttribute('aria-pressed', String(c === chipBtn)));
+      inp.value = chipBtn.dataset.v;
+      if (group.dataset.for === 'room') {
+        // The room rides in the note, the field Victor reads. Swap the old room line for the new.
+        const room = rooms.find(r => r.id === chipBtn.dataset.v);
+        const note = v('note'); const stripped = note.value.replace(/^[^\n]*, if it is free\.\s*/m, '').trim();
+        note.value = room ? `${room.name}, if it is free.${stripped ? ` ${stripped}` : ''}` : stripped;
+      }
+      form.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
+  const showDate = (name) => {
+    const iso = v(name)?.value; if (!isDate(iso)) return;
+    wrap.querySelector(`[data-wd="${name}"]`).textContent = wd(iso);
+    wrap.querySelector(`[data-dm="${name}"]`).textContent = dm(iso);
+    wrap.querySelector(`[data-yr="${name}"]`).textContent = yr(iso);
+  };
   const update = () => {
     const f = new FormData(form);
     const seats = Number(f.get('seats') || 1);
     const ci = isTrip ? stay.dates.from : f.get('checkIn'), co = isTrip ? stay.dates.to : f.get('checkOut');
+    if (!isTrip) { showDate('checkIn'); showDate('checkOut'); }
     const q = quoteStay(stay, ci, co, s, { seats });
-    if (!q.nights) { preview.innerHTML = '<b>Pick your dates</b>'; return; }
+    const nightsEl = wrap.querySelector('#nights'); if (nightsEl) nightsEl.textContent = q.nights > 0 ? q.nights : '–';
+    if (!q.nights) { preview.className = 'ask-quote'; preview.innerHTML = '<b>Pick your dates</b>'; return; }
     const short = Math.max(0, q.points - avail);
-    preview.className = `notice${q.ok ? '' : ' warn'}`;
+    const pctRoom = q.points ? Math.round((q.basePoints / q.points) * 100) : 100;
+    preview.className = `ask-quote${q.ok ? '' : ' warn'}`;
     preview.innerHTML = q.ok
-      ? `<b>Indicative: ${escapeHtml(fmtPoints(q.points))} (${escapeHtml(fmtUsd2(q.points / s.pointsPerDollar))})</b>
-         <p class="small">${q.nights} night${q.nights > 1 ? 's' : ''}${isTrip || q.nights < 1 ? '' : ` · ${escapeHtml(fmtUsd2(q.points / s.pointsPerDollar / q.nights))} a night on average`}.
-         ${escapeHtml(fmtPoints(q.basePoints))} is the room and ${escapeHtml(fmtPoints(q.servicePoints))} is the Circle's 15% — the only fee there is, and this is where it is charged.
-         ${short ? `You are ${escapeHtml(fmtPoints(short))} short — that would be a top-up of ${escapeHtml(fmtUsd2(short / s.pointsPerDollar))} in cash, at face value.` : 'Covered by the points you hold.'}
+      ? `<div><span class="k">Indicative, all-in</span><b class="hero-figure" id="q-pts">${escapeHtml(fmtPoints(q.points))}</b>
+           <span class="small muted mono">${escapeHtml(fmtUsd2(q.points / s.pointsPerDollar))} · ${q.nights} night${q.nights > 1 ? 's' : ''}${isTrip ? '' : ` · ${escapeHtml(fmtUsd2(q.points / s.pointsPerDollar / q.nights))} a night`}</span></div>
+         <div class="ask-split" role="img" aria-label="${pctRoom}% the room, ${100 - pctRoom}% the Circle's share"><span style="width:${pctRoom}%"></span></div>
+         <p class="small">${escapeHtml(fmtPoints(q.basePoints))} is the room, ${escapeHtml(fmtPoints(q.servicePoints))} the Circle's ${Math.round(s.serviceRate * 100)}% — the only fee there is.
+         ${short ? `You are ${escapeHtml(fmtPoints(short))} short: a top-up of ${escapeHtml(fmtUsd2(short / s.pointsPerDollar))} in cash, at face value, or let the Circle chip in.` : 'Covered by the points you hold.'}
          ${q.retailUsd ? ` Booked alone this runs about ${escapeHtml(fmtUsd2(q.retailUsd))}.` : ''}</p>`
-      : `<b>${stay.name} needs at least ${q.minNights} nights for those dates</b>
+      : `<b>${escapeHtml(stay.name)} needs at least ${q.minNights} nights for those dates</b>
          <p class="small">${q.breakdown.peak ? 'Christmas and Carnival weeks carry a longer minimum at most resorts.' : ''}</p>`;
   };
   update();
@@ -666,12 +743,18 @@ export function book({ store, params, query = {}, go }) {
         note: f.get('note'), flexDays: Number(f.get('flexDays') || 0), shared: !!f.get('shared'),
         sourceUrl: cameFrom?.url || '', sourceLabel: cameFrom?.label || '',
       });
-      toast('Sent to Victor. He answers within 72 hours.', { kind: 'good' });
+      toast(`Sent to Victor. He answers within ${sla} hours.`, { kind: 'good' });
       go(`/requests/${r.id}`);
     } catch (err) { setBusy(btn, false); toast(err.message, { kind: 'bad', timeout: 6000 }); }
   });
   return wrap;
 }
+
+// The quote's lines, in words a member reads rather than the keys the sheet stores them under.
+const STACK_LABEL = { room: 'room', taxes: 'taxes', service: 'service', resort: 'resort fee', env: 'levy', share: 'the Circle’s share' };
+
+/** What a request is doing right now, in the member's words. Approval is a fact on a held request, not a status. */
+export const requestLabel = (r) => (r?.status === 'held' && r.approvedAt ? 'Victor is booking it' : statusLabel(r?.status));
 
 const GROUPS = [
   ['quoted', 'Waiting on you'], ['requested', 'With Victor'], ['held', 'Committed'],
@@ -703,7 +786,7 @@ export function requests({ store }) {
         return `<li><span class="what"><b><a href="#/requests/${r.id}">${escapeHtml(st?.name || 'Stay')}</a></b>
             <span class="meta">${escapeHtml(fmtDay(r.checkIn))} · ${r.nights} night${r.nights > 1 ? 's' : ''}${r.shared ? ` · ${(r.pledges || []).length ? `${(r.pledges || []).length} chipped in` : 'open to the Circle'}` : ''}${r.decision ? ` · ${escapeHtml(r.decision.slice(0, 70))}${r.decision.length > 70 ? '…' : ''}` : ''}</span></span>
           <span class="delta"><b>${escapeHtml(fmtPoints(r.quotedPoints || r.indicativePoints || r.points))}</b>
-            <small>${left ? `expires in ${escapeHtml(left)}` : escapeHtml(statusLabel(r.status))}</small></span></li>`;
+            <small>${left ? `expires in ${escapeHtml(left)}` : escapeHtml(requestLabel(r))}</small></span></li>`;
       }).join('')}</ul></div>`));
   }
   return wrap;
@@ -721,18 +804,22 @@ export function requestDetail({ store, params, go, refresh }) {
   const left = countdownTo(r.quoteExpiresAt);
   const avail = store.availablePoints(r.memberId);
 
+  const sla = tierFor(s, member?.monthlyUsd)?.slaHours ?? s.slaHours;
+  // The road, with the step that is happening now. Approval is Victor picking it up — a person
+  // and a time on the record — so "Victor is booking it" is said only once it is true.
   const steps = [
-    { key: 'requested', label: 'Requested', at: r.requestedAt, who: member?.name },
-    { key: 'quoted', label: 'Quoted', at: r.quotedAt, who: store.member(r.quotedBy)?.name },
-    { key: 'held', label: 'Accepted · points committed', at: r.heldAt, who: member?.name },
-    { key: 'confirmed', label: 'Paid and booked', at: r.confirmedAt, who: store.member(r.decidedBy)?.name },
-    { key: 'completed', label: 'Stayed', at: r.completedAt },
+    { key: 'requested', label: 'Asked', at: r.requestedAt, who: member?.name, next: `Victor prices it within ${sla} hours` },
+    { key: 'quoted', label: 'Priced by Victor', at: r.quotedAt, who: store.member(r.quotedBy)?.name, next: mine ? 'waiting on you' : 'waiting on the member' },
+    { key: 'held', label: 'Said yes · points committed', at: r.heldAt, who: member?.name, next: 'Victor picks it up next' },
+    { key: 'approved', label: 'Victor is booking it', at: r.approvedAt, who: store.member(r.approvedBy)?.name, next: 'in his hands · you hear the moment it is booked' },
+    { key: 'confirmed', label: 'Booked', at: r.confirmedAt, who: store.member(r.decidedBy)?.name, next: 'the room is yours' },
+    { key: 'completed', label: 'Stayed', at: r.completedAt, next: '' },
   ];
-  const order = ['requested', 'quoted', 'held', 'confirmed', 'completed'];
-  const at = order.indexOf(r.status);
+  const closed = ['declined', 'cancelled', 'expired'].includes(r.status);
+  const doneUpTo = r.status === 'completed' ? 5 : r.status === 'confirmed' ? 4 : r.status === 'held' ? (r.approvedAt ? 3 : 2) : r.status === 'quoted' ? 1 : 0;
 
   const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:860px">
-      <p class="eyebrow">${escapeHtml(stay?.area || '')} · ${escapeHtml(statusLabel(r.status))}</p>
+      <p class="eyebrow">${escapeHtml(stay?.area || '')} · ${escapeHtml(requestLabel(r))}</p>
       <h1>${escapeHtml(stay?.name || 'Stay')}</h1>
       <p class="lede" style="margin-top:10px">${escapeHtml(fmtDay(r.checkIn))} – ${escapeHtml(fmtDay(r.checkOut))} · ${r.nights} night${r.nights > 1 ? 's' : ''} · ${r.guests} guest${r.guests > 1 ? 's' : ''}${mine ? '' : ` · ${escapeHtml(member?.name || '')}`}</p>
 
@@ -808,8 +895,10 @@ export function requestDetail({ store, params, go, refresh }) {
         <div class="panel flat">
           <p class="eyebrow">${icon('history')}What happened when</p>
           <ul class="timeline" style="margin-top:12px">
-            ${steps.filter(st2 => st2.at || order.indexOf(st2.key) <= Math.max(at, 0)).map(st2 => `<li class="${st2.at ? 'done' : order.indexOf(st2.key) === at + 1 ? 'now' : ''}">
-              <b>${escapeHtml(st2.label)}</b><br><span class="when">${st2.at ? escapeHtml(fmtDayTime(st2.at)) : 'not yet'}${st2.who ? ` · ${escapeHtml(st2.who.split(' ')[0])}` : ''}</span></li>`).join('')}
+            ${steps.slice(0, closed ? doneUpTo + 1 : doneUpTo + 2).map((st2, i) => i <= doneUpTo
+              ? `<li class="done"><b>${escapeHtml(st2.label)}</b><br><span class="when">${st2.at ? escapeHtml(fmtDayTime(st2.at)) : ''}${st2.who ? ` · ${escapeHtml(st2.who.split(' ')[0])}` : ''}</span></li>`
+              : `<li class="now"><b>${escapeHtml(st2.label)}</b><br><span class="when">${escapeHtml(steps[i - 1].next || 'next')}</span></li>`).join('')}
+            ${closed ? `<li class="end"><b>${escapeHtml(statusLabel(r.status))}</b><br><span class="when">${r.decidedAt ? escapeHtml(fmtDayTime(r.decidedAt)) : ''}${r.decidedBy ? ` · ${escapeHtml(store.member(r.decidedBy)?.name.split(' ')[0] || '')}` : ''}</span></li>` : ''}
           </ul>
           ${r.hotelDeadline ? `<p class="small muted" style="margin-top:14px">Free cancellation with the hotel until <b class="num">${escapeHtml(fmtDay(r.hotelDeadline))}</b>. ${escapeHtml(r.hotelTerms || '')}</p>` : ''}
         </div>
@@ -823,7 +912,7 @@ export function requestDetail({ store, params, go, refresh }) {
       ${left && r.status === 'quoted' ? `<span class="chip chip-warn"><i></i>expires in <span class="num">${escapeHtml(left)}</span></span>` : ''}</div>
     <ul class="ledger" style="margin-top:10px">
       <li><span class="what"><b>${r.nights} night${r.nights > 1 ? 's' : ''} all-in</b>
-        <span class="meta">${r.quoteStack ? Object.entries(r.quoteStack).map(([k, v]) => `${k} ${fmtUsd2(v)}`).join(' · ') : 'Room, levies, service and resort fees included'}</span></span>
+        <span class="meta">${r.quoteStack ? Object.entries(r.quoteStack).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${STACK_LABEL[k] || k} ${fmtUsd2(v)}`).join(' · ') : 'Room, levies, service and resort fees included'}</span></span>
         <span class="delta"><b>${escapeHtml(fmtPoints(pts))}</b><small>${escapeHtml(pointsUsd(pts, s.pointsPerDollar))}</small></span></li>
       ${(r.topUpUsd || r.topUpReceivedUsd) ? (() => {
         // Owed and received are two numbers, and the line has to say both when they differ:
@@ -912,37 +1001,7 @@ export function requestDetail({ store, params, go, refresh }) {
   // look" panel, not in #actions, and that dispatcher only matches [data-act].
   wrap.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-look]'); if (!btn) return;
-    const found = btn.dataset.look;
-    const phone = found === 'phone';
-    try {
-      const out = await sheet({ title: phone ? 'You rang them' : 'What did you see?', render: (body, close) => {
-        body.innerHTML = `<p class="sheet-text">${escapeHtml(stay?.name || '')} · ${escapeHtml(fmtDay(r.checkIn))} – ${escapeHtml(fmtDay(r.checkOut))}.
-            This is written down with your name and the time on it, and the member reads it.</p>
-          ${phone ? `<label class="field"><span>What did they say?</span><input name="note" placeholder="Held under Hunto until Tuesday, ref 4471" required></label>
-            <label class="field"><span>Was the week there?</span><select name="found">
-              <option value="showing">Yes, it is there</option><option value="gone">No, it is gone</option>
-              <option value="unclear">They could not say</option></select></label>` : ''}
-          <label class="field"><span>Asking, a night (optional)</span><input name="price" type="number" step="0.01" inputmode="decimal" placeholder="only if the page said"></label>
-          <label class="field"><span>The room, as the page named it (optional)</span><input name="room" placeholder="Two-Bedroom Oceanfront"></label>
-          ${phone ? '' : `<label class="field"><span>Anything worth noting${found === 'showing' ? ' (optional)' : ''}</span><input name="note" ${found === 'showing' ? '' : 'required'} placeholder="${found === 'gone' ? 'nothing for these dates' : 'the calendar would not load'}"></label>`}
-          <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Write it down</button></div>`;
-        body.querySelector('[data-ok]').addEventListener('click', () => {
-          const noteEl = body.querySelector('[name=note]');
-          const note = noteEl?.value.trim() || '';
-          if ((phone || ['gone', 'unclear'].includes(found)) && !note) { noteEl.classList.add('invalid'); return; }
-          close({ found: phone ? body.querySelector('[name=found]').value : found, note,
-            priceUsd: Number(body.querySelector('[name=price]').value) || null,
-            roomLabel: body.querySelector('[name=room]').value.trim() });
-        });
-      } });
-      if (out) {
-        await store.recordLook({ stayId: r.stayId, checkIn: r.checkIn, checkOut: r.checkOut,
-          found: out.found, channel: phone ? 'phone' : 'site',
-          url: phone ? '' : btn.dataset.url, label: phone ? 'Rang them' : btn.dataset.label,
-          priceUsd: out.priceUsd, roomLabel: out.roomLabel, note: out.note, redemptionId: r.id }, me.id);
-        toast('Written down.', { kind: 'good' });
-      }
-    } catch (err) { toast(err.message, { kind: 'bad' }); }
+    await lookSheet(store, r, stay, { found: btn.dataset.look, url: btn.dataset.url, label: btn.dataset.label });
   });
 
   const actions = wrap.querySelector('#actions');
@@ -951,12 +1010,15 @@ export function requestDetail({ store, params, go, refresh }) {
   if (mine && ['requested', 'quoted', 'held'].includes(r.status)) buttons.push('<button class="btn ghost" data-act="cancel">Cancel this request</button>');
   if (canQuote && r.status === 'requested') buttons.push('<button class="btn" data-act="quote">Quote it</button><button class="btn danger" data-act="decline">Decline</button>');
   const topUpOwed = r.status === 'held' && r.topUpUsd > 0 && !r.topUpConfirmed;
-  if (canPay && r.status === 'held') buttons.push(`<button class="btn good" data-act="pay"${topUpOwed ? ' disabled' : ''}>Pay the hotel and burn the points</button>`);
+  if (store.canPlan?.() && r.status === 'held' && !r.approvedAt) buttons.push('<button class="btn" data-act="approve">I have it — booking it</button>');
+  if (canPay && r.status === 'held') buttons.push(`<button class="btn good" data-act="pay"${topUpOwed ? ' disabled' : ''}>${icon('check', { size: 16 })}I booked it</button>`);
+  if (mine && closed && stay && stay.kind !== 'trip') buttons.push(`<a class="btn ghost" href="#/book/${escapeHtml(stay.id)}?from=${escapeHtml(r.checkIn)}&to=${escapeHtml(r.checkOut)}">Ask again</a>`);
   if (canPay && topUpOwed) buttons.push('<button class="btn" data-act="topup">Mark the top-up received</button>');
   if (store.hasRole('planner', 'admin') && r.status === 'confirmed') buttons.push('<button class="btn ghost" data-act="complete">Mark as stayed</button><button class="btn danger" data-act="cancelPaid">Cancel the booking</button>');
   actions.innerHTML = buttons.length
     ? `<p class="eyebrow">${icon('zap')}What you can do</p><div class="row" style="margin-top:12px">${buttons.join('')}</div>
        ${topUpOwed ? `<p class="small" style="margin-top:12px;color:var(--flag)">The hotel cannot be paid until the ${escapeHtml(fmtUsd2(r.topUpUsd))} top-up has reached the Banker. Nothing is ever booked on credit.</p>` : ''}
+       ${r.status === 'held' && mine ? `<p class="small muted" style="margin-top:12px">${r.approvedAt ? 'Victor has it and is booking it himself, in your name. Your points burn only when the room is his to give you.' : 'Your points are committed and Victor picks it up next. Nothing is booked until he books it himself.'}</p>` : ''}
        ${r.status === 'quoted' && mine ? `<p class="small muted" style="margin-top:12px">Accepting moves ${escapeHtml(fmtPoints(Math.min(pts, avail)))} into Committed. They are still yours and still counted in the Circle’s coverage until the hotel is paid.</p>` : ''}`
     : '';
   if (!buttons.length) actions.remove();
@@ -967,7 +1029,7 @@ export function requestDetail({ store, params, go, refresh }) {
     try {
       if (act === 'accept') { await store.acceptQuote(r.id, me.id); toast('Accepted. Your points are committed while Victor books it.', { kind: 'good' }); }
       if (act === 'cancel') {
-        const yes = await confirmDialog({ title: 'Cancel this request?', message: 'Nothing has been committed to a hotel yet, so nothing is lost.', confirmText: 'Cancel it', danger: true });
+        const yes = await confirmDialog({ title: 'Cancel this request?', message: r.approvedAt ? 'Victor is booking it — he sees this straight away and stops. Nothing has been paid, so nothing is lost.' : 'Nothing has been committed to a hotel yet, so nothing is lost.', confirmText: 'Cancel it', danger: true });
         if (yes) { await store.cancelRedemption(r.id, me.id, { reason: 'Cancelled by the member' }); toast('Cancelled.'); go('/requests'); return; }
       }
       if (act === 'decline') {
@@ -977,26 +1039,8 @@ export function requestDetail({ store, params, go, refresh }) {
       }
       if (act === 'quote') await quoteSheet(store, r, stay);
       if (act === 'topup') { await store.confirmTopUp(r.id, me.id); toast('Top-up marked as received.'); }
-      if (act === 'pay') {
-        const out = await sheet({ title: 'Pay the hotel', render: (body, close) => {
-          // What the HOTEL is owed, not what the member was charged. Those differ by the
-          // Circle's 15%, and pre-filling the member's price booked the club's own income as
-          // cash handed to the hotel — so serviceEarned read ~$0 for ever and the Reserve
-          // looked 15% emptier than it was, on every booking, silently.
-          const owed = hotelOwedUsd(r, s);
-          body.innerHTML = `<p class="sheet-text">This burns ${escapeHtml(fmtPoints(r.points))} from ${escapeHtml(member?.name || 'the member')} and records what the Reserve actually paid.
-            The member was quoted ${escapeHtml(fmtUsd2(r.quotedPoints / s.pointsPerDollar))}; the difference is the Circle's ${Math.round(s.serviceRate * 100)}%.</p>
-            <label class="field"><span>Amount paid to the hotel</span><input name="paid" type="number" step="0.01" value="${owed.toFixed(2)}" inputmode="decimal"></label>
-            <label class="field"><span>Hotel confirmation number</span><input name="ref" placeholder="e.g. BT-2026-4471" required></label>
-            <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn good" data-ok>Pay and burn</button></div>`;
-          body.querySelector('[data-ok]').addEventListener('click', () => {
-            const ref = body.querySelector('[name=ref]').value.trim();
-            if (!ref) { body.querySelector('[name=ref]').classList.add('invalid'); return; }
-            close({ paidUsd: Number(body.querySelector('[name=paid]').value), confirmationRef: ref });
-          });
-        } });
-        if (out) { await store.payRedemption(r.id, me.id, out); toast('Booked. The points are burned and the ledger shows it.', { kind: 'good' }); }
-      }
+      if (act === 'approve') { await store.approveRedemption(r.id, me.id); toast(`${member?.name.split(' ')[0] || 'They'} can see you are booking it.`, { kind: 'good' }); }
+      if (act === 'pay') await bookSheet(store, r);
       if (act === 'complete') { await store.completeRedemption(r.id, me.id); toast('Marked as stayed.'); }
       if (act === 'cancelPaid') {
         const reason = await confirmDialog({ title: 'Cancel a booked stay', requireReason: true, reasonLabel: 'Why, and what did the hotel charge?', confirmText: 'Cancel the booking', danger: true,
@@ -1029,6 +1073,112 @@ export function requestDetail({ store, params, go, refresh }) {
  * of the ROOM-only figure, so the labels are true and the arithmetic does not depend on nobody
  * touching them.
  */
+/**
+ * A named person opened a named page and wrote down what they saw. The only availability fact
+ * the app holds; shared by the request page and the Desk's sheets so a look can be written
+ * down wherever the Desk happens to be when it looks.
+ */
+export async function lookSheet(store, r, stay, { found, url = '', label = '' } = {}) {
+  const phone = found === 'phone';
+  try {
+    const out = await sheet({ title: phone ? 'You rang them' : 'What did you see?', render: (body, close) => {
+      body.innerHTML = `<p class="sheet-text">${escapeHtml(stay?.name || '')} · ${escapeHtml(fmtDay(r.checkIn))} – ${escapeHtml(fmtDay(r.checkOut))}.
+          This is written down with your name and the time on it, and the member reads it.</p>
+        ${phone ? `<label class="field"><span>What did they say?</span><input name="note" placeholder="Held under Hunto until Tuesday, ref 4471" required></label>
+          <label class="field"><span>Was the week there?</span><select name="found">
+            <option value="showing">Yes, it is there</option><option value="gone">No, it is gone</option>
+            <option value="unclear">They could not say</option></select></label>` : ''}
+        <label class="field"><span>Asking, a night (optional)</span><input name="price" type="number" step="0.01" inputmode="decimal" placeholder="only if the page said"></label>
+        <label class="field"><span>The room, as the page named it (optional)</span><input name="room" placeholder="Two-Bedroom Oceanfront"></label>
+        ${phone ? '' : `<label class="field"><span>Anything worth noting${found === 'showing' ? ' (optional)' : ''}</span><input name="note" ${found === 'showing' ? '' : 'required'} placeholder="${found === 'gone' ? 'nothing for these dates, or only a studio' : 'what was unclear'}"></label>`}
+        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Write it down</button></div>`;
+      body.querySelector('[data-ok]').addEventListener('click', () => {
+        const noteEl = body.querySelector('[name=note]');
+        const note = noteEl?.value.trim() || '';
+        if ((phone || ['gone', 'unclear'].includes(found)) && !note) { noteEl.classList.add('invalid'); return; }
+        close({ found: phone ? body.querySelector('[name=found]').value : found, note,
+          priceUsd: Number(body.querySelector('[name=price]').value) || null,
+          roomLabel: body.querySelector('[name=room]').value.trim() });
+      });
+    } });
+    if (!out) return null;
+    const l = await store.recordLook({ stayId: r.stayId, checkIn: r.checkIn, checkOut: r.checkOut,
+      found: out.found, channel: phone ? 'phone' : 'site',
+      url: phone ? '' : url, label: phone ? 'Rang them' : label,
+      priceUsd: out.priceUsd, roomLabel: out.roomLabel, note: out.note, redemptionId: r.id }, store.me.id);
+    toast('Written down.', { kind: 'good' });
+    return l || true;
+  } catch (err) { toast(err.message, { kind: 'bad' }); return null; }
+}
+
+/** Where to book this one, with the look buttons under each link. Markup only; wire [data-look] to lookSheet. */
+function lookBlock(store, r) {
+  const links = store.whereToBook(r.id);
+  const gated = store.needsLook?.(r);
+  const seen = gated ? store.lookFor?.(r.stayId, r.checkIn, r.checkOut, r.status === 'held' ? r.heldAt : null) : null;
+  return `<div class="look-block">
+    ${links.length ? `<ul class="stack" style="list-style:none;padding:0;gap:8px">
+      ${links.map(l => `<li class="row" style="gap:8px;flex-wrap:wrap"><a class="btn ${l.exact ? '' : 'ghost'} sm" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}${escapeHtml(l.label)}</a>
+        <button type="button" class="btn ghost sm" data-look="showing" data-url="${escapeHtml(l.url)}" data-label="${escapeHtml(l.label)}">It is there</button>
+        <button type="button" class="btn quiet sm" data-look="gone" data-url="${escapeHtml(l.url)}" data-label="${escapeHtml(l.label)}">It is gone</button></li>`).join('')}
+    </ul>` : '<p class="small muted">No link on file for this one.</p>'}
+    <p class="small" style="margin-top:8px"><button type="button" class="btn quiet sm" data-look="phone">I rang them instead</button></p>
+    ${gated ? `<p class="tiny look-line" style="margin-top:6px${seen ? '' : ';color:var(--flag)'}">${seen
+      ? `Last look: ${escapeHtml(store.member(seen.lookedBy)?.name.split(' ')[0] || 'someone')} ${seen.found === 'showing' ? 'saw it open' : seen.found === 'booked' ? 'booked it' : `found it ${escapeHtml(seen.found)}`} · ${escapeHtml(fmtDayTime(seen.lookedAt))}`
+      : `Nobody has looked at these nights${r.status === 'held' ? ' since they said yes' : ''} — open it and say what you saw first.`}</p>` : ''}
+  </div>`;
+}
+
+/**
+ * Victor books it. The sheet has everything he needs in one place — the dates, the word from
+ * the member, where to book, the look buttons — and the one thing the app needs from him
+ * afterwards: the confirmation. Nothing here is automatic. The points burn only when he says
+ * he has booked it, and the ledger shows it under his name.
+ */
+export async function bookSheet(store, r) {
+  const s = store.settings, stay = store.stay(r.stayId), member = store.member(r.memberId);
+  const first = member?.name.split(' ')[0] || 'the member';
+  const out = await sheet({ title: `Book ${stay?.name || 'it'} for ${first}`, wide: true, render: (body, close) => {
+    const draw = () => {
+      const topUpOwed = r.topUpUsd > 0 && (r.topUpReceivedUsd ?? 0) < r.topUpUsd;
+      const owed = hotelOwedUsd(r, s);
+      body.innerHTML = `
+        <p class="sheet-text"><b>${escapeHtml(fmtDay(r.checkIn))} – ${escapeHtml(fmtDay(r.checkOut))}</b> · ${r.nights} night${r.nights > 1 ? 's' : ''} · ${r.guests} guest${r.guests > 1 ? 's' : ''}${r.flexDays ? ` · flexible ±${r.flexDays}d` : ''}
+          · ${escapeHtml(fmtPoints(r.quotedPoints || r.points))} quoted${r.topUpUsd ? ` · ${escapeHtml(fmtUsd2(r.topUpUsd))} top-up ${topUpOwed ? '<span style="color:var(--flag)">still with the Banker</span>' : 'received'}` : ''}
+          ${r.note ? `<br>“${escapeHtml(r.note)}”` : ''}</p>
+        <p class="eyebrow" style="margin-top:4px">${icon('external')}Book it here${r.approvedAt ? '' : ` — ${first} is told you have it the moment you tap a look`}</p>
+        ${lookBlock(store, r)}
+        <p class="eyebrow" style="margin-top:18px">${icon('check')}Once it is booked</p>
+        <p class="sheet-text" style="margin-top:6px">This burns ${escapeHtml(fmtPoints(r.points))} from ${escapeHtml(member?.name || 'the member')}${(r.pledges || []).length ? ` and what ${r.pledges.length} other${r.pledges.length > 1 ? 's' : ''} chipped in` : ''}, and records what the Reserve paid the hotel. ${first} was quoted ${escapeHtml(fmtUsd2((r.quotedPoints || 0) / s.pointsPerDollar))}; the difference is the Circle's ${Math.round(s.serviceRate * 100)}%.</p>
+        <div class="grid g2">
+          <label class="field"><span>Hotel confirmation number</span><input name="ref" placeholder="e.g. BT-2026-4471" required autocomplete="off"></label>
+          <label class="field"><span>Paid to the hotel, US$</span><input name="paid" type="number" step="0.01" value="${owed.toFixed(2)}" inputmode="decimal"></label>
+        </div>
+        ${topUpOwed ? `<p class="small" style="color:var(--flag);margin-bottom:10px">The ${escapeHtml(fmtUsd2(r.topUpUsd))} top-up has not reached the Banker yet. Nothing is booked on credit — book it once Vishnu has it.</p>` : ''}
+        <div class="sheet-actions"><button class="btn ghost" data-close>Not yet</button>
+          ${r.approvedAt ? '' : '<button type="button" class="btn ghost" data-approve>I have it, booking later</button>'}
+          <button class="btn good" data-ok ${topUpOwed ? 'disabled' : ''}>${icon('check', { size: 16 })}I booked it — burn the points</button></div>`;
+    };
+    draw();
+    body.addEventListener('click', async (e) => {
+      const look = e.target.closest('[data-look]');
+      if (look) { const done = await lookSheet(store, r, stay, { found: look.dataset.look, url: look.dataset.url, label: look.dataset.label }); if (done) { if (!r.approvedAt && store.canPlan?.()) { try { await store.approveRedemption(r.id, store.me.id); } catch { /* the look is written down either way */ } } draw(); } return; }
+      if (e.target.closest('[data-approve]')) { try { await store.approveRedemption(r.id, store.me.id); toast(`${first} can see you are booking it.`, { kind: 'good' }); draw(); } catch (err) { toast(err.message, { kind: 'bad' }); } return; }
+      if (e.target.closest('[data-ok]')) {
+        const ref = body.querySelector('[name=ref]').value.trim();
+        if (!ref) { body.querySelector('[name=ref]').classList.add('invalid'); body.querySelector('[name=ref]').focus(); return; }
+        close({ paidUsd: Number(body.querySelector('[name=paid]').value), confirmationRef: ref });
+      }
+    });
+  } });
+  if (!out) return null;
+  try {
+    await store.payRedemption(r.id, store.me.id, out);
+    toast(`Booked. ${first} can see it, and the ledger shows the points burned under your name.`, { kind: 'good' });
+    return true;
+  } catch (err) { toast(err.message, { kind: 'bad', timeout: 8000 }); return null; }
+}
+
 export async function quoteSheet(store, r, stay) {
   const s = store.settings;
   const indicative = r.indicativePoints || 0;
@@ -1037,6 +1187,7 @@ export async function quoteSheet(store, r, stay) {
   const hotelUsd = indicative / s.pointsPerDollar / (1 + s.serviceRate);
   const out = await sheet({ title: `Quote ${stay?.name || 'this stay'}`, wide: true, render: (body, close) => {
     body.innerHTML = `
+      ${store.needsLook?.(r) ? `<p class="eyebrow">${icon('external')}Look first</p>${lookBlock(store, r)}<p class="eyebrow" style="margin-top:18px">${icon('tag')}Then price it</p>` : ''}
       <p class="sheet-text">Type what the hotel charges. The Circle's ${Math.round(s.serviceRate * 100)}% is added on top and the member sees it as its own line. The quote is locked for ${s.quoteHours} hours.</p>
       <div class="grid g3">
         <label class="field"><span>Room total</span><input name="room" type="number" step="0.01" value="${(hotelUsd * 0.72).toFixed(2)}" inputmode="decimal"></label>
@@ -1063,6 +1214,11 @@ export async function quoteSheet(store, r, stay) {
       body.querySelector('#q-pts').textContent = fmtPoints(Math.round(quoteUsd() * s.pointsPerDollar));
     };
     sync(); body.addEventListener('input', sync);
+    body.addEventListener('click', async (e) => {
+      const look = e.target.closest('[data-look]'); if (!look) return;
+      const done = await lookSheet(store, r, stay, { found: look.dataset.look, url: look.dataset.url, label: look.dataset.label });
+      if (done) { const block = body.querySelector('.look-block'); if (block) block.outerHTML = lookBlock(store, r); }
+    });
     body.querySelector('[data-ok]').addEventListener('click', () => {
       // `share` rides in the stack so the member's breakdown shows it by name. Both backends
       // re-derive it from the hotel lines and refuse a quote whose points do not match, so the

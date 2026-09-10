@@ -67,7 +67,7 @@ export function avatar(member, size = 36) {
 // Status is never colour alone: a filled disc plus a word, every time.
 const STATUS_LABEL = {
   pending: 'Sent · awaiting the Banker', confirmed: 'Confirmed', rejected: 'Returned', withdrawn: 'Withdrawn', reversed: 'Reversed',
-  requested: 'With Victor', quoted: 'Quoted · waiting on you', held: 'Committed', paid: 'Paid', completed: 'Stayed',
+  requested: 'With Victor', quoted: 'Priced · waiting on you', held: 'Committed', paid: 'Paid', completed: 'Stayed',
   declined: 'Declined', cancelled: 'Cancelled', expired: 'Expired',
   due: 'Due', active: 'Active', paused: 'Paused', inactive: 'Inactive', invited: 'Invited', left: 'Left',
 };

@@ -39,9 +39,21 @@ it with the group.
 | Open requests · booked ahead | 1 · 10 months | 2 · 12 months | 2 · 13 months |
 | Guest passes · first look | 2 · — | 3 · 48h | 4 · 72h |
 
-Short of something you want? Ask for it anyway — Victor quotes it and you accept when the
+Short of something you want? Ask for it anyway — Victor prices it and you say yes when the
 points are there — or close the gap with a cash top-up, or have the Circle chip in. Moving
 between levels takes effect on your next contribution and changes nothing already held.
+
+### How a booking happens
+
+Nobody books anything themselves, and nothing is automatic. You **ask** — dates, guests, a
+word for Victor — and see the indicative price before you send it. Victor **looks** at the
+listing, writes down what he saw, and **prices** it, all-in, within your level's promise.
+You **say yes** and your points are committed. Victor then **picks it up** — the app says
+"Victor is booking it" only once he has, not the moment you accept — **books it himself, in
+your name**, and writes down the hotel's confirmation. That is when the points burn and the
+room is yours. The request page shows which of those six steps has happened and which is next;
+the Desk sees the same requests in three lanes: to approve and price, to book, waiting on the
+member.
 
 ## Signing in
 
@@ -305,12 +317,13 @@ Worth doing in this order:
 1. **Sasha** — the home screen: her card, what she can afford, her committed points.
 2. **Marcus, Daniela, Victor, Fabian** have transfers waiting. Sign in as **Vishnu** →
    *Bank* and confirm one. You have a minute to undo it.
-3. **Kimberly** has a live quote with a cash top-up. Accept it as her, then pay the
-   hotel as Vishnu — the top-up has to arrive first.
+3. **Kimberly** has a live quote with a cash top-up. Accept it as her, then book it as
+   **Victor** from the Desk's *To book* lane — the top-up has to reach Vishnu first, and the
+   sheet says so.
 4. **Kimberly** has also opened her Eagle Beach weekend to the Circle: Diego and Priya have
    already chipped in, and 9,000 points are still to cover. Sign in as anyone and put the
    rest in — *Circle* → *Chip in*, or straight from your home screen.
-5. **Victor** → *Desk* to quote Priya's open request, edit the catalog, or write a note.
+5. **Victor** → *Desk* to look at and price Priya's open request from its lane, edit the catalog, or write a note.
    The catalog editor takes **dollars or points in either box** — type one and the other
    follows — and *Settings* has the same converter for checking a price before you enter it.
 6. **Vishnu** → *Bank* → *Close September* — it will not close while transfers are

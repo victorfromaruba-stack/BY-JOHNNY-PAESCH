@@ -1098,6 +1098,7 @@ export class Store {
       // top-ranked "the listing they were looking at" row could never fire for a real request.
       sourceUrl: safeUrl(sourceUrl) || '', sourceLabel: String(sourceLabel || '').slice(0, 60),
       points: q.points, topUpUsd: 0, quoteStack: null, hotelTerms: '', hotelDeadline: null, quotedBy: null, quotedAt: null, quoteExpiresAt: null,
+      approvedAt: null, approvedBy: null,
       status: REDEMPTION_STATUS.requested, requestedAt: nowIso(), decidedBy: null, decidedAt: null, decision: '', heldAt: null, confirmedAt: null, completedAt: null, paidUsd: null, confirmationRef: '',
     };
     this.state.redemptions.push(r);
@@ -1270,6 +1271,21 @@ export class Store {
   }
 
   /** Banker (or planner) pays the hotel: points burn, booking confirmed. */
+  /**
+   * Victor picks it up. The member's points are committed the moment they accept, and until
+   * this the honest line is "Victor picks it up next" — not "Victor is confirming with the
+   * hotel", which the app used to say the instant anyone accepted, whether or not he had seen
+   * it. Approval is a person and a time, on the record; the status stays held, because nothing
+   * about the money has moved. Mirrors approve_redemption() in SQL.
+   */
+  async approveRedemption(id, actorId) {
+    if (!this.hasRole('planner', 'admin')) throw new Error('Only the Desk can approve a booking');
+    const r = this.redemption(id); if (!r) throw new Error('No such request');
+    if (r.status !== REDEMPTION_STATUS.held) throw new Error('A request is approved once the member has accepted the price');
+    if (r.approvedAt) return r;
+    Object.assign(r, { approvedAt: nowIso(), approvedBy: actorId });
+    this.log(actorId, 'redemption.approve', 'redemption', id, {}); await this.commit('redemptions'); return r;
+  }
   async payRedemption(id, actorId, { paidUsd = null, confirmationRef = '' } = {}) {
     if (!this.hasRole('treasurer', 'deputy', 'planner', 'admin')) throw new Error('Only the Banker or the Desk can pay a hotel');
     const r = this.redemption(id); if (!r) throw new Error('No such request');
@@ -1290,6 +1306,7 @@ export class Store {
       if (this.availablePoints(p.memberId) + p.points < p.points) throw new Error(`${this.member(p.memberId)?.name || 'A member'} no longer has the points they chipped in`);
     }
     const stay = this.stay(r.stayId); const at = nowIso();
+    if (!r.approvedAt) Object.assign(r, { approvedAt: at, approvedBy: actorId });
     Object.assign(r, { status: REDEMPTION_STATUS.confirmed, confirmedAt: at, paidUsd: paidUsd == null ? hotelOwedUsd(r, this.settings) : Number(paidUsd), confirmationRef, decidedBy: actorId, decidedAt: at });
     const burn = (memberId, points, note) => this.state.ledger.push({ id: uid('led'), memberId, kind: LEDGER_KIND.burn, points: -points, usd: -round(points / this.settings.pointsPerDollar), refType: 'redemption', refId: r.id, note, at, by: actorId });
     if (r.points > 0) burn(r.memberId, r.points, `${stay?.name || 'Stay'} · ${r.nights} nights`);

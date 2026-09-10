@@ -326,8 +326,15 @@ create table if not exists redemptions (
   penalty_points    int,
   confirmation_ref  text,
   shared            boolean not null default false,   -- open for the Circle to chip in
+  -- Victor picked it up: a person and a time, set by approve_redemption() once the member has
+  -- accepted, or by pay_redemption() if he books it straight away. Until it is set the honest
+  -- line to the member is "Victor picks it up next", not "Victor is confirming with the hotel".
+  approved_at       timestamptz,
+  approved_by       uuid references members(id),
   check (check_out > check_in)
 );
+alter table redemptions add column if not exists approved_at timestamptz;
+alter table redemptions add column if not exists approved_by uuid references members(id);
 
 do $$ begin create type look_found as enum ('showing','gone','unclear','different','booked');
 exception when duplicate_object then null; end $$;
@@ -1278,7 +1285,8 @@ begin
 
   update redemptions set status='confirmed', confirmed_at=now(), decided_by=current_member_id(), decided_at=now(),
          paid_usd = coalesce(p_paid_usd, hotel_owed_usd(r.quoted_points, r.quote_stack)),
-         confirmation_ref = p_confirmation
+         confirmation_ref = p_confirmation,
+         approved_at = coalesce(approved_at, now()), approved_by = coalesce(approved_by, current_member_id())
   where id = p_id returning * into r;
   if r.points > 0 then
     insert into ledger(member_id, kind, points, usd, ref_type, ref_id, note, by_id)
@@ -1304,6 +1312,23 @@ begin
 
   perform log_audit('redemption.pay','redemption',r.id::text,
     jsonb_build_object('points', r.points, 'paidUsd', r.paid_usd, 'confirmationRef', p_confirmation));
+  return r;
+end $$;
+
+-- Victor picks it up. Nothing about the money moves here — the status stays held — but from
+-- this moment the member is told, truthfully, that he has it and is booking it. Mirrors
+-- Store.approveRedemption(); a second tap is a no-op, not an error.
+create or replace function approve_redemption(p_id uuid)
+returns redemptions language plpgsql security definer set search_path = public as $$
+declare r redemptions;
+begin
+  if not has_role('planner','admin') then raise exception 'Only the Desk can approve a booking'; end if;
+  select * into r from redemptions where id = p_id for update;
+  if r.id is null then raise exception 'No such request'; end if;
+  if r.status <> 'held' then raise exception 'A request is approved once the member has accepted the price'; end if;
+  if r.approved_at is not null then return r; end if;
+  update redemptions set approved_at = now(), approved_by = current_member_id() where id = p_id returning * into r;
+  perform log_audit('redemption.approve','redemption',r.id::text,'{}'::jsonb);
   return r;
 end $$;
 
@@ -2183,7 +2208,7 @@ do $$
 declare
   fn text;
   circle_functions text[] := array[
-    'accept_quote','add_watch','adjust_points','admin_add_member','admin_update_member',
+    'accept_quote','add_watch','adjust_points','admin_add_member','admin_update_member','approve_redemption',
     'available_points','cancel_redemption','claim_membership','close_month','committed_points',
     'complete_redemption','confirm_contribution','confirm_top_up','consecutive_months','covered_points',
     'create_crew','current_member_id','deal_matches_watch','decline_redemption','easter_sunday','has_role',

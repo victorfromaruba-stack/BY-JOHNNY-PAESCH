@@ -24,6 +24,7 @@ export function home({ store, go }) {
   const status = store.monthStatus(me.id, month);
   const tier = tierFor(s, me.monthlyUsd);
   const held = store.state.redemptions.filter(r => r.memberId === me.id && r.status === 'held');
+  const asked = store.state.redemptions.filter(r => r.memberId === me.id && r.status === 'requested');
   const quoted = store.state.redemptions.filter(r => r.memberId === me.id && r.status === 'quoted');
   const upcoming = store.state.redemptions.filter(r => r.memberId === me.id && r.status === 'confirmed');
   const note = store.announcements()[0];
@@ -229,10 +230,17 @@ export function home({ store, go }) {
       ${left2 ? `Expires in <span class="num">${escapeHtml(left2)}</span>.` : 'It has expired.'}</p>
       <p style="margin-top:8px"><a class="btn sm" href="#/requests/${q.id}">Look at it</a></p></div>`);
   }
+  // A freshly sent ask used to be invisible here — the member had nowhere that said Victor had it.
+  for (const a of asked) {
+    const st = store.stay(a.stayId);
+    blocks.push(`<div class="notice"><b>Victor has your ask for ${escapeHtml(st?.name || 'a stay')}</b>
+      <p class="small">${a.nights} nights from ${escapeHtml(fmtDay(a.checkIn))}. He prices it within ${tier.slaHours ?? s.slaHours} hours; nothing is committed until you say yes.</p>
+      <p style="margin-top:8px"><a class="btn ghost sm" href="#/requests/${a.id}">Details</a></p></div>`);
+  }
   for (const h of held) {
     const st = store.stay(h.stayId);
     blocks.push(`<div class="notice"><b>${escapeHtml(fmtPoints(h.points))} committed to ${escapeHtml(st?.name || 'a stay')}</b>
-      <p class="small">${h.nights} nights from ${escapeHtml(fmtDay(h.checkIn))}. Victor is confirming with the hotel; your points burn when it is paid.</p>
+      <p class="small">${h.nights} nights from ${escapeHtml(fmtDay(h.checkIn))}. ${h.approvedAt ? 'Victor has it and is booking it himself, in your name; your points burn when the room is yours.' : 'Victor picks it up next; you hear the moment he has it.'}</p>
       <p style="margin-top:8px"><a class="btn ghost sm" href="#/requests/${h.id}">Details</a></p></div>`);
   }
   for (const u of upcoming) {
@@ -260,6 +268,8 @@ export function home({ store, go }) {
       </div></div>`);
   }
   if (blocks.length) left.appendChild(el(`<div class="stack">${blocks.join('')}</div>`));
+  // The list of everything asked, which had no way in from the chrome at all.
+  if (store.state.redemptions.some(r => r.memberId === me.id)) left.appendChild(el(`<p class="small" style="margin-top:10px"><a href="#/requests">${icon('history', { size: 14, cls: 'ico-muted' })} Everything you have asked for</a></p>`));
 
   // 4 — the ledger, last five lines
   const recent = store.ledgerFor(me.id).slice(0, 5);

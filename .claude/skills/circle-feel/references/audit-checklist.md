@@ -158,3 +158,16 @@ the board no longer folds the other groups), the "Gone" flow still works through
 handler, a member sees no edit buttons, and the place name in a group head is a link to the stay.
 No overflow, no errors, at 390. The live section below the board is unchanged and is most of the
 7.3 screens now.
+
+## Re-baselined 10 Sept, the ask and the Desk's lanes (390px)
+
+The ask (`/book/:id`) is a brief now, not a form: date tiles with the native picker underneath,
+a nights figure, a stepper, chips, a switch, the all-in price with its room/share bar, four
+steps, one button. 2.3 screens as a member, no overflow, every control 44px or the whole row
+(the switch is 50×30 inside a full-width label). Pressing anything answers: the number, the
+chip, the price. The request page carries six steps with the one happening now marked, and a
+closed request ends on a red step with "Ask again". The Desk's Requests tab is three lanes —
+to approve and price, to book, waiting on the member — with the action on the row; the sheets
+carry the look buttons, so nothing the Desk taps from the queue can end in a refusal it has to
+go elsewhere to fix. Interaction sweeps: `/desk admin` 14 of 16 controls did something (2
+skipped as hand-offs), `/book/stay_surfclub member` 11 of 13, `/requests member` 2 of 2.

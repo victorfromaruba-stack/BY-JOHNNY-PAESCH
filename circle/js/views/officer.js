@@ -8,7 +8,7 @@ import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel, avatar } from '../ui/components.js';
 import { columns, tableFor, sparkline } from '../ui/charts.js';
 import { waLink, TEMPLATES, copyText, shareText } from '../core/share.js';
-import { quoteSheet } from './catalog.js';
+import { quoteSheet, bookSheet } from './catalog.js';
 import { photoFor } from './public.js';
 import { icon } from '../ui/icons.js';
 
@@ -407,30 +407,47 @@ export function desk({ store, go }) {
   };
 
   const drawRequests = () => {
-    const rows = open;
-    panel.replaceChildren(el(`<div class="stack">
-      ${rows.length ? rows.map(r => {
-        const m = store.member(r.memberId); const st = store.stay(r.stayId);
-        const age = Math.round((Date.now() - new Date(r.requestedAt)) / 36e5);
-        // Each level carries its own promise, so the clock that matters is the asker's.
-        const promised = tierFor(s, store.member(r.memberId)?.monthlyUsd)?.slaHours ?? s.slaHours;
-        const sla = promised - age;
-        return `<div class="panel">
-          <div class="row-between">
-            <div class="row" style="gap:12px">${avatar(m, 38)}
-              <div><b>${escapeHtml(m.name)}</b> → ${escapeHtml(st?.name || '')}
-                <br><span class="small muted">${escapeHtml(fmtDay(r.checkIn))} – ${escapeHtml(fmtDay(r.checkOut))} · ${r.nights} night${r.nights > 1 ? 's' : ''} · ${r.guests} guest${r.guests > 1 ? 's' : ''}${r.flexDays ? ` · flexible ±${r.flexDays}d` : ''}</span></div>
-            </div>
-            <div style="text-align:right">${chip(r.status)}<br><span class="small muted num">${escapeHtml(fmtPoints(r.quotedPoints || r.indicativePoints))}</span></div>
+    // Three lanes, by what the Desk owes: a price, a booking, or nothing yet. A flat list mixed
+    // the three and hid the one that is Victor's own job — booking it — behind an "Open".
+    const hoursLeft = (r) => (tierFor(s, store.member(r.memberId)?.monthlyUsd)?.slaHours ?? s.slaHours) - Math.round((Date.now() - new Date(r.requestedAt)) / 36e5);
+    const lanes = [
+      { key: 'requested', title: 'To approve and price', sub: 'Open it, look, price it. Nothing is promised to anyone until you do.',
+        rows: open.filter(r => r.status === 'requested').sort((a, b) => hoursLeft(a) - hoursLeft(b)) },
+      { key: 'held', title: 'To book', sub: 'They said yes and their points are committed. Book it yourself, then write down the confirmation.',
+        rows: open.filter(r => r.status === 'held').sort((a, b) => (a.approvedAt ? 1 : 0) - (b.approvedAt ? 1 : 0) || String(a.heldAt).localeCompare(String(b.heldAt))) },
+      { key: 'quoted', title: 'Waiting on the member', sub: 'Priced. Nothing to do until they say yes, or the price lapses.',
+        rows: open.filter(r => r.status === 'quoted').sort((a, b) => String(a.quoteExpiresAt).localeCompare(String(b.quoteExpiresAt))) },
+    ];
+    const row = (r) => {
+      const m = store.member(r.memberId); const st = store.stay(r.stayId);
+      const promised = tierFor(s, m?.monthlyUsd)?.slaHours ?? s.slaHours;
+      const sla = hoursLeft(r);
+      const topUpOwed = r.status === 'held' && r.topUpUsd > 0 && (r.topUpReceivedUsd ?? 0) < r.topUpUsd;
+      const left = countdownTo(r.quoteExpiresAt);
+      return `<div class="panel req ${r.status}">
+        <div class="row-between" style="align-items:flex-start">
+          <div class="row" style="gap:12px;min-width:0">${avatar(m, 38)}
+            <div style="min-width:0"><b>${escapeHtml(m?.name || '')}</b> → ${escapeHtml(st?.name || '')}
+              <br><span class="small muted">${escapeHtml(fmtDay(r.checkIn))} – ${escapeHtml(fmtDay(r.checkOut))} · ${r.nights} night${r.nights > 1 ? 's' : ''} · ${r.guests} guest${r.guests > 1 ? 's' : ''}${r.flexDays ? ` · flexible ±${r.flexDays}d` : ''}</span></div>
           </div>
-          ${r.note ? `<p class="small muted" style="margin-top:10px">“${escapeHtml(r.note)}”</p>` : ''}
-          <div class="row" style="margin-top:12px">
-            ${r.status === 'requested' ? `<button class="btn sm" data-quote="${r.id}">Quote it</button>
-              <span class="small ${sla < 12 ? '' : 'muted'}" ${sla < 12 ? 'style="color:var(--flag)"' : ''}>${sla > 0 ? `${sla}h left of the 72-hour promise` : 'past the 72-hour promise'}</span>` : ''}
-            <a class="btn ghost sm" href="#/requests/${r.id}">Open</a>
-          </div></div>`;
-      }).join('') : `<div class="empty"><b>No open requests</b><p class="small muted">Everything has been quoted, booked or answered.</p></div>`}
-    </div>`));
+          <div style="text-align:right;flex:none">${r.status === 'held' ? chip(r.approvedAt ? 'held' : 'requested', r.approvedAt ? 'Booking it' : 'To book') : chip(r.status)}<br><span class="small muted num">${escapeHtml(fmtPoints(r.quotedPoints || r.indicativePoints))}</span></div>
+        </div>
+        ${r.note ? `<p class="small muted" style="margin-top:10px">“${escapeHtml(r.note)}”</p>` : ''}
+        <div class="row" style="margin-top:12px;align-items:center">
+          ${r.status === 'requested' && store.canQuote(r) ? `<button class="btn sm" data-quote="${r.id}">${icon('tag', { size: 15 })}Look and price</button>
+            <span class="small ${sla < 12 ? '' : 'muted'}" ${sla < 12 ? 'style="color:var(--flag)"' : ''}>${sla > 0 ? `${sla}h left of the ${promised}-hour promise` : `past the ${promised}-hour promise`}</span>` : ''}
+          ${r.status === 'held' && store.hasRole('planner', 'admin', 'treasurer', 'deputy') ? `<button class="btn good sm" data-book="${r.id}">${icon('check', { size: 15 })}Book it</button>` : ''}
+          ${r.status === 'held' && store.canPlan() && !r.approvedAt ? `<button class="btn ghost sm" data-approve="${r.id}">I have it</button>` : ''}
+          ${r.status === 'held' ? `
+            ${topUpOwed ? `<span class="small" style="color:var(--flag)">${escapeHtml(fmtUsd2(r.topUpUsd))} top-up still with the Banker</span>` : ''}` : ''}
+          ${r.status === 'quoted' ? `<span class="small muted">${left ? `the price holds another ${escapeHtml(left)}` : 'the price has lapsed'}</span>` : ''}
+          <a class="btn ghost sm" href="#/requests/${r.id}">Open</a>
+        </div></div>`;
+    };
+    panel.replaceChildren(el(`<div class="stack lanes">${lanes.map(l => `<section class="lane lane-${l.key}">
+        <div class="lane-head"><div><p class="eyebrow">${escapeHtml(l.title)}</p><p class="small muted">${escapeHtml(l.sub)}</p></div><b class="num lane-count">${l.rows.length}</b></div>
+        ${l.rows.length ? `<div class="stack">${l.rows.map(row).join('')}</div>` : '<p class="small muted lane-empty">Nothing here.</p>'}
+      </section>`).join('')}</div>`));
   };
 
   const drawCatalog = () => {
@@ -498,6 +515,10 @@ export function desk({ store, go }) {
     if (tab === 'requests') {
       const b = e.target.closest('[data-quote]');
       if (b) { const r = store.redemption(b.dataset.quote); return quoteSheet(store, r, store.stay(r.stayId)); }
+      const bk = e.target.closest('[data-book]');
+      if (bk) return bookSheet(store, store.redemption(bk.dataset.book));
+      const ap = e.target.closest('[data-approve]');
+      if (ap) { try { const r = store.redemption(ap.dataset.approve); await store.approveRedemption(r.id, me.id); toast(`${store.member(r.memberId)?.name.split(' ')[0] || 'They'} can see you are booking it.`, { kind: 'good' }); } catch (err) { toast(err.message, { kind: 'bad' }); } return; }
     }
     if (tab === 'catalog') {
       const ed = e.target.closest('[data-edit]');

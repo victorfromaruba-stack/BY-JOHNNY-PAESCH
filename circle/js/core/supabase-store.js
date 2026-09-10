@@ -337,6 +337,7 @@ export class SupabaseStore extends Store {
   async pledgeToRedemption(id, _memberId, points) { return this.rpc('pledge_to_redemption', { p_id: id, p_points: points }); }
   async withdrawPledge(id, memberId) { return this.rpc('withdraw_pledge', { p_id: id, p_member: memberId }); }
   async confirmTopUp(id) { return this.rpc('confirm_top_up', { p_id: id }); }
+  async approveRedemption(id) { return this.rpc('approve_redemption', { p_id: id }); }
   async payRedemption(id, _actor, { paidUsd = null, confirmationRef = '' } = {}) {
     return this.rpc('pay_redemption', { p_id: id, p_paid_usd: paidUsd, p_confirmation: confirmationRef });
   }
