@@ -540,7 +540,7 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 .deal .deal-body { padding: 16px 18px 18px; }
 .deal.matched { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
 .deal.in-place .deal-body { padding: 14px 16px 16px; }
-.deal.in-place h3 { overflow-wrap: anywhere; }
+.deal.in-place :is(h3, h4) { overflow-wrap: anywhere; }
 /* The board by place: a small photograph and the name once, then the weeks under it. */
 .place-group + .place-group { margin-top: 26px; }
 /* The head stays put while the weeks under it scroll — nineteen cards with no place on them

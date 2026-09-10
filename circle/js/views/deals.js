@@ -58,7 +58,10 @@ export const nightly = (d) => d?.pointsPerNight || (d?.pointsTotal && d?.nights 
  * `inPlace` is for a card that sits under its place's own heading — no photograph strip, no
  * area line, no place in the title — so twenty of them read as a list, not twenty posters.
  */
-export function dealCard(deal, { store, match = null, canEdit = false, inPlace = false } = {}) {
+export function dealCard(deal, { store, match = null, canEdit = false, inPlace = false, level = 3 } = {}) {
+  // Under a place's own h3 the card's title is an h4, so a screen reader moving by heading
+  // hears places and the weeks under them as parent and child, not as peers.
+  const H = `h${Math.min(6, Math.max(2, level))}`;
   const stay = store.stay(deal.stayId);
   const room = store.roomType?.(deal.roomTypeId);
   const saveUsd = deal.retailUsd ? deal.retailUsd - deal.pointsTotal / store.settings.pointsPerDollar : 0;
@@ -69,7 +72,7 @@ export function dealCard(deal, { store, match = null, canEdit = false, inPlace =
         ${match ? `<p class="eyebrow" style="color:var(--good-text)">${icon('bellRing', { size: 15 })}You asked for this</p>` : ''}
         <div class="row-between" style="align-items:flex-start;gap:12px">
           <div>
-            <h3 style="font-size:1.05rem">${escapeHtml(inPlace ? title : (deal.title || stay?.name || 'A deal'))}</h3>
+            <${H} style="font-size:1.05rem">${escapeHtml(inPlace ? title : (deal.title || stay?.name || 'A deal'))}</${H}>
             ${inPlace && (!room || title === room.name) ? '' : `<p class="small muted" style="margin-top:4px">${inPlace ? '' : `${escapeHtml(stay?.area || '')}${stay && stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}`}
               ${room ? `${inPlace ? '' : ' · '}${escapeHtml(room.name)}` : ''}</p>`}
           </div>
@@ -115,7 +118,7 @@ export const byNight = (a, b) => nightly(a) - nightly(b) || String(a.from).local
  * Some deals as cards, the first few shown and the rest behind one button. `key` is what the
  * button remembers itself by across re-renders; `first` is how many open with the page.
  */
-export function dealList(slot, deals, { store, me = null, canEdit = false, first = 3, key = '', inPlace = true, noun = '' } = {}) {
+export function dealList(slot, deals, { store, me = null, canEdit = false, first = 3, key = '', inPlace = true, noun = '', level = 3 } = {}) {
   const watches = me ? store.watchesFor(me.id) : [];
   const matchFor = (d) => watches.map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
   // What answers a watch comes first, whatever it costs: the two-bedroom somebody asked for is
@@ -129,10 +132,17 @@ export function dealList(slot, deals, { store, me = null, canEdit = false, first
     // A button that hides one card costs as much as the card: show it.
     const shown = REVEALED.has(key) || ordered.length - first <= 1 ? ordered : ordered.slice(0, first);
     const hidden = ordered.length - shown.length;
-    grid.replaceChildren(...shown.map(d => dealCard(d, { store, match: matched.get(d.id), canEdit, inPlace })));
+    grid.replaceChildren(...shown.map(d => dealCard(d, { store, match: matched.get(d.id), canEdit, inPlace, level })));
     more.innerHTML = hidden > 0 ? `<button class="btn ghost sm" data-act="reveal">${icon('chevronDown', { size: 16 })}Show the other ${hidden}${noun ? ` ${noun}` : ''}</button>` : '';
   };
-  more.addEventListener('click', (e) => { if (e.target.closest('[data-act="reveal"]')) { REVEALED.add(key); paint(); } });
+  more.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-act="reveal"]')) return;
+    REVEALED.add(key); paint();
+    // The button that had focus is gone; put focus on the first card it revealed, so a keyboard
+    // or screen-reader user lands on what appeared rather than back at the top of the page.
+    const card = grid.children[first];
+    if (card) { card.tabIndex = -1; card.focus({ preventScroll: true }); }
+  });
   paint();
   slot.append(grid, more);
   return { grid, more };
@@ -150,6 +160,7 @@ export function boardByPlace(slot, deals, { store, me = null, canEdit = false, f
     .sort((a, b) => (b.stay?.house ? 1 : 0) - (a.stay?.house ? 1 : 0) || b.list.length - a.list.length || (a.stay?.name || '').localeCompare(b.stay?.name || ''));
   for (const { stayId, stay, list } of order) {
     const n = list.length, soonest = list.slice().sort((a, b) => String(a.from).localeCompare(String(b.from)))[0];
+    const where = stay?.area ? `${escapeHtml(stay.area)}${stay.country && stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''} · ` : '';
     // "posted", not "weeks": a deal posted by hand or found on Interval can be any number of
     // nights, and the count is the only thing about the group that is established.
     const sec = el(`<section class="place-group" data-place="${escapeHtml(stayId || '')}">
@@ -157,7 +168,7 @@ export function boardByPlace(slot, deals, { store, me = null, canEdit = false, f
           ${stay ? `<a class="place-thumb" href="#/stays/${escapeHtml(stay.id)}" tabindex="-1" aria-hidden="true"></a>` : ''}
           <div style="min-width:0">
             <h3 style="font-size:1.05rem">${stay ? `<a href="#/stays/${escapeHtml(stay.id)}">${escapeHtml(stay.name)}${icon('chevronRight', { size: 16, cls: 'ico-muted' })}</a>` : 'A place no longer in the catalog'}</h3>
-            <p class="small muted" style="margin-top:2px">${n === 1
+            <p class="small muted" style="margin-top:2px">${where}${n === 1
               ? `1 posted · ${escapeHtml(fmtPoints(nightly(list[0])))} a night · check-in ${escapeHtml(fmtDay(soonest.from))}`
               : `${n} posted · from ${escapeHtml(fmtPoints(nightly(list[0])))} a night · soonest ${escapeHtml(fmtDay(soonest.from))}`}</p>
           </div>
@@ -165,7 +176,7 @@ export function boardByPlace(slot, deals, { store, me = null, canEdit = false, f
         <div class="place-deals"></div>
       </section>`);
     if (stay) sec.querySelector('.place-thumb').appendChild(stayStrip(stay));
-    dealList(sec.querySelector('.place-deals'), list, { store, me, canEdit, first, key: `board:${stayId || 'none'}`, inPlace: true });
+    dealList(sec.querySelector('.place-deals'), list, { store, me, canEdit, first, key: `board:${stayId || 'none'}`, inPlace: true, level: 4 });
     slot.appendChild(sec);
   }
   return order.length;
@@ -214,7 +225,7 @@ export function deals({ store, go }) {
   const places = new Set(rest.map(d => d.stayId)).size;
   allSlot.appendChild(el(`<div class="sec-head"><div><p class="eyebrow">${mine.length ? 'Everything else on the board' : 'On the board'}</p>
     <h2 style="font-size:1.2rem">${rest.length ? `${rest.length} posted by the Desk${places > 1 ? `, at ${places} places` : ''}` : 'Nothing posted by the Desk yet'}</h2>
-    ${places > 1 ? `<p class="small muted" style="margin-top:6px;max-width:62ch">Cheapest a night first under each place.</p>` : ''}</div></div>`));
+    ${places > 1 ? `<p style="margin-top:6px">Cheapest a night first under each place.</p>` : ''}</div></div>`));
   if (rest.length) {
     boardByPlace(allSlot, rest, { store, me, canEdit, first: 2 });
   } else {
