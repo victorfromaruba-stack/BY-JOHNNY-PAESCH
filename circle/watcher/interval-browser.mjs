@@ -36,6 +36,7 @@
 
 import { readsAsSignedIn } from './interval.mjs';
 import { dirname, join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
@@ -89,6 +90,17 @@ export async function loadPlaywright() {
 const playwright = loadPlaywright;
 
 /**
+ * Which of Playwright's engines are actually downloaded on this machine. Playwright knows
+ * where each one would be; whether it is there is a separate question, and the answer on a
+ * VPS is usually "only the one somebody installed".
+ */
+export function installedEngines(pw) {
+  return ['chromium', 'firefox', 'webkit'].filter(n => {
+    try { return existsSync(pw[n].executablePath()); } catch { return false; }
+  });
+}
+
+/**
  * A proxy URL as Playwright wants it: server without credentials, credentials beside it.
  *
  * This is for an ordinary outbound proxy — a network that requires one — read from HTTPS_PROXY,
@@ -128,6 +140,17 @@ export class IntervalBrowser {
     if (this._page) return this._page;
     const pw = await playwright();
     const engine = pw[this.browserName] || pw.chromium;
+    // An engine that is not downloaded fails inside launch() with a long note about a missing
+    // executable. Say it first, in one line, with the command that fixes it and what is here.
+    let exe = null;
+    try { exe = engine.executablePath(); } catch { exe = null; }
+    if (exe && !existsSync(exe)) {
+      const have = installedEngines(pw);
+      const e = new Error(`Playwright has no ${engine.name()} downloaded — npx playwright install ${engine.name()}`
+        + (have.length ? ` (downloaded here: ${have.join(', ')} — set WATCH_BROWSER to one of those)` : ''));
+      e.needsBrowser = true;
+      throw e;
+    }
     // Whatever proxy the machine already uses, if any. Deliberately NOT a separate setting for
     // Interval: a proxy chosen to make this traffic look like it comes from somewhere else is
     // circumventing bot management rather than using the site, and that is not a line this

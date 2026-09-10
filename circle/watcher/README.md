@@ -267,7 +267,7 @@ Two suites, both stub-driven, no network and no credentials:
 node --test judge.test.mjs   # the posting rules: Interval always, RedWeek under the public rate, the cap, all-in points
 node --test pace.test.mjs    # how soon a refused Interval sign-in is tried again
 node session.test.mjs        # 48 assertions — the fetch client, cookie scoping, the host guard
-node browser.test.mjs        # 29 assertions — the browser client end to end (skips if no Playwright)
+node browser.test.mjs        # the browser client end to end; reads .env for WATCH_BROWSER, runs with whichever engine is downloaded, says what to install when none is
 ```
 
 The ones that matter most: a refused login that still redirects to a normal page is reported

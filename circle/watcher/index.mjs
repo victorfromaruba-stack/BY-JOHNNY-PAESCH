@@ -9,12 +9,13 @@
 //
 // Everything it needs is in .env next to this file. Nothing is written down anywhere else.
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sweep, ARUBA } from './redweek.mjs';
 import { Interval } from './interval.mjs';
 import { Circle } from './circle.mjs';
+import { loadEnv } from './dotenv.mjs';
 // Which finds go up, and what they look like when they do. Pure, and on trial in judge.test.mjs.
 import { worthPosting, asDeal, resolveStay, capPerResortMonth, dedupeKey } from './judge.mjs';
 // How soon to ask Interval again after it said no. Pure, and on trial in pace.test.mjs.
@@ -26,19 +27,8 @@ const PACE_FILE = join(HERE, '.interval-pace.json');
 const args = new Set(process.argv.slice(2));
 const ONCE = args.has('--once'), DRY = args.has('--dry'), DUMP = args.has('--dump');
 
-// .env, read plainly. No dependency for a dozen lines of parsing.
-//
-// The trailing comments matter: .env.example writes `WATCH_MUST_BEAT_OURS=true   # only post…`,
-// and taking the rest of the line whole would make the value "false   # …", which is not the
-// string "false" — so turning a switch off would silently leave it on. An unquoted value ends
-// at the first #; a quoted one keeps whatever is inside the quotes.
-for (const line of (existsSync(join(HERE, '.env')) ? readFileSync(join(HERE, '.env'), 'utf8') : '').split('\n')) {
-  const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
-  if (!m || process.env[m[1]]) continue;
-  const raw = m[2].trim();
-  const quoted = raw.match(/^(["'])([\s\S]*?)\1/);
-  process.env[m[1]] = quoted ? quoted[2] : raw.replace(/\s+#.*$/, '').trim();
-}
+// .env, beside this file. Shared with the tests (dotenv.mjs) so they run with the same choices.
+loadEnv(join(HERE, '.env'));
 
 // A number the file actually set, even when it set it to zero. `Number(x) || d` would read
 // WATCH_BEAT_BY_PCT=0 as "unset" and quietly put the default of 15% back.
@@ -150,7 +140,7 @@ async function pass(circle) {
         savePace(PACE_FILE, acceptedPace());
       } else if (err.needsBrowser) {
         log(`  Interval needs a browser: ${err.message}`);
-        log('  Install it with: npx playwright install firefox   (or set WATCH_INTERVAL_MODE=fetch)');
+        log(`  Install it with: npx playwright install ${process.env.WATCH_BROWSER || 'chromium'}   (or set WATCH_INTERVAL_MODE=fetch)`);
       } else if (err.refused) {
         const next = refusedPace(pace, { everyMin: CFG.everyMin, maxMin: CFG.intervalRetryMaxMin, said: err.message });
         savePace(PACE_FILE, next);

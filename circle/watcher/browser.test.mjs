@@ -10,15 +10,31 @@
 //
 // Run: node browser.test.mjs        (skips itself if Playwright is not installed)
 import http from 'node:http';
-import { IntervalBrowser, splitProxy, loadPlaywright, playwrightCandidates } from './interval-browser.mjs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { IntervalBrowser, splitProxy, loadPlaywright, playwrightCandidates, installedEngines } from './interval-browser.mjs';
+import { loadEnv } from './dotenv.mjs';
+
+// The same .env the service reads, so WATCH_BROWSER here is the browser the watcher uses.
+loadEnv(join(dirname(fileURLToPath(import.meta.url)), '.env'));
 
 let failures = 0;
 const ok = (cond, msg) => { if (!cond) failures++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); };
 
 // The same loader the watcher uses, so this suite runs wherever the watcher can — and says
 // where it looked when it cannot, rather than skipping in silence.
-try { await loadPlaywright(); }
+let pw;
+try { pw = await loadPlaywright(); }
 catch (err) { console.log(`skipped — ${err.message}`); process.exit(0); }
+
+// Run with the configured engine when it is downloaded, with whatever is downloaded when it is
+// not, and say so. On a box with only Firefox a default of chromium used to crash this suite
+// in launch() rather than test anything; with nothing downloaded it says what to install.
+const have = installedEngines(pw);
+const want = process.env.WATCH_BROWSER || 'chromium';
+if (!have.length) { console.log(`skipped — Playwright is here but no browser is downloaded: npx playwright install ${want}`); process.exit(0); }
+const ENGINE = have.includes(want) ? want : have[0];
+console.log(`browser: ${ENGINE}${ENGINE === want ? '' : ` (WATCH_BROWSER=${want} is not downloaded here; ${have.join(', ')} ${have.length === 1 ? 'is' : 'are'})`}`);
 
 // The candidate list itself, without a browser: the running node's own global root comes
 // before the fixed system paths, and an explicit PLAYWRIGHT_MODULE comes first of all.
@@ -118,7 +134,7 @@ const wwwPort = await new Promise(r => www.listen(0, '127.0.0.1', () => r(www.ad
 
 // Point the client at the stub. Only the front door moves; everything else is the real class,
 // exercised the way the VPS will exercise it.
-const iv = new IntervalBrowser({ username: 'victor', password: 'shortpw', origin: `http://127.0.0.1:${wwwPort}` });
+const iv = new IntervalBrowser({ username: 'victor', password: 'shortpw', origin: `http://127.0.0.1:${wwwPort}`, browser: ENGINE });
 const r = await iv.attemptSignIn();
 
 ok(r.limits.j_password === 14 && r.limits.j_username === 33,
