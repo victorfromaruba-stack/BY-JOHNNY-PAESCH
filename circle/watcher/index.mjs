@@ -17,8 +17,12 @@ import { Interval } from './interval.mjs';
 import { Circle } from './circle.mjs';
 // Which finds go up, and what they look like when they do. Pure, and on trial in judge.test.mjs.
 import { worthPosting, asDeal, resolveStay, capPerResortMonth, dedupeKey } from './judge.mjs';
+// How soon to ask Interval again after it said no. Pure, and on trial in pace.test.mjs.
+import { loadPace, savePace, refused as refusedPace, accepted as acceptedPace, due as paceDue, backoffMinutes } from './pace.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+// Where the Interval pace lives between passes and across restarts. Git-ignored, like .env.
+const PACE_FILE = join(HERE, '.interval-pace.json');
 const args = new Set(process.argv.slice(2));
 const ONCE = args.has('--once'), DRY = args.has('--dry'), DUMP = args.has('--dump');
 
@@ -56,6 +60,8 @@ const CFG = {
   mustBeatOurs:  flag('WATCH_MUST_BEAT_OURS', true),
   beatBy:        num('WATCH_BEAT_BY_PCT', 15) / 100,
   maxPerResortMonth: num('WATCH_MAX_PER_RESORT_MONTH', 3),
+  // The longest a refused Interval sign-in waits before the next attempt. A day by default.
+  intervalRetryMaxMin: num('WATCH_INTERVAL_RETRY_MAX_MIN', 24 * 60),
 };
 
 const log = (...a) => console.log(new Date().toISOString().slice(0, 19).replace('T', ' '), ...a);
@@ -74,10 +80,21 @@ async function pass(circle) {
   // deliberate enough. RedWeek needs no login, works today, and finds around 138 open weeks a
   // pass across the six resorts — so the watcher does its job either way, and Interval is a
   // separate decision rather than a blocker. See the README on what that decision involves.
+  //
+  // The pace (pace.mjs): a refused sign-in doubles the wait before the next attempt, up to a
+  // day, and a sign-in that works puts it back to every pass. A run by hand — --once, --dump —
+  // is a deliberate attempt and always goes ahead; the service is what honours the wait.
   const wantsInterval = /^(1|on|true|yes)$/i.test(process.env.WATCH_INTERVAL || '');
+  const pace = loadPace(PACE_FILE);
+  const stamp = (iso) => new Date(iso).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
   if (!wantsInterval) {
     log('Interval: off (WATCH_INTERVAL is not set) — RedWeek only');
-  } else if (process.env.INTERVAL_USER) {
+  } else if (!process.env.INTERVAL_USER) {
+    log('Interval: no INTERVAL_USER set, skipping');
+  } else if (!ONCE && !DUMP && !paceDue(pace)) {
+    const inMin = Math.max(0, Math.ceil((Date.parse(pace.nextTryAt) - Date.now()) / 60_000));
+    log(`Interval: the sign-in was refused ${pace.refusals} time${pace.refusals === 1 ? '' : 's'} in a row — next try ${stamp(pace.nextTryAt)}, ${inMin} min from now; RedWeek still runs every pass`);
+  } else {
     let iv = null;
     try {
       // Interval needs a real browser and RedWeek does not. Two of the three things standing
@@ -123,19 +140,28 @@ async function pass(circle) {
       // ourName is what the catalog is matched on below. Interval calls it resortName, and
       // without this every Getaway week would fail to price and be dropped by onlyOurStays.
       found.push(...got.map(g => ({ ...g, stayId: null, ourName: g.resortName || null })));
+      // It got in. Whatever the pace was, it is every pass again.
+      if (pace.refusals) log(`  Interval signed the watcher in after ${pace.refusals} refusal${pace.refusals === 1 ? '' : 's'} — back to every pass`);
+      savePace(PACE_FILE, acceptedPace());
     } catch (err) {
-      if (err.needsDump) log(`  Interval: ${err.message}`);
-      else if (err.needsBrowser) {
+      if (err.needsDump) {
+        // It signed in; only the search page is unset. Not a refusal, so not a longer wait.
+        log(`  Interval: ${err.message}`);
+        savePace(PACE_FILE, acceptedPace());
+      } else if (err.needsBrowser) {
         log(`  Interval needs a browser: ${err.message}`);
         log('  Install it with: npx playwright install firefox   (or set WATCH_INTERVAL_MODE=fetch)');
+      } else if (err.refused) {
+        const next = refusedPace(pace, { everyMin: CFG.everyMin, maxMin: CFG.intervalRetryMaxMin, said: err.message });
+        savePace(PACE_FILE, next);
+        log(`  Interval refused the sign-in (${next.refusals} in a row): ${err.message}`);
+        log(`  next try ${stamp(next.nextTryAt)} — ${backoffMinutes(next.refusals, CFG.everyMin, { maxMin: CFG.intervalRetryMaxMin })} minutes from now; RedWeek carries on every pass`);
       } else log(`  Interval failed: ${err.message}`);
     } finally {
       // A browser left running would hold memory on a small VPS for as long as the watcher
       // lives, and the watcher lives for months.
       await iv?.close?.().catch(() => {});
     }
-  } else {
-    log('Interval: no INTERVAL_USER set, skipping');
   }
 
   // The catalog, always — not only when the filter is on. It is what turns a find into a

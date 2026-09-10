@@ -84,6 +84,11 @@ sudo systemctl enable --now hunto-watcher
 journalctl -u hunto-watcher -f
 ```
 
+The unit assumes a `hunto` user with the checkout in its home. On the box as it stands the
+checkout is `/root/BY-JOHNNY-PAESCH`, so `User=root` and
+`WorkingDirectory=/root/BY-JOHNNY-PAESCH/circle/watcher` — the `.env` and the pace file
+(`.interval-pace.json`, below) live there too.
+
 Needs Node 20 or newer. RedWeek and the posting path use nothing but the standard library.
 Interval additionally needs Playwright and one browser (`npx playwright install firefox`); if it
 is missing the watcher says so and carries on with RedWeek rather than dying.
@@ -125,6 +130,33 @@ site deliberately put up*. The first is here; the second is not, and there is no
 
 If Interval is turned on and the login keeps failing, the honest reading is that they do not
 want this, and the answer is to stop rather than to try harder.
+
+**Victor made the call on 8 September 2026: Interval stays on.** Both concerns above were put
+to him, with the day's evidence — two sign-ins that did everything the form asks (consent
+dismissed, CSRF token present, waiting room cleared, Radware's cookies minted) and were still
+handed the signed-out page — and he chose to keep trying. That is his membership and his
+decision; what the code decides is the pace.
+
+### The pace of a refused sign-in
+
+A refusal does not repeat every half hour for months. Each one doubles the wait before the
+next attempt — one hour, two, four, eight, sixteen, then once a day (`WATCH_INTERVAL_RETRY_MAX_MIN`,
+1440 by default) — and a sign-in that works puts the pace straight back to every pass. So an
+account that is being told no hears it about six times on the first day and once a day after
+that, and the log says on every pass what the pace is:
+
+```
+Interval: the sign-in was refused 3 times in a row — next try 2026-09-09 02:00 UTC, 187 min from now; RedWeek still runs every pass
+```
+
+The count and the next time live in `.interval-pace.json` next to `.env` (git-ignored), so a
+restart of the service does not start the clock again. Only a refusal moves the pace: a
+missing browser, or a search page not yet set, is reported as what it is and waits nothing.
+Running by hand — `--once` or `--dump` — is a deliberate attempt and always goes ahead,
+whatever the pace says; it still counts, so the service sees it.
+
+RedWeek runs every pass regardless. Nothing about Interval's answer touches the board it
+already fills. Schedule and state are in `pace.mjs`, on trial in `pace.test.mjs`.
 
 ### Interval needs a browser. RedWeek does not.
 
@@ -233,6 +265,7 @@ Two suites, both stub-driven, no network and no credentials:
 
 ```sh
 node --test judge.test.mjs   # the posting rules: Interval always, RedWeek under the public rate, the cap, all-in points
+node --test pace.test.mjs    # how soon a refused Interval sign-in is tried again
 node session.test.mjs        # 48 assertions — the fetch client, cookie scoping, the host guard
 node browser.test.mjs        # 29 assertions — the browser client end to end (skips if no Playwright)
 ```

@@ -65,6 +65,10 @@ async function playwright() {
  * the same variable everything else on the machine uses. Passing a whole `user:pass@host` string
  * as `server` fails, hence the split. Returns null for no proxy.
  */
+// A sign-in Interval turned down, as opposed to a browser that is missing or a page that is
+// unset. index.mjs paces the next attempt on this flag and on nothing else.
+const refusal = (msg) => Object.assign(new Error(msg), { refused: true });
+
 export function splitProxy(url, bypass) {
   if (!url) return null;
   let u;
@@ -387,7 +391,7 @@ export class IntervalBrowser {
     const r = await this.attemptSignIn();
     if (!r.ok) {
       if (r.tooLong.length) throw new Error(`Interval cannot accept what is set: ${r.tooLong.join('; ')}`);
-      throw new Error(`Interval did not sign the watcher in — ${r.probePath} still offers a way in${r.said ? `: ${r.said}` : ''}`);
+      throw refusal(`Interval did not sign the watcher in — ${r.probePath} still offers a way in${r.said ? `: ${r.said}` : ''}`);
     }
     return r.probe || r.answer;
   }
@@ -482,7 +486,7 @@ export class IntervalBrowser {
     const html = await this.html(path);
     if (readsAsSignedIn(html) === false) {
       this.signedIn = false;
-      throw new Error('The session was signed out by the time the Getaway search ran — no results were read.');
+      throw refusal('The session was signed out by the time the Getaway search ran — no results were read.');
     }
     const { parseGetaways } = await import('./interval.mjs');
     return parseGetaways(html, { location });

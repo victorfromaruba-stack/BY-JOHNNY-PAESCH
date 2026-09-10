@@ -43,6 +43,10 @@ const UA = process.env.WATCH_UA
  * lets vip's JSESSIONID overwrite www's, so neither session survives the round trip. Keyed
  * on name+domain+path instead, and only cookies that match the request are sent.
  */
+// A sign-in Interval turned down, as opposed to a browser that is missing or a page that is
+// unset. index.mjs paces the next attempt on this flag and on nothing else.
+const refusal = (msg) => Object.assign(new Error(msg), { refused: true });
+
 export function jar() {
   const store = new Map();                       // "name\ndomain\npath" -> {name, value, domain, path, hostOnly}
   /** A Set-Cookie that clears the cookie rather than setting one. */
@@ -397,7 +401,7 @@ export class Interval {
     const r = await this.attemptSignIn();
     if (!r.ok) {
       if (r.tooLong?.length) throw new Error(`Interval cannot accept what is set: ${r.tooLong.join('; ')}`);
-      throw new Error(`Interval did not sign the watcher in${r.said ? `: ${r.said}`
+      throw refusal(`Interval did not sign the watcher in${r.said ? `: ${r.said}`
         : ` — ${r.probePath} still offers a way in, so the session is anonymous`}`);
     }
     return r.probe || r.html;
@@ -527,7 +531,7 @@ export class Interval {
     // the most, precisely because it never looks like a failure.
     if (readsAsSignedIn(html) === false) {
       this.signedIn = false;
-      throw new Error('The session was signed out by the time the Getaway search ran — no results were read.');
+      throw refusal('The session was signed out by the time the Getaway search ran — no results were read.');
     }
     return parseGetaways(html, { location });
   }
