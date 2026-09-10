@@ -35,28 +35,58 @@
 // never written to the trace, the dump, or the log.
 
 import { readsAsSignedIn } from './interval.mjs';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const ORIGIN = 'https://www.intervalworld.com';
 const HOSTS = /(^|\.)intervalworld\.com$/i;
 const PROBE = process.env.INTERVAL_PROBE_PATH || '/web/my/home';
 
 /**
+ * Where Playwright might be, in the order worth trying.
+ *
+ * A global `npm install -g playwright` lands under the *running* node's prefix — `/opt/node22`
+ * in the container this was written in, `~/.nvm/versions/node/…` under nvm, `/usr/local` or
+ * `/usr` on a distro node — so the prefix is read off `process.execPath` rather than written
+ * down. The old code had the container's path in it, which on the VPS meant Interval could not
+ * launch a browser at all, and the browser suite quietly skipped itself instead of running.
+ * `PLAYWRIGHT_MODULE` names the file outright when none of these fit.
+ */
+export function playwrightCandidates(env = process.env, execPath = process.execPath) {
+  const prefix = dirname(dirname(execPath));
+  return [...new Set([
+    env.PLAYWRIGHT_MODULE,
+    'playwright',                                              // beside the watcher, or on NODE_PATH
+    join(prefix, 'lib', 'node_modules', 'playwright', 'index.mjs'),
+    '/usr/local/lib/node_modules/playwright/index.mjs',
+    '/usr/lib/node_modules/playwright/index.mjs',
+  ].filter(Boolean))];
+}
+
+/**
  * Playwright, loaded only when it is actually needed.
  *
  * A RedWeek-only pass must not fail because a browser is not installed, and the watcher runs
- * on a small VPS where that is a real possibility. Tries the ordinary import first, then the
- * global install path used on the VPS and in this container.
+ * on a small VPS where that is a real possibility. Tries each candidate, then asks npm where
+ * its global root is — a spawn, so only when everything else has failed — and says which
+ * places it looked when none of them had it.
  */
-async function playwright() {
-  const tries = ['playwright', '/opt/node22/lib/node_modules/playwright/index.mjs'];
+export async function loadPlaywright() {
   const failures = [];
-  for (const where of tries) {
-    try { return await import(where); } catch (err) { failures.push(`${where}: ${err.message.split('\n')[0]}`); }
+  for (const where of playwrightCandidates()) {
+    try { return await import(where.startsWith('/') ? pathToFileURL(where).href : where); }
+    catch (err) { failures.push(`${where}: ${String(err.message).split('\n')[0]}`); }
   }
-  const e = new Error(`Interval needs Playwright and it could not be loaded (${failures.join(' | ')})`);
+  try {
+    const root = execFileSync('npm', ['root', '-g'], { encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    if (root) return await import(pathToFileURL(join(root, 'playwright', 'index.mjs')).href);
+  } catch (err) { failures.push(`npm root -g: ${String(err.message).split('\n')[0]}`); }
+  const e = new Error(`Interval needs Playwright and it could not be loaded — set PLAYWRIGHT_MODULE to its index.mjs, or npm install -g playwright (tried ${failures.join(' | ')})`);
   e.needsBrowser = true;
   throw e;
 }
+const playwright = loadPlaywright;
 
 /**
  * A proxy URL as Playwright wants it: server without credentials, credentials beside it.

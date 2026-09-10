@@ -10,13 +10,26 @@
 //
 // Run: node browser.test.mjs        (skips itself if Playwright is not installed)
 import http from 'node:http';
-import { IntervalBrowser, splitProxy } from './interval-browser.mjs';
+import { IntervalBrowser, splitProxy, loadPlaywright, playwrightCandidates } from './interval-browser.mjs';
 
 let failures = 0;
 const ok = (cond, msg) => { if (!cond) failures++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); };
 
-try { await import('/opt/node22/lib/node_modules/playwright/index.mjs'); }
-catch { console.log('skipped — Playwright is not installed here'); process.exit(0); }
+// The same loader the watcher uses, so this suite runs wherever the watcher can — and says
+// where it looked when it cannot, rather than skipping in silence.
+try { await loadPlaywright(); }
+catch (err) { console.log(`skipped — ${err.message}`); process.exit(0); }
+
+// The candidate list itself, without a browser: the running node's own global root comes
+// before the fixed system paths, and an explicit PLAYWRIGHT_MODULE comes first of all.
+{
+  const c = playwrightCandidates({}, '/opt/node22/bin/node');
+  ok(c[0] === 'playwright' && c[1] === '/opt/node22/lib/node_modules/playwright/index.mjs', `the running node's global root is second, after the bare import (${c[1]})`);
+  const nvm = playwrightCandidates({}, '/root/.nvm/versions/node/v22.9.0/bin/node');
+  ok(nvm[1] === '/root/.nvm/versions/node/v22.9.0/lib/node_modules/playwright/index.mjs', 'an nvm node resolves to its own lib/node_modules');
+  const set = playwrightCandidates({ PLAYWRIGHT_MODULE: '/x/playwright/index.mjs' }, '/usr/bin/node');
+  ok(set[0] === '/x/playwright/index.mjs' && set.includes('/usr/lib/node_modules/playwright/index.mjs'), 'PLAYWRIGHT_MODULE goes first and the distro path is still tried');
+}
 
 const MEMBERS = `<html><head><title>VIP Gold</title></head><body>
   <a href="/web/my/auth/logout">Sign Out</a><div class="unit">Aruba weeks</div></body></html>`;
