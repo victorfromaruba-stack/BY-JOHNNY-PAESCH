@@ -630,14 +630,38 @@ async function editStay(store, stay) {
       else Object.assign(data, { site: v('site') || null,
         rates: { low: usd('low'), high: usd('high'), peak: usd('peak') },
         sources: (() => {
-          // Only ever stored WITH the date it was seen. A price with no date cannot be checked
-          // by the member it is shown to, which is the whole point of showing it.
+          // Merged into what is on file, not rebuilt from the two boxes: the boxes set the two
+          // prices and the date, and everything else the record carries — a note, the nights it
+          // was seen for, a source the boxes do not cover — stays as it was. Rebuilding threw
+          // those away on every save, including a rename.
+          //
+          // A price is only ever stored WITH the date it was seen. A price with no date cannot be
+          // checked by the member it is shown to, which is the whole point of showing it — so a
+          // cleared price, or a cleared date, takes that source off.
           const on = v('srcSeenOn'), iv = Number(v('srcIntervalUsd')), rw = Number(v('srcRedweekUsd'));
-          if (!on || (!(iv > 0) && !(rw > 0))) return {};
-          const out = {};
-          if (iv > 0) out.interval = { seenUsd: iv, seenOn: on, note: '' };
-          if (rw > 0) out.redweek = { fromUsd: rw, seenOn: on, note: '' };
-          out.best = (iv > 0 && rw > 0) ? (iv <= rw ? 'interval' : 'redweek') : (iv > 0 ? 'interval' : 'redweek');
+          const out = { ...(stay?.sources || {}) };
+          // One date box serves both prices, so the date is written only onto a price that
+          // changed: a RedWeek figure left as it was keeps the day it was actually seen.
+          let changed = false;
+          const set = (key, field, n) => {
+            const prev = out[key];
+            if (!(n > 0) || !on) { if (prev) changed = true; delete out[key]; return; }
+            if (prev && prev[field] === n) return;
+            changed = true;
+            out[key] = { ...(prev || {}), [field]: n, seenOn: on };
+          };
+          set('interval', 'seenUsd', iv);
+          set('redweek', 'fromUsd', rw);
+          const i = out.interval?.seenUsd || 0, r = out.redweek?.fromUsd || 0;
+          // "best" is recomputed only when a price moved; a rename keeps the one on file, which
+          // the Desk may have set knowing that a RedWeek "from" is a floor across hundreds of
+          // listings and not a week's price.
+          const keep = out.best === 'interval' ? i > 0 : out.best === 'redweek' ? r > 0 : false;
+          if (changed || !keep) {
+            if (i > 0 && r > 0) out.best = i <= r ? 'interval' : 'redweek';
+            else if (i > 0 || r > 0) out.best = i > 0 ? 'interval' : 'redweek';
+            else delete out.best;
+          }
           return out;
         })(),
         minNights: Number(v('minNights')), peakMinNights: Number(v('peakMinNights')), retailUsd: Number(v('retailUsd')),

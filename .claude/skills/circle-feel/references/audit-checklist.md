@@ -142,3 +142,19 @@ like it:
 ## Re-baselined 8 Sept, after the live feed folded into Deals (390px, as admin)
 
 `/deals` went from 1.1 screens of nothing to 8.3 screens of twelve live cards under an empty board; the first figure is the live section's count line at 1072px, because the board's one-line empty state and the section head sit above it. `/stays/:id` gained the "Open right now" panel and the room lines and stayed at 10.1 screens. `/live` is gone (it redirects). No overflow, no errors at 390 or 1440.
+
+## Re-baselined 10 Sept, with fifty owner weeks on the board (390px, as admin)
+
+The watcher filled the board for real: 50 RedWeek weeks at five places (Renaissance 19, Ocean Club
+11, Surf Club 10, Eagle 6, Barceló 4). Measured with the same fifty seeded into the local backend:
+
+| route | before | after | what changed |
+|---|---|---|---|
+| `/deals` | 41.3 screens, 50 full cards | 7.3 screens, 10 cards open | the board is by place: a small photograph and the name once, the cheapest two weeks a night under it, "Show the other N"; cards under a place drop the strip, the area line and the place from the title |
+| `/stays/stay_renaissance` | 19.1 screens, 19 cards | 7.8 screens, 3 cards open | the posted list opens with three, same button |
+
+The opened groups survive the route re-render that a commit causes (the Desk taking a week off
+the board no longer folds the other groups), the "Gone" flow still works through the delegated
+handler, a member sees no edit buttons, and the place name in a group head is a link to the stay.
+No overflow, no errors, at 390. The live section below the board is unchanged and is most of the
+7.3 screens now.

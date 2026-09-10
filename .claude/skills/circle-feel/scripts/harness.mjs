@@ -27,10 +27,14 @@ export async function open({ width = 1280, height = 900, role = 'admin', scale =
   await p.waitForFunction(() => !!window.__hunto, null, { timeout: 25000 });
   await p.evaluate(async (r) => {
     const s = window.__hunto.store;
+    // A plain member carries roles ['member'], so "no roles" matches nobody: a plain member is
+    // one with no officer role. Without this a "member" run signed in as members[0] — Victor.
+    const OFFICER = ['planner', 'comms', 'treasurer', 'admin'];
     const pick = r === 'member'
-      ? s.state.members.find(m => m.status === 'active' && !m.bot && !(m.roles||[]).length)
+      ? s.state.members.find(m => m.status === 'active' && !m.bot && !(m.roles||[]).some(x => OFFICER.includes(x)))
       : s.state.members.find(m => (m.roles||[]).some(x => x === r || x === 'admin'));
-    await s.signIn((pick || s.state.members[0]).id);
+    if (!pick) throw new Error(`no member for role ${r}`);
+    await s.signIn(pick.id);
   }, role);
   return { b, p, errors };
 }

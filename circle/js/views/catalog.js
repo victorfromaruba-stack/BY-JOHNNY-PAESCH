@@ -10,7 +10,7 @@ import { normName } from '../core/names.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
 import { shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
-import { dealCard } from './deals.js';
+import { dealList, byNight } from './deals.js';
 import { liveSection, resortForStay } from './live.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -431,20 +431,18 @@ export function stayDetail({ store, params, go }) {
       const panel = el(`<section class="panel" style="margin-top:22px" id="open-now">
         <div><p class="eyebrow">${icon('eye')}Open right now</p>
           <h2 style="font-size:1.15rem;margin-top:6px">Open right now at ${escapeHtml(stay.name)}</h2>
-          <p class="small muted" style="margin-top:6px;max-width:62ch">${resort
-            ? 'Owner rentals open on VakayMood at the time shown, cheapest first, plus anything the Desk has posted for this place. Not Interval — what Victor finds on Interval arrives on the board.'
-            : 'What the Desk has posted for this place.'}</p></div>
+          <p class="small muted" style="margin-top:6px;max-width:62ch">${posted.length ? `${posted.length} posted by the Desk for this place, cheapest a night first. ` : ''}${resort
+            ? `Owner rentals open on VakayMood at the time shown, cheapest first${posted.length ? ', below' : ', plus anything the Desk has posted for this place'}. Not Interval — what Victor finds on Interval arrives on the board.`
+            : posted.length ? '' : 'What the Desk has posted for this place.'}</p></div>
         <div id="open-posted" style="margin-top:12px"></div>
         <div id="open-live"></div>
       </section>`);
       wrap.querySelector('#open').appendChild(panel);
       if (posted.length) {
-        const grid = el('<div class="grid g2"></div>');
-        for (const d of posted) {
-          const match = store.watchesFor(me.id).map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
-          grid.appendChild(dealCard(d, { store, match, canEdit: store.canPostDeals() }));
-        }
-        panel.querySelector('#open-posted').appendChild(grid);
+        // Under the place's own heading: no strip, no place in the title, the cheapest three
+        // open and the rest behind one button. Nineteen full cards here was three screens of
+        // the same photograph before the first owner week.
+        dealList(panel.querySelector('#open-posted'), posted.slice().sort(byNight), { store, me, canEdit: store.canPostDeals(), first: 3, key: `stay:${stay.id}`, inPlace: true, noun: 'posted' });
         // The card's "Gone" button is the Desk's; on the Deals page the board handles it, here
         // the panel does, so it is never a button that does nothing.
         panel.addEventListener('click', async (e) => {

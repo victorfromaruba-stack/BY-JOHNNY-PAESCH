@@ -12,6 +12,7 @@ import { icon } from '../ui/icons.js';
 import { toast, sheet, confirmDialog, setBusy, avatar } from '../ui/components.js';
 import { stayStrip } from './public.js';
 import { liveSection } from './live.js';
+import { sameName, nameWithin } from '../core/names.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 
@@ -32,24 +33,50 @@ const sourceChip = (s) => {
   return `<span class="tag">${icon(src.icon, { size: 14 })}${escapeHtml(src.label)}</span>`;
 };
 
-/** One deal, as a card. `match` is set when it answers something this member asked for. */
-export function dealCard(deal, { store, match = null, canEdit = false } = {}) {
+/**
+ * A deal's title without the place in front of it. The watcher writes "Marriott's Aruba Surf
+ * Club · Studio Queen · owner asking $166 a night on RedWeek"; under a heading that already says
+ * Surf Club, the first part is the heading again, three lines of it on a phone.
+ */
+export function titleWithoutPlace(title, stay, { room = null, nights = 0 } = {}) {
+  const names = (a, b) => sameName(a, b) || nameWithin(a, b) || nameWithin(b, a);
+  const parts = String(title || '').split(' · ').map(x => x.trim()).filter(Boolean);
+  // The watcher titles a find with the source's own spelling of the place, which may be longer
+  // or shorter than the catalog's ("Aruba Surf Club", "Renaissance Aruba Resort & Casino").
+  const rest = parts.length > 1 && stay && names(parts[0], stay.name) ? parts.slice(1).join(' · ') : (title || '');
+  // A deal posted by hand is titled with the place, so under the place's own heading there
+  // would be nothing left: say the room, or the length, rather than the heading again.
+  if (!rest || (stay && names(rest, stay.name))) return room?.name || (nights ? `${nights} night${nights === 1 ? '' : 's'}` : 'Posted by the Desk');
+  return rest;
+}
+
+/** Points a night, from the row or from the total: older rows and some backends carry only the total. */
+export const nightly = (d) => d?.pointsPerNight || (d?.pointsTotal && d?.nights ? Math.round(d.pointsTotal / d.nights) : 0);
+
+/**
+ * One deal, as a card. `match` is set when it answers something this member asked for.
+ * `inPlace` is for a card that sits under its place's own heading — no photograph strip, no
+ * area line, no place in the title — so twenty of them read as a list, not twenty posters.
+ */
+export function dealCard(deal, { store, match = null, canEdit = false, inPlace = false } = {}) {
   const stay = store.stay(deal.stayId);
   const room = store.roomType?.(deal.roomTypeId);
   const saveUsd = deal.retailUsd ? deal.retailUsd - deal.pointsTotal / store.settings.pointsPerDollar : 0;
-  const node = el(`<article class="panel deal${match ? ' matched' : ''}" data-deal="${escapeHtml(deal.id)}">
-      <div class="deal-strip"></div>
+  const title = inPlace ? titleWithoutPlace(deal.title, stay, { room, nights: deal.nights }) : null;
+  const node = el(`<article class="panel deal${match ? ' matched' : ''}${inPlace ? ' in-place' : ''}" data-deal="${escapeHtml(deal.id)}">
+      ${inPlace ? '' : '<div class="deal-strip"></div>'}
       <div class="deal-body">
         ${match ? `<p class="eyebrow" style="color:var(--good-text)">${icon('bellRing', { size: 15 })}You asked for this</p>` : ''}
         <div class="row-between" style="align-items:flex-start;gap:12px">
           <div>
-            <h3 style="font-size:1.05rem">${escapeHtml(deal.title || stay?.name || 'A deal')}</h3>
-            <p class="small muted" style="margin-top:4px">${escapeHtml(stay?.area || '')}${stay && stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}
-              ${room ? ` · ${escapeHtml(room.name)}` : ''}</p>
+            <h3 style="font-size:1.05rem">${escapeHtml(inPlace ? title : (deal.title || stay?.name || 'A deal'))}</h3>
+            ${inPlace && (!room || title === room.name) ? '' : `<p class="small muted" style="margin-top:4px">${inPlace ? '' : `${escapeHtml(stay?.area || '')}${stay && stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}`}
+              ${room ? `${inPlace ? '' : ' · '}${escapeHtml(room.name)}` : ''}</p>`}
           </div>
           <div style="text-align:right;flex:none">
             <b class="num" style="font-size:1.15rem">${escapeHtml(fmtPoints(deal.pointsTotal))}</b>
             <br><span class="small muted">${escapeHtml(pointsUsd(deal.pointsTotal, store.settings.pointsPerDollar))} · ${deal.nights} night${deal.nights === 1 ? '' : 's'}</span>
+            ${inPlace && nightly(deal) ? `<br><span class="small muted">${escapeHtml(fmtPoints(nightly(deal)))} a night</span>` : ''}
           </div>
         </div>
         <p class="small" style="margin-top:10px">${icon('calendar', { size: 15, cls: 'ico-muted' })}
@@ -71,8 +98,77 @@ export function dealCard(deal, { store, match = null, canEdit = false } = {}) {
         </div>
       </div>
     </article>`);
-  if (stay) node.querySelector('.deal-strip').appendChild(stayStrip(stay));
+  if (stay && !inPlace) node.querySelector('.deal-strip').appendChild(stayStrip(stay));
   return node;
+}
+
+// Which "Show the other N" buttons have been pressed. Module-level because the whole route is
+// re-rendered on every store commit, and the Desk taking one week off the board must not fold
+// the other nineteen back up.
+const REVEALED = new Set();
+
+// Cheapest a night first, then soonest. The same order the live section uses, so a member
+// reading down either list is reading the same thing.
+export const byNight = (a, b) => nightly(a) - nightly(b) || String(a.from).localeCompare(String(b.from));
+
+/**
+ * Some deals as cards, the first few shown and the rest behind one button. `key` is what the
+ * button remembers itself by across re-renders; `first` is how many open with the page.
+ */
+export function dealList(slot, deals, { store, me = null, canEdit = false, first = 3, key = '', inPlace = true, noun = '' } = {}) {
+  const watches = me ? store.watchesFor(me.id) : [];
+  const matchFor = (d) => watches.map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
+  // What answers a watch comes first, whatever it costs: the two-bedroom somebody asked for is
+  // rarely among the cheapest, and a card that says "You asked for this" must not sit behind
+  // the button. Stable, so the given order holds within each half.
+  const matched = new Map(deals.map(d => [d.id, matchFor(d)]));
+  const ordered = deals.slice().sort((a, b) => (matched.get(b.id) ? 1 : 0) - (matched.get(a.id) ? 1 : 0));
+  const grid = el('<div class="grid g2"></div>');
+  const more = el('<div class="list-more"></div>');
+  const paint = () => {
+    // A button that hides one card costs as much as the card: show it.
+    const shown = REVEALED.has(key) || ordered.length - first <= 1 ? ordered : ordered.slice(0, first);
+    const hidden = ordered.length - shown.length;
+    grid.replaceChildren(...shown.map(d => dealCard(d, { store, match: matched.get(d.id), canEdit, inPlace })));
+    more.innerHTML = hidden > 0 ? `<button class="btn ghost sm" data-act="reveal">${icon('chevronDown', { size: 16 })}Show the other ${hidden}${noun ? ` ${noun}` : ''}</button>` : '';
+  };
+  more.addEventListener('click', (e) => { if (e.target.closest('[data-act="reveal"]')) { REVEALED.add(key); paint(); } });
+  paint();
+  slot.append(grid, more);
+  return { grid, more };
+}
+
+/**
+ * The board, by place. Fifty owner weeks as fifty posters is a scroll, not a board; under each
+ * place's name they are a short list with the cheapest two open. Places the Circle actually
+ * uses come first, then the places with the most open.
+ */
+export function boardByPlace(slot, deals, { store, me = null, canEdit = false, first = 2 } = {}) {
+  const groups = new Map();
+  for (const d of deals) { if (!groups.has(d.stayId)) groups.set(d.stayId, []); groups.get(d.stayId).push(d); }
+  const order = [...groups.entries()].map(([stayId, list]) => ({ stayId, stay: store.stay(stayId), list: list.slice().sort(byNight) }))
+    .sort((a, b) => (b.stay?.house ? 1 : 0) - (a.stay?.house ? 1 : 0) || b.list.length - a.list.length || (a.stay?.name || '').localeCompare(b.stay?.name || ''));
+  for (const { stayId, stay, list } of order) {
+    const n = list.length, soonest = list.slice().sort((a, b) => String(a.from).localeCompare(String(b.from)))[0];
+    // "posted", not "weeks": a deal posted by hand or found on Interval can be any number of
+    // nights, and the count is the only thing about the group that is established.
+    const sec = el(`<section class="place-group" data-place="${escapeHtml(stayId || '')}">
+        <div class="place-head">
+          ${stay ? `<a class="place-thumb" href="#/stays/${escapeHtml(stay.id)}" tabindex="-1" aria-hidden="true"></a>` : ''}
+          <div style="min-width:0">
+            <h3 style="font-size:1.05rem">${stay ? `<a href="#/stays/${escapeHtml(stay.id)}">${escapeHtml(stay.name)}${icon('chevronRight', { size: 16, cls: 'ico-muted' })}</a>` : 'A place no longer in the catalog'}</h3>
+            <p class="small muted" style="margin-top:2px">${n === 1
+              ? `1 posted · ${escapeHtml(fmtPoints(nightly(list[0])))} a night · check-in ${escapeHtml(fmtDay(soonest.from))}`
+              : `${n} posted · from ${escapeHtml(fmtPoints(nightly(list[0])))} a night · soonest ${escapeHtml(fmtDay(soonest.from))}`}</p>
+          </div>
+        </div>
+        <div class="place-deals"></div>
+      </section>`);
+    if (stay) sec.querySelector('.place-thumb').appendChild(stayStrip(stay));
+    dealList(sec.querySelector('.place-deals'), list, { store, me, canEdit, first, key: `board:${stayId || 'none'}`, inPlace: true });
+    slot.appendChild(sec);
+  }
+  return order.length;
 }
 
 /** The board: everything live, with the things you asked for pinned to the top. */
@@ -106,21 +202,21 @@ export function deals({ store, go }) {
   if (mine.length) {
     mineSlot.appendChild(el(`<div class="sec-head"><div><p class="eyebrow" style="color:var(--good-text)">${icon('bellRing')}Matches what you asked for</p>
       <h2 style="font-size:1.2rem">${mine.length} of these ${mine.length === 1 ? 'is' : 'are'} what you are watching for</h2></div></div>`));
-    const grid = el('<div class="grid g2"></div>');
-    mine.forEach(m => grid.appendChild(dealCard(m.deal, { store, match: m, canEdit })));
-    mineSlot.appendChild(grid);
+    // Full cards, the first four open: a broad watch can answer to most of the board, and
+    // fifty posters here would undo the grouping below it.
+    dealList(mineSlot, mine.map(m => m.deal), { store, me, canEdit, first: 4, key: 'mine', inPlace: false, noun: 'you asked for' });
     // Only when something is actually unseen. markWatchesSeen() commits, a commit notifies,
     // a notify re-renders, and this runs again — so keying it off mine.length (which never
     // shrinks) spun the page against the database forever the moment one deal matched.
     if (store.unseenMatches(me.id).length) store.markWatchesSeen(me.id);
   }
 
+  const places = new Set(rest.map(d => d.stayId)).size;
   allSlot.appendChild(el(`<div class="sec-head"><div><p class="eyebrow">${mine.length ? 'Everything else on the board' : 'On the board'}</p>
-    <h2 style="font-size:1.2rem">${rest.length ? `${rest.length} posted by the Desk` : 'Nothing posted by the Desk yet'}</h2></div></div>`));
+    <h2 style="font-size:1.2rem">${rest.length ? `${rest.length} posted by the Desk${places > 1 ? `, at ${places} places` : ''}` : 'Nothing posted by the Desk yet'}</h2>
+    ${places > 1 ? `<p class="small muted" style="margin-top:6px;max-width:62ch">Cheapest a night first under each place.</p>` : ''}</div></div>`));
   if (rest.length) {
-    const grid = el('<div class="grid g2"></div>');
-    rest.forEach(d => grid.appendChild(dealCard(d, { store, canEdit })));
-    allSlot.appendChild(grid);
+    boardByPlace(allSlot, rest, { store, me, canEdit, first: 2 });
   } else {
     // One line, not a screen: what owners have open is right below, and an empty-state box the
     // height of a phone would push it out of sight — which is how "Deals is empty" read to Victor.
