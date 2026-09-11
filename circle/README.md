@@ -52,8 +52,9 @@ You **say yes** and your points are committed. Victor then **picks it up** — t
 "Victor is booking it" only once he has, not the moment you accept — **books it himself, in
 your name**, and writes down the hotel's confirmation. That is when the points burn and the
 room is yours. The request page shows which of those six steps has happened and which is next;
-the Desk sees the same requests in three lanes: to approve and price, to book, waiting on the
-member.
+the Desk sees the same requests in three lanes: to look and price, to book, waiting on the
+member. A declined or lapsed ask can be asked again with everything you said the first time
+already filled in.
 
 ## Signing in
 

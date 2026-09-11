@@ -167,7 +167,7 @@ steps, one button. 2.3 screens as a member, no overflow, every control 44px or t
 (the switch is 50×30 inside a full-width label). Pressing anything answers: the number, the
 chip, the price. The request page carries six steps with the one happening now marked, and a
 closed request ends on a red step with "Ask again". The Desk's Requests tab is three lanes —
-to approve and price, to book, waiting on the member — with the action on the row; the sheets
+to look and price, to book, waiting on the member — with the action on the row; the sheets
 carry the look buttons, so nothing the Desk taps from the queue can end in a refusal it has to
 go elsewhere to fix. Interaction sweeps: `/desk admin` 14 of 16 controls did something (2
 skipped as hand-offs), `/book/stay_surfclub member` 11 of 13, `/requests member` 2 of 2.

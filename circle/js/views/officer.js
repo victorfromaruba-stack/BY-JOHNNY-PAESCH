@@ -411,7 +411,7 @@ export function desk({ store, go }) {
     // the three and hid the one that is Victor's own job — booking it — behind an "Open".
     const hoursLeft = (r) => (tierFor(s, store.member(r.memberId)?.monthlyUsd)?.slaHours ?? s.slaHours) - Math.round((Date.now() - new Date(r.requestedAt)) / 36e5);
     const lanes = [
-      { key: 'requested', title: 'To approve and price', sub: 'Open it, look, price it. Nothing is promised to anyone until you do.',
+      { key: 'requested', title: 'To look and price', sub: 'Open it, look, price it. Nothing is promised to anyone until you do.',
         rows: open.filter(r => r.status === 'requested').sort((a, b) => hoursLeft(a) - hoursLeft(b)) },
       { key: 'held', title: 'To book', sub: 'They said yes and their points are committed. Book it yourself, then write down the confirmation.',
         rows: open.filter(r => r.status === 'held').sort((a, b) => (a.approvedAt ? 1 : 0) - (b.approvedAt ? 1 : 0) || String(a.heldAt).localeCompare(String(b.heldAt))) },
@@ -430,7 +430,7 @@ export function desk({ store, go }) {
             <div style="min-width:0"><b>${escapeHtml(m?.name || '')}</b> → ${escapeHtml(st?.name || '')}
               <br><span class="small muted">${escapeHtml(fmtDay(r.checkIn))} – ${escapeHtml(fmtDay(r.checkOut))} · ${r.nights} night${r.nights > 1 ? 's' : ''} · ${r.guests} guest${r.guests > 1 ? 's' : ''}${r.flexDays ? ` · flexible ±${r.flexDays}d` : ''}</span></div>
           </div>
-          <div style="text-align:right;flex:none">${r.status === 'held' ? chip(r.approvedAt ? 'held' : 'requested', r.approvedAt ? 'Booking it' : 'To book') : chip(r.status)}<br><span class="small muted num">${escapeHtml(fmtPoints(r.quotedPoints || r.indicativePoints))}</span></div>
+          <div style="text-align:right;flex:none">${r.status === 'held' ? chip(r.approvedAt ? 'held' : 'requested', r.approvedAt ? 'Booking it' : 'To book') : r.status === 'quoted' ? chip('quoted', 'Priced') : chip(r.status)}<br><span class="small muted num">${escapeHtml(fmtPoints(r.quotedPoints || r.indicativePoints))}</span></div>
         </div>
         ${r.note ? `<p class="small muted" style="margin-top:10px">“${escapeHtml(r.note)}”</p>` : ''}
         <div class="row" style="margin-top:12px;align-items:center">
@@ -439,7 +439,7 @@ export function desk({ store, go }) {
           ${r.status === 'held' && store.hasRole('planner', 'admin', 'treasurer', 'deputy') ? `<button class="btn good sm" data-book="${r.id}">${icon('check', { size: 15 })}Book it</button>` : ''}
           ${r.status === 'held' && store.canPlan() && !r.approvedAt ? `<button class="btn ghost sm" data-approve="${r.id}">I have it</button>` : ''}
           ${r.status === 'held' ? `
-            ${topUpOwed ? `<span class="small" style="color:var(--flag)">${escapeHtml(fmtUsd2(r.topUpUsd))} top-up still with the Banker</span>` : ''}` : ''}
+            ${topUpOwed ? `<span class="small" style="color:var(--flag)">${escapeHtml(fmtUsd2(r.topUpUsd))} top-up still to the Banker</span>` : ''}` : ''}
           ${r.status === 'quoted' ? `<span class="small muted">${left ? `the price holds another ${escapeHtml(left)}` : 'the price has lapsed'}</span>` : ''}
           <a class="btn ghost sm" href="#/requests/${r.id}">Open</a>
         </div></div>`;

@@ -595,9 +595,22 @@ export function book({ store, params, query = {}, go }) {
   const isDate = (x) => /^\d{4}-\d{2}-\d{2}$/.test(String(x || '')) && !Number.isNaN(Date.parse(x));
   const wantFrom = isDate(query.from) && Date.parse(query.from) >= Date.parse(d(today)) ? query.from : null;
   const wantTo = wantFrom && isDate(query.to) && Date.parse(query.to) > Date.parse(wantFrom) ? query.to : null;
+  // Dates that came in but have already passed: the page opens two months out, and says so,
+  // rather than quietly pretending the member chose those.
+  const datesPassed = !wantFrom && isDate(query.from);
   const startIn = wantFrom || d(soon);
   const startOut = wantTo || d(new Date(Date.parse(startIn) + (stay.minNights || 2) * 864e5));
-  const wantRoom = (store.roomTypesFor?.(stay.id) || []).find(r => r.id === query.room) || null;
+  const rooms = isTrip ? [] : (store.roomTypesFor?.(stay.id) || []);
+  const roomLineFor = (room) => (room ? `${room.name}, if it is free.` : '');
+  // "Ask again" on a declined or lapsed request carries what the member said the first time —
+  // guests, flexibility, the word, the switch — so the re-ask opens as they left it, not blank.
+  const wantNote = typeof query.note === 'string' ? query.note.slice(0, 600).trim() : '';
+  const wantGuests = Math.min(8, Math.max(1, Math.round(Number(query.guests)) || 2));
+  const wantFlex = [0, 1, 3, 7].includes(Number(query.flex)) ? Number(query.flex) : 0;
+  const wantShared = query.shared === '1';
+  let wantRoom = rooms.find(r => r.id === query.room) || null;
+  // The room rides in the note (the request has no room column), so a re-ask finds it there.
+  if (!wantRoom && wantNote) wantRoom = rooms.find(r => wantNote.startsWith(roomLineFor(r))) || null;
   // Where they were looking. A deal off the board knows its own listing; a week seen on
   // Interval or RedWeek came in through the same link. Victor gets this on the request so he
   // does not have to go and find it again.
@@ -613,12 +626,14 @@ export function book({ store, params, query = {}, go }) {
   // The request has no room column, and inventing one across two backends to carry a
   // preference is the wrong trade — the note is the field for exactly this, and it reaches
   // Victor with everything else. It is prefilled, not locked: it is still the member's message.
-  const openingNote = [
-    wantRoom ? `${wantRoom.name}, if it is free.` : '',
-    query.deal ? 'Asking against a deal from the board.' : '',
-  ].filter(Boolean).join(' ');
+  // `roomLine` is the exact string the app put in front of the note, kept so a room change swaps
+  // that string and nothing else — a regex here once ate whatever the member had typed on the line.
+  let roomLine = roomLineFor(wantRoom);
+  const openingNote = wantNote
+    ? (roomLine && !wantNote.startsWith(roomLine) ? `${roomLine} ${wantNote}` : wantNote)
+    : [roomLine, query.deal ? 'Asking against a deal from the board.' : ''].filter(Boolean).join(' ');
   const sla = tier.slaHours ?? s.slaHours;
-  const rooms = isTrip ? [] : (store.roomTypesFor?.(stay.id) || []);
+  const minHold = s.minQuoteHours ?? 12;
   const wd = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short' });
   const dm = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   const yr = (iso) => new Date(iso + 'T12:00:00').getFullYear();
@@ -636,7 +651,7 @@ export function book({ store, params, query = {}, go }) {
           <div class="ask-tile static"><span class="k">The trip</span><b>${escapeHtml(fmtDay(stay.dates.from))} – ${escapeHtml(fmtDay(stay.dates.to))}</b>
             <em>${stay.nights} nights · ${escapeHtml(fmtPoints(seatPoints(stay, s)))} a seat · ${store.seatsHeld(stay.id)} of ${stay.seats} seats held</em></div>
           <div class="ask-row"><span class="k">Seats</span>
-            <div class="stepper" data-for="seats" data-min="1" data-max="4"><button type="button" data-step="-1" aria-label="One seat fewer">−</button><output aria-live="polite">1</output><button type="button" data-step="1" aria-label="One seat more">+</button></div>
+            <div class="stepper" data-for="seats" data-min="1" data-max="4"><button type="button" data-step="-1" aria-label="One seat fewer" disabled>−</button><output aria-live="polite">1</output><button type="button" data-step="1" aria-label="One seat more">+</button></div>
             <input type="hidden" name="seats" value="1"></div>
         </div>`
         : `
@@ -647,18 +662,16 @@ export function book({ store, params, query = {}, go }) {
           <label class="ask-tile"><span class="k">Check out</span><b data-dm="checkOut">${escapeHtml(dm(startOut))}</b><em><span data-wd="checkOut">${escapeHtml(wd(startOut))}</span> · <span data-yr="checkOut">${yr(startOut)}</span></em>
             <input name="checkOut" type="date" required value="${escapeHtml(startOut)}" min="${d(today)}" aria-label="Check out"></label>
         </div>
-        ${wantFrom ? `<p class="tiny muted ask-hint">${fromDeal ? 'The dates of the deal you tapped.' : cameFrom ? 'The dates of the week you were looking at.' : 'The dates you came in with.'} Tap either to change them.</p>` : ''}
+        ${wantFrom ? `<p class="tiny muted ask-hint">${fromDeal ? 'The dates of the deal you tapped.' : cameFrom ? 'The dates of the week you were looking at.' : 'The dates you came in with.'} Tap either to change them.</p>`
+          : datesPassed ? '<p class="tiny muted ask-hint">The dates you came in with have passed, so these are two months out. Tap either to change them.</p>' : ''}
         <div class="ask-block">
           <div class="ask-row"><span class="k">Guests</span>
-            <div class="stepper" data-for="guests" data-min="1" data-max="8"><button type="button" data-step="-1" aria-label="One guest fewer">−</button><output aria-live="polite">2</output><button type="button" data-step="1" aria-label="One guest more">+</button></div>
-            <input type="hidden" name="guests" value="2"></div>
+            <div class="stepper" data-for="guests" data-min="1" data-max="8"><button type="button" data-step="-1" aria-label="One guest fewer"${wantGuests <= 1 ? ' disabled' : ''}>−</button><output aria-live="polite">${wantGuests}</output><button type="button" data-step="1" aria-label="One guest more"${wantGuests >= 8 ? ' disabled' : ''}>+</button></div>
+            <input type="hidden" name="guests" value="${wantGuests}"></div>
           <div class="ask-row"><span class="k">Flexible</span>
             <div class="chips" role="radiogroup" aria-label="Flexible by" data-for="flexDays">
-              <button type="button" class="chip-btn" data-v="0" aria-pressed="true">Exact dates</button>
-              <button type="button" class="chip-btn" data-v="1" aria-pressed="false">±1 day</button>
-              <button type="button" class="chip-btn" data-v="3" aria-pressed="false">±3 days</button>
-              <button type="button" class="chip-btn" data-v="7" aria-pressed="false">±7 days</button>
-            </div><input type="hidden" name="flexDays" value="0"></div>
+              ${[[0, 'Exact dates'], [1, '±1 day'], [3, '±3 days'], [7, '±7 days']].map(([v, label]) => `<button type="button" class="chip-btn" data-v="${v}" aria-pressed="${wantFlex === v ? 'true' : 'false'}">${label}</button>`).join('')}
+            </div><input type="hidden" name="flexDays" value="${wantFlex}"></div>
           ${rooms.length ? `<div class="ask-row"><span class="k">Room</span>
             <div class="chips" role="radiogroup" aria-label="Which room" data-for="room">
               <button type="button" class="chip-btn" data-v="" aria-pressed="${wantRoom ? 'false' : 'true'}">Any room</button>
@@ -670,13 +683,13 @@ export function book({ store, params, query = {}, go }) {
           <textarea name="note" rows="2" placeholder="${isTrip ? 'Who is coming, anything he should know…' : 'Ground floor if you can, arriving late, celebrating something…'}">${escapeHtml(openingNote)}</textarea></label>
         <label class="ask-row ask-switch">
           <span><b>Let the Circle chip in</b><span class="small muted">Anyone can put their own points toward this one — a room you are sharing, or a gift. Theirs commit the moment they chip in and come back if it falls through.</span></span>
-          <input type="checkbox" name="shared" role="switch" class="switch" aria-label="Let the Circle chip in">
+          <input type="checkbox" name="shared" role="switch" class="switch" aria-label="Let the Circle chip in"${wantShared ? ' checked' : ''}>
         </label>
         <div class="ask-quote" id="preview" aria-live="polite"></div>
         <ol class="ask-steps" aria-label="What happens next">
           <li class="now"><b>You ask</b><span>dates, guests, a word for Victor</span></li>
-          <li><b>Victor prices it</b><span>within ${sla} hours, all-in, in points</span></li>
-          <li><b>You say yes</b><span>the price holds ${s.quoteHours} hours · your points commit</span></li>
+          <li><b>Victor prices it</b><span>within ${sla} hours, all-in, in points · the quote says how long it holds, ${minHold} hours at the least</span></li>
+          <li><b>You say yes</b><span>before it lapses · your points commit</span></li>
           <li><b>Victor books it</b><span>himself, in your name · then it is confirmed</span></li>
         </ol>
         <button class="btn block" type="submit">${isTrip ? 'Ask for the seat' : 'Ask Victor to book it'}</button>
@@ -706,13 +719,20 @@ export function book({ store, params, query = {}, go }) {
       group.querySelectorAll('.chip-btn[data-v]').forEach(c => c.setAttribute('aria-pressed', String(c === chipBtn)));
       inp.value = chipBtn.dataset.v;
       if (group.dataset.for === 'room') {
-        // The room rides in the note, the field Victor reads. Swap the old room line for the new.
+        // The room rides in the note, the field Victor reads. Swap the line the app wrote for the
+        // new one and leave the member's own words exactly as they typed them.
         const room = rooms.find(r => r.id === chipBtn.dataset.v);
-        const note = v('note'); const stripped = note.value.replace(/^[^\n]*, if it is free\.\s*/m, '').trim();
-        note.value = room ? `${room.name}, if it is free.${stripped ? ` ${stripped}` : ''}` : stripped;
+        const note = v('note');
+        const rest = (roomLine && note.value.startsWith(roomLine) ? note.value.slice(roomLine.length) : note.value).trim();
+        roomLine = roomLineFor(room);
+        note.value = roomLine ? `${roomLine}${rest ? ` ${rest}` : ''}` : rest;
       }
       form.dispatchEvent(new Event('input', { bubbles: true }));
     }
+    // A date tile is a transparent date input stretched over a label, so every tap lands on the
+    // input. Phones open the picker on that tap; a desktop click only focuses an invisible
+    // segment of the field, so ask for the picker outright.
+    if (e.target.matches?.('.ask-tile input[type="date"]')) { try { e.target.showPicker?.(); } catch { /* a browser that refuses still has the input focused; typing a date works */ } }
   });
   const showDate = (name) => {
     const iso = v(name)?.value; if (!isDate(iso)) return;
@@ -823,12 +843,15 @@ export function requestDetail({ store, params, go, refresh }) {
     { key: 'requested', label: 'Asked', at: r.requestedAt, who: member?.name, next: `Victor prices it within ${sla} hours` },
     { key: 'quoted', label: 'Priced by Victor', at: r.quotedAt, who: store.member(r.quotedBy)?.name, next: mine ? 'waiting on you' : 'waiting on the member' },
     { key: 'held', label: 'Said yes · points committed', at: r.heldAt, who: member?.name, next: 'Victor picks it up next' },
-    { key: 'approved', label: 'Victor is booking it', at: r.approvedAt, who: store.member(r.approvedBy)?.name, next: 'in his hands · you hear the moment it is booked' },
+    { key: 'approved', label: 'Picked up by Victor', at: r.approvedAt, who: store.member(r.approvedBy)?.name, next: 'in his hands · you hear the moment it is booked' },
     { key: 'confirmed', label: 'Booked', at: r.confirmedAt, who: store.member(r.decidedBy)?.name, next: 'the room is yours' },
     { key: 'completed', label: 'Stayed', at: r.completedAt, next: '' },
   ];
   const closed = ['declined', 'cancelled', 'expired'].includes(r.status);
-  const doneUpTo = r.status === 'completed' ? 5 : r.status === 'confirmed' ? 4 : r.status === 'held' ? (r.approvedAt ? 3 : 2) : r.status === 'quoted' ? 1 : 0;
+  // A closed request keeps every step that actually happened — the quote that lapsed, the yes
+  // that was cancelled — because those are the member's record of what they committed and when.
+  const doneUpTo = closed ? steps.reduce((n, st, i) => (st.at ? i : n), 0)
+    : r.status === 'completed' ? 5 : r.status === 'confirmed' ? 4 : r.status === 'held' ? (r.approvedAt ? 3 : 2) : r.status === 'quoted' ? 1 : 0;
 
   const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:860px">
       <p class="eyebrow">${escapeHtml(stay?.area || '')} · ${escapeHtml(requestLabel(r))}</p>
@@ -1024,7 +1047,11 @@ export function requestDetail({ store, params, go, refresh }) {
   const topUpOwed = r.status === 'held' && r.topUpUsd > 0 && !r.topUpConfirmed;
   if (store.canPlan?.() && r.status === 'held' && !r.approvedAt) buttons.push('<button class="btn" data-act="approve">I have it — booking it</button>');
   if (canPay && r.status === 'held') buttons.push(`<button class="btn good" data-act="pay"${topUpOwed ? ' disabled' : ''}>${icon('check', { size: 16 })}I booked it</button>`);
-  if (mine && closed && stay && stay.kind !== 'trip') buttons.push(`<a class="btn ghost" href="#/book/${escapeHtml(stay.id)}?from=${escapeHtml(r.checkIn)}&to=${escapeHtml(r.checkOut)}">Ask again</a>`);
+  if (mine && closed && stay && stay.kind !== 'trip') {
+    // Everything they said the first time rides along, so the re-ask opens as they left it.
+    const again = new URLSearchParams({ from: r.checkIn, to: r.checkOut, guests: String(r.guests || 2), flex: String(r.flexDays || 0), shared: r.shared ? '1' : '0', note: r.note || '' });
+    buttons.push(`<a class="btn ghost" href="#/book/${escapeHtml(stay.id)}?${escapeHtml(again.toString())}">Ask again</a>`);
+  }
   if (canPay && topUpOwed) buttons.push('<button class="btn" data-act="topup">Mark the top-up received</button>');
   if (store.hasRole('planner', 'admin') && r.status === 'confirmed') buttons.push('<button class="btn ghost" data-act="complete">Mark as stayed</button><button class="btn danger" data-act="cancelPaid">Cancel the booking</button>');
   actions.innerHTML = buttons.length
@@ -1119,25 +1146,34 @@ export async function lookSheet(store, r, stay, { found, url = '', label = '' } 
       url: phone ? '' : url, label: phone ? 'Rang them' : label,
       priceUsd: out.priceUsd, roomLabel: out.roomLabel, note: out.note, redemptionId: r.id }, store.me.id);
     toast('Written down.', { kind: 'good' });
-    return l || true;
+    // The caller reads `.found` — a look that says the week is gone must never be taken for a yes.
+    return l || out;
   } catch (err) { toast(err.message, { kind: 'bad' }); return null; }
 }
 
-/** Where to book this one, with the look buttons under each link. Markup only; wire [data-look] to lookSheet. */
+/** Who may write down a look: the same people both backends let record one (planner, comms, admin). */
+const canLook = (store) => store.hasRole('planner', 'comms', 'admin');
+
+/**
+ * Where to book this one, with the look buttons under each link. Markup only; wire [data-look]
+ * to lookSheet. The Banker sees the links but not the buttons — the server refuses their look
+ * anyway, and a button that only ever toasts an error is not a control.
+ */
 function lookBlock(store, r) {
   const links = store.whereToBook(r.id);
   const gated = store.needsLook?.(r);
   const seen = gated ? store.lookFor?.(r.stayId, r.checkIn, r.checkOut, r.status === 'held' ? r.heldAt : null) : null;
+  const may = canLook(store);
   return `<div class="look-block">
     ${links.length ? `<ul class="stack" style="list-style:none;padding:0;gap:8px">
       ${links.map(l => `<li class="row" style="gap:8px;flex-wrap:wrap"><a class="btn ${l.exact ? '' : 'ghost'} sm" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}${escapeHtml(l.label)}</a>
-        <button type="button" class="btn ghost sm" data-look="showing" data-url="${escapeHtml(l.url)}" data-label="${escapeHtml(l.label)}">It is there</button>
-        <button type="button" class="btn quiet sm" data-look="gone" data-url="${escapeHtml(l.url)}" data-label="${escapeHtml(l.label)}">It is gone</button></li>`).join('')}
+        ${may ? `<button type="button" class="btn ghost sm" data-look="showing" data-url="${escapeHtml(l.url)}" data-label="${escapeHtml(l.label)}">It is there</button>
+        <button type="button" class="btn quiet sm" data-look="gone" data-url="${escapeHtml(l.url)}" data-label="${escapeHtml(l.label)}">It is gone</button>` : ''}</li>`).join('')}
     </ul>` : '<p class="small muted">No link on file for this one.</p>'}
-    <p class="small" style="margin-top:8px"><button type="button" class="btn quiet sm" data-look="phone">I rang them instead</button></p>
+    ${may ? '<p class="small" style="margin-top:8px"><button type="button" class="btn quiet sm" data-look="phone">I rang them instead</button></p>' : ''}
     ${gated ? `<p class="tiny look-line" style="margin-top:6px${seen ? '' : ';color:var(--flag)'}">${seen
       ? `Last look: ${escapeHtml(store.member(seen.lookedBy)?.name.split(' ')[0] || 'someone')} ${seen.found === 'showing' ? 'saw it open' : seen.found === 'booked' ? 'booked it' : `found it ${escapeHtml(seen.found)}`} · ${escapeHtml(fmtDayTime(seen.lookedAt))}`
-      : `Nobody has looked at these nights${r.status === 'held' ? ' since they said yes' : ''} — open it and say what you saw first.`}</p>` : ''}
+      : `Nobody has looked at these nights${r.status === 'held' ? ' since they said yes' : ''}${may ? ' — open it and say what you saw first.' : ' — Victor or Ian looks before it can be booked.'}`}</p>` : ''}
   </div>`;
 }
 
@@ -1150,31 +1186,41 @@ function lookBlock(store, r) {
 export async function bookSheet(store, r) {
   const s = store.settings, stay = store.stay(r.stayId), member = store.member(r.memberId);
   const first = member?.name.split(' ')[0] || 'the member';
+  const canApprove = !!store.canPlan?.();
   const out = await sheet({ title: `Book ${stay?.name || 'it'} for ${first}`, wide: true, render: (body, close) => {
     const draw = () => {
+      // The live backend replaces the record on every write, so re-read it before drawing —
+      // otherwise the sheet keeps showing "I have it" after it has been said.
+      Object.assign(r, store.redemption(r.id) || {});
       const topUpOwed = r.topUpUsd > 0 && (r.topUpReceivedUsd ?? 0) < r.topUpUsd;
       const owed = hotelOwedUsd(r, s);
       body.innerHTML = `
         <p class="sheet-text"><b>${escapeHtml(fmtDay(r.checkIn))} – ${escapeHtml(fmtDay(r.checkOut))}</b> · ${r.nights} night${r.nights > 1 ? 's' : ''} · ${r.guests} guest${r.guests > 1 ? 's' : ''}${r.flexDays ? ` · flexible ±${r.flexDays}d` : ''}
-          · ${escapeHtml(fmtPoints(r.quotedPoints || r.points))} quoted${r.topUpUsd ? ` · ${escapeHtml(fmtUsd2(r.topUpUsd))} top-up ${topUpOwed ? '<span style="color:var(--flag)">still with the Banker</span>' : 'received'}` : ''}
+          · ${escapeHtml(fmtPoints(r.quotedPoints || r.points))} quoted${r.topUpUsd ? ` · ${escapeHtml(fmtUsd2(r.topUpUsd))} top-up ${topUpOwed ? '<span style="color:var(--flag)">still to the Banker</span>' : 'received'}` : ''}
           ${r.note ? `<br>“${escapeHtml(r.note)}”` : ''}</p>
-        <p class="eyebrow" style="margin-top:4px">${icon('external')}Book it here${r.approvedAt ? '' : ` — ${first} is told you have it the moment you tap a look`}</p>
+        <p class="eyebrow" style="margin-top:4px">${icon('external')}Book it here${r.approvedAt || !canApprove ? '' : ` — ${escapeHtml(first)} is told you have it the moment you say it is there`}</p>
         ${lookBlock(store, r)}
         <p class="eyebrow" style="margin-top:18px">${icon('check')}Once it is booked</p>
-        <p class="sheet-text" style="margin-top:6px">This burns ${escapeHtml(fmtPoints(r.points))} from ${escapeHtml(member?.name || 'the member')}${(r.pledges || []).length ? ` and what ${r.pledges.length} other${r.pledges.length > 1 ? 's' : ''} chipped in` : ''}, and records what the Reserve paid the hotel. ${first} was quoted ${escapeHtml(fmtUsd2((r.quotedPoints || 0) / s.pointsPerDollar))}; the difference is the Circle's ${Math.round(s.serviceRate * 100)}%.</p>
+        <p class="sheet-text" style="margin-top:6px">This burns ${escapeHtml(fmtPoints(r.points))} from ${escapeHtml(member?.name || 'the member')}${(r.pledges || []).length ? ` and what ${r.pledges.length} other${r.pledges.length > 1 ? 's' : ''} chipped in` : ''}, and records what the Reserve paid the hotel. ${escapeHtml(first)} was quoted ${escapeHtml(fmtUsd2((r.quotedPoints || 0) / s.pointsPerDollar))}; the difference is the Circle's ${Math.round(s.serviceRate * 100)}%.</p>
         <div class="grid g2">
           <label class="field"><span>Hotel confirmation number</span><input name="ref" placeholder="e.g. BT-2026-4471" required autocomplete="off"></label>
           <label class="field"><span>Paid to the hotel, US$</span><input name="paid" type="number" step="0.01" value="${owed.toFixed(2)}" inputmode="decimal"></label>
         </div>
         ${topUpOwed ? `<p class="small" style="color:var(--flag);margin-bottom:10px">The ${escapeHtml(fmtUsd2(r.topUpUsd))} top-up has not reached the Banker yet. Nothing is booked on credit — book it once Vishnu has it.</p>` : ''}
         <div class="sheet-actions"><button class="btn ghost" data-close>Not yet</button>
-          ${r.approvedAt ? '' : '<button type="button" class="btn ghost" data-approve>I have it, booking later</button>'}
+          ${r.approvedAt || !canApprove ? '' : '<button type="button" class="btn ghost" data-approve>I have it, booking later</button>'}
           <button class="btn good" data-ok ${topUpOwed ? 'disabled' : ''}>${icon('check', { size: 16 })}I booked it — burn the points</button></div>`;
     };
     draw();
     body.addEventListener('click', async (e) => {
       const look = e.target.closest('[data-look]');
-      if (look) { const done = await lookSheet(store, r, stay, { found: look.dataset.look, url: look.dataset.url, label: look.dataset.label }); if (done) { if (!r.approvedAt && store.canPlan?.()) { try { await store.approveRedemption(r.id, store.me.id); } catch { /* the look is written down either way */ } } draw(); } return; }
+      if (look) {
+        const done = await lookSheet(store, r, stay, { found: look.dataset.look, url: look.dataset.url, label: look.dataset.label });
+        // Seeing it there is Victor picking it up. Seeing it gone, or not being sure, is not.
+        if (done?.found === 'showing' && !r.approvedAt && canApprove) { try { await store.approveRedemption(r.id, store.me.id); } catch { /* the look is written down either way */ } }
+        if (done) draw();
+        return;
+      }
       if (e.target.closest('[data-approve]')) { try { await store.approveRedemption(r.id, store.me.id); toast(`${first} can see you are booking it.`, { kind: 'good' }); draw(); } catch (err) { toast(err.message, { kind: 'bad' }); } return; }
       if (e.target.closest('[data-ok]')) {
         const ref = body.querySelector('[name=ref]').value.trim();
@@ -1200,7 +1246,7 @@ export async function quoteSheet(store, r, stay) {
   const out = await sheet({ title: `Quote ${stay?.name || 'this stay'}`, wide: true, render: (body, close) => {
     body.innerHTML = `
       ${store.needsLook?.(r) ? `<p class="eyebrow">${icon('external')}Look first</p>${lookBlock(store, r)}<p class="eyebrow" style="margin-top:18px">${icon('tag')}Then price it</p>` : ''}
-      <p class="sheet-text">Type what the hotel charges. The Circle's ${Math.round(s.serviceRate * 100)}% is added on top and the member sees it as its own line. The quote is locked for ${s.quoteHours} hours.</p>
+      <p class="sheet-text">Type what the hotel charges. The Circle's ${Math.round(s.serviceRate * 100)}% is added on top and the member sees it as its own line. The quote holds for ${s.quoteHours} hours, or until the look it rests on goes stale — never under ${s.minQuoteHours ?? 12} — and the member sees the countdown.</p>
       <div class="grid g3">
         <label class="field"><span>Room total</span><input name="room" type="number" step="0.01" value="${(hotelUsd * 0.72).toFixed(2)}" inputmode="decimal"></label>
         <label class="field"><span>Taxes</span><input name="taxes" type="number" step="0.01" value="${(hotelUsd * 0.09).toFixed(2)}" inputmode="decimal"></label>
