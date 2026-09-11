@@ -156,6 +156,7 @@ export function cruises({ store }) {
     const months = canAfford ? 0 : Math.ceil((seat - Math.max(0, avail)) / pointsPerMonth(s, me.monthlyUsd));
     const footer = `<span class="small muted" style="margin-top:4px">${escapeHtml(fmtDay(t.dates.from))} – ${escapeHtml(fmtDay(t.dates.to))} · ${held} of ${t.seats} ${unit}s held${mine ? ' · you are in' : ''}</span>
       <span class="small muted" style="margin-top:2px">${mine ? `Your ${unit} is held` : canAfford ? `You can cover a ${unit} now` : `About ${months} more month${months === 1 ? '' : 's'} of contributions`}</span>
+      ${(t.cruise?.ports || []).length >= 2 ? `<span class="small muted" style="margin-top:4px">${escapeHtml(t.cruise.ports.join(' · '))}</span>` : ''}
       <span class="flags" style="margin-top:6px">
         ${t.cruise?.ship ? `<span class="tag">${escapeHtml(t.cruise.ship)}</span>` : ''}
         ${t.isDrop ? `<span class="tag" style="background:var(--flight-soft);border-color:transparent">Drop${t.isDrop && look.firstLookHours > 0 ? ' · your first look' : ''}</span>` : ''}
@@ -192,7 +193,7 @@ export function stayDetail({ store, params, go }) {
       <div id="open"></div>
       <div class="panel" id="pricing" style="margin-top:22px"></div>
       <div id="place"></div>
-      ${(() => {
+      ${isTrip ? (safeUrl(stay.cruise?.ref) ? `<p class="small muted" style="margin-top:16px">${icon('external', { size: 14, cls: 'ico-muted' })} Seen on <a href="${escapeHtml(safeUrl(stay.cruise.ref))}" target="_blank" rel="noopener noreferrer">Interval</a> — Victor confirms the sailing and the cabin before he quotes anyone.</p>` : '') : (() => {
         // Where the number came from, ALWAYS — including when the answer is "nowhere yet".
         //
         // This panel used to render only when `stay.sources` existed, and no live row had it,
@@ -450,8 +451,7 @@ export function stayDetail({ store, params, go }) {
     const pace = store.monthsToAfford(price);
     const mineRow = pace?.find(x => x.mine);
     const gapUsd = fmtUsd2(Math.max(0, price - avail) / s.pointsPerDollar);
-    wrap.querySelector('#pricing').insertAdjacentHTML('beforeend', `<p class="small muted" style="margin-top:12px">${icon('spark', { size: 14, cls: 'ico-muted' })}
-      You hold <b class="num">${escapeHtml(fmtPoints(avail))}</b> — ${canCover >= min
+    wrap.querySelector('#pricing').insertAdjacentHTML('beforeend', `<p class="small muted" style="margin-top:12px">You hold <b class="num">${escapeHtml(fmtPoints(avail))}</b> — ${canCover >= min
         ? `enough for ${Math.min(canCover, 14)} ${unit}${canCover === 1 ? '' : 's'} here.`
         : `${escapeHtml(gapUsd)} short of ${isTrip ? `a ${unit}` : `the ${min}-night minimum`}${mineRow && mineRow.months > 0 ? `, about ${mineRow.months} more month${mineRow.months === 1 ? '' : 's'} at your level` : ''}. Ask anyway: Victor quotes it, and ${escapeHtml(gapUsd)} as a cash top-up closes the gap.`}
       ${escapeHtml(tierName(me.monthlyUsd))} can hold ${tier.holds} open request${tier.holds > 1 ? 's' : ''} and book ${tier.windowMonths} months ahead.</p>`);
