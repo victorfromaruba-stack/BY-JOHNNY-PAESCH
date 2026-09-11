@@ -190,3 +190,24 @@ website looks low quality, not exclusive." What changed and what it measures:
   section shows six first. With fifty posted weeks: 12.4 screens as the Desk, 10.7 as a
   member (cards 305–343px). Without any: 5.0.
 - Whole-app audit at 390: no overflow, no errors; landing 7.8 screens, stays 9.6.
+
+## Re-baselined 11 Sept, after Deals folded into Stays and the room catalog went (390px, as admin)
+
+Victor: "difficult to pick a place, hard to understand how it works, I don't need a million
+rooms, I only need the best deals on the market; instead of Stays and Deals only have Stays;
+make Cruise — Interval has cruise." So: one Stays tab that IS the deals (posted + owner weeks
+open on VakayMood, one list, cheapest a night first, the first eight spread across places),
+a strip of the places under it, no rooms table, no room chips, no filters; a Cruises tab
+(cruises, then the land trips); /deals, /live and /trips redirect. No overflow, no errors on
+any route.
+
+| route | screens | first figure | note |
+|---|---|---|---|
+| `/stays` | 6.0 | 704px | 55 open with the Circle's copy of VakayMood; 8 cards open, "Show the other 47"; 23 places in the strip |
+| `/stays/:id` | 4.6 | 831px | hero → tags → "Open right now" (4 of 20) → date tiles + one afford line → About the place / Where this price comes from, both folded |
+| `/cruises` | 2.6 | 441px | the demo cruise, then three trips |
+| `/cruises/:id` | 2.2 | 1312px | ship, ports, dates, cabins held, hold deadline |
+| `/book/:id` (cruise) | — | — | "Ask for a cabin", a Cabins stepper, "Ask for the cabin" |
+
+Not a regression: `/stays` is taller than the old catalog grid because it is now the board.
+

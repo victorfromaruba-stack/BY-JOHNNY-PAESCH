@@ -75,6 +75,15 @@ export const REACH = Object.freeze({
 });
 export const reachOf = (stay) => (stay?.kind === 'trip' ? (stay.reach || 'region') : 'aruba');
 
+/**
+ * A cruise is a trip with a ship: fixed dates, a fixed price for a cabin, so many cabins. It is
+ * stored as kind 'trip' with a `cruise` record (line, ship, embark, ports, cabin), so every rule
+ * that prices, holds and books a seat on a trip prices, holds and books a cabin unchanged.
+ */
+export const isCruise = (stay) => stay?.kind === 'trip' && !!stay?.cruise;
+/** The word for what a member asks for here: a night, a seat, or a cabin. */
+export const unitWord = (stay) => (stay?.kind === 'trip' ? (isCruise(stay) ? 'cabin' : 'seat') : 'night');
+
 /** Points a level earns in a month, tier bonus included. */
 export function pointsPerMonth(settings, monthlyUsd) {
   const t = tierFor(settings, monthlyUsd);

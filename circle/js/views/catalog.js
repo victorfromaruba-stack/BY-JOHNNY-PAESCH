@@ -1,8 +1,8 @@
-// Stays, trips, requesting one, and the life of a request.
+// Stays (the deals), cruises and trips, requesting one, and the life of a request.
 import { escapeHtml, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, countdownTo, initials, nightsBetween, safeUrl } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
-import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth, round2, hotelOwedUsd } from '../core/money.js';
-import { ring, versusLine } from '../ui/pieces.js';
+import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth, round2, hotelOwedUsd, isCruise, unitWord } from '../core/money.js';
+import { versusLine } from '../ui/pieces.js';
 import { effectiveTier } from '../core/standing.js';
 import { stayCard, stayStrip, photoFor, photoCredit, seedIdOf } from './public.js';
 import { PLACES } from '../data/places.js';
@@ -10,177 +10,162 @@ import { normName } from '../core/names.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
 import { shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
-import { dealList, byNight } from './deals.js';
-import { liveSection, resortForStay } from './live.js';
+import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet } from './deals.js';
+import { openWeeks, resortForStay } from './live.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 const AREAS = ['Palm Beach', 'Eagle Beach', 'Druif Beach', 'Oranjestad', 'Malmok', 'Savaneta', 'Noord'];
 
-export function stays({ store, query, go }) {
-  const me = store.me, s = store.settings;
-  const avail = store.availablePoints(me.id);
-  // What a member actually narrows by. The old row was five on/off toggles and an area select:
-  // no way to say "under $300" or "sleeps six", which are the first two questions anybody asks.
-  const state = { area: '', house: false, onSand: false, adultsOnly: false, allInclusive: false,
-                  affordable: false, maxUsd: 0, sleeps: 0, sort: 'price' };
-  const wrap = el(`<div><section class="sec"><div class="wrap">
-      <!-- The member tapped "Stays" to get here, so the page does not need an eyebrow saying
-           there are twenty-three of them, a heading repeating the tab, AND a count line: that
-           was three ways of saying the same thing and 780px of scrolling before the first
-           price. The count carries the number, the title orients, and what is in the price is
-           read once — so it folds away instead of pushing the goods off the screen. -->
-      <div class="sec-head tight"><div><h1>Stays in Aruba</h1>
-        <p class="small muted" id="count"></p>
-        <details class="fineprint"><summary>What is in the price</summary>
-          <p class="small muted">Every price is the Circle’s all-in rate per night — room, taxes, service charge and resort fee. Your binding quote comes from Victor and is usually better.</p>
-        </details>
-        </div></div>
-      <!-- On a phone the filter bar was 244px — four selects and five chips, 29% of the screen,
-           standing between the member and the hotels. It is one control there now, and stays
-           inline on a wide screen where the room is free. -->
-      <button class="btn ghost sm no-print" id="ftoggle" type="button" aria-expanded="false" aria-controls="filters"></button>
-      <div class="row no-print filterbar" id="filters" style="margin-bottom:14px" role="group" aria-label="Filter stays"></div>
-      <div class="grid g3" id="list"></div>
-      <p class="small muted" style="margin-top:18px">${icon('eye', { size: 14, cls: 'ico-muted' })} <a href="#/deals">See everything open right now, on Deals</a> · you never book it yourself — you put points in and the Circle books it for you. The four marked <em>Where we stay</em> are the ones we actually end up at; the rest are here because Victor can get them. Longer minimums apply over Christmas and Carnival, and the quote says when. <a href="#/rules">The rules</a>.</p>
-    </div></section></div>`);
-  const list = wrap.querySelector('#list'), filters = wrap.querySelector('#filters'), count = wrap.querySelector('#count');
-  const ftoggle = wrap.querySelector('#ftoggle');
-  // The label carries the state, because a shut filter bar that silently narrows the list is
-  // how someone concludes half the island has disappeared.
-  const activeFilters = () => ['house', 'onSand', 'adultsOnly', 'allInclusive', 'affordable']
-    .filter(k => state[k]).length + (state.area ? 1 : 0) + (state.maxUsd ? 1 : 0)
-    + (state.sleeps ? 1 : 0) + (state.sort !== 'price' ? 1 : 0);
-  const drawToggle = () => {
-    const n = activeFilters();
-    ftoggle.innerHTML = `${icon('search', { size: 15 })}${n ? `Filters · ${n}` : 'Filters'}`;
-  };
-  ftoggle.addEventListener('click', () => {
-    const open = filters.classList.toggle('open');
-    ftoggle.setAttribute('aria-expanded', String(open));
-  });
+/**
+ * One line, under every list of what is open: where the owner weeks came from and when.
+ * Never "available" — open on VakayMood at the time shown, or the Circle's own copy of it.
+ */
+function asOfLine(res, where = 'the places we stay') {
+  const t = res.generatedAt ? new Date(res.generatedAt) : null;
+  const time = t ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const day = t ? t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+  const eye = icon('eye', { size: 14, cls: 'ico-muted' });
+  if (res.error) return `${eye} This phone could not reach VakayMood just now${res.blocked ? ' — mobile data, or a content blocker' : ''}, so owner weeks are missing here. What the Desk has posted is what you see. <button type="button" class="btn quiet sm" data-act="retry-open" style="margin-left:6px">${icon('refresh', { size: 14 })}Try again</button>`;
+  const n = res.total.toLocaleString('en-US');
+  const weeks = `${n} owner week${res.total === 1 ? '' : 's'} open at ${escapeHtml(where)}`;
+  return res.fromCopy
+    ? `${eye} ${weeks} in the Circle’s copy of VakayMood, taken ${escapeHtml(day)} ${escapeHtml(time)} — this phone could not reach it live.`
+    : `${eye} ${weeks} on VakayMood as of ${escapeHtml(time)}${res.failed ? ` (${res.failed} place${res.failed === 1 ? '' : 's'} did not answer)` : ''}.`;
+}
 
-  const draw = () => {
-    drawToggle();
-    const on = (k) => (state[k] ? '' : 'quiet');
-    const dirty = state.area || state.house || state.onSand || state.adultsOnly || state.allInclusive
-      || state.affordable || state.maxUsd || state.sleeps;
-    filters.innerHTML = `
-      <div class="filterbar">
-        <div class="fgroup">
-          <label class="fsel"><span>Where</span>
-            <select id="area" aria-label="Area"><option value="">Anywhere on the island</option>${AREAS.map(a => `<option${a === state.area ? ' selected' : ''}>${a}</option>`).join('')}</select></label>
-          <label class="fsel"><span>Up to</span>
-            <select id="maxUsd" aria-label="Most a night">
-              ${[[0, 'Any price'], [200, '$200 a night'], [300, '$300'], [400, '$400'], [600, '$600'], [900, '$900']]
-                .map(([v, t]) => `<option value="${v}"${state.maxUsd === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
-          <label class="fsel"><span>Sleeps</span>
-            <select id="sleeps" aria-label="How many it sleeps">
-              ${[[0, 'Any'], [2, '2+'], [4, '4+'], [6, '6+'], [8, '8+']]
-                .map(([v, t]) => `<option value="${v}"${state.sleeps === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
-          <label class="fsel"><span>Sort</span>
-            <select id="sort" aria-label="Sort">
-              ${[['price', 'Cheapest first'], ['dear', 'Dearest first'], ['name', 'By name']]
-                .map(([v, t]) => `<option value="${v}"${state.sort === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
-        </div>
-        <div class="fgroup">
-          <button class="btn ${on('house')} sm" data-flag="house" aria-pressed="${state.house}">Where we stay</button>
-          <button class="btn ${on('onSand')} sm" data-flag="onSand" aria-pressed="${state.onSand}">On the sand</button>
-          <button class="btn ${on('adultsOnly')} sm" data-flag="adultsOnly" aria-pressed="${state.adultsOnly}">Adults only</button>
-          <button class="btn ${on('allInclusive')} sm" data-flag="allInclusive" aria-pressed="${state.allInclusive}">All-inclusive</button>
-          <button class="btn ${on('affordable')} sm" data-flag="affordable" aria-pressed="${state.affordable}">I can afford it now</button>
-          ${dirty ? `<button class="btn quiet sm" id="clear-f">${icon('x', { size: 15 })}Clear</button>` : ''}
-        </div>
-      </div>`;
-    let items = store.arubaStays();
-    if (state.area) items = items.filter(x => x.area === state.area);
-    for (const f of ['house', 'onSand', 'adultsOnly', 'allInclusive']) if (state[f]) items = items.filter(x => x[f]);
-    if (state.affordable) items = items.filter(x => avail >= fromPoints(x, s) * (x.minNights || 1));
-    // Against the from-price, because that is the number on the card they are reading.
-    if (state.maxUsd) items = items.filter(x => fromPoints(x, s) / s.pointsPerDollar <= state.maxUsd);
-    // The biggest room the property actually publishes. A place whose rooms are all doubles is
-    // not a "sleeps 8" answer just because it has a lot of them.
-    if (state.sleeps) items = items.filter(x => Math.max(0, ...store.roomTypesFor(x.id).map(r => r.sleeps || 0)) >= state.sleeps);
-    const byPrice = (a, b) => fromPoints(a, s) - fromPoints(b, s);
-    items = items.slice().sort(state.sort === 'name' ? (a, b) => a.name.localeCompare(b.name)
-      : state.sort === 'dear' ? (a, b) => byPrice(b, a)
-      : (a, b) => (b.house ? 1 : 0) - (a.house ? 1 : 0) || byPrice(a, b));
-    count.textContent = `${items.length} of ${store.arubaStays().length} places · from-price a night, all in`;
-    list.replaceChildren(...items.map(st => {
-      const per = fromPoints(st, s);
-      const min = st.minNights || 1;
-      const coverable = Math.floor(avail / per);
-      const footer = `<span class="small ${coverable >= min ? 'muted' : ''}" style="margin-top:4px">${
-        coverable >= min ? `You can cover ${Math.min(coverable, 14)} night${coverable === 1 ? '' : 's'}`
-        : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of the ${min}-night minimum`}</span>`;
-      return stayCard(st, { store, footer });
-    }));
-    if (!items.length) list.replaceChildren(el(`<div class="empty">${icon('search', { size: 28, cls: 'ico-muted' })}<b style="display:block;margin-top:10px">Nothing matches those filters</b><p class="small muted">Try a different area, or turn off “I can afford it now” to see everything.</p></div>`));
-  };
-  draw();
-  filters.addEventListener('click', (e) => {
-    const flagBtn = e.target.closest('[data-flag]');
-    if (flagBtn) { state[flagBtn.dataset.flag] = !state[flagBtn.dataset.flag]; draw(); return; }
-    if (e.target.closest('#clear-f')) {
-      Object.assign(state, { area: '', house: false, onSand: false, adultsOnly: false,
-        allInclusive: false, affordable: false, maxUsd: 0, sleeps: 0, sort: 'price' });
-      draw();
+/**
+ * The Stays tab IS the deals: every live one, cheapest a night first — what Victor and Ian have
+ * put on the board, and what owners have open right now at the places we stay — as one list
+ * with one button. Victor: "I only need the best deals on the market." The places themselves
+ * are a strip underneath, for a member who wants a place rather than a week.
+ */
+export function stays({ store, go }) {
+  const me = store.me, s = store.settings;
+  const canEdit = store.canPostDeals();
+  const mine = store.matchesForMember(me.id);
+  const mineIds = new Set(mine.map(m => m.deal.id));
+  const posted = store.liveDeals().filter(d => !mineIds.has(d.id));
+  const watching = store.watchesFor(me.id).length;
+  const wrap = el(`<div><section class="sec"><div class="wrap">
+      <div class="row-between" style="align-items:flex-start;gap:14px">
+        <div><h1>Stays</h1>
+          <p class="lede" style="margin-top:10px;max-width:58ch">The best deals on the market right now, cheapest a night first — what Victor and Ian have found, and what owners have open at the places we stay. Tap one and Victor books it in your name; you never book anything yourself. <a href="#/rules">How it works</a>.</p></div>
+        ${canEdit ? `<div class="row no-print"><button class="btn sm" id="paste">${icon('copy', { size: 16 })}Paste a listing</button>
+          <button class="btn ghost sm" id="post">${icon('plus', { size: 16 })}By hand</button></div>` : ''}
+      </div>
+      <div class="row" style="margin-top:16px">
+        <a class="btn ghost sm" href="#/watching">${icon('bell', { size: 16 })}Tell the Desk what you want${watching ? ` · ${watching}` : ''}</a>
+      </div>
+      <div id="mine" style="margin-top:22px"></div>
+      <div id="deals" style="margin-top:22px"></div>
+      <div id="places" style="margin-top:34px"></div>
+    </div></section></div>`);
+
+  if (mine.length) {
+    const mineSlot = wrap.querySelector('#mine');
+    mineSlot.appendChild(el(`<div class="sec-head tight"><div><p class="eyebrow" style="color:var(--good-text)">${icon('bellRing')}What you asked for</p>
+      <h2 style="font-size:1.2rem">${mine.length} of these ${mine.length === 1 ? 'is' : 'are'} what you are watching for</h2></div></div>`));
+    dealList(mineSlot, mine.map(m => m.deal), { store, me, canEdit, first: 4, key: 'mine', inPlace: false, noun: 'you asked for' });
+    // Only when something is actually unseen: markWatchesSeen() commits, a commit re-renders,
+    // and this would run again forever.
+    if (store.unseenMatches(me.id).length) store.markWatchesSeen(me.id);
+  }
+
+  // The list. What the Desk posted paints at once; what owners have open is asked for and
+  // merged in when it answers, so the page never waits on a third party to show the board.
+  const dealsSlot = wrap.querySelector('#deals');
+  let drafts = [];
+  let loading = true;
+  // Cheapest a night first — but the eight that open with the page are spread across places, at
+  // most two from any one of them. Sixty Surf Club studios at $166 are all genuinely the cheapest
+  // and the first screen would be eight of the same card; the rest keep strict price order
+  // behind "Show the other N".
+  const FIRST = 8;
+  const spread = (list) => {
+    const lead = [], rest = [], seen = new Map();
+    for (const d of list) {
+      const n = seen.get(d.stayId) || 0;
+      if (lead.length < FIRST && n < 2) { lead.push(d); seen.set(d.stayId, n + 1); } else rest.push(d);
     }
-  });
-  filters.addEventListener('change', (e) => {
-    const id = e.target.id;
-    if (id === 'area') state.area = e.target.value;
-    else if (id === 'maxUsd') state.maxUsd = Number(e.target.value) || 0;
-    else if (id === 'sleeps') state.sleeps = Number(e.target.value) || 0;
-    else if (id === 'sort') state.sort = e.target.value;
-    else return;
-    draw();
-  });
+    return [...lead, ...rest];
+  };
+  const paint = (sub) => {
+    dealsSlot.replaceChildren();
+    const all = spread([...posted, ...drafts].sort(byNight));
+    dealsSlot.appendChild(el(`<div class="sec-head tight"><div><p class="eyebrow">${icon('trend')}Open right now</p>
+      <h2 style="font-size:1.2rem">${all.length ? `${all.length} open, cheapest a night first` : loading ? 'Looking at what is open…' : 'Nothing open right now'}</h2>
+      <p class="small muted" id="asof" style="margin-top:6px;max-width:62ch">${sub}</p></div></div>`));
+    if (all.length) dealList(dealsSlot, all, { store, me, canEdit, first: FIRST, key: 'stays', inPlace: false, noun: 'open' });
+    else if (!loading) dealsSlot.appendChild(el(`<p class="small muted" style="margin-top:8px">Open a place below and put your dates in — Victor prices any nights. <a href="#/watching">A watch</a> tells you the moment something opens.</p>`));
+  };
+  const load = () => {
+    loading = true;
+    paint(`${icon('refresh', { size: 14, cls: 'ico-muted' })} Looking at what owners have open at the places we stay…`);
+    openWeeks(store).then(res => { drafts = res.deals.filter(d => !mineIds.has(d.id)); loading = false; paint(asOfLine(res)); });
+  };
+  load();
+  wireDealActions(wrap, store, { drafts: () => drafts });
+  wrap.addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-open"]')) load(); });
+  wrap.querySelector('#post')?.addEventListener('click', () => postDealSheet({ store }));
+  wrap.querySelector('#paste')?.addEventListener('click', () => pasteListingSheet({ store }));
+
+  // The places, as a strip: where we actually stay first, then by price. One for a member who
+  // wants a place on their own dates rather than a week somebody else has open.
+  const placesSlot = wrap.querySelector('#places');
+  const places = store.arubaStays().slice().sort((a, b) => (b.house ? 1 : 0) - (a.house ? 1 : 0) || fromPoints(a, s) - fromPoints(b, s));
+  placesSlot.appendChild(el(`<div class="sec-head tight"><div><p class="eyebrow">${icon('bed')}The places</p>
+    <h2 style="font-size:1.2rem">${places.length} places Victor can get</h2>
+    <p class="small muted" style="margin-top:6px;max-width:62ch">Open one for what it costs a night on any dates, all in. The ones marked <em>Where we stay</em> are where we actually end up; the rest are here because Victor can get them.</p></div></div>`));
+  const hz = el('<div class="horizon-wrap"><div class="horizon"></div></div>');
+  places.forEach(st => hz.firstElementChild.appendChild(stayCard(st, { store })));
+  placesSlot.appendChild(hz);
   return wrap;
 }
 
-export function trips({ store }) {
+/**
+ * Cruises, and the trips under them. Both are the same shape — fixed dates, a fixed price for
+ * a cabin or a seat, so many of them — and both are asked for and booked the way a stay is.
+ * Interval International trades a deposited week for a cabin; Victor posts the ones worth it.
+ */
+export function cruises({ store }) {
   const me = store.me, s = store.settings;
   const avail = store.availablePoints(me.id);
   const tier = tierFor(s, me.monthlyUsd);
-  // What this member may actually do — their level plus what standing has added. The screen and
-  // the Desk now read the same number; they used to disagree by exactly the amount the home
-  // screen was promising.
-  // standingOf(), not standing() — see requestRedemption. With standing() this screen told a
-  // member on the LIVE backend they had one fewer open request than the server actually allows.
   const look = effectiveTier(tier, store.standingOf(me.id));
-  const all = store.trips();
+  const sailings = store.cruises(), trips = store.landTrips();
   const wrap = el(`<div><section class="sec"><div class="wrap">
-      <!-- This header used to run 892px before the first trip: a lede, a paragraph naming the
-           three countries (which the cards below already name, and which goes stale the day a
-           trip changes), and a notice box explaining the levels. All of it true, none of it
-           what somebody opening /trips came for. The one sentence that matters most — nobody
-           is shut out — leads; the rest folds. -->
-      <div class="sec-head tight"><div><p class="eyebrow">${icon('plane')}Sourced by Victor, run with Ian</p><h1>Trips</h1>
-        <p class="small muted">Everyone can come on everything. A seat covers the hotels and every transfer on the ground; flights to and from Aruba are extra unless the note says otherwise.</p>
-        <details class="fineprint"><summary>What your level changes</summary>
-          <p class="small muted">Not whether you can come — only how fast the points build. At ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))}, so a seat further afield takes longer to save for. It also sets the perks: ${look.holds} open request${look.holds > 1 ? 's' : ''} at a time, ${look.windowMonths} months ahead${look.firstLookHours ? `, and first look at a new trip ${look.firstLookHours} hours early` : ''}${look.fromStanding.extraHolds || look.fromStanding.extraFirstLookHours ? ' — your standing is in those numbers' : ''}. <a href="#/profile">Change your level</a> any month; it starts on your next contribution.</p>
-          <p class="small muted">Guests can come at the same rate, in cash. Read each trip’s note — Victor writes down what the journey costs you in days, not just in points.</p>
-        </details>
-        </div></div>
+      <div class="sec-head tight"><div><h1>Cruises</h1>
+        <p class="lede" style="margin-top:10px;max-width:58ch">Interval International trades a deposited week for a cabin, and now and then sells a cabin cheap. Victor posts the sailings worth it; you ask for a cabin and he books it in your name.</p></div></div>
       <div class="grid g3" id="list"></div>
-      ${all.length ? '' : `<div class="empty">${icon('plane', { size: 28, cls: 'ico-muted' })}<b style="display:block;margin-top:10px">No trips on the board</b><p class="small muted">Victor posts them as he sources them. Ian sends a note when one goes live.</p></div>`}
+      ${sailings.length ? '' : `<div class="empty">${icon('compass', { size: 28, cls: 'ico-muted' })}<b style="display:block;margin-top:10px">No cruise on the board yet</b><p class="small muted">Victor posts one when Interval has a sailing worth it. <a href="#/watching">A watch</a> tells you first.</p></div>`}
+      <div id="trips" style="margin-top:34px"></div>
     </div></section></div>`);
-  const list = wrap.querySelector('#list');
-  list.replaceChildren(...all.map(t => {
+  const card = (t) => {
     const held = store.seatsHeld(t.id);
+    const unit = unitWord(t);
     const mine = store.state.redemptions.some(r => r.memberId === me.id && r.stayId === t.id && ['requested', 'quoted', 'held', 'confirmed', 'completed'].includes(r.status));
     const seat = seatPoints(t, s);
     const canAfford = avail >= seat;
-    const firstLook = t.isDrop && look.firstLookHours > 0;
     const months = canAfford ? 0 : Math.ceil((seat - Math.max(0, avail)) / pointsPerMonth(s, me.monthlyUsd));
-    const footer = `<span class="small muted" style="margin-top:4px">${escapeHtml(fmtDay(t.dates.from))} – ${escapeHtml(fmtDay(t.dates.to))} · ${held} of ${t.seats} seats held${mine ? ' · you are in' : ''}</span>
-      <span class="small muted" style="margin-top:2px">${mine ? 'Your seat is held' : canAfford ? 'You can cover a seat now' : `About ${months} more month${months === 1 ? '' : 's'} of contributions`}</span>
+    const footer = `<span class="small muted" style="margin-top:4px">${escapeHtml(fmtDay(t.dates.from))} – ${escapeHtml(fmtDay(t.dates.to))} · ${held} of ${t.seats} ${unit}s held${mine ? ' · you are in' : ''}</span>
+      <span class="small muted" style="margin-top:2px">${mine ? `Your ${unit} is held` : canAfford ? `You can cover a ${unit} now` : `About ${months} more month${months === 1 ? '' : 's'} of contributions`}</span>
       <span class="flags" style="margin-top:6px">
-        ${t.isDrop ? `<span class="tag" style="background:var(--flight-soft);border-color:transparent">Drop${firstLook ? ` · your first look` : ''}</span>` : ''}
+        ${t.cruise?.ship ? `<span class="tag">${escapeHtml(t.cruise.ship)}</span>` : ''}
+        ${t.isDrop ? `<span class="tag" style="background:var(--flight-soft);border-color:transparent">Drop${t.isDrop && look.firstLookHours > 0 ? ' · your first look' : ''}</span>` : ''}
         <span class="tag">${escapeHtml(REACH[reachOf(t)].label)}</span>
       </span>`;
-    return stayCard(t, { store, footer });
-  }));
+    return stayCard(t, { store, footer, href: `#/${isCruise(t) ? 'cruises' : 'trips'}/${t.id}` });
+  };
+  wrap.querySelector('#list').replaceChildren(...sailings.map(card));
+  if (trips.length) {
+    const slot = wrap.querySelector('#trips');
+    slot.appendChild(el(`<div class="sec-head tight"><div><p class="eyebrow">${icon('plane')}Trips with the Circle</p>
+      <h2 style="font-size:1.2rem">${trips.length} trip${trips.length === 1 ? '' : 's'}, a seat each</h2>
+      <p class="small muted" style="margin-top:6px;max-width:62ch">Everyone can come on everything. A seat covers the hotels and every transfer on the ground; flights to and from Aruba are extra unless the note says otherwise. At ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))}, so a seat further afield takes longer to save for — ${look.holds} open request${look.holds > 1 ? 's' : ''} at a time, ${look.windowMonths} months ahead.</p></div></div>`));
+    const grid = el('<div class="grid g3"></div>');
+    grid.replaceChildren(...trips.map(card));
+    slot.appendChild(grid);
+  } else wrap.querySelector('#trips').remove();
   return wrap;
 }
 
@@ -197,12 +182,8 @@ export function stayDetail({ store, params, go }) {
       <p class="lede" style="margin-top:12px">${escapeHtml(stay.vibe)}</p>
       <div class="stay-card daylight" id="stay-hero" style="margin-top:20px;border-radius:var(--r-card)"><span class="strip"></span></div>
       <div class="row" style="margin-top:14px">${(stay.features || []).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</div>
-      <div class="side" style="margin-top:22px">
-        <div class="panel" id="pricing"></div>
-        <div class="panel flat" id="afford"></div>
-      </div>
-      <div id="rooms"></div>
       <div id="open"></div>
+      <div class="panel" id="pricing" style="margin-top:22px"></div>
       <div id="place"></div>
       ${(() => {
         // Where the number came from, ALWAYS — including when the answer is "nowhere yet".
@@ -224,8 +205,7 @@ export function stayDetail({ store, params, go }) {
         const seenOn = src.interval?.seenOn || src.redweek?.seenOn || null;
         const daysOld = seenOn ? Math.floor((Date.now() - Date.parse(seenOn)) / 864e5) : null;
         const stale = daysOld != null && daysOld > 60;
-        return `<div class="panel" style="margin-top:16px">
-          <h3>Where this price comes from</h3>
+        return `<details class="fineprint" style="margin-top:16px"><summary>Where this price comes from</summary><div class="panel" style="margin-top:10px">
           ${rows.length ? `
             <p class="small muted" style="margin-top:6px">What the public sites were asking for a week here, the last time anyone looked. Interval is surplus inventory so it is not always there, and an owner on RedWeek sometimes beats it.</p>
             <div class="tablewrap" style="margin-top:12px;border:0"><table>
@@ -248,13 +228,11 @@ export function stayDetail({ store, params, go }) {
              ${site ? `<p class="small" style="margin-top:10px">Their own page is
                <a href="${escapeHtml(site)}" target="_blank" rel="noopener noreferrer">${escapeHtml(new URL(site).host.replace(/^www\./, ''))} ${icon('external', { size: 13 })}</a>
                &mdash; what it is asking today is the number to beat.</p>` : ''}`}
-          <p class="small" id="live-line" hidden style="margin-top:10px"></p>
-        </div>`;
+        </div></details>`;
       })()}
       ${stay.dealNote ? `<div class="notice" style="margin-top:16px"><b>From Victor</b><p class="small">${escapeHtml(stay.dealNote)}</p></div>` : ''}
-      <div id="reach-note"></div>
       <div class="row" style="margin-top:20px">
-        <a class="btn" href="#/book/${escapeHtml(stay.id)}">${icon('send', { size: 17 })}${isTrip ? 'Ask for a seat' : 'Ask Victor for dates'}</a>
+        <a class="btn" href="#/book/${escapeHtml(stay.id)}">${icon('send', { size: 17 })}${isTrip ? `Ask for a ${unitWord(stay)}` : 'Ask Victor for dates'}</a>
         <button class="btn ghost" id="share">${icon('share', { size: 16 })}Share</button>
       </div>
     </div></section></div>`);
@@ -304,7 +282,7 @@ export function stayDetail({ store, params, go }) {
     if (place.policies?.children != null || place.policies?.dogs != null) facts.push(`${icon('users', { size: 14, cls: 'ico-muted' })} ${[place.policies.children === true ? 'children welcome' : place.policies.children === false ? 'adults only' : '', place.policies.dogs === false ? 'no dogs' : place.policies.dogs === true ? 'dogs allowed' : ''].filter(Boolean).join(' · ')}`);
     const SHOW = 10;
     const srcLine = (place.sources || []).map(x => `<a href="${escapeHtml(x.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(x.label)}</a>, seen ${escapeHtml(fmtDay(x.seenOn))}`).join('; ');
-    wrap.querySelector('#place').innerHTML = `<section class="panel" style="margin-top:16px" id="the-place">
+    wrap.querySelector('#place').innerHTML = `<details class="fineprint" style="margin-top:16px"><summary>About the place</summary><section class="panel" style="margin-top:10px" id="the-place">
       <div><p class="eyebrow">${icon('home')}The place</p>
         <h2 style="font-size:1.15rem;margin-top:6px">What ${escapeHtml(stay.name)} publishes about itself</h2></div>
       ${facts.length ? `<ul class="facts" style="margin-top:10px">${facts.map(f => `<li>${f}</li>`).join('')}</ul>` : ''}
@@ -313,16 +291,16 @@ export function stayDetail({ store, params, go }) {
       ${allAmen.length ? `<div class="flags" id="amen" style="margin-top:14px">${allAmen.slice(0, SHOW).map(({ a, label }) => `<span class="tag" title="${escapeHtml(label)}">${escapeHtml(a)}</span>`).join('')}
         ${allAmen.length > SHOW ? `<button type="button" class="btn quiet sm" id="amen-more">All ${allAmen.length} on the list</button>` : ''}</div>` : ''}
       ${!facts.length && !allAmen.length && !propertyPhotos.length ? `<p class="small muted" style="margin-top:8px">Nothing this place publishes in a form we can read yet.</p>` : ''}
-      ${!store.roomTypesFor(stay.id).length && (place.rooms || []).length ? `
+      ${(place.rooms || []).length ? `
         <div style="margin-top:16px"><p class="eyebrow">${icon('bed', { size: 14 })}Rooms, as the property lists them</p>
         <ul class="ledger" id="site-rooms" style="margin-top:8px">${place.rooms.map((r, i) => {
           const pics = roomPhotos.get(normName(r.catalogName || r.name)) || [];
           const bits = [r.sqft ? `${r.sqft.toLocaleString('en-US')} sq ft` : r.sqm ? `${r.sqm} m²` : '', r.sleeps ? `sleeps ${r.sleeps}` : '', r.beds || '', r.view || ''].filter(Boolean);
           return `<li><span class="what">${pics.length ? `<button type="button" class="room-thumb" data-site-room="${i}" aria-label="Photographs of ${escapeHtml(r.name)}"><img src="assets/${escapeHtml(pics[0].thumb || pics[0].file)}" alt="" loading="lazy" decoding="async"></button>` : ''}<b>${escapeHtml(r.name)}</b>
             ${bits.length ? `<span class="meta">${escapeHtml(bits.join(' · '))}</span>` : ''}${r.description ? `<span class="meta">${escapeHtml(r.description)}</span>` : ''}</span></li>`; }).join('')}</ul>
-        <p class="tiny muted" style="margin-top:6px">Sizes and sleeps are the property's own published figures; a blank means it publishes none. These rooms are not priced in the catalog yet — ask, and Victor prices the nights.</p></div>` : ''}
+        <p class="tiny muted" style="margin-top:6px">Sizes and sleeps are the property's own published figures; a blank means it publishes none. Say which one you want in your ask, and Victor prices the nights.</p></div>` : ''}
       <p class="tiny muted" style="margin-top:12px">Facts and pictures from ${srcLine}. What is not stated there is not stated here.</p>
-    </section>`;
+    </section></details>`;
     wrap.querySelector('#place').addEventListener('click', (e) => {
       const sr = e.target.closest('[data-site-room]');
       if (sr) {
@@ -341,145 +319,53 @@ export function stayDetail({ store, params, go }) {
     wrap.querySelector('#place')?.remove();
   }
 
-  // Which sizes an owner has open on VakayMood right now, filled in when the feed answers. The
-  // rooms table draws before that and once more after, so first paint never waits on a third party.
-  let openByBeds = new Map();
-  let drawRooms = null;
-  const roomsSlot = wrap.querySelector('#rooms');
-  const rooms = store.roomTypesFor(stay.id);
-  if (rooms.length && !isTrip) {
-    roomsSlot.appendChild(el(`<section class="panel" style="margin-top:22px">
-        <div><p class="eyebrow">${icon('bed')}The rooms</p>
-          <h2 style="font-size:1.15rem;margin-top:6px">${rooms.length} you can be given here</h2></div>
-        <div class="tablewrap" style="margin-top:14px"><table class="rooms-table">
-          <caption class="sr-only">Room types with size, occupancy and from-price per night</caption>
-          <thead><tr><th>Room</th><th>Size</th><th>Sleeps</th><th class="num">From, a night</th><th></th></tr></thead>
-          <tbody id="r-body"></tbody>
-        </table></div>
-        <button class="btn ghost sm" id="r-more" type="button" style="margin-top:12px" hidden></button>
-        <p class="small muted" style="margin-top:12px">${icon('scale', { size: 14, cls: 'ico-muted' })}
-          Every room is priced off this property's own rate, so when Victor negotiates a better one they all move together.
-          Sizes are the property's own published figures. Where a room says <em>size not published</em>, nobody publishes one and we would rather leave it blank than guess at it.
-          A green line under a room means an owner has that size open on VakayMood right now; the link goes with your request so Victor knows where it was seen, and what you pay is his quote.</p>
-      </section>`));
-    // Thirteen rooms here, twenty-three at the Hilton. Nobody reads to the end of that, and it
-    // buried everything below it — so the page opens with a handful and says how many more.
-    const FIRST = 6;
-    let showAll = rooms.length <= FIRST + 2;
-    drawRooms = () => {
-      const shown = showAll ? rooms : rooms.slice(0, FIRST);
-      const more = roomsSlot.querySelector('#r-more');
-      if (more) more.hidden = showAll;
-      roomsSlot.querySelector('#r-body').innerHTML = shown.map(r => {
-        const per = store.roomPointsFrom(stay.id, r.id);
-        const min = stay.minNights || 1;
-        const can = Math.floor(avail / (per || 1));
-        const pics = roomPhotos.get(normName(r.name)) || [];
-        return `<tr>
-          <td>${pics.length ? `<button type="button" class="room-thumb" data-room-photos="${escapeHtml(r.id)}" aria-label="Photographs of ${escapeHtml(r.name)}"><img src="assets/${escapeHtml(pics[0].thumb || pics[0].file)}" alt="" loading="lazy" decoding="async"></button>` : ''}<b>${escapeHtml(r.name)}</b>
-            ${r.beds ? `<br><span class="small muted">${escapeHtml(r.beds)}</span>` : ''}
-            <br><span class="flags">${r.kitchen === 'full' ? `<span class="tag">${icon('kitchen', { size: 13 })}Full kitchen</span>` : r.kitchen === 'kitchenette' ? '<span class="tag">Kitchenette</span>' : ''}
-              ${(r.extras || []).slice(0, 2).map(x => `<span class="tag">${escapeHtml(x)}</span>`).join('')}
-              ${r.source === 'size-unpublished' ? '<span class="tag">size not published</span>' : ''}</span>
-            ${(() => {
-              const o = openByBeds.get(r.bedrooms ?? -1);
-              return o ? `<br><a class="small open-line" href="#/book/${escapeHtml(stay.id)}?from=${escapeHtml(o.from)}&to=${escapeHtml(o.to)}&room=${escapeHtml(r.id)}${o.bookingUrl ? `&src=${encodeURIComponent(o.bookingUrl)}&srcLabel=VakayMood` : ''}">${icon('eye', { size: 13 })} an owner is asking ${escapeHtml(fmtUsd2(o.usdNightly))} a night on VakayMood · ${escapeHtml(fmtDay(o.from))} – ${escapeHtml(fmtDay(o.to))}</a>` : '';
-            })()}</td>
-          <td class="small" data-k="Size"><span>${r.sqft ? `${r.sqft.toLocaleString('en-US')} sq ft` : '<span class="muted">not published</span>'}</span>${r.sqm ? `<span class="muted">${r.sqm} m²</span>` : ''}</td>
-          <td class="small" data-k="Sleeps"><span>${icon('users', { size: 14, cls: 'ico-muted' })} ${r.sleeps}</span>${r.bedrooms ? `<span class="muted">${r.bedrooms} bed${r.bedrooms > 1 ? 'rooms' : 'room'}</span>` : ''}</td>
-          <td class="num" data-k="A night"><span><b>${escapeHtml(fmtPoints(per))}</b></span><span class="small muted">${escapeHtml(fmtUsd2(per / s.pointsPerDollar))}</span><span class="small ${can >= min ? 'muted' : ''}">${can >= min ? `covers ${Math.min(can, 14)} night${can === 1 ? '' : 's'}` : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of ${min}`}</span></td>
-          <td><div class="row nowrap" style="gap:6px;justify-content:flex-end;flex-wrap:nowrap">
-            <a class="btn ghost sm" href="#/book/${escapeHtml(stay.id)}?room=${escapeHtml(r.id)}">Ask</a>
-            <button class="btn ghost sm icon-only" data-watch-room="${escapeHtml(r.id)}" aria-label="Tell me when a ${escapeHtml(r.name)} comes free">${icon('bell', { size: 15 })}</button>
-          </div></td></tr>`;
-      }).join('');
-    };
-    if (!showAll) {
-      const rest = rooms.length - FIRST;
-      const more = roomsSlot.querySelector('#r-more');
-      more.textContent = `Show the other ${rest} room${rest === 1 ? '' : 's'}`;
-      more.addEventListener('click', () => { showAll = true; drawRooms(); more.hidden = true; });
-    }
-    drawRooms();
-    roomsSlot.addEventListener('click', async (e) => {
-      const rp = e.target.closest('[data-room-photos]');
-      if (rp) {
-        const r = rooms.find(x => x.id === rp.dataset.roomPhotos);
-        const pics = roomPhotos.get(normName(r?.name)) || [];
-        const published = (place?.rooms || []).find(x => normName(x.catalogName || x.name) === normName(r?.name));
-        const facts = `<p class="sheet-text">${[
-          r?.sqft ? `${r.sqft.toLocaleString('en-US')} sq ft` : r?.sqm ? `${r.sqm} m²` : 'size not published',
-          r?.sleeps ? `sleeps ${r.sleeps}` : '', r?.beds || published?.beds || '', published?.view || r?.view || '',
-          r?.kitchen === 'full' ? 'full kitchen' : r?.kitchen === 'kitchenette' ? 'kitchenette' : ''].filter(Boolean).map(escapeHtml).join(' · ')}</p>
-          ${published?.description ? `<p class="small muted">“${escapeHtml(published.description)}”</p>` : ''}`;
-        photoSheet(r?.name || 'The room', pics, facts);
-        return;
-      }
-      const w = e.target.closest('[data-watch-room]');
-      if (w) { const { addWatchSheet } = await import('./deals.js'); addWatchSheet({ store, prefill: { stayId: stay.id, roomTypeId: w.dataset.watchRoom, nights: stay.minNights || 3 } }); }
-    });
-  }
-
-  // What is open here right now: posted deals for this place, then owner rentals live from
-  // VakayMood where it carries this resort. The rooms table above learns which sizes are open
-  // from the same fetch, so "the room packages reflect what is open" without a second request.
+  // What is open here right now: what the Desk has posted for this place, and what owners have
+  // open on VakayMood where it carries this resort — one list, cheapest a night first, the same
+  // card as the Stays tab. First, because it is what a member came for.
   {
     const resort = isTrip ? null : resortForStay(store, stay);
     const posted = store.liveDeals().filter(d => d.stayId === stay.id);
-    const liveLine = wrap.querySelector('#live-line');
     if (resort || posted.length) {
       const panel = el(`<section class="panel" style="margin-top:22px" id="open-now">
-        <div><p class="eyebrow">${icon('eye')}Open right now</p>
-          <h2 style="font-size:1.15rem;margin-top:6px">Open right now at ${escapeHtml(stay.name)}</h2>
-          <p class="small muted" style="margin-top:6px;max-width:62ch">${posted.length ? `${posted.length} posted by the Desk for this place, cheapest a night first. ` : ''}${resort
-            ? `Owner rentals open on VakayMood at the time shown, cheapest first${posted.length ? ', below' : ', plus anything the Desk has posted for this place'}. Not Interval — what Victor finds on Interval arrives on the board.`
-            : posted.length ? '' : 'What the Desk has posted for this place.'}</p></div>
-        <div id="open-posted" style="margin-top:12px"></div>
-        <div id="open-live"></div>
+        <div><p class="eyebrow">${icon('trend')}Open right now</p>
+          <h2 style="font-size:1.15rem;margin-top:6px" id="open-h"></h2>
+          <p class="small muted" id="open-sub" style="margin-top:6px;max-width:62ch"></p></div>
+        <div id="open-list" style="margin-top:12px"></div>
       </section>`);
       wrap.querySelector('#open').appendChild(panel);
-      if (posted.length) {
-        // Under the place's own heading: no strip, no place in the title, the cheapest three
-        // open and the rest behind one button. Nineteen full cards here was three screens of
-        // the same photograph before the first owner week.
-        dealList(panel.querySelector('#open-posted'), posted.slice().sort(byNight), { store, me, canEdit: store.canPostDeals(), first: 3, key: `stay:${stay.id}`, inPlace: true, noun: 'posted' });
-        // The card's "Gone" button is the Desk's; on the Deals page the board handles it, here
-        // the panel does, so it is never a button that does nothing.
-        panel.addEventListener('click', async (e) => {
-          const retire = e.target.closest('[data-act="retire"]');
-          if (!retire) return;
-          const id = retire.closest('[data-deal]')?.dataset.deal;
-          const yes = await confirmDialog({ title: 'Take it off the board?', confirmText: 'It is gone',
-            message: 'It stays in the record, but it comes off the board for everyone.' });
-          if (yes) { try { await store.retireDeal(id, me.id, 'Taken'); toast('Off the board.'); } catch (err) { toast(err.message, { kind: 'bad' }); } }
-        });
-      }
-      if (resort) {
-        panel.querySelector('#open-live').appendChild(liveSection(
-          { store, me, s, canPost: store.canPostDeals(), go },
-          { compact: true, slug: resort.slug, first: 6,
-            onLoaded: (byBeds, res) => {
-              openByBeds = byBeds;
-              drawRooms?.();
-              if (liveLine && res.cheapest) {
-                const at = res.generatedAt ? new Date(res.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                liveLine.innerHTML = `${icon('eye', { size: 14, cls: 'ico-muted' })} On VakayMood${res.fromCopy ? '' : ' right now'}: ${res.total.toLocaleString('en-US')} owner week${res.total === 1 ? '' : 's'} open here, asking from ${escapeHtml(fmtUsd2(res.cheapest.usdNightly))} a night${at ? ` · ${res.fromCopy ? 'the Circle’s copy, taken' : 'as of'} ${escapeHtml(at)}` : ''}.`;
-                liveLine.hidden = false;
-              }
-            } }));
-      }
+      let drafts = [];
+      let loading = !!resort;
+      const paint = (sub) => {
+        const slot = panel.querySelector('#open-list'); slot.replaceChildren();
+        const all = [...posted, ...drafts].sort(byNight);
+        panel.querySelector('#open-h').textContent = all.length ? `${all.length} open at ${stay.name}` : loading ? `Looking at what is open at ${stay.name}…` : `Nothing open at ${stay.name} right now`;
+        panel.querySelector('#open-sub').innerHTML = `${sub} Cheapest a night first; ask for one and Victor books it in your name.`;
+        if (all.length) dealList(slot, all, { store, me, canEdit: store.canPostDeals(), first: 4, key: `stay:${stay.id}`, inPlace: true, noun: 'open' });
+        else if (!loading) slot.innerHTML = `<p class="small muted">Put your dates in below and Victor prices them. <a href="#/watching">A watch</a> tells you the moment a week opens here.</p>`;
+      };
+      const load = () => {
+        if (!resort) { paint(''); return; }
+        loading = true; paint(`${icon('refresh', { size: 14, cls: 'ico-muted' })} Looking at what owners have open…`);
+        openWeeks(store, { slug: resort.slug }).then(res => { drafts = res.deals; loading = false; paint(asOfLine(res, stay.name)); });
+      };
+      load();
+      wireDealActions(panel, store, { drafts: () => drafts });
+      panel.addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-open"]')) load(); });
     }
   }
 
   if (isTrip) {
     const held = store.seatsHeld(stay.id);
     const roster = store.rosterFor(stay.id);
+    const unit = unitWord(stay), cr = stay.cruise || null;
     wrap.querySelector('#pricing').innerHTML = `
-      <h2>${escapeHtml(fmtPoints(seatPoints(stay, s)))} a seat</h2>
-      <p class="small muted" style="margin-top:4px">${escapeHtml(pointsUsd(seatPoints(stay, s), s.pointsPerDollar))} all-in for ${stay.nights} nights · the Circle’s 15% is inside it · guests pay ${escapeHtml(fmtUsd2(stay.guestCashUsd))} in cash</p>
+      <h2>${escapeHtml(fmtPoints(seatPoints(stay, s)))} a ${unit}</h2>
+      <p class="small muted" style="margin-top:4px">${escapeHtml(pointsUsd(seatPoints(stay, s), s.pointsPerDollar))} all-in for ${stay.nights} nights · the Circle’s 15% is inside it${stay.guestCashUsd ? ` · guests pay ${escapeHtml(fmtUsd2(stay.guestCashUsd))} in cash` : ''}</p>
       <ul class="ledger" style="margin-top:14px">
+        ${cr ? `<li><span class="what"><b>${escapeHtml(cr.ship || 'The ship')}</b>${cr.line ? `<span class="meta">${escapeHtml(cr.line)}</span>` : ''}</span><span class="delta"><b>${escapeHtml(cr.cabin || '')}</b></span></li>
+        ${cr.embark || (cr.ports || []).length ? `<li><span class="what"><b>${cr.embark ? `Sails from ${escapeHtml(cr.embark)}` : 'Ports'}</b>${(cr.ports || []).length ? `<span class="meta">${escapeHtml(cr.ports.join(' · '))}</span>` : ''}</span></li>` : ''}` : ''}
         <li><span class="what"><b>Dates</b></span><span class="delta"><b>${escapeHtml(fmtDay(stay.dates.from))} – ${escapeHtml(fmtDay(stay.dates.to))}</b></span></li>
-        <li><span class="what"><b>Seats</b><span class="meta">${roster.length ? roster.map(m => escapeHtml(m.name.split(' ')[0])).join(', ') + ' are in' : 'Nobody yet'}</span></span><span class="delta"><b>${held} / ${stay.seats}</b></span></li>
+        <li><span class="what"><b>${unit === 'cabin' ? 'Cabins' : 'Seats'}</b><span class="meta">${roster.length ? roster.map(m => escapeHtml(m.name.split(' ')[0])).join(', ') + ' are in' : 'Nobody yet'}</span></span><span class="delta"><b>${held} / ${stay.seats}</b></span></li>
         <li><span class="what"><b>Hold deadline</b><span class="meta">Victor releases the block after this</span></span><span class="delta"><b>${escapeHtml(fmtDay(stay.holdDeadline))}</b></span></li>
         ${(() => {
           const v = versusPublic(stay.retailUsd, seatPoints(stay, s) / s.pointsPerDollar);
@@ -488,7 +374,7 @@ export function stayDetail({ store, params, go }) {
             <span class="delta"><b>${escapeHtml(fmtUsd2(v.publicUsd))}</b></span></li>`;
         })()}
       </ul>
-      ${versusLine(versusPublic(stay.retailUsd, seatPoints(stay, s) / s.pointsPerDollar), 'a seat')}`;
+      ${versusLine(versusPublic(stay.retailUsd, seatPoints(stay, s) / s.pointsPerDollar), `a ${unit}`)}`;
   } else {
     // Defaults a member would plausibly want: a fortnight out, for this stay's own minimum.
     // The minimum matters — opening on two nights at a villa that only comes by the week would
@@ -545,35 +431,26 @@ export function stayDetail({ store, params, go }) {
     drawQuote();
     wrap.querySelector('#pricing').addEventListener('change', (e) => { if (e.target.id === 'q-in' || e.target.id === 'q-out') drawQuote(); });
   }
+  // Against your points, in one line under the price — not a panel, a ring and a notice all
+  // saying the same thing three ways.
   const per = unitPoints(stay, s);
-  const min = isTrip ? 1 : (stay.minNights || 1);
-  const canCover = Math.floor(avail / per);
-  wrap.querySelector('#afford').innerHTML = `
-    <p class="eyebrow">${icon('spark')}Against your points</p>
-    <div class="row" style="gap:14px;margin-top:12px;align-items:center"><span id="ring"></span>
-      <div class="small"><b>${escapeHtml(fmtPoints(avail))}</b> available<br>
-      <span class="muted">${canCover >= min ? `enough for ${Math.min(canCover, 14)} ${isTrip ? 'seat' : 'night'}${canCover === 1 ? '' : 's'}` : `${escapeHtml(fmtUsd2(Math.max(0, min * per - avail) / s.pointsPerDollar))} short of ${isTrip ? 'a seat' : `the ${min}-night minimum`}`}</span></div></div>
-    <p class="small muted" style="margin-top:14px">Short of it? Pay the difference as a top-up when Victor quotes you — at face value, since the Circle's share is already in the quote. Nothing is booked on credit.</p>
-    <p class="small muted" style="margin-top:8px">${escapeHtml(tierName(me.monthlyUsd))} can hold ${tier.holds} open request${tier.holds > 1 ? 's' : ''} and book ${tier.windowMonths} months ahead.</p>`;
-  wrap.querySelector('#ring').replaceChildren(ring({ total: min, filled: Math.min(min, canCover), size: 76, label: String(Math.min(canCover, 99)), sub: isTrip ? 'seats' : 'nights' }));
   {
-    // Nobody is turned away from a trip. If it is more than they hold, say plainly how
-    // long it takes at their level — and how long it would take at the others.
-    const price = isTrip ? seatPoints(stay, s) : fromPoints(stay, s) * (stay.minNights || 1);
+    const min = isTrip ? 1 : (stay.minNights || 1);
+    const canCover = Math.floor(avail / per);
+    const unit = unitWord(stay);
+    const price = per * min;
     const pace = store.monthsToAfford(price);
     const mineRow = pace?.find(x => x.mine);
-    if (mineRow && mineRow.months > 0) {
-      const faster = pace.filter(x => !x.mine && x.months < mineRow.months);
-      wrap.querySelector('#reach-note').innerHTML = `<div class="notice" style="margin-top:18px">
-        <b>About ${mineRow.months} more month${mineRow.months === 1 ? '' : 's'} at your level</b>
-        <p class="small">You hold ${escapeHtml(fmtPoints(Math.max(0, store.availablePoints(me.id))))} and ${isTrip ? 'a seat' : `${stay.minNights} night${stay.minNights > 1 ? 's' : ''}`} here is ${escapeHtml(fmtPoints(price))}. At ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))}.
-        ${faster.length ? `At ${faster.map(f => `${escapeHtml(fmtUsd2(f.tier.monthlyUsd))} it would be ${f.months}`).join(', and at ')}.` : ''}
-        You can ask for it now either way — Victor quotes it, and you accept when the points are there. Or ${escapeHtml(fmtUsd2((price - Math.max(0, store.availablePoints(me.id))) / s.pointsPerDollar))} as a cash top-up closes the gap.</p></div>`;
-    }
+    const gapUsd = fmtUsd2(Math.max(0, price - avail) / s.pointsPerDollar);
+    wrap.querySelector('#pricing').insertAdjacentHTML('beforeend', `<p class="small muted" style="margin-top:12px">${icon('spark', { size: 14, cls: 'ico-muted' })}
+      You hold <b class="num">${escapeHtml(fmtPoints(avail))}</b> — ${canCover >= min
+        ? `enough for ${Math.min(canCover, 14)} ${unit}${canCover === 1 ? '' : 's'} here.`
+        : `${escapeHtml(gapUsd)} short of ${isTrip ? `a ${unit}` : `the ${min}-night minimum`}${mineRow && mineRow.months > 0 ? `, about ${mineRow.months} more month${mineRow.months === 1 ? '' : 's'} at your level` : ''}. Ask anyway: Victor quotes it, and ${escapeHtml(gapUsd)} as a cash top-up closes the gap.`}
+      ${escapeHtml(tierName(me.monthlyUsd))} can hold ${tier.holds} open request${tier.holds > 1 ? 's' : ''} and book ${tier.windowMonths} months ahead.</p>`);
   }
   wrap.querySelector('#share').addEventListener('click', () => shareText({
-    title: stay.name, text: `${stay.name} — ${fmtPoints(per)} ${isTrip ? 'a seat' : 'a night'} through the ${VOCAB.clubName}.`,
-    url: `${location.origin}${location.pathname}#/${isTrip ? 'trips' : 'stays'}/${stay.id}`,
+    title: stay.name, text: `${stay.name} — ${fmtPoints(per)} a ${unitWord(stay)} through the ${VOCAB.clubName}.`,
+    url: `${location.origin}${location.pathname}#/${isCruise(stay) ? 'cruises' : isTrip ? 'trips' : 'stays'}/${stay.id}`,
   }));
   return wrap;
 }
@@ -583,6 +460,7 @@ export function book({ store, params, query = {}, go }) {
   const stay = store.stay(params.id);
   if (!stay) return el('<div class="wrap sec"><h1>Nothing to request</h1><p class="lede" style="margin-top:10px"><a href="#/stays">Back to the stays</a>.</p></div>');
   const isTrip = stay.kind === 'trip';
+  const unit = unitWord(stay);
   const avail = store.availablePoints(me.id);
   const tier = tierFor(s, me.monthlyUsd);
   const today = new Date(); const soon = new Date(today); soon.setMonth(soon.getMonth() + 2);
@@ -600,17 +478,12 @@ export function book({ store, params, query = {}, go }) {
   const datesPassed = !wantFrom && isDate(query.from);
   const startIn = wantFrom || d(soon);
   const startOut = wantTo || d(new Date(Date.parse(startIn) + (stay.minNights || 2) * 864e5));
-  const rooms = isTrip ? [] : (store.roomTypesFor?.(stay.id) || []);
-  const roomLineFor = (room) => (room ? `${room.name}, if it is free.` : '');
   // "Ask again" on a declined or lapsed request carries what the member said the first time —
   // guests, flexibility, the word, the switch — so the re-ask opens as they left it, not blank.
   const wantNote = typeof query.note === 'string' ? query.note.slice(0, 600).trim() : '';
   const wantGuests = Math.min(8, Math.max(1, Math.round(Number(query.guests)) || 2));
   const wantFlex = [0, 1, 3, 7].includes(Number(query.flex)) ? Number(query.flex) : 0;
   const wantShared = query.shared === '1';
-  let wantRoom = rooms.find(r => r.id === query.room) || null;
-  // The room rides in the note (the request has no room column), so a re-ask finds it there.
-  if (!wantRoom && wantNote) wantRoom = rooms.find(r => wantNote.startsWith(roomLineFor(r))) || null;
   // Where they were looking. A deal off the board knows its own listing; a week seen on
   // Interval or RedWeek came in through the same link. Victor gets this on the request so he
   // does not have to go and find it again.
@@ -626,12 +499,9 @@ export function book({ store, params, query = {}, go }) {
   // The request has no room column, and inventing one across two backends to carry a
   // preference is the wrong trade — the note is the field for exactly this, and it reaches
   // Victor with everything else. It is prefilled, not locked: it is still the member's message.
-  // `roomLine` is the exact string the app put in front of the note, kept so a room change swaps
-  // that string and nothing else — a regex here once ate whatever the member had typed on the line.
-  let roomLine = roomLineFor(wantRoom);
-  const openingNote = wantNote
-    ? (roomLine && !wantNote.startsWith(roomLine) ? `${roomLine} ${wantNote}` : wantNote)
-    : [roomLine, query.deal ? 'Asking against a deal from the board.' : ''].filter(Boolean).join(' ');
+  // The room, if one matters, is a line in the word for Victor — the field he reads. There is
+  // no room catalog to pick from any more; the member says it in their own words.
+  const openingNote = wantNote || (query.deal ? 'Asking against a deal from the board.' : '');
   const sla = tier.slaHours ?? s.slaHours;
   const minHold = s.minQuoteHours ?? 12;
   const wd = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short' });
@@ -642,16 +512,16 @@ export function book({ store, params, query = {}, go }) {
   // control here answers when touched, and every number is the mono face.
   const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:720px">
       <p class="eyebrow">${escapeHtml(stay.area)}${stay.country && stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}</p>
-      <h1>${isTrip ? 'Ask for a seat' : 'Have Victor book it'}</h1>
+      <h1>${isTrip ? `Ask for a ${unit}` : 'Have Victor book it'}</h1>
       <p class="lede" style="margin-top:10px">${escapeHtml(stay.name)}. You never book it yourself: Victor checks the room, prices it in points, and books it in your name once you say yes.</p>
       <form class="panel ask" id="form">
         ${photoFor(stay) ? '<div class="ask-shot" aria-hidden="true"></div>' : ''}
         ${isTrip ? `
         <div class="ask-block">
           <div class="ask-tile static"><span class="k">The trip</span><b>${escapeHtml(fmtDay(stay.dates.from))} – ${escapeHtml(fmtDay(stay.dates.to))}</b>
-            <em>${stay.nights} nights · ${escapeHtml(fmtPoints(seatPoints(stay, s)))} a seat · ${store.seatsHeld(stay.id)} of ${stay.seats} seats held</em></div>
-          <div class="ask-row"><span class="k">Seats</span>
-            <div class="stepper" data-for="seats" data-min="1" data-max="4"><button type="button" data-step="-1" aria-label="One seat fewer" disabled>−</button><output aria-live="polite">1</output><button type="button" data-step="1" aria-label="One seat more">+</button></div>
+            <em>${stay.nights} nights · ${escapeHtml(fmtPoints(seatPoints(stay, s)))} a ${unit} · ${store.seatsHeld(stay.id)} of ${stay.seats} ${unit}s held</em></div>
+          <div class="ask-row"><span class="k">${unit === 'cabin' ? 'Cabins' : 'Seats'}</span>
+            <div class="stepper" data-for="seats" data-min="1" data-max="4"><button type="button" data-step="-1" aria-label="One ${unit} fewer" disabled>−</button><output aria-live="polite">1</output><button type="button" data-step="1" aria-label="One ${unit} more">+</button></div>
             <input type="hidden" name="seats" value="1"></div>
         </div>`
         : `
@@ -672,15 +542,9 @@ export function book({ store, params, query = {}, go }) {
             <div class="chips" role="radiogroup" aria-label="Flexible by" data-for="flexDays">
               ${[[0, 'Exact dates'], [1, '±1 day'], [3, '±3 days'], [7, '±7 days']].map(([v, label]) => `<button type="button" class="chip-btn" data-v="${v}" aria-pressed="${wantFlex === v ? 'true' : 'false'}">${label}</button>`).join('')}
             </div><input type="hidden" name="flexDays" value="${wantFlex}"></div>
-          ${rooms.length ? `<div class="ask-row"><span class="k">Room</span>
-            <div class="chips" role="radiogroup" aria-label="Which room" data-for="room">
-              <button type="button" class="chip-btn" data-v="" aria-pressed="${wantRoom ? 'false' : 'true'}">Any room</button>
-              ${(wantRoom ? [wantRoom, ...rooms.filter(r => r.id !== wantRoom.id).slice(0, 3)] : rooms.slice(0, 4)).map(r => `<button type="button" class="chip-btn" data-v="${escapeHtml(r.id)}" aria-pressed="${wantRoom?.id === r.id ? 'true' : 'false'}">${escapeHtml(r.name)}</button>`).join('')}
-              ${rooms.length > 4 ? `<a class="chip-btn quiet" href="#/stays/${escapeHtml(stay.id)}">${rooms.length - 4} more on the stay page</a>` : ''}
-            </div><input type="hidden" name="room" value="${escapeHtml(wantRoom?.id || '')}"></div>` : ''}
         </div>`}
         <label class="field ask-note"><span>A word for Victor</span>
-          <textarea name="note" rows="2" placeholder="${isTrip ? 'Who is coming, anything he should know…' : 'Ground floor if you can, arriving late, celebrating something…'}">${escapeHtml(openingNote)}</textarea></label>
+          <textarea name="note" rows="2" placeholder="${isTrip ? 'Who is coming, anything he should know…' : 'A two-bedroom if there is one, ground floor, arriving late, celebrating something…'}">${escapeHtml(openingNote)}</textarea></label>
         <label class="ask-row ask-switch">
           <span><b>Let the Circle chip in</b><span class="small muted">Anyone can put their own points toward this one — a room you are sharing, or a gift. Theirs commit the moment they chip in and come back if it falls through.</span></span>
           <input type="checkbox" name="shared" role="switch" class="switch" aria-label="Let the Circle chip in"${wantShared ? ' checked' : ''}>
@@ -692,7 +556,7 @@ export function book({ store, params, query = {}, go }) {
           <li><b>You say yes</b><span>before it lapses · your points commit</span></li>
           <li><b>Victor books it</b><span>himself, in your name · then it is confirmed</span></li>
         </ol>
-        <button class="btn block" type="submit">${isTrip ? 'Ask for the seat' : 'Ask Victor to book it'}</button>
+        <button class="btn block" type="submit">${isTrip ? `Ask for the ${unit}` : 'Ask Victor to book it'}</button>
         <p class="small muted ask-foot">He answers within ${sla} hours${isTrip ? '' : ' with an all-in price'}. Nothing is committed until you say yes to it.
           You hold ${escapeHtml(fmtPoints(avail))} and can have ${tier.holds} open request${tier.holds > 1 ? 's' : ''} at a time as ${escapeHtml(tierName(me.monthlyUsd))}.${cameFrom ? ` <span class="nowrap">${icon('external', { size: 13, cls: 'ico-muted' })} Victor gets the ${escapeHtml(cameFrom.label)} link you were looking at.</span>` : ''}</p>
       </form>
@@ -718,15 +582,6 @@ export function book({ store, params, query = {}, go }) {
       const group = chipBtn.closest('.chips'); const inp = v(group.dataset.for);
       group.querySelectorAll('.chip-btn[data-v]').forEach(c => c.setAttribute('aria-pressed', String(c === chipBtn)));
       inp.value = chipBtn.dataset.v;
-      if (group.dataset.for === 'room') {
-        // The room rides in the note, the field Victor reads. Swap the line the app wrote for the
-        // new one and leave the member's own words exactly as they typed them.
-        const room = rooms.find(r => r.id === chipBtn.dataset.v);
-        const note = v('note');
-        const rest = (roomLine && note.value.startsWith(roomLine) ? note.value.slice(roomLine.length) : note.value).trim();
-        roomLine = roomLineFor(room);
-        note.value = roomLine ? `${roomLine}${rest ? ` ${rest}` : ''}` : rest;
-      }
       form.dispatchEvent(new Event('input', { bubbles: true }));
     }
     // A date tile is a transparent date input stretched over a label, so every tap lands on the

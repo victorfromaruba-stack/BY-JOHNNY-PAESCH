@@ -16,7 +16,7 @@ export const VOCAB = {
   member: 'Insider', members: 'Insiders',
   points: 'points', point: 'point', glyph: '✦',
   treasurer: 'the Banker', treasurerTitle: 'Banker of the Circle',
-  planner: 'Founder & Curator', comms: 'Voice of the Circle', desk: 'the Desk',
+  planner: 'Founder & Curator', comms: 'Founder & Voice of the Circle', desk: 'the Desk',
   contribution: 'contribution',
   share: 'the Circle’s share',
   reserve: 'the Reserve', operating: 'Operating',

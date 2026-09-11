@@ -479,6 +479,9 @@ export class Store {
   get stays() { return this.state.stays; }
   arubaStays() { return this.state.stays.filter(s => s.kind === 'aruba' && s.active); }
   trips() { return this.state.stays.filter(s => s.kind === 'trip' && s.active); }
+  /** Cruises are trips with a ship on the record; land trips are the rest. */
+  cruises() { return this.trips().filter(s => !!s.cruise); }
+  landTrips() { return this.trips().filter(s => !s.cruise); }
   contribution(id) { return this.state.contributions.find(c => c.id === id) || null; }
   /** Where to find a transfer screenshot. Here it is on the row; Supabase signs a URL. */
   async proofUrl(_path) { return null; }

@@ -43,6 +43,8 @@ const AWAY = {
  */
 export function sceneFor(stay) {
   if (!stay) return 'lowrise';
+  // A cruise is the ship, wherever it sails from; a trip is the place it goes.
+  if (stay.kind === 'trip' && stay.cruise) return 'cruise';
   if (stay.kind === 'trip') return `away:${stay.country}`;
   const f = (stay.features || []).join(' ').toLowerCase();
   const name = `${stay.name} ${stay.vibe || ''}`.toLowerCase();
@@ -247,6 +249,23 @@ function away(country, rand, ink, horizon) {
       <path d="M60 176q18-10 36 0"/><path d="M544 168q18-10 36 0"/></g>`;
 }
 
+/** A cruise: the ship itself, long and low on the water at dusk, one silhouette. */
+const CRUISE = { sky: ['#2F5E86', '#D3E2EB'], sea: ['#0B3A52', '#1F6E85'], sun: '#EAF3F6', ink: '#0A1F2C', built: '#0A1F2C' };
+function ship(rand, ink, horizon) {
+  const y = horizon + 2;
+  const x0 = 110 + rand() * 30, x1 = x0 + 410;
+  const hull = `<path d="M${n1(x0)} ${n1(y - 14)}L${n1(x1 - 34)} ${n1(y - 14)}Q${n1(x1 + 8)} ${n1(y - 13)} ${n1(x1)} ${n1(y + 2)}L${n1(x1 - 10)} ${n1(y + 24)}H${n1(x0 + 26)}L${n1(x0 - 12)} ${n1(y + 2)}Z" fill="${ink}"/>`;
+  const decks = `<g fill="${ink}"><rect x="${n1(x0 + 34)}" y="${n1(y - 48)}" width="306" height="36" rx="7"/>
+    <rect x="${n1(x0 + 66)}" y="${n1(y - 70)}" width="236" height="26" rx="7"/>
+    <rect x="${n1(x0 + 106)}" y="${n1(y - 86)}" width="150" height="20" rx="6"/>
+    <path d="M${n1(x0 + 236)} ${n1(y - 86)}h26l7-24h-27Z"/></g>`;
+  let win = '';
+  for (let i = 0; i < 22; i++) win += `<rect x="${n1(x0 + 46 + i * 13)}" y="${n1(y - 39)}" width="6" height="4" rx="1" fill="#FFE9B8" opacity=".85"/>`;
+  for (let i = 0; i < 16; i++) win += `<rect x="${n1(x0 + 80 + i * 13)}" y="${n1(y - 62)}" width="6" height="4" rx="1" fill="#FFE9B8" opacity=".85"/>`;
+  const wake = `<path d="M${n1(x0 - 48)} ${n1(y + 16)}q46 9 100 4" stroke="#fff" stroke-width="2" fill="none" opacity=".35" stroke-linecap="round"/>`;
+  return hull + decks + win + wake;
+}
+
 /**
  * The picture for one stay or trip, as an SVG string. Deterministic from the id, so the
  * same place is the same picture on every device, and nothing is fetched.
@@ -256,7 +275,7 @@ export function sceneSvg(stay, { w = W, h = H } = {}) {
   const rand = rng(hash(key));
   const scene = sceneFor(stay);
   const isAway = scene.startsWith('away:');
-  const pal = isAway ? (AWAY[scene.slice(5)] || AWAY.Japan) : SKIES[Math.floor(rand() * SKIES.length)];
+  const pal = scene === 'cruise' ? CRUISE : isAway ? (AWAY[scene.slice(5)] || AWAY.Japan) : SKIES[Math.floor(rand() * SKIES.length)];
   const uid = `a${(hash(key) % 1e6).toString(36)}`;
   const horizon = 118 + rand() * 10;
   const ink = pal.ink;
@@ -289,6 +308,7 @@ export function sceneSvg(stay, { w = W, h = H } = {}) {
   else if (scene === 'town') mid = town(rand, built, horizon);
   else if (scene === 'wild') mid = wild(rand, built, horizon);
   else if (scene === 'overwater') mid = overwater(rand, built, horizon);
+  else if (scene === 'cruise') mid = ship(rand, built, horizon);
   else if (isAway) mid = away(scene.slice(5), rand, built, horizon);
 
   // Lit windows against a dark building, glazed dark against a pale one.

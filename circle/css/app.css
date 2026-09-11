@@ -23,7 +23,7 @@ a { color: inherit; text-decoration-color: var(--hairline); text-underline-offse
     text-decoration-thickness: 1px; }
 a:hover { text-decoration-color: currentColor; }
 /* A card is a link in its entirety; nothing inside it needs to advertise that separately. */
-.stay-card, .stay-card a, .crew-card, .deal a, .panel > a.stat, .job-list a, .live-card a.stay-ref,
+.stay-card, .stay-card a, .crew-card, .deal a, .panel > a.stat, .job-list a,
 a.panel, a.stat, .lad-v a, .faces a, .rank-crest a { text-decoration: none; }
 .stay-card h3, .stay-card .where, .stay-card .price, .stay-card .flags, .stay-card .sourced,
 .stay-card .body span { text-decoration: none; }
@@ -527,14 +527,6 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 @media (prefers-reduced-motion: reduce) { .goal-bar > span { transition: none; } }
 
 /* The room table: dense, but every row still readable on a phone. */
-.rooms-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-.rooms-table th { text-align: left; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--ink-3); font-weight: 600; padding: 0 12px 8px 0; white-space: nowrap; }
-.rooms-table th.num, .rooms-table td.num { text-align: right; }
-.rooms-table td { padding: 12px 12px 12px 0; border-top: 1px solid var(--hairline-soft); vertical-align: top; }
-.rooms-table td:last-child, .rooms-table th:last-child { padding-right: 0; }
-.rooms-table .flags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-.rooms-table .tag { font-size: .68rem; padding: 2px 7px; }
 
 /* Deal cards: the strip runs along the top like a stay card, but shorter. */
 .deal { padding: 0; overflow: hidden; }
@@ -544,52 +536,7 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 .deal.matched { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
 .deal.in-place .deal-body { padding: 14px 16px 16px; }
 .deal.in-place :is(h3, h4) { overflow-wrap: anywhere; }
-/* The board by place: a small photograph and the name once, then the weeks under it. */
-.place-group + .place-group { margin-top: 26px; }
-/* The head stays put while the weeks under it scroll — nineteen cards with no place on them
-   need the name in view — and sits under the top bar, which is sticky at 61px. */
-.place-head { display: flex; align-items: center; gap: 12px; padding: 8px 0 10px; margin-bottom: 4px;
-  position: sticky; top: 61px; z-index: 2; background: var(--ground); }
-.place-thumb { flex: none; width: 64px; height: 48px; border-radius: 10px; overflow: hidden; background: var(--well); display: block; }
-.place-thumb .scene, .place-thumb img { width: 100%; height: 100%; display: block; object-fit: cover; }
-.place-thumb .scene svg { width: 100%; height: 100%; }
-.place-thumb .plate-area { display: none; }   /* the plate's area name does not fit 64px; the colour is enough */
-.place-head h3 a { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 2px; }
-.place-head h3 a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .list-more:not(:empty) { margin-top: 10px; }
-.rooms-table td .row.nowrap { flex-wrap: nowrap; }
-.rooms-table { min-width: 620px; }
-/* Below that, it stops being a table. Five columns in 620px inside a 322px card meant swiping
-   a hidden scroller sideways to reach the price — on the screen where somebody is choosing a
-   room. Each room becomes a block instead: name, then the three facts on labelled lines, then
-   the two buttons at full reach. */
-@media (max-width: 620px) {
-  .rooms-table { min-width: 0; display: block; font-size: .88rem; }
-  .rooms-table thead { display: none; }
-  .rooms-table tbody, .rooms-table tr { display: block; }
-  .rooms-table tr { padding: 14px 0 16px; border-top: 1px solid var(--hairline-soft); }
-  .rooms-table tr:first-child { border-top: 0; padding-top: 4px; }
-  .rooms-table td { display: block; padding: 2px 0; border: 0; }
-  /* Size and sleeps share a line, and so do the three parts of the price. Each on its own
-     labelled row cost 460px per room — thirteen rooms was six thousand pixels, seven of the
-     page's ten screens, and the Hilton has twenty-three. */
-  .rooms-table td[data-k] { display: inline; margin-right: 14px; }
-  .rooms-table td[data-k]::before { content: attr(data-k); font-size: .68rem; letter-spacing: .08em;
-    text-transform: uppercase; color: var(--ink-3); margin-right: 5px; }
-  .rooms-table td[data-k] > span { display: inline; }
-  .rooms-table td[data-k] > span + span::before { content: " · "; color: var(--ink-3); }
-  /* td.num carries white-space:nowrap so a figure never breaks mid-number. In a column that is
-     right; on one wrapped line holding three of them it ran 370px wide inside a 322px card and
-     pushed the last one off the edge. Here the line has to wrap — and a number cannot break
-     anyway, having no space in it, so nothing is at risk. The one part that does contain
-     spaces, "$139.69 short of 7", is a sentence and should wrap like one. */
-  .rooms-table td.num { display: block; margin: 6px 0 0; text-align: left; white-space: normal; }
-  .rooms-table td:first-child::before, .rooms-table td:last-child::before { content: none; }
-  .rooms-table td:last-child { margin-top: 10px; }
-  /* !important because the justify-content is written inline on the div, and an inline style
-     beats a stylesheet every time — which is why this rule has never once applied. */
-  .rooms-table td:last-child .row { justify-content: flex-start !important; }
-}
 
 /* Nav badges: how many deals are waiting that you asked for. */
 .nav-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px;
@@ -600,14 +547,6 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
   background: var(--good); box-shadow: 0 0 0 2px var(--surface); }
 .empty .ico { display: block; }
 
-/* Live listings: a card shouts when the owner's ask beats our own rate, and shouts differently
-   when it answers something this member is watching for. The second ring is heavier so a card
-   that does both is still readable as "you asked for this". */
-.live-card.beats { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
-.live-card.matched { border-color: var(--good); box-shadow: inset 0 0 0 2px var(--good); }
-.live-card h3 { overflow-wrap: anywhere; }
-/* The line under a room on a stay page: an owner has that size open right now. */
-.rooms-table .open-line { display: inline-block; margin-top: 6px; color: var(--good-text); }
 
 /* The place: what a property publishes about itself, and the pictures it publishes. */
 .facts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .9rem; }
@@ -661,37 +600,6 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
 .book-now { font-size: clamp(1.7rem, 6.4vw, 2.3rem); line-height: 1.04; margin-top: 10px; }
 @media (min-width: 900px) { .book-now br { display: none; } }
 
-/* The filter bar. It was five bold words and a select in a row, which read as a sentence
-   rather than as controls — you could not tell it was a thing you could touch. Two groups now:
-   the four that narrow (where, price, size, order) as labelled selects, and the five on/off
-   ones as chips that plainly look pressed or not. */
-.filterbar { display: grid; gap: 10px; margin-top: 6px; }
-.fgroup { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
-.fsel { display: grid; gap: 4px; min-width: 0; }
-.fsel > span { font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); padding-left: 2px; }
-.fsel select { appearance: none; -webkit-appearance: none; min-height: 44px;
-  border: 1px solid var(--hairline); border-radius: var(--r-pill); background: var(--surface);
-  padding: 9px 32px 9px 14px; font-size: .86rem; font-weight: 500; color: var(--ink); cursor: pointer;
-  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
-  background-position: right 15px center, right 10px center; background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat; }
-.fsel select:hover { border-color: var(--ink-3); }
-.fsel select:focus-visible { outline: 2px solid var(--good); outline-offset: 1px; }
-/* A chip has to look like something you can press BEFORE you press it. These were .btn.quiet —
-   transparent, borderless — so the row read as five bold words in a sentence and nobody could
-   tell it was a control. Resting: a hairline and the card surface. Pressed: filled ink, which
-   is unmistakable at a glance rather than one shade different. */
-.fgroup .btn.quiet { border-color: var(--hairline); background: var(--surface); color: var(--ink-2);
-  font-weight: 500; }
-.fgroup .btn.quiet:hover { border-color: var(--ink-3); color: var(--ink); background: var(--surface); }
-.fgroup .btn[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink);
-  font-weight: 600; }
-.fgroup .btn[aria-pressed="true"]:hover { background: var(--ink); color: var(--on-ink); }
-@media (max-width: 560px) {
-  .fgroup { gap: 6px; }
-  .fsel select { padding: 8px 28px 8px 11px; font-size: .8rem; }
-  .fgroup .btn.sm { font-size: .78rem; padding: 6px 11px; }
-}
 
 /* Us against the published rate. Three states, and one of them says we are dearer this week —
    which is the reason this is a styled sentence and not a green badge: a comparison that can
@@ -905,27 +813,6 @@ button.badge-card:hover { border-color: var(--ink-3); }
 .fineprint > summary:hover { color: var(--ink); }
 .fineprint > p { max-width: 62ch; margin-bottom: 6px; }
 
-/* The filter bar on a phone: one control, not four rows.
-   244px of selects and chips stood between the member and the hotels — 29% of the screen. It
-   collapses below the breakpoint and stays inline above it, where the room is free. The button
-   carries the active count, because a shut bar that silently narrows the list is how somebody
-   concludes half the island has disappeared. */
-#ftoggle { margin-bottom: 12px; }
-@media (max-width: 779px) {
-  /* Scoped to the outer container by id: draw() renders another .filterbar INSIDE this one, so
-     collapsing on the class alone hid the inner bar too and opening the toggle revealed an
-     empty box. */
-  #filters { display: none; }
-  #filters.open { display: block; }
-}
-@media (min-width: 780px) { #ftoggle { display: none; } }
-/* The live section on Deals has the same shape: seven controls that would be four rows on a
-   phone, behind one button that says how many are set. */
-@media (max-width: 779px) {
-  #live-filters { display: none; }
-  #live-filters.open { display: flex; }
-}
-@media (min-width: 780px) { #live-ftoggle { display: none; } }
 
 /* The hero video sits over the still that already painted, and only becomes visible once it can
    actually play. Fading in over its own first frame means the swap is invisible — the water

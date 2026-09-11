@@ -2,8 +2,8 @@
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
 import { execFileSync } from 'node:child_process';
 export const LOCAL = `export const CONFIG = { backend: 'local', supabaseUrl: '', supabaseKey: '' };`;
-export const ROUTES = ['/', '/home', '/stays', '/stays/stay_surfclub', '/trips', '/trips/trip_japan',
-  '/deals', '/requests', '/pay', '/ledger', '/pool', '/circle', '/crews', '/watching',
+export const ROUTES = ['/', '/home', '/stays', '/stays/stay_surfclub', '/cruises', '/cruises/trip_cruise_abc', '/trips/trip_japan',
+  '/requests', '/pay', '/ledger', '/pool', '/circle', '/crews', '/watching',
   '/card', '/profile', '/rules', '/desk', '/bank', '/settings', '/sign-in'];
 /** Open the app signed in as a member with the given role ('member' | 'planner' | 'admin'). */
 export async function open({ width = 1280, height = 900, role = 'admin', scale = 1 } = {}) {

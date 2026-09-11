@@ -8,7 +8,6 @@
 
 import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay } from '../core/money.js';
 import { ARUBA_STAYS, WORLD_TRIPS } from './stays.js';
-import { ROOM_TYPES } from './rooms.js';
 import { VOCAB, initialsOf } from '../core/vocab.js';
 
 function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
@@ -24,7 +23,7 @@ const BANKS = ['Aruba Bank', 'Banco di Caribe', 'CMB', 'RBC Royal Bank'];
 // 'pendingNow' (September transfer still waiting for the Banker), 'paused', 'lapsed'
 const PEOPLE = [
   { id: 'mem_victor', name: 'Victor Rosario', roles: ['planner', 'admin'], badgePins: ['founder_victor','founding','planner'], about: 'If it is bookable, I have already asked what it costs.', accent: 'flight', tier: 200, since: '2026-01', hue: 208, home: 'Noord', title: 'Founder & Curator', founding: true, story: ['pendingNow'], dream: 'stay_ritz' },
-  { id: 'mem_ian', name: 'Ian Hekman', roles: ['comms'], tier: 150, since: '2026-01', hue: 32, home: 'Oranjestad', title: 'Voice of the Circle', founding: true, dream: 'stay_renaissance' },
+  { id: 'mem_ian', name: 'Ian Hekman', roles: ['comms'], badgePins: ['founder_ian'], tier: 150, since: '2026-01', hue: 32, home: 'Oranjestad', title: 'Founder & Voice of the Circle', founding: true, dream: 'stay_renaissance' },
   { id: 'mem_vishnu', name: 'Vishnu', roles: ['treasurer'], tier: 150, since: '2026-01', hue: 152, home: 'Paradera', title: 'Banker of the Circle', founding: true, dream: 'stay_divi' },
   { id: 'mem_sasha', name: 'Sasha Wever', roles: ['member'], badgePins: ['saltwater','twelve'], about: 'In the sea before breakfast, every trip.', accent: 'good', tier: 200, since: '2026-01', hue: 268, home: 'Malmok', founding: true, standingOrder: true, showOnRollcall: true, dream: 'stay_oceanvillas' },
   { id: 'mem_daniela', name: 'Daniela Croes', roles: ['member'], tier: 150, since: '2026-01', hue: 338, home: 'Santa Cruz', founding: true, story: ['paused', 'pendingNow'], dream: 'stay_manchebo' },
@@ -146,7 +145,9 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
   const stays = [...ARUBA_STAYS.map(s => ({ ...s })), ...WORLD_TRIPS.map(t => ({ ...t }))]
     .map(s => ({ ...s, active: s.draft ? false : true, createdAt: '2026-01-10T12:00:00Z', curatedBy: 'mem_victor' }));
   const stayById = Object.fromEntries(stays.map(s => [s.id, s]));
-  const roomTypes = ROOM_TYPES.map(r => ({ ...r, active: true }));
+  // No room catalog any more: a member says the room they want in their own words, and the
+  // Desk prices the nights. The table stays in the schema for old room-pinned watches.
+  const roomTypes = [];
 
   // --- requests -------------------------------------------------------------
   const add = (r) => { redemptions.push(r); log(r.memberId, 'redemption.request', 'redemption', r.id, { stay: stayById[r.stayId]?.name }, r.requestedAt); return r; };
@@ -295,7 +296,7 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
   // The badge catalog mirrors what is in the database, so the preview shows the real thing.
   const badgeCatalog = [
     { key: 'founder_victor', name: 'The Founder', blurb: 'Started the Circle and books every room in it.', kind: 'founder', pricePoints: null, mark: 'crown', sort: 1, active: true },
-    { key: 'founder_ian', name: 'The Voice', blurb: 'Wrote the first note and every one since.', kind: 'founder', pricePoints: null, mark: 'quill', sort: 2, active: true },
+    { key: 'founder_ian', name: 'Founder & Voice', blurb: 'Founded the Circle alongside Victor, and wrote the first note and every one since.', kind: 'founder', pricePoints: null, mark: 'quill', sort: 2, active: true },
     { key: 'founder_vishnu', name: 'The Banker', blurb: 'Holds the money and has never once been out by a cent.', kind: 'founder', pricePoints: null, mark: 'vault', sort: 3, active: true },
     { key: 'founding', name: 'Founding Insider', blurb: 'One of the first twenty seats.', kind: 'earned', pricePoints: null, mark: 'star', sort: 10, active: true },
     { key: 'twelve', name: 'Twelve Straight', blurb: 'Twelve consecutive contributions.', kind: 'earned', pricePoints: null, mark: 'twelve', sort: 12, active: true },

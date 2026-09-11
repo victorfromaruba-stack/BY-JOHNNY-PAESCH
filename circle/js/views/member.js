@@ -207,11 +207,10 @@ export function home({ store, go }) {
   // A deal that answers something you asked for goes above everything else: these go fast.
   for (const m of store.matchesForMember(me.id).slice(0, 3)) {
     const st = store.stay(m.deal.stayId);
-    const room = store.roomType(m.deal.roomTypeId);
     blocks.push(`<div class="notice good"><b>${icon('bellRing', { size: 16 })} ${escapeHtml(st?.name || 'A place you asked for')} came free</b>
-      <p class="small">${room ? `${escapeHtml(room.name)} · ` : ''}${m.deal.nights} nights from ${escapeHtml(fmtDay(m.deal.from))} · ${escapeHtml(fmtPoints(m.deal.pointsTotal))}.
+      <p class="small">${m.deal.nights} nights from ${escapeHtml(fmtDay(m.deal.from))} · ${escapeHtml(fmtPoints(m.deal.pointsTotal))}.
       ${m.affordable ? 'You have the points.' : `You are ${escapeHtml(fmtPoints(m.short))} short — ask anyway and close it with a top-up.`}</p>
-      <p style="margin-top:8px"><a class="btn sm" href="#/deals">${icon('eye', { size: 15 })}Look at it</a></p></div>`);
+      <p style="margin-top:8px"><a class="btn sm" href="#/stays">${icon('eye', { size: 15 })}Look at it</a></p></div>`);
   }
   if (status === 'due') blocks.push(`<div class="notice warn"><b>Your ${escapeHtml(fmtMonth(month))} contribution is due</b>
       <p class="small">${escapeHtml(fmtUsd2(me.monthlyUsd))} to the Reserve with reference <span class="num">${escapeHtml(refFor(me, month))}</span>, then tap “I sent it”.</p>
@@ -342,7 +341,7 @@ export async function goalSheet({ store }) {
         <label class="field"><span>Where</span>
           <select name="stayId" required>
             <optgroup label="On the island">${stays.map(x => `<option value="${escapeHtml(x.id)}"${x.id === current.stayId ? ' selected' : ''}>${escapeHtml(x.name)}${x.house ? ' · where we stay' : ''}</option>`).join('')}</optgroup>
-            <optgroup label="Trips">${trips.map(x => `<option value="${escapeHtml(x.id)}"${x.id === current.stayId ? ' selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}</optgroup>
+            <optgroup label="Cruises and trips">${trips.map(x => `<option value="${escapeHtml(x.id)}"${x.id === current.stayId ? ' selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}</optgroup>
           </select></label>
         <div class="grid g2" id="stay-only">
           <label class="field"><span>Nights</span><input name="nights" type="number" min="1" max="30" value="${current.nights || 3}" inputmode="numeric"></label>

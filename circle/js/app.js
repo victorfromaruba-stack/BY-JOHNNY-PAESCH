@@ -27,16 +27,19 @@ const ROUTES = [
   { path: '/ledger/:month', view: member.ledger, title: 'Statement', auth: true },
   { path: '/card', view: member.card, title: 'Your card', auth: true },
   { path: '/profile', view: member.profile, title: 'Your profile', auth: true },
-  { path: '/stays', view: catalog.stays, title: 'Stays in Aruba', auth: true },
+  { path: '/stays', view: catalog.stays, title: 'Stays', auth: true },
   { path: '/stays/:id', view: catalog.stayDetail, title: 'Stay', auth: true },
-  { path: '/trips', view: catalog.trips, title: 'Trips', auth: true },
+  { path: '/cruises', view: catalog.cruises, title: 'Cruises', auth: true },
+  { path: '/cruises/:id', view: catalog.stayDetail, title: 'Cruise', auth: true },
+  // Trips are on the Cruises tab now; old links and bookmarks still land somewhere.
+  { path: '/trips', redirect: '/cruises', title: 'Cruises' },
   { path: '/trips/:id', view: catalog.stayDetail, title: 'Trip', auth: true },
   { path: '/book/:id', view: catalog.book, title: 'Request', auth: true },
   { path: '/requests', view: catalog.requests, title: 'Your requests', auth: true },
   { path: '/requests/:id', view: catalog.requestDetail, title: 'Request', auth: true },
-  { path: '/deals', view: dealsView.deals, title: 'Deals', auth: true },
-  // "What is open" is a section of Deals now. Old links and bookmarks still land somewhere.
-  { path: '/live', redirect: '/deals', title: 'Deals' },
+  // Deals ARE the Stays tab now — every live one, cheapest first. Old links still land somewhere.
+  { path: '/deals', redirect: '/stays', title: 'Stays' },
+  { path: '/live', redirect: '/stays', title: 'Stays' },
   { path: '/watching', view: dealsView.watching, title: 'What you are watching', auth: true },
   { path: '/crews', view: crewsView.crews, title: 'Your crews', auth: true },
   { path: '/crews/:id', view: crewsView.crewDetail, title: 'Crew', auth: true },
@@ -264,8 +267,8 @@ function toggleTheme() {
 // The five that live in the thumb bar. Everything else is in the top bar.
 const NAV = [
   { path: '/home', label: 'Home', icon: 'home' },
-  { path: '/stays', label: 'Stays', icon: 'bed' },
-  { path: '/deals', label: 'Deals', icon: 'zap', badge: 'deals' },
+  { path: '/stays', label: 'Stays', icon: 'bed', badge: 'deals' },
+  { path: '/cruises', label: 'Cruises', icon: 'compass' },
   { path: '/crews', label: 'Crews', icon: 'users', badge: 'crews' },
   { path: '/circle', label: 'Circle', icon: 'globe' },
 ];
@@ -282,8 +285,8 @@ function updateChrome(current) {
   // else and happen to have jobs on top, so their jobs live inside the member's own screens —
   // on Home when something is waiting, and always under their profile — rather than as three
   // extra tabs that only three people can open.
-  const main = me ? [{ path: '/home', label: 'Home' }, { path: '/stays', label: 'Stays' }, { path: '/trips', label: 'Trips' },
-                     { path: '/deals', label: 'Deals', badge: unseen }, { path: '/pay', label: 'Send' },
+  const main = me ? [{ path: '/home', label: 'Home' }, { path: '/stays', label: 'Stays', badge: unseen }, { path: '/cruises', label: 'Cruises' },
+                     { path: '/pay', label: 'Send' },
                      { path: '/circle', label: 'Circle' }, { path: '/crews', label: 'Crews' }, { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }]
                   : [{ path: '/rules', label: 'How it works' }];
   tabs.innerHTML = main.map(n => `<a href="#${n.path}"${path === n.path ? ' aria-current="page"' : ''}>${escapeHtml(n.label)}${

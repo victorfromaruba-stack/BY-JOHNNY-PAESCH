@@ -18,11 +18,11 @@ next door as well), and the Renaissance Wind Creek in Oranjestad (whose beach is
 forty-acre private island reached by water taxi from the lobby). Planners can move the badge
 from the Desk — it is a checkbox on every stay.
 
-**The trips this cycle** go to three countries: the Dominican Republic (seven nights, two in
-the Zona Colonial and five on the Samaná peninsula in whale season), Mexico (nine nights
-across Mexico City and Oaxaca), and Japan (ten nights in Kyoto and Tokyo, which is honestly
-fourteen days door to door — there is no same-day connection from Aruba). Nobody is shut out
-of any of them; the level only changes how fast the points build.
+**Cruises and trips** are the other tab. Interval International trades a deposited week for
+a cabin, and now and then sells a cabin cheap; Victor posts the sailings worth it, a cabin is
+asked for and booked exactly the way a stay is, and the land trips this cycle (the Dominican
+Republic in whale season, Mexico City and Oaxaca, Kyoto and Tokyo) sit under them. Nobody is
+shut out of any of them; the level only changes how fast the points build.
 
 **What a level is for.** No level shuts anyone out of anything: every Insider can ask for
 every stay and every trip. What the level changes is how fast the points build — and that
@@ -120,7 +120,7 @@ privilege, so write the row:
 ```sql
 insert into members (name, email, monthly_usd, roles, status, title, founding, card_code)
 values
-  ('Ian Hekman', 'ian@example.aw',    150, '{comms}'::member_role[],     'invited', 'Voice of the Circle',  true,
+  ('Ian Hekman', 'ian@example.aw',    150, '{comms}'::member_role[],     'invited', 'Founder & Voice of the Circle', true,
    upper(substr(md5(random()::text), 1, 6))),
   ('Vishnu',     'vishnu@example.aw', 150, '{treasurer}'::member_role[], 'invited', 'Banker of the Circle', true,
    upper(substr(md5(random()::text), 1, 6)))
@@ -161,15 +161,17 @@ across fourteen resorts, including **Marriott's Aruba Surf Club** (roughly 1,700
 **Marriott's Aruba Ocean Club** and the **Renaissance Wind Creek** — three of our four. The
 Divi is all-inclusive rather than a timeshare, so owner weeks for it do not exist.
 
-**Open right now** is the third section of **Deals** (`#/deals`; the old `#/live` address
-redirects there) and the "Open right now at …" panel on every stay page VakayMood carries,
-where each room row also says when an owner has that size open. It used to be a screen of its
-own, ten tabs along, that nobody opened while Deals sat empty. It stays an extra, not a
-destination, because the Circle's model is that **members never book anything themselves**.
-They put points in, alone or pooled with others, and Victor books the room in their name.
-That is the whole product, and a feed of clickable outside inventory would quietly route
-members around the club and around the 15%. The copy calls it what it is — owner rentals on
-VakayMood, never "Interval" and never "available".
+What owners have open is part of **Stays** (`#/stays`; the old `#/deals` and `#/live`
+addresses redirect there). There is no Deals tab any more: the Stays tab *is* the deals —
+every live one, what Victor and Ian posted and what owners have open at the places we stay,
+in one list, cheapest a night first, with one button. The stay page shows the same list for
+that one place. It is a list of things to ask for, not a feed to click through, because the
+Circle's model is that **members never book anything themselves**. They put points in, alone
+or pooled with others, and Victor books the room in their name. That is the whole product,
+and a feed of clickable outside inventory would quietly route members around the club and
+around the 15%. The copy calls it what it is — owner rentals on VakayMood, never "Interval"
+and never "available" — and an owner's week is priced at that owner's asking price plus the
+Circle's share, never against a room we do not have on file.
 
 So the outbound "go and book it" link is **planner-and-comms only**. A member sees the week,
 sees what it costs in points, and gets one button: *Ask the Circle for it*. Verified by
@@ -249,20 +251,14 @@ The email worker POSTs JSON — `{property, roomType, from, to, points | usd, so
 
 ## The rooms
 
-Every property in the catalog now carries its real room types: 184 of them across the sixteen
-properties where an operator publishes the detail — name, square feet and metres, occupancy,
-bed configuration, bathrooms, whether there is no kitchen, a kitchenette or a full one, the
-view grade and what each type has that the others do not.
-
-Pricing works off one number per property. `rateFactor` says what a type costs relative to
-the room the property's seasonal rate is modelled on, so the Surf Club's studio is 0.39 and
-its oceanfront two-bedroom is 1.29 of the same rate. Negotiate a better rate in the Desk and
-every room in the property moves with it. A row marked *inferred* is one nobody publishes a
-size for; *aggregator* means it came from a booking site rather than the operator.
-
-Seven of the twenty-three Aruba properties have no room rows yet — Radisson Blu, Holiday Inn,
-Courtyard, Boardwalk, Amsterdam Manor, voco Surfside and Eagle Aruba. The app handles that:
-it simply does not offer the choice there.
+There is no room catalog. There was one — 189 room types across sixteen properties, with
+square feet, bed configurations and a rate factor each — and it was the thing Victor meant by
+"a million rooms": seven screens of table on a stay page, room chips on the ask, room selects
+on every sheet, and none of it ever changed what anyone was charged. A member now says the
+room they want in their own words on the ask ("a two-bedroom if there is one"), the property's
+own published room list sits under **About the place** for reference, and Victor prices the
+nights. The `room_types` table stays in the schema, empty, so an old room-pinned watch still
+resolves.
 
 ## Money that never went through the queue
 
@@ -429,11 +425,14 @@ The demo is deliberately self-contained. To run this for real:
 
 Everything the club charges is editable, and always in both units:
 
-- **Desk → Stays & trips** — each property has a dollar box and a points box per season
-  (Summer, Winter, Peak); type into either and the other follows at 100 points to the
+- **Desk → Stays, cruises & trips** — each property has a dollar box and a points box per
+  season (Summer, Winter, Peak); type into either and the other follows at 100 points to the
   dollar. Minimum nights, the Peak minimum, the public rate used for the “you save” line,
-  and whether it is live for members are all here too. Trips are priced per seat, with the
-  cash price a non-member guest pays.
+  and whether it is live for members are all here too. Trips are priced per seat and cruises
+  per cabin, with the dates, how many the Desk can hold, the hold deadline, and for a cruise
+  the line, the ship, the port it sails from, the ports in order, the cabin category and the
+  Interval page it was seen on. A cruise is a trip with a ship on the record (`stays.cruise`),
+  so everything that holds and books a seat holds and books a cabin unchanged.
 - **Settings → Dollars and points** — a converter that also tells you how many months of
   contributions at each tier a price works out to, and the amount in Aruban florin.
 - **Settings → The rules of the club** (admin) — the 15% share, the points-per-dollar rate,

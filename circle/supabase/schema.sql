@@ -274,6 +274,8 @@ create table if not exists stays (
   seats           int,
   hold_deadline   date,
   is_drop         boolean not null default false,
+  -- a cruise: a trip with a ship. {line, ship, embark, ports[], cabin, ref}. Null for land trips.
+  cruise          jsonb,
   active          boolean not null default true,
   curated_by      uuid references members(id),
   created_at      timestamptz not null default now(),
@@ -2608,6 +2610,10 @@ alter table stays add column if not exists photo_at   timestamptz;
 alter table stays drop constraint if exists stays_photo_needs_provenance;
 alter table stays add constraint stays_photo_needs_provenance
   check (photo_path is null or nullif(trim(photo_note), '') is not null);
+-- Cruises. Interval International trades a deposited week for a cabin; Victor posts the sailings
+-- worth it. A cruise is a trip (fixed dates, a fixed price for a cabin, so many cabins) with a
+-- ship on the record, so every rule that holds and books a seat holds and books a cabin unchanged.
+alter table stays add column if not exists cruise jsonb;
 
 -- VakayMood is a source in its own right: the Desk's "Put it on the board" posts from it. The
 -- inline check on the table is for a fresh build; this is for a database that already exists.
@@ -2681,7 +2687,7 @@ revoke all on badge_catalog, member_badges, tax_rates from anon;
 
 insert into badge_catalog (key, name, blurb, kind, price_points, mark, sort) values
   ('founder_victor','The Founder','Started the Circle and books every room in it.','founder',null,'crown',1),
-  ('founder_ian','The Voice','Wrote the first note and every one since.','founder',null,'quill',2),
+  ('founder_ian','Founder & Voice','Founded the Circle alongside Victor, and wrote the first note and every one since.','founder',null,'quill',2),
   ('founder_vishnu','The Banker','Holds the money and has never once been out by a cent.','founder',null,'vault',3),
   ('founding','Founding Insider','One of the first twenty seats.','earned',null,'star',10),
   ('autopilot','On Autopilot','A standing order, running six months or more.','earned',null,'repeat',11),

@@ -205,7 +205,7 @@ export function stayCard(stay, { store, href = null, footer = '' } = {}) {
       <span class="body">
         <h3>${escapeHtml(stay.name)}</h3>
         <span class="where">${plated ? '' : `${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}`}${stay.kind === 'trip' ? `${plated ? '' : ' · '}${stay.nights} nights` : plated ? (stay.onSand ? 'On the sand' : 'Across the road') : stay.onSand ? ' · on the sand' : ' · across the road'}</span>
-        <span class="price"><b class="num">${escapeHtml(fmtPoints(per))}</b><small>${escapeHtml(stay.kind === 'trip' ? `a seat · ${fmtUsd2(per / 100)}` : `from, a night · ${fmtUsd2(per / 100)}`)}</small></span>
+        <span class="price"><b class="num">${escapeHtml(fmtPoints(per))}</b><small>${escapeHtml(stay.kind === 'trip' ? `a ${stay.cruise ? 'cabin' : 'seat'} · ${fmtUsd2(per / 100)}` : `from, a night · ${fmtUsd2(per / 100)}`)}</small></span>
         <span class="flags">${stay.house ? '<span class="tag house">Where we stay</span>' : ''}${(stay.features || []).slice(0, stay.house ? 2 : 3).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</span>
         ${sourceLine(stay)}
         ${footer}
@@ -265,7 +265,12 @@ export function landing({ store, go }) {
           <div><p class="eyebrow">${icon('users', { size: 14 })}Seats</p>
             <p>${blind ? `<b class="num">${s.memberCap}</b> in all · by invitation only` : `<b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of ${s.memberCap} taken · by invitation only`}</p></div>
           <div><p class="eyebrow">${icon('bed', { size: 14 })}On the list</p>
-            <p><b class="num">${escapeHtml(String(store.stays.filter(x => x.kind !== 'trip').length))}</b> places · <b class="num">${escapeHtml(String(store.stays.filter(x => x.kind === "trip").length))}</b> trips</p></div>
+            <p>${(() => {
+              const places = store.stays.filter(x => x.kind !== 'trip' && x.active !== false).length;
+              const cruises = store.stays.filter(x => x.kind === 'trip' && x.cruise && x.active !== false).length;
+              const trips = store.stays.filter(x => x.kind === 'trip' && !x.cruise && x.active !== false).length;
+              return [`<b class="num">${places}</b> places`, cruises ? `<b class="num">${cruises}</b> cruise${cruises === 1 ? '' : 's'}` : '', trips ? `<b class="num">${trips}</b> trip${trips === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
+            })()}</p></div>
         </div>
       </div>
     </div></section>`));
@@ -280,9 +285,9 @@ export function landing({ store, go }) {
   // Horizon — the dream, before the ledger
   const horizon = el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>Where the points go</h2>
-      <p>Twenty-three places on the island and the trips Victor and Ian put together. Every price is the Circle’s all-in rate — taxes, levies and resort fees included.</p>
-      <p class="small muted" style="margin-top:8px">These four are where we actually end up. The trips this cycle go to the Dominican Republic, Mexico and Japan.</p></div>
-      <a class="btn ghost sm" href="${blind ? '#/sign-in' : '#/stays'}">${icon('chevronRight', { size: 15 })}${blind ? 'Sign in to see them all' : 'All twenty-three'}</a></div>
+      <p>The best deals on the market at the places on the island the Circle can get, and the cruises and trips Victor and Ian put together. Every price is the Circle’s all-in rate — taxes, levies and resort fees included.</p>
+      <p class="small muted" style="margin-top:8px">These are where we actually end up. See a deal, ask Victor, he books it in your name — nobody books anything themselves.</p></div>
+      <a class="btn ghost sm" href="${blind ? '#/sign-in' : '#/stays'}">${icon('chevronRight', { size: 15 })}${blind ? 'Sign in to see them all' : 'See what is open'}</a></div>
       <div class="horizon-wrap"><div class="horizon" id="horizon"></div></div></div></section>`);
   const hz = horizon.querySelector('#horizon');
   // Signed out, every one of these opened a password form with no explanation — someone was

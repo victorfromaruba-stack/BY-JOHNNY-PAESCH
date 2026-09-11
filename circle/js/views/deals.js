@@ -1,9 +1,13 @@
-// Deals, and the watch list that decides who hears about them.
+// Deals — the card, the list, the sheets the Desk posts with, and the watch list that decides
+// who hears about them.
 //
-// The whole point of this screen is speed. Victor sees a one-bedroom appear on Interval at
-// eleven at night; by the time he has typed four fields, every Insider who asked for that
-// exact thing has it on their home screen. Nothing here books anything — a deal turns into
-// a request, and a request goes through the same quote the rest of the app uses.
+// The whole point is speed. Victor sees a one-bedroom appear on Interval at eleven at night; by
+// the time he has typed four fields, every Insider who asked for that exact thing has it on
+// their home screen. Nothing here books anything — a deal turns into a request, and a request
+// goes through the same quote the rest of the app uses.
+//
+// There is no Deals page any more. The Stays tab IS the deals — every live one, cheapest a
+// night first — and this module is what it draws them with.
 
 import { escapeHtml, fmtDay, fmtPoints, fmtRelative, fmtUsd2, nightsBetween, pointsUsd, safeUrl } from '../core/util.js';
 import { VOCAB } from '../core/vocab.js';
@@ -11,7 +15,6 @@ import { quoteStay, fromPoints, seatPoints } from '../core/money.js';
 import { icon } from '../ui/icons.js';
 import { toast, sheet, confirmDialog, setBusy, avatar } from '../ui/components.js';
 import { stayStrip } from './public.js';
-import { liveSection } from './live.js';
 import { sameName, nameWithin } from '../core/names.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -38,15 +41,15 @@ const sourceChip = (s) => {
  * Club · Studio Queen · owner asking $166 a night on RedWeek"; under a heading that already says
  * Surf Club, the first part is the heading again, three lines of it on a phone.
  */
-export function titleWithoutPlace(title, stay, { room = null, nights = 0 } = {}) {
+export function titleWithoutPlace(title, stay, { nights = 0 } = {}) {
   const names = (a, b) => sameName(a, b) || nameWithin(a, b) || nameWithin(b, a);
   const parts = String(title || '').split(' · ').map(x => x.trim()).filter(Boolean);
   // The watcher titles a find with the source's own spelling of the place, which may be longer
   // or shorter than the catalog's ("Aruba Surf Club", "Renaissance Aruba Resort & Casino").
   const rest = parts.length > 1 && stay && names(parts[0], stay.name) ? parts.slice(1).join(' · ') : (title || '');
   // A deal posted by hand is titled with the place, so under the place's own heading there
-  // would be nothing left: say the room, or the length, rather than the heading again.
-  if (!rest || (stay && names(rest, stay.name))) return room?.name || (nights ? `${nights} night${nights === 1 ? '' : 's'}` : 'Posted by the Desk');
+  // would be nothing left: say the length rather than the heading again.
+  if (!rest || (stay && names(rest, stay.name))) return nights ? `${nights} night${nights === 1 ? '' : 's'}` : 'Posted by the Desk';
   return rest;
 }
 
@@ -63,9 +66,14 @@ export function dealCard(deal, { store, match = null, canEdit = false, inPlace =
   // hears places and the weeks under them as parent and child, not as peers.
   const H = `h${Math.min(6, Math.max(2, level))}`;
   const stay = store.stay(deal.stayId);
-  const room = store.roomType?.(deal.roomTypeId);
   const saveUsd = deal.retailUsd ? deal.retailUsd - deal.pointsTotal / store.settings.pointsPerDollar : 0;
-  const title = inPlace ? titleWithoutPlace(deal.title, stay, { room, nights: deal.nights }) : null;
+  const title = inPlace ? titleWithoutPlace(deal.title, stay, { nights: deal.nights }) : null;
+  // An owner's week open on VakayMood is not on the board: the ask carries the listing link
+  // instead of a deal id, and the Desk's button puts it on the board rather than taking it off.
+  const draft = !!deal.draft;
+  const askHref = draft
+    ? `#/book/${escapeHtml(deal.stayId)}?from=${escapeHtml(deal.from)}&to=${escapeHtml(deal.to)}${safeUrl(deal.sourceUrl) ? `&src=${encodeURIComponent(deal.sourceUrl)}&srcLabel=${encodeURIComponent('VakayMood')}` : ''}`
+    : `#/book/${escapeHtml(deal.stayId)}?from=${escapeHtml(deal.from)}&to=${escapeHtml(deal.to)}&deal=${escapeHtml(deal.id)}`;
   // The watcher's note repeats the unit the title already names ("Studio Queen · sleeps 4 ·
   // RedWeek protects the payment"); under a place, keep only what the title does not say.
   const noteLine = (() => {
@@ -82,37 +90,37 @@ export function dealCard(deal, { store, match = null, canEdit = false, inPlace =
         ${showPlace && stay ? `<p class="eyebrow"><a href="#/stays/${escapeHtml(stay.id)}" style="color:inherit;text-decoration:none">${escapeHtml(stay.name)}</a>${stay.area ? ` · ${escapeHtml(stay.area)}` : ''}</p>` : ''}
         ${inPlace
           ? `<${H} style="font-size:1.02rem">${escapeHtml(title)}</${H}>
-             ${room && title !== room.name ? `<p class="small muted" style="margin-top:2px">${escapeHtml(room.name)}</p>` : ''}
              <p class="deal-price"><b class="num">${escapeHtml(fmtPoints(deal.pointsTotal))}</b>
                <span class="small muted mono">${escapeHtml(pointsUsd(deal.pointsTotal, store.settings.pointsPerDollar))} · ${deal.nights} night${deal.nights === 1 ? '' : 's'}${nightly(deal) ? ` · ${escapeHtml(fmtPoints(nightly(deal)))} a night` : ''}</span></p>`
           : `<div class="row-between" style="align-items:flex-start;gap:12px">
           <div>
             <${H} style="font-size:1.05rem">${escapeHtml(deal.title || stay?.name || 'A deal')}</${H}>
-            <p class="small muted" style="margin-top:4px">${escapeHtml(stay?.area || '')}${stay && stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}${room ? ` · ${escapeHtml(room.name)}` : ''}</p>
+            <p class="small muted" style="margin-top:4px">${escapeHtml(stay?.area || '')}${stay && stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}</p>
           </div>
           <div style="text-align:right;flex:none">
             <b class="num" style="font-size:1.15rem">${escapeHtml(fmtPoints(deal.pointsTotal))}</b>
-            <br><span class="small muted">${escapeHtml(pointsUsd(deal.pointsTotal, store.settings.pointsPerDollar))} · ${deal.nights} night${deal.nights === 1 ? '' : 's'}</span>
+            <br><span class="small muted">${escapeHtml(pointsUsd(deal.pointsTotal, store.settings.pointsPerDollar))} · ${deal.nights} night${deal.nights === 1 ? '' : 's'}${nightly(deal) ? ` · ${escapeHtml(fmtPoints(nightly(deal)))} a night` : ''}</span>
           </div>
         </div>`}
         <p class="small" style="margin-top:${inPlace ? 8 : 10}px">${icon('calendar', { size: 15, cls: 'ico-muted' })}
           ${escapeHtml(fmtDay(deal.from))} – ${escapeHtml(fmtDay(deal.to))}
-          ${deal.units > 1 ? ` · ${deal.units} of them` : ''}${saveUsd > 0 && inPlace ? ` <span style="color:var(--good-text)">· about ${escapeHtml(fmtUsd2(saveUsd))} under the public rate</span>` : ''}</p>
-        ${saveUsd > 0 && !inPlace ? `<p class="small" style="margin-top:6px;color:var(--good-text)">${icon('trend', { size: 15 })}About ${escapeHtml(fmtUsd2(saveUsd))} under the public rate</p>` : ''}
-        ${noteLine ? `<p class="small muted" style="margin-top:${inPlace ? 6 : 10}px">${inPlace ? escapeHtml(noteLine) : `“${escapeHtml(noteLine)}”`}</p>` : ''}
+          ${deal.units > 1 && !draft ? ` · ${deal.units} of them` : ''}${saveUsd > 0 && inPlace ? ` <span style="color:var(--good-text)">· about ${escapeHtml(fmtUsd2(saveUsd))} under the public rate</span>` : ''}</p>
+        ${saveUsd > 0 && !inPlace ? `<p class="small" style="margin-top:6px;color:var(--good-text)">${icon('trend', { size: 15 })}About ${escapeHtml(fmtUsd2(saveUsd))} under the resort's public rate</p>` : ''}
+        ${noteLine ? `<p class="small muted" style="margin-top:${inPlace ? 6 : 10}px">${inPlace || draft ? escapeHtml(noteLine) : `“${escapeHtml(noteLine)}”`}</p>` : ''}
         ${inPlace
-          ? `<p class="small muted deal-meta" style="margin-top:6px">${escapeHtml((SOURCES[deal.source] || SOURCES.other).label)} · ${escapeHtml(fmtRelative(deal.postedAt))}${deal.expiresAt ? ` · until ${escapeHtml(fmtDay(deal.expiresAt))}` : ''}</p>`
+          ? `<p class="small muted deal-meta" style="margin-top:6px">${draft ? `Open on VakayMood as of ${escapeHtml(fmtRelative(deal.postedAt))}` : `${escapeHtml((SOURCES[deal.source] || SOURCES.other).label)} · ${escapeHtml(fmtRelative(deal.postedAt))}${deal.expiresAt ? ` · until ${escapeHtml(fmtDay(deal.expiresAt))}` : ''}`}</p>`
           : `<div class="flags" style="margin-top:10px">
-          ${sourceChip(deal.source)}
-          <span class="tag">${icon('clock', { size: 14 })}${escapeHtml(fmtRelative(deal.postedAt))}</span>
-          ${deal.expiresAt ? `<span class="tag">${icon('hourglass', { size: 14 })}until ${escapeHtml(fmtDay(deal.expiresAt))}</span>` : ''}
+          ${draft ? `<span class="tag">${icon('eye', { size: 14 })}Open on VakayMood</span>` : sourceChip(deal.source)}
+          <span class="tag">${icon('clock', { size: 14 })}${draft ? 'as of ' : ''}${escapeHtml(fmtRelative(deal.postedAt))}</span>
+          ${deal.expiresAt && !draft ? `<span class="tag">${icon('hourglass', { size: 14 })}until ${escapeHtml(fmtDay(deal.expiresAt))}</span>` : ''}
         </div>`}
         ${match && !match.affordable ? `<p class="small muted" style="margin-top:10px">${icon('spark', { size: 14 })}
           You are ${escapeHtml(fmtPoints(match.short))} short — ask anyway and close the gap with a top-up, or open it to the Circle.</p>` : ''}
         <div class="row" style="margin-top:14px">
-          <a class="btn sm" href="#/book/${escapeHtml(deal.stayId)}?from=${escapeHtml(deal.from)}&to=${escapeHtml(deal.to)}&deal=${escapeHtml(deal.id)}">${icon('send', { size: 16 })}Ask for it</a>
+          <a class="btn sm" href="${askHref}">${icon('send', { size: 16 })}Ask for it</a>
           ${canEdit && safeUrl(deal.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(deal.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 16 })}Go and book it</a>` : ''}
-          ${canEdit ? `<button class="btn quiet sm" data-act="retire">${icon('x', { size: 16 })}Gone</button>` : ''}
+          ${canEdit && draft ? `<button class="btn quiet sm" data-act="post-draft">${icon('plus', { size: 16 })}Put it on the board</button>` : ''}
+          ${canEdit && !draft ? `<button class="btn quiet sm" data-act="retire">${icon('x', { size: 16 })}Gone</button>` : ''}
         </div>
       </div>
     </article>`);
@@ -164,123 +172,52 @@ export function dealList(slot, deals, { store, me = null, canEdit = false, first
 }
 
 /**
- * The board, by place. Fifty owner weeks as fifty posters is a scroll, not a board; under each
- * place's name they are a short list with the cheapest two open. Places the Circle actually
- * uses come first, then the places with the most open.
+ * The Desk puts an owner's week on the board. Everyone watching for something it answers hears
+ * about it straight away; the listing link rides along so Victor is one tap from it when asked.
  */
-export function boardByPlace(slot, deals, { store, me = null, canEdit = false, first = 2 } = {}) {
-  const groups = new Map();
-  for (const d of deals) { if (!groups.has(d.stayId)) groups.set(d.stayId, []); groups.get(d.stayId).push(d); }
-  const order = [...groups.entries()].map(([stayId, list]) => ({ stayId, stay: store.stay(stayId), list: list.slice().sort(byNight) }))
-    .sort((a, b) => (b.stay?.house ? 1 : 0) - (a.stay?.house ? 1 : 0) || b.list.length - a.list.length || (a.stay?.name || '').localeCompare(b.stay?.name || ''));
-  for (const { stayId, stay, list } of order) {
-    const n = list.length, soonest = list.slice().sort((a, b) => String(a.from).localeCompare(String(b.from)))[0];
-    const where = stay?.area ? `${escapeHtml(stay.area)}${stay.country && stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''} · ` : '';
-    // "posted", not "weeks": a deal posted by hand or found on Interval can be any number of
-    // nights, and the count is the only thing about the group that is established.
-    const sec = el(`<section class="place-group" data-place="${escapeHtml(stayId || '')}">
-        <div class="place-head">
-          ${stay ? `<a class="place-thumb" href="#/stays/${escapeHtml(stay.id)}" tabindex="-1" aria-hidden="true"></a>` : ''}
-          <div style="min-width:0">
-            <h3 style="font-size:1.05rem">${stay ? `<a href="#/stays/${escapeHtml(stay.id)}">${escapeHtml(stay.name)}${icon('chevronRight', { size: 16, cls: 'ico-muted' })}</a>` : 'A place no longer in the catalog'}</h3>
-            <p class="small muted" style="margin-top:2px">${where}${n === 1
-              ? `1 posted · ${escapeHtml(fmtPoints(nightly(list[0])))} a night · check-in ${escapeHtml(fmtDay(soonest.from))}`
-              : `${n} posted · from ${escapeHtml(fmtPoints(nightly(list[0])))} a night · soonest ${escapeHtml(fmtDay(soonest.from))}`}</p>
-          </div>
-        </div>
-        <div class="place-deals"></div>
-      </section>`);
-    if (stay) sec.querySelector('.place-thumb').appendChild(stayStrip(stay));
-    dealList(sec.querySelector('.place-deals'), list, { store, me, canEdit, first, key: `board:${stayId || 'none'}`, inPlace: true, level: 4 });
-    slot.appendChild(sec);
-  }
-  return order.length;
+export async function postDraft(store, draft, actorId) {
+  const yes = await confirmDialog({
+    title: 'Put it on the board?',
+    confirmText: 'Post it',
+    message: `${draft.title} · ${draft.nights} nights from ${fmtDay(draft.from)} · ${fmtPoints(draft.pointsTotal)}. Everyone watching for something this answers hears about it straight away.`,
+  });
+  if (!yes) return null;
+  const deal = await store.postDeal({
+    stayId: draft.stayId, from: draft.from, to: draft.to, nights: draft.nights,
+    pointsTotal: draft.pointsTotal, retailUsd: draft.usdTotal || null,
+    source: 'vakaymood', sourceUrl: draft.sourceUrl, sourceRef: draft.sourceRef,
+    title: draft.title,
+    note: `Owner rental on VakayMood.${draft.usdSubtotal ? ` ${fmtUsd2(draft.usdSubtotal)} at booking, ${fmtUsd2(draft.usdFees || 0)} at the resort.` : ''}`,
+    expiresAt: draft.expiresAt,
+  }, actorId);
+  const n = store.matchesForDeal(deal.id).length;
+  toast(n ? `On the board. ${n} ${n === 1 ? 'Insider was' : 'Insiders were'} waiting for it.` : 'On the board.', { kind: 'good', timeout: 6000 });
+  return deal;
 }
 
-/** The board: everything live, with the things you asked for pinned to the top. */
-export function deals({ store, go }) {
-  const me = store.me;
-  const canEdit = store.canPostDeals();
-  const mine = store.matchesForMember(me.id);
-  const mineIds = new Set(mine.map(m => m.deal.id));
-  const rest = store.liveDeals().filter(d => !mineIds.has(d.id));
-
-  const wrap = el(`<div><section class="sec"><div class="wrap">
-      <div class="row-between">
-        <div><p class="eyebrow">${icon('zap')}As they turn up</p><h1>Deals</h1>
-          <p class="lede" style="margin-top:10px;max-width:62ch">Everything open that the Circle can book for you: what answers a watch you set, what Victor and Ian have put on the board from Interval, RedWeek and the phone, and what owners have open right now on VakayMood.
-            <b>You do not book any of it yourself</b> — put your points in, alone or with others, and the Circle books it in your name.</p></div>
-        ${canEdit ? `<div class="row no-print"><button class="btn sm" id="paste">${icon('copy', { size: 16 })}Paste a listing</button>
-          <button class="btn ghost sm" id="post">${icon('plus', { size: 16 })}By hand</button></div>` : ''}
-      </div>
-
-      <div class="row" style="margin-top:18px">
-        <a class="btn ghost sm" href="#/watching">${icon('bell', { size: 16 })}What you are watching${store.watchesFor(me.id).length ? ` · ${store.watchesFor(me.id).length}` : ''}</a>
-      </div>
-
-      <div id="mine" style="margin-top:22px"></div>
-      <div id="all" style="margin-top:22px"></div>
-      <div id="open" style="margin-top:30px"></div>
-    </div></section></div>`);
-
-  const mineSlot = wrap.querySelector('#mine'), allSlot = wrap.querySelector('#all');
-
-  if (mine.length) {
-    mineSlot.appendChild(el(`<div class="sec-head"><div><p class="eyebrow" style="color:var(--good-text)">${icon('bellRing')}Matches what you asked for</p>
-      <h2 style="font-size:1.2rem">${mine.length} of these ${mine.length === 1 ? 'is' : 'are'} what you are watching for</h2></div></div>`));
-    // Full cards, the first four open: a broad watch can answer to most of the board, and
-    // fifty posters here would undo the grouping below it.
-    dealList(mineSlot, mine.map(m => m.deal), { store, me, canEdit, first: 4, key: 'mine', inPlace: false, noun: 'you asked for' });
-    // Only when something is actually unseen. markWatchesSeen() commits, a commit notifies,
-    // a notify re-renders, and this runs again — so keying it off mine.length (which never
-    // shrinks) spun the page against the database forever the moment one deal matched.
-    if (store.unseenMatches(me.id).length) store.markWatchesSeen(me.id);
-  }
-
-  const places = new Set(rest.map(d => d.stayId)).size;
-  allSlot.appendChild(el(`<div class="sec-head"><div><p class="eyebrow">${mine.length ? 'Everything else on the board' : 'On the board'}</p>
-    <h2 style="font-size:1.2rem">${rest.length ? `${rest.length} posted by the Desk${places > 1 ? `, at ${places} places` : ''}` : 'Nothing posted by the Desk yet'}</h2>
-    ${places > 1 ? `<p style="margin-top:6px">Cheapest a night first under each place.</p>` : ''}</div></div>`));
-  if (rest.length) {
-    // The best deal is the lowest price. The four cheapest a night lead, as full cards, before
-    // the board by place — where each of them appears again under its own place.
-    if (rest.length > 4 && places > 1) {
-      const cheapest = rest.slice().sort(byNight).slice(0, 4);
-      allSlot.appendChild(el(`<div class="sec-head tight" style="margin-top:8px"><div><p class="eyebrow">${icon('trend')}Lowest prices right now</p>
-        <p>The four cheapest a night on the board, all-in.</p></div></div>`));
-      dealList(allSlot, cheapest, { store, me, canEdit, first: 4, key: 'cheapest', inPlace: true, showPlace: true });
-      allSlot.appendChild(el(`<div class="sec-head tight" style="margin-top:28px"><div><p class="eyebrow">${icon('bed')}Everything on the board, by place</p></div></div>`));
-    }
-    boardByPlace(allSlot, rest, { store, me, canEdit, first: 2 });
-  } else {
-    // One line, not a screen: what owners have open is right below, and an empty-state box the
-    // height of a phone would push it out of sight — which is how "Deals is empty" read to Victor.
-    allSlot.appendChild(el(`<p class="small muted" style="margin-top:8px">What Victor and Ian find on Interval, RedWeek and the phone lands here. What owners have open right now is below —
-      and <a href="#/watching">a watch</a> is how you hear first.</p>`));
-  }
-
-  // Everything open on VakayMood, live from the member's own browser. Owner rentals, not
-  // Interval — the copy says so, because a member who reads "Interval" here would think the
-  // Getaway price applies.
-  const openSlot = wrap.querySelector('#open');
-  openSlot.appendChild(el(`<div class="sec-head"><div><p class="eyebrow">${icon('eye')}Owners renting, live</p>
-    <h2 style="font-size:1.2rem">Open right now on VakayMood</h2>
-    <p class="small muted" style="margin-top:8px;max-width:62ch">Owners renting their weeks on VakayMood, as of the time shown — proof a week is physically open, and what that owner is asking.
-      Not Interval Getaways: what Victor finds on Interval reaches you through the board above. Our own rate for the same room is under each card, and what you accept is Victor's quote.</p></div></div>`));
-  openSlot.appendChild(liveSection({ store, me, s: store.settings, canPost: canEdit, go }));
-
-  wrap.addEventListener('click', async (e) => {
+/**
+ * The two officer buttons on a card — "Gone" and "Put it on the board" — wired once on whatever
+ * node holds the cards, so they are never buttons that do nothing. `drafts` resolves a draft's
+ * id to the row the page holds (the card only carries the id).
+ */
+export function wireDealActions(node, store, { drafts = () => [] } = {}) {
+  node.addEventListener('click', async (e) => {
     const retire = e.target.closest('[data-act="retire"]');
     if (retire) {
-      const id = retire.closest('[data-deal]').dataset.deal;
+      const id = retire.closest('[data-deal]')?.dataset.deal;
       const yes = await confirmDialog({ title: 'Take it off the board?', confirmText: 'It is gone',
         message: 'It stays in the record, but it comes off the board for everyone.' });
       if (yes) { try { await store.retireDeal(id, store.me.id, 'Taken'); toast('Off the board.'); } catch (err) { toast(err.message, { kind: 'bad' }); } }
+      return;
+    }
+    const post = e.target.closest('[data-act="post-draft"]');
+    if (post) {
+      const id = post.closest('[data-deal]')?.dataset.deal;
+      const draft = drafts().find(d => d.id === id);
+      if (!draft) return;
+      try { await postDraft(store, draft, store.me.id); } catch (err) { toast(err.message, { kind: 'bad', timeout: 6000 }); }
     }
   });
-  wrap.querySelector('#post')?.addEventListener('click', () => postDealSheet({ store }));
-  wrap.querySelector('#paste')?.addEventListener('click', () => pasteListingSheet({ store }));
-  return wrap;
 }
 
 /** Victor or Ian, posting something they just found. Four fields and it is on everyone's screen. */
@@ -294,8 +231,6 @@ export async function postDealSheet({ store, prefill = {} }) {
         <p class="sheet-text">Everyone who asked for something this answers hears about it straight away. Be quick and rough — the binding number is still the quote you give them afterwards.</p>
         <label class="field"><span>Which place</span>
           <select name="stayId" required>${stays.map(st => `<option value="${escapeHtml(st.id)}"${st.id === prefill.stayId ? ' selected' : ''}>${escapeHtml(st.name)}${st.kind === 'trip' ? ' (trip)' : ''}</option>`).join('')}</select></label>
-        <label class="field" id="room-slot" hidden><span>Which room, if it matters</span>
-          <select name="roomTypeId"><option value="">Any room</option></select></label>
         <div class="grid g2">
           <label class="field"><span>From</span><input type="date" name="from" value="${escapeHtml(prefill.from || '')}" required></label>
           <label class="field"><span>To</span><input type="date" name="to" value="${escapeHtml(prefill.to || '')}" required></label>
@@ -315,7 +250,6 @@ export async function postDealSheet({ store, prefill = {} }) {
         <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>${icon('send', { size: 16 })}Post it</button></div>`;
 
       const v = (n) => body.querySelector(`[name=${n}]`);
-      const roomSlot = body.querySelector('#room-slot');
 
       // Dollars and points stay in step, the way they do everywhere else in the Desk.
       body.addEventListener('input', (e) => {
@@ -324,15 +258,9 @@ export async function postDealSheet({ store, prefill = {} }) {
         preview();
       });
 
-      const fillRooms = () => {
-        const rooms = store.roomTypesFor?.(v('stayId').value) || [];
-        roomSlot.hidden = !rooms.length;
-        v('roomTypeId').innerHTML = `<option value="">Any room</option>` +
-          rooms.map(r => `<option value="${escapeHtml(r.id)}"${r.id === prefill.roomTypeId ? ' selected' : ''}>${escapeHtml(r.name)}</option>`).join('');
-      };
       // Say, before he posts, exactly who is about to hear about it.
       const preview = () => {
-        const draft = { id: 'draft', status: 'live', stayId: v('stayId').value, roomTypeId: v('roomTypeId').value || null,
+        const draft = { id: 'draft', status: 'live', stayId: v('stayId').value, roomTypeId: null,
           kind: store.stay(v('stayId').value)?.kind === 'trip' ? 'trip' : 'aruba',
           from: v('from').value, to: v('to').value,
           nights: Math.max(1, nightsBetween(v('from').value, v('to').value) || 1),
@@ -344,11 +272,11 @@ export async function postDealSheet({ store, prefill = {} }) {
              <p class="small">${who.map(m => escapeHtml(store.member(m.watch.memberId)?.name.split(' ')[0] || '')).join(', ')} — they will see it the moment you post.</p>`
           : `<b>Nobody is watching for this yet</b><p class="small">It still goes on the board for everyone.</p>`;
       };
-      body.addEventListener('change', (e) => { if (e.target.name === 'stayId') { fillRooms(); } preview(); });
-      fillRooms(); preview();
+      body.addEventListener('change', preview);
+      preview();
 
       body.querySelector('[data-ok]').addEventListener('click', () => close({
-        stayId: v('stayId').value, roomTypeId: v('roomTypeId').value || null,
+        stayId: v('stayId').value, roomTypeId: null,
         from: v('from').value, to: v('to').value,
         pointsTotal: Number(v('points').value) || 0,
         retailUsd: Number(v('retailUsd').value) || null,
@@ -387,15 +315,14 @@ export function watching({ store, go }) {
   }
   for (const w of mine) {
     const stay = w.stayId ? store.stay(w.stayId) : null;
-    const room = store.roomType?.(w.roomTypeId);
     const hits = store.liveDeals().map(d => store.dealMatchesWatch(d, w)).filter(Boolean);
     list.appendChild(el(`<div class="panel" data-watch="${escapeHtml(w.id)}">
         <div class="row-between" style="align-items:flex-start;gap:14px">
           <div>
             <h3 style="font-size:1.05rem">${icon(stay?.kind === 'trip' ? 'plane' : 'bed', { size: 18, cls: 'ico-muted' })}
-              ${escapeHtml(stay?.name || (w.kind === 'trip' ? 'Any trip' : 'Anywhere on the island'))}</h3>
+              ${escapeHtml(stay?.name || (w.kind === 'trip' ? 'Any cruise or trip' : 'Anywhere on the island'))}</h3>
             <p class="small muted" style="margin-top:6px">
-              ${room ? `${escapeHtml(room.name)} · ` : ''}${w.nights} night${w.nights === 1 ? '' : 's'} between
+              ${w.nights} night${w.nights === 1 ? '' : 's'} between
               ${escapeHtml(fmtDay(w.from))} and ${escapeHtml(fmtDay(w.to))}${w.flexDays ? `, give or take ${w.flexDays} days` : ''}
               ${w.maxPoints ? ` · up to ${escapeHtml(fmtPoints(w.maxPoints))}` : ''}</p>
             ${w.note ? `<p class="small muted" style="margin-top:8px">“${escapeHtml(w.note)}”</p>` : ''}
@@ -403,7 +330,7 @@ export function watching({ store, go }) {
           <button class="btn quiet sm" data-act="stop">${icon('x', { size: 15 })}Stop</button>
         </div>
         ${hits.length ? `<div class="notice good" style="margin-top:12px"><b>${icon('checkCircle', { size: 16 })} ${hits.length} on the board right now</b>
-           <p style="margin-top:8px"><a class="btn sm" href="#/deals">Look at ${hits.length === 1 ? 'it' : 'them'}</a></p></div>`
+           <p style="margin-top:8px"><a class="btn sm" href="#/stays">Look at ${hits.length === 1 ? 'it' : 'them'}</a></p></div>`
           : `<p class="small muted" style="margin-top:12px">${icon('clock', { size: 15, cls: 'ico-muted' })}Nothing yet. You will see it here and on your home screen.</p>`}
       </div>`));
   }
@@ -436,8 +363,6 @@ export async function addWatchSheet({ store, prefill = {} }) {
         <label class="field"><span>Which place</span>
           <select name="stayId"><option value="">Anywhere on the island</option>
             ${stays.map(st => `<option value="${escapeHtml(st.id)}"${st.id === prefill.stayId ? ' selected' : ''}>${escapeHtml(st.name)}${st.kind === 'trip' ? ' (trip)' : ''}</option>`).join('')}</select></label>
-        <label class="field" id="room-slot" hidden><span>Which room</span>
-          <select name="roomTypeId"><option value="">Any room there</option></select></label>
         <div class="grid g2">
           <label class="field"><span>Earliest</span><input type="date" name="from" value="${escapeHtml(prefill.from || inMonths(1))}" required></label>
           <label class="field"><span>Latest</span><input type="date" name="to" value="${escapeHtml(prefill.to || inMonths(4))}" required></label>
@@ -456,13 +381,6 @@ export async function addWatchSheet({ store, prefill = {} }) {
         <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>${icon('bell', { size: 16 })}Watch for it</button></div>`;
 
       const v = (n) => body.querySelector(`[name=${n}]`);
-      const roomSlot = body.querySelector('#room-slot');
-      const fillRooms = () => {
-        const rooms = store.roomTypesFor?.(v('stayId').value) || [];
-        roomSlot.hidden = !rooms.length;
-        v('roomTypeId').innerHTML = `<option value="">Any room there</option>` +
-          rooms.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.name)}${r.sqft ? ` · ${r.sqft} sq ft` : ''}</option>`).join('');
-      };
       const draw = () => {
         const stay = store.stay(v('stayId').value);
         const nights = Number(v('nights').value) || 1;
@@ -486,11 +404,11 @@ export async function addWatchSheet({ store, prefill = {} }) {
         if (e.target.name === 'maxPoints') v('maxUsd').value = (Math.round(Number(e.target.value) || 0) / s.pointsPerDollar).toFixed(2).replace(/\.00$/, '') || '';
         draw();
       });
-      body.addEventListener('change', (e) => { if (e.target.name === 'stayId') fillRooms(); draw(); });
-      fillRooms(); draw();
+      body.addEventListener('change', draw);
+      draw();
 
       body.querySelector('[data-ok]').addEventListener('click', () => close({
-        stayId: v('stayId').value || null, roomTypeId: v('roomTypeId').value || null,
+        stayId: v('stayId').value || null, roomTypeId: null,
         kind: store.stay(v('stayId').value)?.kind === 'trip' ? 'trip' : 'aruba',
         from: v('from').value, to: v('to').value,
         nights: Number(v('nights').value) || 1, flexDays: Number(v('flexDays').value) || 0,

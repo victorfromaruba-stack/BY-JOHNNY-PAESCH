@@ -153,4 +153,12 @@ export const WORLD_TRIPS = [
     vibe: 'The far one. Five nights in Kyoto with the maples still turning and the illuminations lit, five in Tokyo, in apartments with kitchens rather than hotel rooms. Open-jaw: into Osaka, out of Haneda, so nobody backtracks.',
     features: ['The far one', 'Ten nights', 'Open-jaw', 'Apartments'],
     dealNote: 'Be honest with yourself about the journey: there is no same-day connection from Aruba to Japan. Every Aruba departure lands at its hub after the day’s transpacific flights have gone. We route Aruba–Amsterdam–Osaka so both overnights happen in a seat instead of a hotel — two days out, two days back, fourteen days door to door. Early December is the one window where Kyoto still has colour, the crowds have gone and the rooms cost about half of what they do in November. Hotels, the shinkansen between the two cities and every transfer are in the seat; flights are extra. Eight seats, and Victor needs the names by 30 June 2027.' },
+  // A cruise is a trip with a ship: a cabin instead of a seat, a port instead of a hotel. This one
+  // is the demo's example of the shape; on the real Circle, Victor posts what Interval has.
+  { id: 'trip_cruise_abc', kind: 'trip', reach: 'region', name: 'Seven nights, the ABC islands and Cartagena', area: 'Oranjestad', country: 'Aruba', dates: { from: '2027-01-24', to: '2027-01-31' }, nights: 7,
+    pointsPerSeat: 189000, guestCashUsd: 1890, retailUsd: 2640, seats: 4, holdDeadline: '2026-11-30', isDrop: false,
+    cruise: { line: 'Celebrity', ship: 'Celebrity Beyond', embark: 'Oranjestad', ports: ['Oranjestad', 'Willemstad', 'Kralendijk', 'Cartagena', 'Oranjestad'], cabin: 'Balcony cabin, two people', ref: '' },
+    vibe: 'Walk on in Oranjestad, sleep on the water, wake up in Curaçao. A balcony cabin for two, all meals aboard, the Circle’s block of four cabins on one deck.',
+    features: ['Cruise', 'Balcony cabin', 'Seven nights', 'Sails from Aruba'],
+    dealNote: 'A cabin is for two, and the price is for the cabin — split it with whoever you bring. Interval trades a deposited week for a cabin like this; Victor confirms the sailing and the deck before he quotes anyone.' },
 ];

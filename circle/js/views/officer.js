@@ -335,7 +335,7 @@ export function desk({ store, go }) {
         <button class="btn sm" data-tab="requests" aria-pressed="true">Requests${open.length ? ` · ${open.length}` : ''}</button>
         <button class="btn quiet sm" data-tab="wanted" aria-pressed="false">${icon('bell', { size: 15 })}Wanted${store.watches().length ? ` · ${store.watches().length}` : ''}</button>
         <button class="btn quiet sm" data-tab="deals" aria-pressed="false">${icon('zap', { size: 15 })}Deals${store.liveDeals().length ? ` · ${store.liveDeals().length}` : ''}</button>
-        <button class="btn quiet sm" data-tab="catalog" aria-pressed="false">Stays &amp; trips</button>
+        <button class="btn quiet sm" data-tab="catalog" aria-pressed="false">Stays, cruises &amp; trips</button>
         <button class="btn quiet sm" data-tab="notes" aria-pressed="false">Notes</button>
       </div>
       <div id="panel" style="margin-top:18px"></div>
@@ -354,12 +354,11 @@ export function desk({ store, go }) {
       ${rows.length ? `<div class="stack">${rows.map(r => {
         const stay = r.stay;
         const names = [...r.members].map(id => store.member(id)?.name.split(' ')[0]).filter(Boolean);
-        const room = store.roomType(r.roomTypeId);
         const windows = r.watches.map(w => `${fmtDay(w.from)} – ${fmtDay(w.to)}${w.nights ? ` · ${w.nights}n` : ''}`);
         return `<div class="panel">
           <div class="row-between" style="align-items:flex-start;gap:14px">
             <div>
-              <h3 style="font-size:1.05rem">${escapeHtml(stay?.name || 'Anywhere on the island')}${room ? ` · ${escapeHtml(room.name)}` : ''}</h3>
+              <h3 style="font-size:1.05rem">${escapeHtml(stay?.name || 'Anywhere on the island')}</h3>
               <p class="small muted" style="margin-top:6px">${icon('users', { size: 14, cls: 'ico-muted' })}
                 ${r.count} ${r.count === 1 ? 'Insider' : 'Insiders'}: ${escapeHtml(names.join(', '))}</p>
               <p class="small muted" style="margin-top:4px">${icon('calendar', { size: 14, cls: 'ico-muted' })} ${escapeHtml(windows.join(' · '))}</p>
@@ -380,7 +379,7 @@ export function desk({ store, go }) {
     const live = store.liveDeals();
     panel.replaceChildren(el(`<div>
       <div class="row" style="margin-bottom:16px"><button class="btn sm" id="post-deal">${icon('plus', { size: 16 })}Post a deal</button>
-        <a class="btn ghost sm" href="#/deals">${icon('eye', { size: 15 })}See it as a member does</a></div>
+        <a class="btn ghost sm" href="#/stays">${icon('eye', { size: 15 })}See it as a member does</a></div>
       ${live.length ? `<div class="stack">${live.map(d => {
         const stay = store.stay(d.stayId);
         const hits = store.matchesForDeal(d.id);
@@ -454,14 +453,14 @@ export function desk({ store, go }) {
     const list = store.stays;
     panel.replaceChildren(el(`<div class="panel">
       <div class="row-between"><h2 style="font-size:1.1rem">What the Circle offers</h2>
-        <button class="btn ghost sm" id="add">Add a stay</button></div>
+        <button class="btn ghost sm" id="add">Add a stay, trip or cruise</button></div>
       <div class="tablewrap" style="margin-top:14px;border:0"><table>
         <thead><tr><th>Name</th><th>Area</th><th class="num">From, a night</th><th>State</th><th></th></tr></thead>
         <tbody>${list.map(st => `<tr>
-          <td><b>${escapeHtml(st.name)}</b><br><span class="small muted">${st.kind === 'trip' ? `${escapeHtml(fmtDay(st.dates.from))} · ${st.nights} nights` : `min ${st.minNights} nights`}</span></td>
+          <td><b>${escapeHtml(st.name)}</b><br><span class="small muted">${st.kind === 'trip' ? `${st.cruise ? `cruise${st.cruise.ship ? ` · ${escapeHtml(st.cruise.ship)}` : ''} · ` : 'trip · '}${escapeHtml(fmtDay(st.dates.from))} · ${st.nights} nights` : `min ${st.minNights} nights`}</span></td>
           <td class="small">${escapeHtml(st.area)}</td>
           ${st.kind === 'trip'
-            ? `<td class="num">${escapeHtml(fmtPoints(seatPoints(st, s)))} a seat</td>`
+            ? `<td class="num">${escapeHtml(fmtPoints(seatPoints(st, s)))} a ${st.cruise ? 'cabin' : 'seat'}</td>`
             : `<td class="num">${escapeHtml(fmtPoints(fromPoints(st, s)))}</td>`}
           <td>${st.active ? chip('confirmed', 'Live') : chip('cancelled', 'Draft')}</td>
           <td><button class="btn quiet sm" data-edit="${st.id}">Edit</button></td></tr>`).join('')}</tbody>
@@ -571,18 +570,44 @@ function moneyPair(key, label, valueUsd, s) {
 
 async function editStay(store, stay) {
   const s = store.settings;
-  const isTrip = stay?.kind === 'trip';
-  const out = await sheet({ title: stay ? `Edit ${stay.name}` : 'Add a stay', wide: true, render: (body, close) => {
+  // What it is: a stay on the island (priced a night), a trip (a seat), or a cruise (a cabin,
+  // on a ship, from a port). A cruise is stored as a trip with a `cruise` record, so everything
+  // that holds and books a seat holds and books a cabin unchanged.
+  let kind = stay ? (stay.cruise ? 'cruise' : stay.kind) : 'aruba';
+  const out = await sheet({ title: stay ? `Edit ${stay.name}` : 'Add a stay, trip or cruise', wide: true, render: (body, close) => {
+   const draw = () => {
+    const isTrip = kind !== 'aruba', cruise = kind === 'cruise', unit = cruise ? 'cabin' : 'seat';
+    const cr = stay?.cruise || {};
     body.innerHTML = `
+      ${stay ? '' : `<label class="field"><span>What is it</span><select name="kind">
+        <option value="aruba"${kind === 'aruba' ? ' selected' : ''}>A stay on the island — priced a night</option>
+        <option value="trip"${kind === 'trip' ? ' selected' : ''}>A trip — a seat each, fixed dates</option>
+        <option value="cruise"${kind === 'cruise' ? ' selected' : ''}>A cruise — a cabin each, fixed dates</option></select></label>`}
       <div class="grid g2">
-        <label class="field"><span>Name</span><input name="name" value="${escapeHtml(stay?.name || '')}" required></label>
-        <label class="field"><span>Area</span><input name="area" value="${escapeHtml(stay?.area || '')}"></label>
+        <label class="field"><span>Name</span><input name="name" value="${escapeHtml(stay?.name || '')}" placeholder="${cruise ? '7 nights, Southern Caribbean' : ''}" required></label>
+        <label class="field"><span>${cruise ? 'Sails from' : 'Area'}</span><input name="area" value="${escapeHtml(stay?.area || '')}" placeholder="${cruise ? 'San Juan' : ''}"></label>
       </div>
-      <p class="eyebrow" style="margin-bottom:8px">${isTrip ? 'What a seat costs us' : 'What a night costs us'}</p>
+      ${cruise ? `<div class="grid g3">
+        <label class="field"><span>Cruise line</span><input name="crLine" value="${escapeHtml(cr.line || '')}" placeholder="Celebrity"></label>
+        <label class="field"><span>Ship</span><input name="crShip" value="${escapeHtml(cr.ship || '')}" placeholder="Celebrity Beyond"></label>
+        <label class="field"><span>Cabin</span><input name="crCabin" value="${escapeHtml(cr.cabin || '')}" placeholder="Balcony, two people"></label>
+      </div>
+      <label class="field"><span>Ports, in order</span><input name="crPorts" value="${escapeHtml((cr.ports || []).join(', '))}" placeholder="Aruba, Curaçao, Bonaire">
+        <span class="hint">Comma-separated. Members see them on the card and the page.</span></label>
+      <label class="field"><span>Where you saw it</span><input name="crRef" type="url" value="${escapeHtml(stay?.sources?.interval?.url || '')}" placeholder="https://www.intervalworld.com/…" inputmode="url">
+        <span class="hint">The Interval page for this sailing, so when someone asks you are one tap from it.</span></label>` : ''}
+      <p class="eyebrow" style="margin-bottom:8px">${isTrip ? `What a ${unit} costs us` : 'What a night costs us'}</p>
       <p class="small muted" style="margin-bottom:12px">The room, taxes and levies included — what the Circle pays. The member is charged ${escapeHtml(fmtPct(s.serviceRate, 0))} on top of this when they spend points, and that is the number every screen shows them. Type dollars or points, whichever you have in your head; the other follows at ${s.pointsPerDollar} points to the dollar.</p>
-      ${isTrip ? `<div class="grid g2">${moneyPair('seat', 'A seat, before our share', stay.pointsPerSeat / s.pointsPerDollar, s)}
-          <label class="field"><span>Guest price in cash US$</span><input name="guestCashUsd" type="number" step="1" value="${stay.guestCashUsd || 0}" inputmode="decimal">
-            <span class="hint">What a non-member pays the Banker, at face value.</span></label></div>`
+      ${isTrip ? `<div class="grid g2">${moneyPair('seat', `A ${unit}, before our share`, (stay?.pointsPerSeat || 0) / s.pointsPerDollar, s)}
+          <label class="field"><span>Guest price in cash US$</span><input name="guestCashUsd" type="number" step="1" value="${stay?.guestCashUsd || 0}" inputmode="decimal">
+            <span class="hint">What a non-member pays the Banker, at face value.</span></label></div>
+        <div class="grid g3">
+          <label class="field"><span>${cruise ? 'Sails on' : 'Starts on'}</span><input name="startsOn" type="date" value="${escapeHtml(stay?.dates?.from || '')}" required></label>
+          <label class="field"><span>${cruise ? 'Back on' : 'Ends on'}</span><input name="endsOn" type="date" value="${escapeHtml(stay?.dates?.to || '')}" required></label>
+          <label class="field"><span>${cruise ? 'Cabins' : 'Seats'} you can hold</span><input name="seats" type="number" min="1" value="${stay?.seats || (cruise ? 4 : 10)}" inputmode="numeric"></label>
+          <label class="field"><span>Hold deadline</span><input name="holdDeadline" type="date" value="${escapeHtml(stay?.holdDeadline || '')}"><span class="hint">You release the block after this.</span></label>
+          <label class="field"><span>Public rate US$, a ${unit}</span><input name="retailUsd" type="number" value="${stay?.retailUsd || 0}" inputmode="decimal"><span class="hint">What the same ${unit} costs booked alone, for comparison.</span></label>
+        </div>`
         : `<div class="grid g3">
         ${RATE_BAND_LIST.map(b => moneyPair(b.id, `${b.from} – ${b.to}`,
             stay?.rates?.[b.id] ?? ({ low: 250, high: 380, peak: 460 })[b.id], s)).join('')}
@@ -644,11 +669,23 @@ async function editStay(store, stay) {
     body.querySelector('[data-ok]').addEventListener('click', () => {
       const v = (n) => body.querySelector(`[name=${n}]`)?.value;
       const usd = (n) => Number(body.querySelector(`[data-usd="${n}"]`)?.value) || 0;
-      const data = { id: stay?.id, kind: stay?.kind || 'aruba', name: v('name'), area: v('area'), vibe: v('vibe'), dealNote: v('dealNote'),
-        active: body.querySelector('[name=active]').checked, country: stay?.country || 'Aruba', features: stay?.features || [] };
-      if (isTrip) Object.assign(data, { pointsPerSeat: Math.round(usd('seat') * s.pointsPerDollar), guestCashUsd: Number(v('guestCashUsd')) || 0,
-        dates: stay.dates, nights: stay.nights, seats: stay.seats, holdDeadline: stay.holdDeadline });
-      else Object.assign(data, { site: v('site') || null,
+      const data = { id: stay?.id, kind: isTrip ? 'trip' : 'aruba', name: v('name'), area: v('area'), vibe: v('vibe'), dealNote: v('dealNote'),
+        active: body.querySelector('[name=active]').checked, country: stay?.country || (isTrip ? '' : 'Aruba'), features: stay?.features || [] };
+      if (isTrip) {
+        const from = v('startsOn'), to = v('endsOn');
+        const nights = Math.round((Date.parse(to) - Date.parse(from)) / 864e5);
+        if (!(nights > 0)) { toast('The end date has to come after the start.', { kind: 'bad' }); body.querySelector('[name=endsOn]')?.focus(); return; }
+        if (!(usd('seat') > 0)) { toast(`Say what a ${unit} costs us.`, { kind: 'bad' }); body.querySelector('[data-usd="seat"]')?.focus(); return; }
+        Object.assign(data, { pointsPerSeat: Math.round(usd('seat') * s.pointsPerDollar), guestCashUsd: Number(v('guestCashUsd')) || 0,
+          dates: { from, to }, nights, seats: Math.max(1, Number(v('seats')) || 1), holdDeadline: v('holdDeadline') || null,
+          retailUsd: Number(v('retailUsd')) || 0, reach: stay?.reach || (cruise ? 'region' : 'world'), isDrop: stay?.isDrop ?? false });
+        if (cruise) {
+          const ref = safeUrl(v('crRef')) || '';
+          data.cruise = { line: (v('crLine') || '').trim(), ship: (v('crShip') || '').trim(), embark: (v('area') || '').trim(),
+            ports: String(v('crPorts') || '').split(',').map(x => x.trim()).filter(Boolean), cabin: (v('crCabin') || '').trim(), ref };
+          data.sources = { ...(stay?.sources || {}), ...(ref ? { interval: { ...(stay?.sources?.interval || {}), url: ref } } : {}) };
+        } else data.cruise = stay?.cruise ?? null;
+      } else Object.assign(data, { site: v('site') || null,
         rates: { low: usd('low'), high: usd('high'), peak: usd('peak') },
         sources: (() => {
           // Merged into what is on file, not rebuilt from the two boxes: the boxes set the two
@@ -699,6 +736,9 @@ async function editStay(store, stay) {
       Object.assign(data, { photoFile, photoNote, photoRemove: !!body.dataset.photoRemove });
       close(data);
     });
+   };
+   draw();
+   body.addEventListener('change', (e) => { if (e.target.name === 'kind') { kind = e.target.value; draw(); } });
   } });
   if (out) {
     try {
