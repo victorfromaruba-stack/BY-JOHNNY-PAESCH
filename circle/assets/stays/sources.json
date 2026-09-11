@@ -117,5 +117,68 @@
    "seenOn": "2026-09-08",
    "bytes": 232299
   }
+ },
+ "areas": {
+  "note": "Photographs of the BEACH a place stands on, for the stays that have no photograph of their own. Openly licensed, from Wikimedia Commons through the category and File pages its robots.txt allows. Shown with the beach named on the picture and the credit under it — never as a picture of the hotel.",
+  "palm-a": {
+   "file": "areas/palm-a.jpg",
+   "area": "Palm Beach",
+   "what": "Palm Beach, the beach at the door",
+   "author": "Coolcaesar",
+   "license": "CC BY 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+   "page": "https://commons.wikimedia.org/wiki/File:Palm_Beach,_Aruba.jpg",
+   "seenOn": "2026-09-11"
+  },
+  "palm-b": {
+   "file": "areas/palm-b.jpg",
+   "area": "Palm Beach",
+   "what": "Palapas on Palm Beach, the beach at the door",
+   "author": "Ginelly.Q",
+   "license": "CC BY 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+   "page": "https://commons.wikimedia.org/wiki/File:Beach_palapas_in_Palm_beach,_Noord_Aruba_01.jpg",
+   "seenOn": "2026-09-11"
+  },
+  "palm-c": {
+   "file": "areas/palm-c.jpg",
+   "area": "Palm Beach",
+   "what": "Palapas on Palm Beach, the beach at the door",
+   "author": "Ginelly.Q",
+   "license": "CC BY 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+   "page": "https://commons.wikimedia.org/wiki/File:Beach_palapas_in_Palm_beach,_Noord_Aruba_03.jpg",
+   "seenOn": "2026-09-11"
+  },
+  "eagle-a": {
+   "file": "areas/eagle-a.jpg",
+   "area": "Eagle Beach",
+   "what": "A fofoti tree on Eagle Beach, the beach at the door",
+   "author": "Rarends297",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "page": "https://commons.wikimedia.org/wiki/File:Fofoti_-_Eagle_Beach_Aruba_(WoA)_08.jpg",
+   "seenOn": "2026-09-11"
+  },
+  "eagle-b": {
+   "file": "areas/eagle-b.jpg",
+   "area": "Eagle Beach",
+   "what": "A fofoti tree on Eagle Beach, the beach at the door",
+   "author": "Jason Boldero",
+   "license": "CC BY 2.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+   "page": "https://commons.wikimedia.org/wiki/File:Fofoti_Tree,_Eagle_Beach,_Aruba_(28568601953).jpg",
+   "seenOn": "2026-09-11"
+  },
+  "oranjestad-a": {
+   "file": "areas/oranjestad-a.jpg",
+   "area": "Oranjestad",
+   "what": "Surfside Beach, Oranjestad, the beach at the door",
+   "author": "Caribiana",
+   "license": "CC BY-SA 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+   "page": "https://commons.wikimedia.org/wiki/File:Surfside_Beach_(Aruba).jpeg",
+   "seenOn": "2026-09-11"
+  }
  }
 }

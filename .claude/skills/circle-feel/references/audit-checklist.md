@@ -171,3 +171,22 @@ to approve and price, to book, waiting on the member — with the action on the 
 carry the look buttons, so nothing the Desk taps from the queue can end in a refusal it has to
 go elsewhere to fix. Interaction sweeps: `/desk admin` 14 of 16 controls did something (2
 skipped as hand-offs), `/book/stay_surfclub member` 11 of 13, `/requests member` 2 of 2.
+
+## Re-baselined 11 Sept, the look (390px)
+
+Victor, on the live site: "many images missing, it looks empty, the main picture is shit, the
+website looks low quality, not exclusive." What changed and what it measures:
+
+- **The hero** is a fofoti at first light (generated, as the house rule allows for the hero
+  and nowhere else), 4:5 on every width; on a phone it is the first thing on the page, above
+  the headline. The moving-water video layer is gone with the old still it was cut from.
+- **No card is empty.** The eleven stays with no photograph of their own show a licensed
+  photograph of their beach (Commons, CC BY / BY-SA / CC0), with the beach named ON the
+  picture and the credit under the hero saying it is not a photograph of the hotel.
+- **The stay page** leads with the picture, then dates and the price for those nights in the
+  same tiles as the ask, then the rooms; the price provenance text sits below. First figure at
+  498px on the Ritz page; 5.2 screens.
+- **Deals** opens with the four lowest prices a night, then the board by place; the live
+  section shows six first. With fifty posted weeks: 12.4 screens as the Desk, 10.7 as a
+  member (cards 305–343px). Without any: 5.0.
+- Whole-app audit at 390: no overflow, no errors; landing 7.8 screens, stays 9.6.

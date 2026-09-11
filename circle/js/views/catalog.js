@@ -197,6 +197,12 @@ export function stayDetail({ store, params, go }) {
       <p class="lede" style="margin-top:12px">${escapeHtml(stay.vibe)}</p>
       <div class="stay-card daylight" id="stay-hero" style="margin-top:20px;border-radius:var(--r-card)"><span class="strip"></span></div>
       <div class="row" style="margin-top:14px">${(stay.features || []).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</div>
+      <div class="side" style="margin-top:22px">
+        <div class="panel" id="pricing"></div>
+        <div class="panel flat" id="afford"></div>
+      </div>
+      <div id="rooms"></div>
+      <div id="open"></div>
       <div id="place"></div>
       ${(() => {
         // Where the number came from, ALWAYS — including when the answer is "nowhere yet".
@@ -246,12 +252,6 @@ export function stayDetail({ store, params, go }) {
         </div>`;
       })()}
       ${stay.dealNote ? `<div class="notice" style="margin-top:16px"><b>From Victor</b><p class="small">${escapeHtml(stay.dealNote)}</p></div>` : ''}
-      <div class="side" style="margin-top:22px">
-        <div class="panel" id="pricing"></div>
-        <div class="panel flat" id="afford"></div>
-      </div>
-      <div id="open"></div>
-      <div id="rooms"></div>
       <div id="reach-note"></div>
       <div class="row" style="margin-top:20px">
         <a class="btn" href="#/book/${escapeHtml(stay.id)}">${icon('send', { size: 17 })}${isTrip ? 'Ask for a seat' : 'Ask Victor for dates'}</a>
@@ -501,11 +501,21 @@ export function stayDetail({ store, params, go }) {
     wrap.querySelector('#pricing').innerHTML = `
       <h2>What your nights cost</h2>
       <p class="small muted" style="margin-top:6px">From <b class="num">${escapeHtml(fmtPoints(fromPoints(stay, s)))}</b> a night. Put your dates in and it prices those exact nights — the same arithmetic the Desk quotes from.</p>
-      <div class="grid g2" style="margin-top:14px">
-        <label class="field"><span>Check in</span><input type="date" id="q-in" value="${escapeHtml(dIn)}" min="${escapeHtml(dToday)}"></label>
-        <label class="field"><span>Check out</span><input type="date" id="q-out" value="${escapeHtml(dOut)}" min="${escapeHtml(dToday)}"></label>
+      <div class="ask-dates" style="margin-top:14px">
+        <label class="ask-tile"><span class="k">Check in</span><b data-dm="q-in"></b><em><span data-wd="q-in"></span> · <span data-yr="q-in"></span></em>
+          <input type="date" id="q-in" value="${escapeHtml(dIn)}" min="${escapeHtml(dToday)}" aria-label="Check in"></label>
+        <div class="ask-nights" aria-live="polite"><b id="q-nights">–</b><span>nights</span></div>
+        <label class="ask-tile"><span class="k">Check out</span><b data-dm="q-out"></b><em><span data-wd="q-out"></span> · <span data-yr="q-out"></span></em>
+          <input type="date" id="q-out" value="${escapeHtml(dOut)}" min="${escapeHtml(dToday)}" aria-label="Check out"></label>
       </div>
-      <div id="q-out-slot"></div>`;
+      <div id="q-out-slot" style="margin-top:12px"></div>`;
+    const showTile = (id) => {
+      const v = wrap.querySelector(`#${id}`).value; if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+      const d = new Date(v + 'T12:00:00');
+      wrap.querySelector(`[data-dm="${id}"]`).textContent = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      wrap.querySelector(`[data-wd="${id}"]`).textContent = d.toLocaleDateString('en-GB', { weekday: 'short' });
+      wrap.querySelector(`[data-yr="${id}"]`).textContent = String(d.getFullYear());
+    };
 
     // A date-driven quote instead of a table of three seasons. Same numbers, none of the
     // vocabulary: the member says when, and the app says what — which is the only question
@@ -514,7 +524,9 @@ export function stayDetail({ store, params, go }) {
     const qSlot = wrap.querySelector('#q-out-slot');
     const drawQuote = () => {
       const ci = wrap.querySelector('#q-in').value, co = wrap.querySelector('#q-out').value;
+      showTile('q-in'); showTile('q-out');
       const q = quoteStay(stay, ci, co, s);
+      wrap.querySelector('#q-nights').textContent = q.nights > 0 ? q.nights : '–';
       if (!q.nights) { qSlot.innerHTML = '<p class="small muted">Pick a check-out after your check-in.</p>'; return; }
       const short = Math.max(0, q.points - avail);
       qSlot.innerHTML = `

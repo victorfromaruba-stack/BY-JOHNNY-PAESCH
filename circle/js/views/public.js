@@ -63,11 +63,49 @@ const PHOTO_CREDITS = Object.freeze({
 const SEED_BY_NAME = new Map(Object.entries(CATALOG_NAMES).map(([id, n]) => [normName(n), id]));
 /** The bundled catalog id for a stay on either backend: its own id, or the id whose name it carries. */
 export const seedIdOf = (stay) => (stay?.id && (REAL_PHOTOS.has(stay.id) || SEED_BY_NAME.has(normName(CATALOG_NAMES[stay.id] || ''))) ? stay.id : SEED_BY_NAME.get(normName(stay?.name)));
+/**
+ * The beach a place stands on, for the eleven stays with no photograph of their own. Openly
+ * licensed photographs of Palm Beach, Eagle Beach and Surfside from Wikimedia Commons (see
+ * assets/stays/sources.json → areas). Shown with the beach named ON the picture and the credit
+ * under it, so a member never takes the sea for the hotel: a real photograph of the real
+ * beach at the door beats a grey plate, and it claims nothing the app has not established.
+ */
+const AREA_PHOTOS = Object.freeze({
+  'Palm Beach': ['palm-a', 'palm-b', 'palm-c'],
+  'Eagle Beach': ['eagle-a', 'eagle-b'],
+  'Oranjestad': ['oranjestad-a'],
+  'Noord': ['palm-b'],           // the Courtyard is inland, ten minutes from Palm Beach
+});
+const AREA_CREDITS = Object.freeze({
+  'palm-a': { area: 'Palm Beach', what: 'Palm Beach, the beach at the door', author: 'Coolcaesar', license: 'CC BY 4.0', licenseUrl: 'https://creativecommons.org/licenses/by/4.0/', page: 'https://commons.wikimedia.org/wiki/File:Palm_Beach,_Aruba.jpg' },
+  'palm-b': { area: 'Palm Beach', what: 'Palapas on Palm Beach, the beach at the door', author: 'Ginelly.Q', license: 'CC BY 4.0', licenseUrl: 'https://creativecommons.org/licenses/by/4.0/', page: 'https://commons.wikimedia.org/wiki/File:Beach_palapas_in_Palm_beach,_Noord_Aruba_01.jpg' },
+  'palm-c': { area: 'Palm Beach', what: 'Palapas on Palm Beach, the beach at the door', author: 'Ginelly.Q', license: 'CC BY 4.0', licenseUrl: 'https://creativecommons.org/licenses/by/4.0/', page: 'https://commons.wikimedia.org/wiki/File:Beach_palapas_in_Palm_beach,_Noord_Aruba_03.jpg' },
+  'eagle-a': { area: 'Eagle Beach', what: 'A fofoti tree on Eagle Beach, the beach at the door', author: 'Rarends297', license: 'CC0 1.0', licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/', page: 'https://commons.wikimedia.org/wiki/File:Fofoti_-_Eagle_Beach_Aruba_(WoA)_08.jpg' },
+  'eagle-b': { area: 'Eagle Beach', what: 'A fofoti tree on Eagle Beach, the beach at the door', author: 'Jason Boldero', license: 'CC BY 2.0', licenseUrl: 'https://creativecommons.org/licenses/by/2.0/', page: 'https://commons.wikimedia.org/wiki/File:Fofoti_Tree,_Eagle_Beach,_Aruba_(28568601953).jpg' },
+  'oranjestad-a': { area: 'Oranjestad', what: 'Surfside Beach in Oranjestad, the beach at the door', author: 'Caribiana', license: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/', page: 'https://commons.wikimedia.org/wiki/File:Surfside_Beach_(Aruba).jpeg' },
+});
+const hashOf = (str) => [...String(str)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+/** The beach photograph a stay falls back to, chosen once per stay so neighbours on the list differ. */
+export const areaPhotoFor = (stay) => {
+  if (!stay || stay.kind === 'trip') return null;
+  const keys = AREA_PHOTOS[stay.area]; if (!keys?.length) return null;
+  const key = keys[hashOf(stay.name || stay.id) % keys.length];
+  return { key, file: `assets/areas/${key}.jpg`, ...AREA_CREDITS[key] };
+};
+/** 'own' (the Desk's upload), 'bundled' (a photograph of the place), 'area' (its beach), or null. */
+export const photoKind = (stay) => {
+  if (!stay) return null;
+  if (stay.photoUrl) return 'own';
+  const seed = seedIdOf(stay);
+  if (seed && REAL_PHOTOS.has(seed)) return 'bundled';
+  return areaPhotoFor(stay) ? 'area' : null;
+};
 export const photoFor = (stay) => {
   if (!stay) return null;
   if (stay.photoUrl) return stay.photoUrl;
   const seed = seedIdOf(stay);
-  return seed && REAL_PHOTOS.has(seed) ? `assets/stays/${seed.replace('stay_', '')}.jpg` : null;
+  if (seed && REAL_PHOTOS.has(seed)) return `assets/stays/${seed.replace('stay_', '')}.jpg`;
+  return areaPhotoFor(stay)?.file || null;
 };
 
 /**
@@ -85,7 +123,15 @@ export function photoCredit(stay) {
   }
   const seed = seedIdOf(stay);
   const c = seed && REAL_PHOTOS.has(seed) ? PHOTO_CREDITS[seed] : null;
-  if (!c) return null;
+  if (!c) {
+    // The beach, not the hotel — said in words, because the licence asks for the credit and the
+    // house rule asks for the difference between a picture of the place and a picture near it.
+    const a = areaPhotoFor(stay); if (!a) return null;
+    return {
+      text: `${a.what} — not a photograph of the hotel. Photograph by ${a.author}, ${a.license}, via Wikimedia Commons.`,
+      html: `${escapeHtml(a.what)} &mdash; not a photograph of the hotel. Photograph by ${ext(a.page, a.author)}, ${ext(a.licenseUrl, a.license)}, via Wikimedia Commons.`,
+    };
+  }
   if (c.author) {
     return {
       text: `${c.what}. Photograph by ${c.author}, ${c.license}, via Wikimedia Commons.`,
@@ -106,7 +152,9 @@ export const stayStrip = (stay) => {
     // The alt says what it is, not what it looks like: a member using a screen reader wants to
     // know this is a picture of the property, not a description of the sea.
     const credit = photoCredit(stay);
-    d.innerHTML = `<img src="${escapeHtml(photo)}" alt="${escapeHtml(stay.name)}"${credit ? ` title="${escapeHtml(credit.text)}"` : ''} loading="lazy" decoding="async">`;
+    const area = photoKind(stay) === 'area' ? areaPhotoFor(stay) : null;
+    d.innerHTML = `<img src="${escapeHtml(photo)}" alt="${escapeHtml(area ? `${area.area}, the beach at ${stay.name}` : stay.name)}"${credit ? ` title="${escapeHtml(credit.text)}"` : ''} loading="lazy" decoding="async">`
+      + (area ? `<span class="strip-tag">${escapeHtml(area.area)} · the beach</span>` : '');
     return d;
   }
   // The three trips keep their drawing: there is one of each, they are drawn as the thing people
@@ -204,15 +252,9 @@ export function landing({ store, go }) {
         <!-- The frame is 4:5 above 900px and 16:10 below it, so the tall file belongs to the
              WIDE viewport, not the narrow one. Serving these the other way round crops the
              sea out of both. -->
-        <picture>
-          <source media="(min-width:901px)" srcset="assets/hero-tall.jpg">
-          <img src="assets/hero.jpg" alt="Shallow turquoise water over white sand, late in the afternoon" fetchpriority="high" decoding="async">
-        </picture>
-        <!-- The still paints first and always. The video is layered over it and only fades in
-             once it can actually play, and only when the browser says that is a reasonable thing
-             to spend somebody's data on. Its poster frame IS this image, so there is no jump at
-             the swap — you cannot see the moment the water starts moving. -->
-        <video class="hero-video" muted loop playsinline preload="none" aria-hidden="true" tabindex="-1"></video>
+        <!-- One tall still, on every width: 4:5 beside the copy on a desktop, 4:5 above it on a
+             phone. A photograph of the mood, not of a room — the rooms are on the stay pages. -->
+        <img src="assets/hero-tall.jpg" alt="A windswept fofoti tree leaning over calm water at first light" fetchpriority="high" decoding="async">
         <figcaption>${icon('mapPin', { size: 14 })}The west coast — every place on the list is on this water or ten minutes from it.</figcaption>
       </figure>
       <div class="hero-gauge enter" style="--d:180ms">
@@ -227,39 +269,6 @@ export function landing({ store, go }) {
         </div>
       </div>
     </div></section>`));
-  // The hero video, added only when it is a reasonable thing to spend somebody's data on.
-  //
-  // The still has already painted by the time this runs, and it stays as the base layer, so a
-  // refusal here costs nothing — the page simply looks the way it did before. Reasons to refuse:
-  // the viewer asked for less motion, the browser is in data-saver mode, or the connection is
-  // slow. Aruban mobile data is the normal case for this club, not the edge case.
-  (() => {
-    const v = wrap.querySelector('.hero-video');
-    if (!v) return;
-    const conn = navigator.connection || {};
-    const wants = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    const cheap = !conn.saveData && !/2g/.test(conn.effectiveType || '');
-    if (!wants || !cheap) return;
-    // Same breakpoint as the stills: the tall crop belongs to the WIDE viewport, because the
-    // frame is 4:5 above 900px and 16:10 below it.
-    const tall = window.matchMedia('(min-width: 901px)').matches;
-    v.poster = tall ? 'assets/hero-tall.jpg' : 'assets/hero.jpg';
-    // Both codecs, webm first. H.264 is universal on the browsers members actually use, but
-    // Firefox and every open-source Chromium build ship VP9 and not H.264 — including the one
-    // this project's own tests run in, which is how this got caught rather than shipped blind.
-    const stem = tall ? 'assets/hero-tall' : 'assets/hero';
-    for (const [ext, type] of [['webm', 'video/webm'], ['mp4', 'video/mp4']]) {
-      const src = document.createElement('source');
-      src.src = `${stem}.${ext}`; src.type = type;
-      v.appendChild(src);
-    }
-    v.addEventListener('canplay', () => {
-      v.classList.add('ready');
-      // Autoplay can still be refused; if it is, the still is already there and nothing breaks.
-      v.play().catch(() => v.classList.remove('ready'));
-    }, { once: true });
-    v.load();
-  })();
 
   if (!blind) wrap.querySelector('#gauge-slot').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, configured: t.accountsConfigured, size: 'full' }));
 

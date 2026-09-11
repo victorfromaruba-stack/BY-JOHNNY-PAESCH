@@ -248,7 +248,7 @@ const freshState = () => ({
 export function liveSection(ctx, { compact = false, slug = null, first = compact ? 6 : 12, onLoaded = null } = {}) {
   const { store, s } = ctx;
   const state = compact ? { ...freshState(), slug, oursOnly: false } : (lastState ||= freshState());
-  const FIRST = first;
+  const FIRST = compact ? first : 6;   // the cheapest six open with the page; fifty cards was the scroll Victor called empty
 
   const wrap = el(`<div class="live-section">
     ${compact ? '' : `<button type="button" class="btn ghost sm no-print" id="live-ftoggle" aria-expanded="false" aria-controls="live-filters" style="margin-top:14px">${icon('filter', { size: 15 })}Filters</button>

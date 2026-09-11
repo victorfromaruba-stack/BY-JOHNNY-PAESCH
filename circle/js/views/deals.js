@@ -58,7 +58,7 @@ export const nightly = (d) => d?.pointsPerNight || (d?.pointsTotal && d?.nights 
  * `inPlace` is for a card that sits under its place's own heading — no photograph strip, no
  * area line, no place in the title — so twenty of them read as a list, not twenty posters.
  */
-export function dealCard(deal, { store, match = null, canEdit = false, inPlace = false, level = 3 } = {}) {
+export function dealCard(deal, { store, match = null, canEdit = false, inPlace = false, level = 3, showPlace = false } = {}) {
   // Under a place's own h3 the card's title is an h4, so a screen reader moving by heading
   // hears places and the weeks under them as parent and child, not as peers.
   const H = `h${Math.min(6, Math.max(2, level))}`;
@@ -66,32 +66,47 @@ export function dealCard(deal, { store, match = null, canEdit = false, inPlace =
   const room = store.roomType?.(deal.roomTypeId);
   const saveUsd = deal.retailUsd ? deal.retailUsd - deal.pointsTotal / store.settings.pointsPerDollar : 0;
   const title = inPlace ? titleWithoutPlace(deal.title, stay, { room, nights: deal.nights }) : null;
+  // The watcher's note repeats the unit the title already names ("Studio Queen · sleeps 4 ·
+  // RedWeek protects the payment"); under a place, keep only what the title does not say.
+  const noteLine = (() => {
+    const n = String(deal.note || '').trim(); if (!n) return '';
+    if (!inPlace) return n;
+    const parts = n.split(' · ').map(x => x.trim()).filter(Boolean);
+    const t = String(title || '').toLowerCase();
+    return parts.filter(x => !t.includes(x.toLowerCase())).join(' · ');
+  })();
   const node = el(`<article class="panel deal${match ? ' matched' : ''}${inPlace ? ' in-place' : ''}" data-deal="${escapeHtml(deal.id)}">
       ${inPlace ? '' : '<div class="deal-strip"></div>'}
       <div class="deal-body">
         ${match ? `<p class="eyebrow" style="color:var(--good-text)">${icon('bellRing', { size: 15 })}You asked for this</p>` : ''}
-        <div class="row-between" style="align-items:flex-start;gap:12px">
+        ${showPlace && stay ? `<p class="eyebrow"><a href="#/stays/${escapeHtml(stay.id)}" style="color:inherit;text-decoration:none">${escapeHtml(stay.name)}</a>${stay.area ? ` · ${escapeHtml(stay.area)}` : ''}</p>` : ''}
+        ${inPlace
+          ? `<${H} style="font-size:1.02rem">${escapeHtml(title)}</${H}>
+             ${room && title !== room.name ? `<p class="small muted" style="margin-top:2px">${escapeHtml(room.name)}</p>` : ''}
+             <p class="deal-price"><b class="num">${escapeHtml(fmtPoints(deal.pointsTotal))}</b>
+               <span class="small muted mono">${escapeHtml(pointsUsd(deal.pointsTotal, store.settings.pointsPerDollar))} · ${deal.nights} night${deal.nights === 1 ? '' : 's'}${nightly(deal) ? ` · ${escapeHtml(fmtPoints(nightly(deal)))} a night` : ''}</span></p>`
+          : `<div class="row-between" style="align-items:flex-start;gap:12px">
           <div>
-            <${H} style="font-size:1.05rem">${escapeHtml(inPlace ? title : (deal.title || stay?.name || 'A deal'))}</${H}>
-            ${inPlace && (!room || title === room.name) ? '' : `<p class="small muted" style="margin-top:4px">${inPlace ? '' : `${escapeHtml(stay?.area || '')}${stay && stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}`}
-              ${room ? `${inPlace ? '' : ' · '}${escapeHtml(room.name)}` : ''}</p>`}
+            <${H} style="font-size:1.05rem">${escapeHtml(deal.title || stay?.name || 'A deal')}</${H}>
+            <p class="small muted" style="margin-top:4px">${escapeHtml(stay?.area || '')}${stay && stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}${room ? ` · ${escapeHtml(room.name)}` : ''}</p>
           </div>
           <div style="text-align:right;flex:none">
             <b class="num" style="font-size:1.15rem">${escapeHtml(fmtPoints(deal.pointsTotal))}</b>
             <br><span class="small muted">${escapeHtml(pointsUsd(deal.pointsTotal, store.settings.pointsPerDollar))} · ${deal.nights} night${deal.nights === 1 ? '' : 's'}</span>
-            ${inPlace && nightly(deal) ? `<br><span class="small muted">${escapeHtml(fmtPoints(nightly(deal)))} a night</span>` : ''}
           </div>
-        </div>
-        <p class="small" style="margin-top:10px">${icon('calendar', { size: 15, cls: 'ico-muted' })}
+        </div>`}
+        <p class="small" style="margin-top:${inPlace ? 8 : 10}px">${icon('calendar', { size: 15, cls: 'ico-muted' })}
           ${escapeHtml(fmtDay(deal.from))} – ${escapeHtml(fmtDay(deal.to))}
-          ${deal.units > 1 ? ` · ${deal.units} of them` : ''}</p>
-        ${saveUsd > 0 ? `<p class="small" style="margin-top:6px;color:var(--good-text)">${icon('trend', { size: 15 })}About ${escapeHtml(fmtUsd2(saveUsd))} under the public rate</p>` : ''}
-        ${deal.note ? `<p class="small muted" style="margin-top:10px">“${escapeHtml(deal.note)}”</p>` : ''}
-        <div class="flags" style="margin-top:10px">
+          ${deal.units > 1 ? ` · ${deal.units} of them` : ''}${saveUsd > 0 && inPlace ? ` <span style="color:var(--good-text)">· about ${escapeHtml(fmtUsd2(saveUsd))} under the public rate</span>` : ''}</p>
+        ${saveUsd > 0 && !inPlace ? `<p class="small" style="margin-top:6px;color:var(--good-text)">${icon('trend', { size: 15 })}About ${escapeHtml(fmtUsd2(saveUsd))} under the public rate</p>` : ''}
+        ${noteLine ? `<p class="small muted" style="margin-top:${inPlace ? 6 : 10}px">${inPlace ? escapeHtml(noteLine) : `“${escapeHtml(noteLine)}”`}</p>` : ''}
+        ${inPlace
+          ? `<p class="small muted deal-meta" style="margin-top:6px">${escapeHtml((SOURCES[deal.source] || SOURCES.other).label)} · ${escapeHtml(fmtRelative(deal.postedAt))}${deal.expiresAt ? ` · until ${escapeHtml(fmtDay(deal.expiresAt))}` : ''}</p>`
+          : `<div class="flags" style="margin-top:10px">
           ${sourceChip(deal.source)}
           <span class="tag">${icon('clock', { size: 14 })}${escapeHtml(fmtRelative(deal.postedAt))}</span>
           ${deal.expiresAt ? `<span class="tag">${icon('hourglass', { size: 14 })}until ${escapeHtml(fmtDay(deal.expiresAt))}</span>` : ''}
-        </div>
+        </div>`}
         ${match && !match.affordable ? `<p class="small muted" style="margin-top:10px">${icon('spark', { size: 14 })}
           You are ${escapeHtml(fmtPoints(match.short))} short — ask anyway and close the gap with a top-up, or open it to the Circle.</p>` : ''}
         <div class="row" style="margin-top:14px">
@@ -118,7 +133,7 @@ export const byNight = (a, b) => nightly(a) - nightly(b) || String(a.from).local
  * Some deals as cards, the first few shown and the rest behind one button. `key` is what the
  * button remembers itself by across re-renders; `first` is how many open with the page.
  */
-export function dealList(slot, deals, { store, me = null, canEdit = false, first = 3, key = '', inPlace = true, noun = '', level = 3 } = {}) {
+export function dealList(slot, deals, { store, me = null, canEdit = false, first = 3, key = '', inPlace = true, noun = '', level = 3, showPlace = false } = {}) {
   const watches = me ? store.watchesFor(me.id) : [];
   const matchFor = (d) => watches.map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
   // What answers a watch comes first, whatever it costs: the two-bedroom somebody asked for is
@@ -132,7 +147,7 @@ export function dealList(slot, deals, { store, me = null, canEdit = false, first
     // A button that hides one card costs as much as the card: show it.
     const shown = REVEALED.has(key) || ordered.length - first <= 1 ? ordered : ordered.slice(0, first);
     const hidden = ordered.length - shown.length;
-    grid.replaceChildren(...shown.map(d => dealCard(d, { store, match: matched.get(d.id), canEdit, inPlace, level })));
+    grid.replaceChildren(...shown.map(d => dealCard(d, { store, match: matched.get(d.id), canEdit, inPlace, level, showPlace })));
     more.innerHTML = hidden > 0 ? `<button class="btn ghost sm" data-act="reveal">${icon('chevronDown', { size: 16 })}Show the other ${hidden}${noun ? ` ${noun}` : ''}</button>` : '';
   };
   more.addEventListener('click', (e) => {
@@ -227,6 +242,15 @@ export function deals({ store, go }) {
     <h2 style="font-size:1.2rem">${rest.length ? `${rest.length} posted by the Desk${places > 1 ? `, at ${places} places` : ''}` : 'Nothing posted by the Desk yet'}</h2>
     ${places > 1 ? `<p style="margin-top:6px">Cheapest a night first under each place.</p>` : ''}</div></div>`));
   if (rest.length) {
+    // The best deal is the lowest price. The four cheapest a night lead, as full cards, before
+    // the board by place — where each of them appears again under its own place.
+    if (rest.length > 4 && places > 1) {
+      const cheapest = rest.slice().sort(byNight).slice(0, 4);
+      allSlot.appendChild(el(`<div class="sec-head tight" style="margin-top:8px"><div><p class="eyebrow">${icon('trend')}Lowest prices right now</p>
+        <p>The four cheapest a night on the board, all-in.</p></div></div>`));
+      dealList(allSlot, cheapest, { store, me, canEdit, first: 4, key: 'cheapest', inPlace: true, showPlace: true });
+      allSlot.appendChild(el(`<div class="sec-head tight" style="margin-top:28px"><div><p class="eyebrow">${icon('bed')}Everything on the board, by place</p></div></div>`));
+    }
     boardByPlace(allSlot, rest, { store, me, canEdit, first: 2 });
   } else {
     // One line, not a screen: what owners have open is right below, and an empty-state box the
