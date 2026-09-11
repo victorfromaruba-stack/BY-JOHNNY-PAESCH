@@ -25,6 +25,8 @@
   --flag-soft: #F8E1E5;
   --out: #121A26;             /* points out: ink */
   --share: #B7C2C4;           /* the Circle's share segment */
+  /* text on a photograph, and the scrim under it — the same in both themes, because the photo does not change */
+  --on-photo: #F3F6F6; --scrim: rgba(11,18,32,.74); --scrim-soft: rgba(11,18,32,.28);
   /* card finishes */
   --card-100: #E9EEEE; --card-100-etch: #121A26; --card-100-line: rgba(18,26,38,.16);
   --card-150: #8E9AA0; --card-150-etch: #F3F6F6; --card-150-line: rgba(255,255,255,.22);
@@ -57,6 +59,7 @@
   --flight: #F2C744; --flight-soft: #2B2A1C;
   --flag: #E8697B; --flag-soft: #33161C;
   --out: #E8EEF0; --share: #3B4753;
+  --on-photo: #F3F6F6; --scrim: rgba(11,18,32,.74); --scrim-soft: rgba(11,18,32,.28);
   --card-100: #1B2637; --card-100-etch: #E8EEF0; --card-100-line: rgba(255,255,255,.14);
   --card-150: #8E9AA0; --card-150-etch: #0B1220; --card-150-line: rgba(0,0,0,.24);
   --card-200: #0E1622; --card-200-etch: #F2C744; --card-200-line: rgba(242,199,68,.28);
@@ -73,6 +76,7 @@
   --flight: #F2C744; --flight-soft: #2B2A1C;
   --flag: #E8697B; --flag-soft: #33161C;
   --out: #E8EEF0; --share: #3B4753;
+  --on-photo: #F3F6F6; --scrim: rgba(11,18,32,.74); --scrim-soft: rgba(11,18,32,.28);
   --card-100: #1B2637; --card-100-etch: #E8EEF0; --card-100-line: rgba(255,255,255,.14);
   --card-150: #8E9AA0; --card-150-etch: #0B1220; --card-150-line: rgba(0,0,0,.24);
   --card-200: #0E1622; --card-200-etch: #F2C744; --card-200-line: rgba(242,199,68,.28);

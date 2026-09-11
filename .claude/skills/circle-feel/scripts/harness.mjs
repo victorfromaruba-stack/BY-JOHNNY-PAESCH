@@ -5,10 +5,25 @@ export const LOCAL = `export const CONFIG = { backend: 'local', supabaseUrl: '',
 export const ROUTES = ['/', '/home', '/stays', '/stays/stay_surfclub', '/cruises', '/cruises/trip_cruise_abc', '/trips/trip_japan',
   '/requests', '/pay', '/ledger', '/pool', '/circle', '/crews', '/watching',
   '/card', '/profile', '/rules', '/desk', '/bank', '/settings', '/sign-in'];
+const FONT_DIR = process.env.CIRCLE_FONTS || '/tmp/claude-0/-home-user-BY-JOHNNY-PAESCH/84807211-e7d2-5336-9e3f-7549cf10be4d/scratchpad';
+async function fontShim(p) {
+  const { existsSync, readFileSync } = await import('node:fs');
+  const css = `${FONT_DIR}/fonts.css`;
+  if (!existsSync(css)) return;
+  await p.route('https://fonts.googleapis.com/**', r => r.fulfill({ status: 200, contentType: 'text/css', body: readFileSync(css, 'utf8') }));
+  await p.route('https://fonts.gstatic.com/**', r => {
+    const f = `${FONT_DIR}/fonts/${new URL(r.request().url()).pathname.slice(1).replace(/\//g, '_')}`;
+    return existsSync(f) ? r.fulfill({ status: 200, contentType: 'font/woff2', body: readFileSync(f) }) : r.abort();
+  });
+}
 /** Open the app signed in as a member with the given role ('member' | 'planner' | 'admin'). */
 export async function open({ width = 1280, height = 900, role = 'admin', scale = 1 } = {}) {
   const b = await chromium.launch();
   const p = await b.newPage({ viewport: { width, height }, deviceScaleFactor: scale });
+  // The real typefaces. This sandbox cannot reach Google Fonts, so headless Chromium would draw
+  // every screenshot in a fallback face and every judgement about type would be about the wrong
+  // font. If the files were saved once (scratchpad/fonts + fonts.css), answer both hosts from disk.
+  await fontShim(p);
   const errors = [];
   p.on('pageerror', e => errors.push(String(e.message)));
   p.on('console', m => { const t = m.text();

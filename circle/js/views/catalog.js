@@ -10,6 +10,7 @@ import { normName } from '../core/names.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
 import { shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
+import { routeSvg } from '../ui/art.js';
 import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet } from './deals.js';
 import { openWeeks, resortForStay } from './live.js';
 
@@ -49,7 +50,7 @@ export function stays({ store, go }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <div class="row-between" style="align-items:flex-start;gap:14px">
         <div><h1>Stays</h1>
-          <p class="lede" style="margin-top:10px;max-width:58ch">The best deals on the market right now, cheapest a night first — what Victor and Ian have found, and what owners have open at the places we stay. Tap one and Victor books it in your name; you never book anything yourself. <a href="#/rules">How it works</a>.</p></div>
+          <p class="lede" style="margin-top:10px;max-width:46ch">The best deals on the market, cheapest a night first. Tap one and Victor books it in your name. <a href="#/rules">How it works</a>.</p></div>
         ${canEdit ? `<div class="row no-print"><button class="btn sm" id="paste">${icon('copy', { size: 16 })}Paste a listing</button>
           <button class="btn ghost sm" id="post">${icon('plus', { size: 16 })}By hand</button></div>` : ''}
       </div>
@@ -134,9 +135,15 @@ export function cruises({ store }) {
   const look = effectiveTier(tier, store.standingOf(me.id));
   const sailings = store.cruises(), trips = store.landTrips();
   const wrap = el(`<div><section class="sec"><div class="wrap">
-      <div class="sec-head tight"><div><h1>Cruises</h1>
-        <p class="lede" style="margin-top:10px;max-width:58ch">Interval International trades a deposited week for a cabin, and now and then sells a cabin cheap. Victor posts the sailings worth it; you ask for a cabin and he books it in your name.</p></div></div>
-      <div class="grid g3" id="list"></div>
+      <figure class="page-hero bleed">
+        <picture>
+          <source media="(max-width: 779px)" srcset="assets/cruise-hero-tall.jpg">
+          <img src="assets/cruise-hero.jpg" alt="Open sea from a ship’s rail at dusk" fetchpriority="high" decoding="async">
+        </picture>
+        <figcaption class="copy"><p class="eyebrow">Interval International · a cabin for the week</p><h1>Cruises</h1></figcaption>
+      </figure>
+      <p class="lede" style="max-width:46ch">Interval trades a deposited week for a cabin. Victor posts the sailings worth it; you ask for a cabin and he books it in your name.</p>
+      <div class="grid g3" id="list" style="margin-top:22px"></div>
       ${sailings.length ? '' : `<div class="empty">${icon('compass', { size: 28, cls: 'ico-muted' })}<b style="display:block;margin-top:10px">No cruise on the board yet</b><p class="small muted">Victor posts one when Interval has a sailing worth it. <a href="#/watching">A watch</a> tells you first.</p></div>`}
       <div id="trips" style="margin-top:34px"></div>
     </div></section></div>`);
@@ -362,7 +369,7 @@ export function stayDetail({ store, params, go }) {
       <h2>${escapeHtml(fmtPoints(seatPoints(stay, s)))} a ${unit}</h2>
       <p class="small muted" style="margin-top:4px">${escapeHtml(pointsUsd(seatPoints(stay, s), s.pointsPerDollar))} all-in for ${stay.nights} nights · the Circle’s 15% is inside it${stay.guestCashUsd ? ` · guests pay ${escapeHtml(fmtUsd2(stay.guestCashUsd))} in cash` : ''}</p>
       <ul class="ledger" style="margin-top:14px">
-        ${cr ? `<li><span class="what"><b>${escapeHtml(cr.ship || 'The ship')}</b>${cr.line ? `<span class="meta">${escapeHtml(cr.line)}</span>` : ''}</span><span class="delta"><b>${escapeHtml(cr.cabin || '')}</b></span></li>
+        ${cr ? `<li><span class="what"><b>${escapeHtml(cr.ship || 'The ship')}</b><span class="meta">${escapeHtml([cr.line, cr.cabin].filter(Boolean).join(' · '))}</span></span></li>
         ${cr.embark || (cr.ports || []).length ? `<li><span class="what"><b>${cr.embark ? `Sails from ${escapeHtml(cr.embark)}` : 'Ports'}</b>${(cr.ports || []).length ? `<span class="meta">${escapeHtml(cr.ports.join(' · '))}</span>` : ''}</span></li>` : ''}` : ''}
         <li><span class="what"><b>Dates</b></span><span class="delta"><b>${escapeHtml(fmtDay(stay.dates.from))} – ${escapeHtml(fmtDay(stay.dates.to))}</b></span></li>
         <li><span class="what"><b>${unit === 'cabin' ? 'Cabins' : 'Seats'}</b><span class="meta">${roster.length ? roster.map(m => escapeHtml(m.name.split(' ')[0])).join(', ') + ' are in' : 'Nobody yet'}</span></span><span class="delta"><b>${held} / ${stay.seats}</b></span></li>
@@ -374,7 +381,8 @@ export function stayDetail({ store, params, go }) {
             <span class="delta"><b>${escapeHtml(fmtUsd2(v.publicUsd))}</b></span></li>`;
         })()}
       </ul>
-      ${versusLine(versusPublic(stay.retailUsd, seatPoints(stay, s) / s.pointsPerDollar), `a ${unit}`)}`;
+      ${versusLine(versusPublic(stay.retailUsd, seatPoints(stay, s) / s.pointsPerDollar), `a ${unit}`)}
+      ${cr && (cr.ports || []).length >= 2 ? `<div class="route" style="margin-top:16px"><p class="eyebrow">${icon('compass', { size: 14 })}The route</p>${routeSvg(cr.ports)}</div>` : ''}`;
   } else {
     // Defaults a member would plausibly want: a fortnight out, for this stay's own minimum.
     // The minimum matters — opening on two nights at a villa that only comes by the week would

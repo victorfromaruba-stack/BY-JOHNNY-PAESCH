@@ -980,3 +980,24 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .deal.in-place .deal-price > b { font-size: 1.2rem; font-weight: 500; }
 .deal.in-place .deal-price .mono { white-space: normal; }
 .deal.in-place .deal-body .row { margin-top: 12px; }
+
+/* ---------- a page hero: one photograph, the title set on it ---------- */
+/* The Cruises tab opens on the sea from a ship's rail at dusk. The picture is the mood, not a
+   place, so it is allowed to be generated; the title sits on a scrim at its foot in the photo
+   tokens, which do not change with the theme because the photograph does not. On a phone the
+   picture runs edge to edge and the tall crop is used, so the deck corner is not cut off. */
+.page-hero { position: relative; margin: 0 0 18px; border-radius: var(--r-card); overflow: hidden; aspect-ratio: 4 / 3; background: var(--well); }
+.page-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.page-hero .copy { position: absolute; inset: auto 0 0 0; margin: 0; padding: 28px 20px 20px;
+  background: linear-gradient(to top, var(--scrim) 0%, var(--scrim-soft) 60%, transparent 100%); color: var(--on-photo); }
+.page-hero .copy .eyebrow { color: var(--on-photo); opacity: .82; }
+.page-hero .copy h1 { color: var(--on-photo); margin-top: 6px; font-variation-settings: "wdth" 112; }
+@media (max-width: 779px) {
+  .page-hero.bleed { margin-inline: calc(-1 * clamp(16px, 4vw, 28px)); border-radius: 0; margin-bottom: 22px; }
+}
+@media (min-width: 780px) {
+  .page-hero { aspect-ratio: 21 / 8; }
+  .page-hero .copy { padding: 36px 32px 30px; }
+}
+/* The route of a cruise: ink on the panel, so it draws itself in both themes. */
+.route svg { margin-top: 10px; color: var(--ink); }

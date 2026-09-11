@@ -267,6 +267,41 @@ function ship(rand, ink, horizon) {
 }
 
 /**
+ * A cruise's route as a line of ports: dots on a gentle curve, the names alternating above and
+ * below, the first and last marked as the port it sails from. Inherits `currentColor`, so it is
+ * ink on the card in both themes and needs no palette of its own. Nothing here claims a distance
+ * or a day — it is the order of the ports, which is the one thing the record establishes.
+ */
+export function routeSvg(ports, { w = 520, h = 132 } = {}) {
+  const list = (ports || []).map(p => String(p || '').trim()).filter(Boolean);
+  if (list.length < 2) return '';
+  const n = list.length;
+  const padX = 34, y0 = 72;
+  const xs = list.map((_, i) => padX + (i * (w - padX * 2)) / (n - 1));
+  // A curve, not a ruler: the line lifts between ports the way a ship's track does on a chart.
+  let d = `M${xs[0]} ${y0}`;
+  for (let i = 1; i < n; i++) { const mx = (xs[i - 1] + xs[i]) / 2; const lift = i % 2 ? -14 : 12; d += ` Q${n1(mx)} ${n1(y0 + lift)} ${n1(xs[i])} ${y0}`; }
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const same = list[0] === list[n - 1];
+  const dots = list.map((_, i) => {
+    const end = i === 0 || i === n - 1;
+    return `<circle cx="${n1(xs[i])}" cy="${y0}" r="${end ? 6 : 4.5}" fill="${end ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"/>`;
+  }).join('');
+  const labels = list.map((name, i) => {
+    const above = i % 2 === 0;
+    const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
+    const x = i === 0 ? xs[0] - 6 : i === n - 1 ? xs[n - 1] + 6 : xs[i];
+    const y = above ? y0 - 20 : y0 + 30;
+    const tag = i === 0 ? (same ? 'sails from, and back to' : 'sails from') : i === n - 1 && !same ? 'ends at' : '';
+    return `<text x="${n1(x)}" y="${y}" text-anchor="${anchor}" font-size="15" font-weight="600" fill="currentColor">${esc(name)}</text>`
+      + (tag ? `<text x="${n1(x)}" y="${above ? y - 15 : y + 15}" text-anchor="${anchor}" font-size="11" letter-spacing=".08em" fill="currentColor" opacity=".62">${tag.toUpperCase()}</text>` : '');
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="${esc(list.join(', then '))}" style="display:block;overflow:visible;font-family:var(--font-body)">
+    <path d="${d}" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="1 6" stroke-linecap="round" opacity=".7"/>
+    ${dots}${labels}</svg>`;
+}
+
+/**
  * The picture for one stay or trip, as an SVG string. Deterministic from the id, so the
  * same place is the same picture on every device, and nothing is fetched.
  */
