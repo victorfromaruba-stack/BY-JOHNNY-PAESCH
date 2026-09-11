@@ -1001,3 +1001,5 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 }
 /* The route of a cruise: ink on the panel, so it draws itself in both themes. */
 .route svg { margin-top: 10px; color: var(--ink); }
+/* A week that checks in within days: the one line on a card that changes what you do now. */
+.deal .soon { color: var(--good-text); font-weight: 600; }

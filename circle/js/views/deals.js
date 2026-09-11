@@ -61,6 +61,18 @@ export const nightly = (d) => d?.pointsPerNight || (d?.pointsTotal && d?.nights 
  * `inPlace` is for a card that sits under its place's own heading — no photograph strip, no
  * area line, no place in the title — so twenty of them read as a list, not twenty posters.
  */
+/** Days from today (Aruba) to a check-in day; 0 is today, negative is gone. */
+export const daysUntil = (isoDay) => {
+  const today = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Aruba' }) + 'T12:00:00Z');
+  return Math.round((Date.parse(`${isoDay}T12:00:00Z`) - today.getTime()) / 864e5);
+};
+/** "Checks in today", "tomorrow", "in 3 days" — only inside the week, when it changes what you do. */
+export const soonLabel = (isoDay) => {
+  const n = daysUntil(isoDay);
+  if (n < 0 || n > 7) return '';
+  return n === 0 ? 'Checks in today' : n === 1 ? 'Checks in tomorrow' : `Checks in ${n} days`;
+};
+
 export function dealCard(deal, { store, match = null, canEdit = false, inPlace = false, level = 3, showPlace = false } = {}) {
   // Under a place's own h3 the card's title is an h4, so a screen reader moving by heading
   // hears places and the weeks under them as parent and child, not as peers.
@@ -102,7 +114,8 @@ export function dealCard(deal, { store, match = null, canEdit = false, inPlace =
             <br><span class="small muted">${escapeHtml(pointsUsd(deal.pointsTotal, store.settings.pointsPerDollar))} · ${deal.nights} night${deal.nights === 1 ? '' : 's'}${nightly(deal) ? ` · ${escapeHtml(fmtPoints(nightly(deal)))} a night` : ''}</span>
           </div>
         </div>`}
-        <p class="small" style="margin-top:${inPlace ? 8 : 10}px">${icon('calendar', { size: 15, cls: 'ico-muted' })}
+        ${soonLabel(deal.from) ? `<p class="small soon" style="margin-top:${inPlace ? 8 : 10}px">${icon('zap', { size: 15 })}${soonLabel(deal.from)}</p>` : ''}
+        <p class="small" style="margin-top:${soonLabel(deal.from) ? 4 : inPlace ? 8 : 10}px">${icon('calendar', { size: 15, cls: 'ico-muted' })}
           ${escapeHtml(fmtDay(deal.from))} – ${escapeHtml(fmtDay(deal.to))}
           ${deal.units > 1 && !draft ? ` · ${deal.units} of them` : ''}${saveUsd > 0 && inPlace ? ` <span style="color:var(--good-text)">· about ${escapeHtml(fmtUsd2(saveUsd))} under the public rate</span>` : ''}</p>
         ${saveUsd > 0 && !inPlace ? `<p class="small" style="margin-top:6px;color:var(--good-text)">${icon('trend', { size: 15 })}About ${escapeHtml(fmtUsd2(saveUsd))} under the resort's public rate</p>` : ''}
@@ -433,7 +446,7 @@ export async function addWatchSheet({ store, prefill = {} }) {
  * the Desk reads the dates, the unit, the price and which of our places it is. What it cannot
  * read it leaves blank rather than guessing, and he confirms everything before it is posted.
  */
-export async function pasteListingSheet({ store }) {
+export async function pasteListingSheet({ store, prefill = {} }) {
   const { parseListing } = await import('../data/listing-paste.js');
   const stays = [...store.arubaStays(), ...store.trips()];
   const ppd = store.settings.pointsPerDollar;
@@ -443,7 +456,7 @@ export async function pasteListingSheet({ store }) {
       <p class="sheet-text">Select the listing on Interval or RedWeek, copy it, and paste it below.
         Nothing is logged into and nothing is fetched — this only reads what you paste.</p>
       <label class="field"><span>The listing</span>
-        <textarea name="raw" rows="7" placeholder="Sep 11–18, 2026  7 Nights&#10;3 Bedroom Villa, Ocean view&#10;Sleeps: 12, Building: Compass&#10;$525/night   $4,031 total" style="font-family:var(--font-mono);font-size:.86rem"></textarea></label>
+        <textarea name="raw" rows="7" placeholder="Sep 11–18, 2026  7 Nights&#10;3 Bedroom Villa, Ocean view&#10;Sleeps: 12, Building: Compass&#10;$525/night   $4,031 total" style="font-family:var(--font-mono);font-size:.86rem">${escapeHtml(prefill.raw || '')}</textarea></label>
       <div id="read" class="notice" style="margin-top:4px"><p class="small muted">Waiting for a paste.</p></div>
       <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button>
         <button class="btn" data-ok disabled>${icon('chevronRight', { size: 16 })}Check it over</button></div>`;
@@ -469,6 +482,7 @@ export async function pasteListingSheet({ store }) {
     };
     ta.addEventListener('input', draw);
     ta.addEventListener('paste', () => setTimeout(draw, 0));
+    if (prefill.raw) draw();
     body.querySelector('[data-ok]').addEventListener('click', () => close(parsed));
   } });
 

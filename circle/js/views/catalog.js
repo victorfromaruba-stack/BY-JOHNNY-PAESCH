@@ -11,7 +11,7 @@ import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/c
 import { shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
 import { routeSvg } from '../ui/art.js';
-import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet } from './deals.js';
+import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet, daysUntil } from './deals.js';
 import { openWeeks, resortForStay } from './live.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -40,7 +40,7 @@ function asOfLine(res, where = 'the places we stay') {
  * with one button. Victor: "I only need the best deals on the market." The places themselves
  * are a strip underneath, for a member who wants a place rather than a week.
  */
-export function stays({ store, go }) {
+export function stays({ store, go, query = {} }) {
   const me = store.me, s = store.settings;
   const canEdit = store.canPostDeals();
   const mine = store.matchesForMember(me.id);
@@ -58,6 +58,7 @@ export function stays({ store, go }) {
         <a class="btn ghost sm" href="#/watching">${icon('bell', { size: 16 })}Tell the Desk what you want${watching ? ` · ${watching}` : ''}</a>
       </div>
       <div id="mine" style="margin-top:22px"></div>
+      <div id="soon" style="margin-top:22px"></div>
       <div id="deals" style="margin-top:22px"></div>
       <div id="places" style="margin-top:34px"></div>
     </div></section></div>`);
@@ -90,8 +91,23 @@ export function stays({ store, go }) {
     }
     return [...lead, ...rest];
   };
+  // What checks in within the week, soonest first, before anything else: a Getaway that starts
+  // today is worth a phone call now and worth nothing on Monday. Never more than four; the
+  // same weeks are in the list below at their price.
+  const soonSlot = wrap.querySelector('#soon');
+  const paintSoon = (list) => {
+    soonSlot.replaceChildren();
+    const soon = list.filter(d => { const n = daysUntil(d.from); return n >= 0 && n <= 7; })
+      .sort((a, b) => String(a.from).localeCompare(String(b.from)) || byNight(a, b)).slice(0, 4);
+    if (!soon.length) return;
+    soonSlot.appendChild(el(`<div class="sec-head tight"><div><p class="eyebrow" style="color:var(--good-text)">${icon('zap')}Coming up</p>
+      <h2 style="font-size:1.2rem">${soon.length === 1 ? 'One checks in within the week' : `${soon.length} check in within the week`}</h2>
+      <p class="small muted" style="margin-top:6px">Soonest first. Ask now and Victor rings today.</p></div></div>`));
+    dealList(soonSlot, soon, { store, me, canEdit, first: 4, key: 'soon', inPlace: false, noun: 'coming up' });
+  };
   const paint = (sub) => {
     dealsSlot.replaceChildren();
+    paintSoon([...posted, ...drafts]);
     const all = spread([...posted, ...drafts].sort(byNight));
     dealsSlot.appendChild(el(`<div class="sec-head tight"><div><p class="eyebrow">${icon('trend')}Open right now</p>
       <h2 style="font-size:1.2rem">${all.length ? `${all.length} open, cheapest a night first` : loading ? 'Looking at what is open…' : 'Nothing open right now'}</h2>
@@ -109,6 +125,13 @@ export function stays({ store, go }) {
   wrap.addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-open"]')) load(); });
   wrap.querySelector('#post')?.addEventListener('click', () => postDealSheet({ store }));
   wrap.querySelector('#paste')?.addEventListener('click', () => pasteListingSheet({ store }));
+  // Shared to the app from the phone (a Getaway copied off Interval, a RedWeek listing): the
+  // share landed the text in sessionStorage on the way in, and the paste sheet opens on it.
+  if (query.paste && canEdit) {
+    let raw = '';
+    try { raw = sessionStorage.getItem('hunto.share') || ''; sessionStorage.removeItem('hunto.share'); } catch { /* private mode: nothing to open */ }
+    if (raw) setTimeout(() => pasteListingSheet({ store, prefill: { raw } }), 50);
+  }
 
   // The places, as a strip: where we actually stay first, then by price. One for a member who
   // wants a place on their own dates rather than a week somebody else has open.

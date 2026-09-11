@@ -124,9 +124,16 @@ async function pass(circle) {
         return { found: [], posted: 0 };
       }
       const today = new Date(), plus = new Date(Date.now() + num('WATCH_WINDOW_DAYS', 120) * 864e5);
+      const soon = new Date(Date.now() + num('WATCH_INTERVAL_SOON_DAYS', 14) * 864e5);
       const iso = (d) => d.toISOString().slice(0, 10);
-      const got = await iv.getaways({ from: iso(today), to: iso(plus), guests: num('WATCH_GUESTS', 2) });
-      log(`  ${got.length} Getaway weeks`);
+      // The next fortnight first, on its own: a Getaway that starts today or this week is the one
+      // Victor rings about now, and a results page for four months may not carry it (one page,
+      // sorted their way). Then the long window. The same week from both is one find.
+      const near = await iv.getaways({ from: iso(today), to: iso(soon), guests: num('WATCH_GUESTS', 2) });
+      const far = await iv.getaways({ from: iso(today), to: iso(plus), guests: num('WATCH_GUESTS', 2) });
+      const seenIds = new Set();
+      const got = [...near, ...far].filter(g => { const k = g.externalId || `${g.resortName}|${g.from}|${g.to}`; if (seenIds.has(k)) return false; seenIds.add(k); return true; });
+      log(`  ${got.length} Getaway weeks (${near.length} check in within ${num('WATCH_INTERVAL_SOON_DAYS', 14)} days)`);
       // ourName is what the catalog is matched on below. Interval calls it resortName, and
       // without this every Getaway week would fail to price and be dropped by onlyOurStays.
       found.push(...got.map(g => ({ ...g, stayId: null, ourName: g.resortName || null })));

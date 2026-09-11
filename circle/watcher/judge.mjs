@@ -22,6 +22,9 @@ import { normName, sameName, nameWithin } from '../js/core/names.js';
  * weeks badly wrong: a week beginning 17 December is three nights at the cheap rate and four at
  * the Christmas one, and pricing all seven as cheap made an ordinary listing look like a steal.
  */
+/** The last second of a check-in day in Aruba (AST, UTC−4, no daylight time), as UTC. */
+export const endOfCheckInDay = (isoDay) => new Date(Date.parse(`${isoDay}T23:59:59-04:00`)).toISOString();
+
 export function ourPrice(stay, from, nights) {
   if (!stay) return null;
   const rates = { low: stay.rate_low_usd, high: stay.rate_high_usd, peak: stay.rate_peak_usd };
@@ -148,7 +151,9 @@ export function asDeal(f, cfg, settings = {}) {
     // exactly that — not the Circle's own rate dressed up as retail.
     retailUsd: f.retailPrice || null,
     // A week that has started cannot be booked. Off the board by itself on the check-in day.
-    expiresAt: `${f.from}T12:00:00Z`,
+    // Off the board at the end of the check-in day in Aruba (UTC−4), not at noon UTC: a Getaway
+    // that starts today is still worth a phone call at four in the afternoon.
+    expiresAt: endOfCheckInDay(f.from),
   };
 }
 

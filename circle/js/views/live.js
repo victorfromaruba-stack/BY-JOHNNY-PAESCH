@@ -82,7 +82,9 @@ export function draftDealFrom(store, d, { generatedAt = null } = {}) {
     unitType: d.unitType || '', sleeps: d.sleeps ?? null, bedrooms: bedroomsOf(d),
     usdNightly: d.usdNightly, usdTotal: d.usdTotal, usdSubtotal: d.usdSubtotal, usdFees: d.usdFees,
     postedAt: generatedAt || new Date().toISOString(),
-    expiresAt: `${d.from}T12:00:00Z`,
+    // Open until the end of the check-in day in Aruba (UTC−4): a week that starts today is
+    // still open this afternoon.
+    expiresAt: new Date(Date.parse(`${d.from}T23:59:59-04:00`)).toISOString(),
   };
 }
 

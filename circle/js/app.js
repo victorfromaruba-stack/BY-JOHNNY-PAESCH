@@ -92,6 +92,17 @@ window.__huntoInstall = async () => {
 window.__huntoCanInstall = () => !!installPrompt;
 
 async function boot() {
+  // Shared to the app from the phone's share sheet (manifest share_target): the listing text
+  // arrives as ?text=…&url=… on the start URL. Keep it for the paste sheet, then drop it from the
+  // address so a reload does not post it twice, and land on Stays with the sheet asked for.
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.has('text') || q.has('url') || q.has('title')) {
+      const raw = [q.get('title'), q.get('text'), q.get('url')].filter(Boolean).join('\n').trim();
+      if (raw) sessionStorage.setItem('hunto.share', raw);
+      history.replaceState(null, '', `${location.pathname}#/stays?paste=1`);
+    }
+  } catch { /* nothing shared, or no storage */ }
   const live = CONFIG.backend === 'supabase' && CONFIG.supabaseUrl && CONFIG.supabaseKey;
   if (live && !wantsPreview()) {
     try {
