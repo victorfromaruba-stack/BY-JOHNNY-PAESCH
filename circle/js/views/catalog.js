@@ -319,6 +319,10 @@ export function stayDetail({ store, params, go, query = {} }) {
     const pics = roomPhotosFor(stay, place);
     const property = pics.filter(ph => ph.kind === 'property');
     const plans = pics.filter(ph => ph.kind === 'plan').length;
+    // Where the resort publishes no room list a program may read, the sizes come from the units
+    // owners hold there. The section says so rather than passing them off as the resort's own.
+    const fromUnits = rooms.some(r => r.fromUnits);
+    const vm = (place?.sources || []).find(x => x.kind === 'vakaymood');
     const site = safeUrl(stay.site);
     const host = site ? new URL(site).host.replace(/^www\./, '') : '';
     const chain = /marriott\.com/.test(site || '') ? 'Marriott' : /hilton\.com/.test(site || '') ? 'Hilton' : /hyatt\.com/.test(site || '') ? 'Hyatt' : null;
@@ -326,7 +330,7 @@ export function stayDetail({ store, params, go, query = {} }) {
     roomsSlot.innerHTML = `<section class="rooms" id="the-rooms">
       <div class="running-head"><h2>The rooms</h2><p class="eyebrow">${pics.length
         ? `<span class="num">${pics.length}</span> picture${pics.length === 1 ? '' : 's'}${plans ? ` · <span class="num">${plans}</span> plan${plans === 1 ? '' : 's'}` : ''}`
-        : 'as the property lists them'}</p></div>
+        : fromUnits ? 'the sizes owners have here' : 'as the property lists them'}</p></div>
       ${rooms.map((r, i) => `<article class="room" data-room="${i}">
         ${r.photos.length ? galleryStrip(r.photos, { room: i }) : ''}
         <div class="room-head"><h3>${escapeHtml(r.name)}</h3>${r.bits.length ? `<span class="meta num">${escapeHtml(r.bits.join(' · '))}</span>` : ''}</div>
@@ -336,7 +340,8 @@ export function stayDetail({ store, params, go, query = {} }) {
       ${property.length ? `<article class="room" data-room="property">${galleryStrip(property, { room: 'property' })}<div class="room-head"><h3>The property</h3><span class="meta">${property.length} photograph${property.length === 1 ? '' : 's'}</span></div></article>` : ''}
       ${!pics.length ? `<p class="small muted" style="margin-top:10px">No photographs of the rooms yet. ${chain ? `${chain} does not let a program copy its pictures, and the Circle does not take what it has not been given.` : 'The property\u2019s own pictures are its copyright, and the Circle does not take what it has not been given.'}${site ? ` The rooms are on <a href="${escapeHtml(site)}" target="_blank" rel="noopener noreferrer">${escapeHtml(host)} ${icon('external', { size: 13 })}</a>.` : ''}</p>` : ''}
       ${canEdit ? `<p style="margin-top:12px"><button type="button" class="btn ghost sm" data-act="room-photos">${icon('camera', { size: 15 })}Add room photographs</button></p>` : ''}
-      ${pics.length ? `<p class="tiny muted" style="margin-top:12px">The property\u2019s own photographs, shown so you know the room you are asking for; each carries the page and the day it was seen. They are the property\u2019s copyright.</p>` : ''}
+      ${fromUnits ? `<p class="tiny muted" style="margin-top:12px">${escapeHtml(stay.name)} publishes no room list a program may read, so these are the sizes owners actually hold here, from ${vm ? `<a href="${escapeHtml(safeUrl(vm.url) || '#')}" target="_blank" rel="noopener noreferrer">VakayMood\u2019s resort page</a>, seen ${escapeHtml(fmtDay(vm.seenOn))}` : 'VakayMood\u2019s resort page'}. Where owners differ, the range is shown rather than one of them.</p>` : ''}
+      ${pics.length ? `<p class="tiny muted" style="margin-top:12px">The property\u2019s own pictures, shown so you know the room you are asking for; each carries the page and the day it was seen. They are the property\u2019s copyright.</p>` : ''}
     </section>`;
     roomsSlot.addEventListener('click', async (e) => {
       const t = e.target.closest('[data-photo]');

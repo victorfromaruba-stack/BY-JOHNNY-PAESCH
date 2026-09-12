@@ -32,6 +32,34 @@ export function roomPhotosFor(stay, place) {
 }
 
 /**
+ * The sizes at a resort that publishes no room list of its own, worked out from the units owners
+ * actually have there — the same VakayMood record the rest of the dossier comes from. It is the
+ * only honest room list for the three Marriott houses, whose own site refuses a scripted read:
+ * every figure below is a figure an owner filed against a real week, and where owners disagree
+ * the page says the range rather than picking one.
+ */
+function roomsFromUnits(units) {
+  const by = new Map();
+  for (const u of units || []) {
+    const key = String(u.name || '').trim(); if (!key) continue;
+    const g = by.get(key) || { name: key, bedrooms: u.bedrooms ?? null, sleeps: [], baths: [], kitchens: new Set(), views: new Set() };
+    if (Number.isFinite(u.sleeps)) g.sleeps.push(u.sleeps);
+    if (Number.isFinite(u.bathrooms)) g.baths.push(u.bathrooms);
+    if (u.kitchen) g.kitchens.add(String(u.kitchen).toLowerCase());
+    if (u.view && !/^varies$/i.test(u.view)) g.views.add(String(u.view).toLowerCase());
+    by.set(key, g);
+  }
+  const span = (xs, one, many) => { if (!xs.length) return ''; const lo = Math.min(...xs), hi = Math.max(...xs); return lo === hi ? `${one} ${lo}` : `${one} ${lo}–${hi}`; };
+  const list = (set) => [...set].sort();
+  return [...by.values()].sort((a, b) => (a.bedrooms ?? 9) - (b.bedrooms ?? 9)).map(g => ({
+    name: g.name,
+    bits: [span(g.sleeps, 'sleeps'), g.baths.length ? `${Math.min(...g.baths) === Math.max(...g.baths) ? Math.min(...g.baths) : `${Math.min(...g.baths)}–${Math.max(...g.baths)}`} bath${Math.max(...g.baths) > 1 ? 's' : ''}` : '', list(g.kitchens).join(' or ')].filter(Boolean),
+    description: g.views.size ? `Owners have it ${list(g.views).length === 1 ? `with ${list(g.views)[0] === 'oceanfront' ? 'an oceanfront' : list(g.views)[0].startsWith('o') || list(g.views)[0].startsWith('i') ? `an ${list(g.views)[0]}` : `a ${list(g.views)[0]}`} outlook` : `looking onto ${list(g.views).join(', ')}`}.` : '',
+    photos: [],
+  }));
+}
+
+/**
  * The rooms as the property lists them, each with its photographs; then any room the Desk has
  * photographed that the property's list does not carry. Sizes and sleeps are the property's own
  * published figures — a blank is a blank.
@@ -42,13 +70,22 @@ export function roomsOf(stay, place) {
   for (const ph of pics) if (ph.room) (byRoom.get(normName(ph.room)) || byRoom.set(normName(ph.room), []).get(normName(ph.room))).push(ph);
   // A plan first: it is the shape of the room, and it is what the rest of the strip is of.
   const order = (a, b) => (b.kind === 'plan' ? 1 : 0) - (a.kind === 'plan' ? 1 : 0);
-  const rooms = (place?.rooms || []).map((r) => {
+  // A resort that publishes no room list of its own still has sizes: the units owners hold there.
+  const fromUnits = !(place?.rooms || []).length && (place?.units || []).length ? roomsFromUnits(place.units) : null;
+  const rooms = (fromUnits || place?.rooms || []).map((r) => {
+    if (fromUnits) {
+      const photos = [normName(r.name)].flatMap(k => byRoom.get(k) || []).sort(order);
+      byRoom.delete(normName(r.name));
+      return { ...r, photos, fromUnits: true };
+    }
+    return null;
+  }).filter(Boolean).concat(fromUnits ? [] : (place?.rooms || []).map((r) => {
     const keys = [normName(r.name), r.catalogName ? normName(r.catalogName) : null].filter(Boolean);
     const photos = keys.flatMap(k => byRoom.get(k) || []).sort(order);
     for (const k of keys) byRoom.delete(k);
     const bits = [r.sqft ? `${r.sqft.toLocaleString('en-US')} sq ft` : r.sqm ? `${r.sqm} m²` : '', r.sleeps ? `sleeps ${r.sleeps}` : '', r.beds || '', r.view || ''].filter(Boolean);
     return { name: r.name, bits, description: r.description || '', photos };
-  });
+  }));
   for (const [, photos] of byRoom) rooms.push({ name: photos[0].room, bits: [], description: '', photos: photos.sort(order) });
   // Pictures that are plainly of a room, where the property does not say which one. They are not
   // the property, and naming them would be inventing — so they go last, under their own heading,
