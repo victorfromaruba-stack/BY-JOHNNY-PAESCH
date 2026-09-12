@@ -1092,8 +1092,10 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .index-row .from { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .84rem; color: var(--ink-2); white-space: nowrap; }
 .index-row .from b { color: var(--ink); font-weight: 500; }
 @media (min-width: 900px) { .index { display: grid; grid-template-columns: 1fr 1fr 1fr; column-gap: 40px; } }
-.running-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 34px; padding-bottom: 8px; border-bottom: 1px solid var(--hairline); }
-.running-head h2 { font-size: 1.2rem; }
+.running-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin-top: 34px; padding-bottom: 8px; border-bottom: 1px solid var(--hairline); }
+/* The heading keeps its line; the eyebrow gives way and drops under it when the row is short. */
+.running-head h2 { font-size: 1.2rem; flex: 0 0 auto; }
+.running-head .eyebrow { flex: 1 1 auto; text-align: right; }
 .running-head .eyebrow { margin: 0; }
 .rule-block { padding-block: 18px; border-top: 1px solid var(--hairline); }
 .pull { margin: 18px 0 0; padding: 4px 0 4px 16px; border-left: 2px solid var(--good); font-style: italic; font-size: 1rem; line-height: 1.5; }
@@ -1131,6 +1133,10 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .gallery.big .gallery-tile { width: min(78vw, 300px); height: auto; aspect-ratio: 3 / 2; scroll-snap-align: start; position: relative; }
 .gallery.big .gallery-tile:only-child { width: min(100%, 520px); }
 .gallery .tile-tag { position: absolute; left: 10px; top: 10px; font-size: .64rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--on-photo); background: var(--scrim); padding: 4px 8px; border-radius: var(--r-pill); }
+/* A plan is a drawing, not a photograph: it is shown whole, on paper, never cropped to fill. */
+.gallery-tile.plan { background: #FFFFFF; border: 1px solid var(--hairline); }
+.gallery-tile.plan img { object-fit: contain; }
+.place-photo.plan img { object-fit: contain; background: #FFFFFF; max-height: 70vh; }
 @media (min-width: 780px) { .gallery.big { margin-inline: 0; padding-inline: 0; } .gallery.big .gallery-tile { width: 300px; } }
 
 /* The island: the coast as a hairline, the land in the well, this place in the accent. */

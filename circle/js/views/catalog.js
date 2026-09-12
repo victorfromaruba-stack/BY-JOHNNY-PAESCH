@@ -317,18 +317,21 @@ export function stayDetail({ store, params, go, query = {} }) {
     const canEdit = store.hasRole('planner', 'comms', 'admin');
     const rooms = roomsOf(stay, place);
     const pics = roomPhotosFor(stay, place);
-    const property = pics.filter(ph => !ph.room);
+    const property = pics.filter(ph => ph.kind === 'property');
+    const plans = pics.filter(ph => ph.kind === 'plan').length;
     const site = safeUrl(stay.site);
     const host = site ? new URL(site).host.replace(/^www\./, '') : '';
     const chain = /marriott\.com/.test(site || '') ? 'Marriott' : /hilton\.com/.test(site || '') ? 'Hilton' : /hyatt\.com/.test(site || '') ? 'Hyatt' : null;
     const roomsSlot = wrap.querySelector('#rooms');
     roomsSlot.innerHTML = `<section class="rooms" id="the-rooms">
-      <div class="running-head"><h2>The rooms</h2><p class="eyebrow">${pics.length ? `<span class="num">${pics.length}</span> photograph${pics.length === 1 ? '' : 's'} · the property's own` : 'as the property lists them'}</p></div>
+      <div class="running-head"><h2>The rooms</h2><p class="eyebrow">${pics.length
+        ? `<span class="num">${pics.length}</span> picture${pics.length === 1 ? '' : 's'}${plans ? ` · <span class="num">${plans}</span> plan${plans === 1 ? '' : 's'}` : ''}`
+        : 'as the property lists them'}</p></div>
       ${rooms.map((r, i) => `<article class="room" data-room="${i}">
         ${r.photos.length ? galleryStrip(r.photos, { room: i }) : ''}
         <div class="room-head"><h3>${escapeHtml(r.name)}</h3>${r.bits.length ? `<span class="meta num">${escapeHtml(r.bits.join(' · '))}</span>` : ''}</div>
         ${r.description ? `<p class="small muted">${escapeHtml(r.description)}</p>` : ''}
-        <a class="btn quiet sm" href="#/book/${escapeHtml(stay.id)}?note=${encodeURIComponent(`A ${r.name}, if there is one.`)}">${icon('send', { size: 14 })}Ask for a ${escapeHtml(r.name)}</a>
+        ${r.unnamed ? '' : `<a class="btn quiet sm" href="#/book/${escapeHtml(stay.id)}?note=${encodeURIComponent(`The ${r.name}, if there is one.`)}">${icon('send', { size: 14 })}Ask for the ${escapeHtml(r.name)}</a>`}
       </article>`).join('')}
       ${property.length ? `<article class="room" data-room="property">${galleryStrip(property, { room: 'property' })}<div class="room-head"><h3>The property</h3><span class="meta">${property.length} photograph${property.length === 1 ? '' : 's'}</span></div></article>` : ''}
       ${!pics.length ? `<p class="small muted" style="margin-top:10px">No photographs of the rooms yet. ${chain ? `${chain} does not let a program copy its pictures, and the Circle does not take what it has not been given.` : 'The property\u2019s own pictures are its copyright, and the Circle does not take what it has not been given.'}${site ? ` The rooms are on <a href="${escapeHtml(site)}" target="_blank" rel="noopener noreferrer">${escapeHtml(host)} ${icon('external', { size: 13 })}</a>.` : ''}</p>` : ''}
