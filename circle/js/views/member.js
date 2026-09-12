@@ -33,6 +33,7 @@ export function home({ store, go }) {
   const next = store.nextMilestone(me.id);
 
   const wrap = el(`<div><section class="sec"><div class="wrap">
+    <div id="masthead"></div>
     <div class="side">
       <div class="stack" id="left"></div>
       <div class="stack" id="right"></div>
@@ -45,43 +46,46 @@ export function home({ store, go }) {
   // conversion rate in their head: a member wants to know whether they can go somewhere, and
   // the app knew the answer and never said it. The five-digit figure is still here — it is
   // just no longer the headline, because it is not the question.
+  // The page opens the way the board does: a line of standing type saying what you can have,
+  // the figure it rests on in the mono face underneath, and the one button that acts on it. The
+  // membership card and the balance bar follow, under a hairline — they are the evidence, not
+  // the headline, and a rounded box around the first thing a member reads was the "card soup"
+  // Victor objected to.
   const book = store.canBookNow(me.id);
-  const bookLine = !book ? ''
+  const head = !book
+    ? { eyebrow: 'The Circle', h1: `${VOCAB.pap.welcome[0]}, ${me.name.split(' ')[0]}`, lede: 'Your points, what the Desk has open, and what the Circle owes you — all on one page.', cta: `<a class="btn" href="#/stays">${icon('bed', { size: 17 })}See what is open</a>` }
     : book.can
-      ? `<p class="eyebrow">${icon('bed')}What you can book today</p>
-         <h1 class="book-now">${book.nights}${book.capped ? '+' : ''} night${book.nights === 1 ? '' : 's'} at<br>${escapeHtml(book.stay.name)}</h1>
-         <p class="small muted" style="margin-top:8px">At its cheapest, all in. Pick your dates and the Desk prices those nights exactly.</p>
-         <div class="row" style="margin-top:14px">
-           <a class="btn" href="#/book/${escapeHtml(book.stay.id)}">${icon('send', { size: 17 })}Ask for these dates</a>
-           <a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Other places</a>
-         </div>`
-      : `<p class="eyebrow">${icon('bed')}The first thing within reach</p>
-         <h1 class="book-now">${book.nights} night${book.nights === 1 ? '' : 's'} at<br>${escapeHtml(book.stay.name)}</h1>
-         <p class="small muted" style="margin-top:8px"><b class="num">${escapeHtml(fmtPoints(book.short))}</b> to go — about ${book.months} more month${book.months === 1 ? '' : 's'} at ${escapeHtml(fmtUsd2(me.monthlyUsd))}. You can ask for it before then and close the gap in cash.</p>
-         <div class="row" style="margin-top:14px">
-           <a class="btn" href="#/pay">${icon('arrowUp', { size: 17 })}Send a contribution</a>
-           <a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Other places</a>
-         </div>`;
-
-  const top = el(`<div class="panel">
+      ? { eyebrow: 'What you can book today', h1: `${book.nights}${book.capped ? '+' : ''} night${book.nights === 1 ? '' : 's'} at ${book.stay.name}`,
+          lede: 'At its cheapest, all in. Pick your dates and the Desk prices those nights exactly.',
+          cta: `<a class="btn" href="#/book/${escapeHtml(book.stay.id)}">${icon('send', { size: 17 })}Ask for these dates</a>
+                <a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Other places</a>` }
+      : { eyebrow: 'The first thing within reach', h1: `${book.nights} night${book.nights === 1 ? '' : 's'} at ${book.stay.name}`,
+          lede: `${fmtPoints(book.short)} to go — about ${book.months} more month${book.months === 1 ? '' : 's'} at ${fmtUsd2(me.monthlyUsd)}. You can ask for it before then and close the gap in cash.`,
+          cta: `<a class="btn" href="#/pay">${icon('arrowUp', { size: 17 })}Send a contribution</a>
+                <a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Other places</a>` };
+  wrap.querySelector('#masthead').innerHTML = `<div class="masthead">
+      <p class="eyebrow"><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span>, ${escapeHtml(me.name.split(' ')[0])}${book ? ` · ${escapeHtml(head.eyebrow)}` : ''}</p>
+      <h1>${escapeHtml(head.h1)}</h1>
+      <p class="dateline"><b class="num" id="avail">0</b> <span id="avail-usd"></span></p>
+      <p class="lede" style="margin-top:10px">${escapeHtml(head.lede)}</p>
+      <div class="row no-print">${head.cta}</div>
+    </div>`;
+  const top = el(`<div class="rule-block">
       <div class="card-strip">
-        <a href="#/card" style="width:132px;display:block" aria-label="Open your card"><span id="mini-card"></span></a>
-        <div>
-          <h2 style="font-size:1.05rem;letter-spacing:.01em"><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span>, ${escapeHtml(me.name.split(' ')[0])}</h2>
-          <p class="small muted" style="margin-top:6px"><b class="num" id="avail">0</b> <span id="avail-usd"></span></p>
-          <div id="balbar" style="margin-top:12px"></div>
+        <div style="min-width:0">
+          <div id="balbar"></div>
+          <div class="row" style="margin-top:12px">
+            ${book?.can === false ? '' : `<a class="btn ghost sm" href="#/pay">${icon('arrowUp', { size: 16 })}Send a contribution</a>`}
+            <a class="btn quiet sm" href="#/ledger">${icon('receipt', { size: 16 })}Statement</a>
+          </div>
         </div>
-      </div>
-      <div class="book-lead">${bookLine}</div>
-      <div class="row" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--hairline-soft)">
-        ${book?.can === false ? '' : `<a class="btn ghost sm" href="#/pay">${icon('arrowUp', { size: 16 })}Send a contribution</a>`}
-        <a class="btn quiet sm" href="#/ledger">${icon('receipt', { size: 16 })}Statement</a>
+        <a class="mini" href="#/card" aria-label="Open your card"><span id="mini-card"></span></a>
       </div>
     </div>`);
   left.appendChild(top);
   top.querySelector('#mini-card').replaceChildren(memberCard(me, { store, flippable: false, compact: true }));
-  countUp(top.querySelector('#avail'), lt.available, { format: (n) => `✦ ${Math.round(n).toLocaleString('en-US')}` });
-  top.querySelector('#avail-usd').textContent = `· ${pointsUsd(lt.available, s.pointsPerDollar)} of hotel${lt.committed ? ` · ${fmtPoints(lt.committed)} committed` : ''}`;
+  countUp(wrap.querySelector('#avail'), lt.available, { format: (n) => `✦ ${Math.round(n).toLocaleString('en-US')}` });
+  wrap.querySelector('#avail-usd').textContent = `· ${pointsUsd(lt.available, s.pointsPerDollar)} of hotel${lt.committed ? ` · ${fmtPoints(lt.committed)} committed` : ''}`;
   {
     const total = Math.max(1, lt.available + lt.committed);
     top.querySelector('#balbar').innerHTML = `
@@ -281,7 +285,7 @@ export function home({ store, go }) {
   // right column — streak, roll call, coverage, the note from Ian
   const myStanding = store.standingOf(me.id);
   const nextUp = nextRank(myStanding?.monthsHeld ?? 0);
-  right.appendChild(el(`<div class="panel">
+  right.appendChild(el(`<div class="rule-block">
       <div class="row-between"><p class="eyebrow">${icon('crown')}Your standing</p>
         <a class="small" href="#/profile">Your corner</a></div>
       <div id="crest-slot" style="margin-top:10px"></div>
@@ -303,7 +307,7 @@ export function home({ store, go }) {
     const series = store.balanceSeries(me.id).map(p => p.points);
     right.querySelector('.spark-slot')?.replaceChildren(sparkline(series.length ? series : [0, 0], { height: 46 }));
   }
-  right.appendChild(el(`<div class="panel">
+  right.appendChild(el(`<div class="rule-block">
       <div class="row-between"><p class="eyebrow">${icon('users')}This month in the Circle</p>
         <a class="small" href="#/circle">Everyone</a></div>
       <div class="row" style="gap:14px;margin-top:12px;align-items:center">
@@ -312,14 +316,14 @@ export function home({ store, go }) {
         <br><span class="muted">Names stay private unless an Insider opts in.</span></div>
       </div></div>`));
   right.querySelector('#rollcall').replaceChildren(ring({ total: t.expectedThisMonth, filled: t.confirmedThisMonth, size: 76 }));
-  const cov = el(`<div class="panel"><p class="eyebrow">${icon('shield')}Proof of reserves</p><div id="cov" style="margin-top:12px"></div>
+  const cov = el(`<div class="rule-block"><p class="eyebrow">${icon('shield')}Proof of reserves</p><div id="cov" style="margin-top:12px"></div>
       <p class="small muted" style="margin-top:10px"><a href="#/pool">The whole Pool</a></p></div>`);
   cov.querySelector('#cov').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, configured: t.accountsConfigured }));
   right.appendChild(cov);
-  if (note) right.appendChild(el(`<div class="panel"><p class="eyebrow">Note from ${escapeHtml(store.member(note.authorId)?.name.split(' ')[0] || 'Ian')}</p>
-      <h3 style="margin-top:8px">${escapeHtml(note.title)}</h3>
-      <p class="small muted" style="margin-top:8px">${escapeHtml(note.body.slice(0, 180))}${note.body.length > 180 ? '…' : ''}</p>
-      <p class="small" style="margin-top:10px"><a href="#/circle">All the notes</a></p></div>`));
+  // The Voice's note reads as a note: set as a pull quote, in his words, signed.
+  if (note) right.appendChild(el(`<div class="rule-block"><p class="eyebrow">${icon('inbox')}From the Voice</p>
+      <blockquote class="pull"><b>${escapeHtml(note.title)}</b><br>${escapeHtml(note.body.slice(0, 180))}${note.body.length > 180 ? '…' : ''}
+        <cite>${escapeHtml(store.member(note.authorId)?.name || 'Ian')} · <a href="#/circle">all the notes</a></cite></blockquote></div>`));
   return wrap;
 }
 

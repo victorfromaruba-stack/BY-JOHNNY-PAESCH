@@ -312,7 +312,9 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .card-flip.flipped > .front { visibility: hidden; transition: visibility 0s linear calc(var(--dur-flip) / 2); }
 .card-back-body { position: absolute; inset: 0; padding: 6cqw; display: grid; grid-template-rows: auto 1fr auto; gap: 3cqw; font-size: clamp(6px, 3.6cqw, 12px); }
 .card-back-body p { font-size: clamp(5px, 2.9cqw, 10px); }
-.card-strip { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+.card-strip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+.card-strip .mini { display: block; width: 132px; }
+@media (max-width: 560px) { .card-strip { grid-template-columns: 1fr; } .card-strip .mini { width: 168px; } }
 @media (prefers-reduced-motion: reduce) { .card-tilt .card-obj { transform: none; } .card-obj .sheen { display: none; } }
 
 /* ---------- stay / trip cards ---------- */
@@ -1098,6 +1100,12 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .running-head .eyebrow { flex: 1 1 auto; text-align: right; }
 .running-head .eyebrow { margin: 0; }
 .rule-block { padding-block: 18px; border-top: 1px solid var(--hairline); }
+.stack > .rule-block:first-child { border-top: 0; padding-top: 0; }
+.stack > .rule-block + .rule-block { padding-top: 18px; }
+/* Home's masthead carries the balance in the dateline and its action under the lede. */
+#masthead .masthead { border-bottom: 0; padding-bottom: 0; margin-bottom: 10px; }
+#masthead .dateline b { color: var(--ink); font-size: 1.02rem; }
+#masthead .row { margin-top: 16px; }
 .pull { margin: 18px 0 0; padding: 4px 0 4px 16px; border-left: 2px solid var(--good); font-style: italic; font-size: 1rem; line-height: 1.5; }
 .pull cite { display: block; font-style: normal; margin-top: 6px; }
 /* Reduced motion: a row does not press. */
