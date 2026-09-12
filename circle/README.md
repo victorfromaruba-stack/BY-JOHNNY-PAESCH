@@ -288,6 +288,13 @@ Marriott and Barceló answer a scripted request with a 403 and that is a no: the
 their copyright, and the Circle does not take what it has not been given. The page says so, by
 name, and links their own rooms page.
 
+Those four still get a room list, because the data was already there and nobody was showing
+it: the **units owners actually hold** at that resort, from the same VakayMood record the rest
+of the dossier comes from. Surf Club goes from nothing to Studio, One, Two and Three Bedroom,
+each with sleeps, bathrooms, kitchen and the outlooks owners have — and where owners differ the
+page shows the range rather than picking one. The footnote says where it came from and on which
+day, and that the resort publishes no list a program may read.
+
 The Desk can add photographs it holds the rights to — its own, or a resort's media kit with
 their OK — from the stay page (**Add room photographs**): several at once, which room each
 shows, and a note saying where they came from, which is not optional. They are filed under

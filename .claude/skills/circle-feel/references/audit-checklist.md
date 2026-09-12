@@ -211,3 +211,25 @@ any route.
 
 Not a regression: `/stays` is taller than the old catalog grid because it is now the board.
 
+
+## Re-baselined 12 Sept, the rooms, the island and the editorial Home (390px, as admin)
+
+Victor: "I also need more pictures of the rooms on each packages how they look like a map of the
+room map etc" and, before it, "be more creative with everything, make it HIGH QUALITY". So: the
+stay page opens on the place (photograph edge to edge on a phone, the name and the from-price set
+on it), a row on the board opens the place with that week pinned rather than jumping to the ask,
+"The rooms" carries every picture on file per room plus the property's own floor plans, "Where it
+is" draws the island, and Home opens on a masthead instead of eight stacked panels. No overflow,
+no console error on any route at 390 or 1440, light or dark.
+
+| route | screens | first figure | note |
+|---|---|---|---|
+| `/home` | 3.5 | 131px | masthead: greeting, "2 nights at voco Surfside Aruba", the balance in mono, one button; the card and the bar under a hairline; the right column is four hairline blocks, not four boxes |
+| `/stays` | 5.5 | 96px | unchanged board; rows now open the place, carrying the week |
+| `/stays/stay_boardwalk` | 5.2 | ~3000px | hero → 6 rooms, 33 pictures and 3 plans → the island → the quote |
+| `/stays/stay_surfclub` | 4.7 | 1066px | no photographs (Marriott 403s) but four sizes from the units owners hold, and the reason in a footnote |
+| `/book/:id` | 2.0 | — | the room being asked for, in pictures, above the dates |
+
+Deliberate, not a regression: a stay page is taller because it now answers "what does the room
+look like" and "where is it" without leaving the page. The under-44px controls the sweep reports
+on a stay page are words inside sentences (an address, a phone number, a site link), not controls.
