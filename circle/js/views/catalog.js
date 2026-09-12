@@ -341,7 +341,9 @@ export function stayDetail({ store, params, go, query = {} }) {
       ${!pics.length ? `<p class="small muted" style="margin-top:10px">No photographs of the rooms yet. ${chain ? `${chain} does not let a program copy its pictures, and the Circle does not take what it has not been given.` : 'The property\u2019s own pictures are its copyright, and the Circle does not take what it has not been given.'}${site ? ` The rooms are on <a href="${escapeHtml(site)}" target="_blank" rel="noopener noreferrer">${escapeHtml(host)} ${icon('external', { size: 13 })}</a>.` : ''}</p>` : ''}
       ${canEdit ? `<p style="margin-top:12px"><button type="button" class="btn ghost sm" data-act="room-photos">${icon('camera', { size: 15 })}Add room photographs</button></p>` : ''}
       ${fromUnits ? `<p class="tiny muted" style="margin-top:12px">${escapeHtml(stay.name)} publishes no room list a program may read, so these are the sizes owners actually hold here, from ${vm ? `<a href="${escapeHtml(safeUrl(vm.url) || '#')}" target="_blank" rel="noopener noreferrer">VakayMood\u2019s resort page</a>, seen ${escapeHtml(fmtDay(vm.seenOn))}` : 'VakayMood\u2019s resort page'}. Where owners differ, the range is shown rather than one of them.</p>` : ''}
-      ${pics.length ? `<p class="tiny muted" style="margin-top:12px">The property\u2019s own pictures, shown so you know the room you are asking for; each carries the page and the day it was seen. They are the property\u2019s copyright.</p>` : ''}
+      ${pics.length ? `<p class="tiny muted" style="margin-top:12px">${pics.every(ph => ph.own)
+        ? 'Photographs the Circle holds the rights to; each carries the note saying where it came from.'
+        : 'The property\u2019s own pictures, shown so you know the room you are asking for; each carries the page and the day it was seen. They are the property\u2019s copyright.'}${pics.some(ph => ph.own) && !pics.every(ph => ph.own) ? ' The ones marked Ours are the Circle\u2019s.' : ''}</p>` : ''}
     </section>`;
     roomsSlot.addEventListener('click', async (e) => {
       const t = e.target.closest('[data-photo]');
@@ -368,7 +370,7 @@ export function stayDetail({ store, params, go, query = {} }) {
     wrap.querySelector('#where').innerHTML = `<section class="where">
       <div class="running-head"><h2>Where it is</h2><p class="eyebrow">${escapeHtml(stay.area)} · ${stay.onSand ? 'on the sand' : 'across the road'}</p></div>
       <div class="island-wrap">${islandSvg({ here: place?.geo || null, area: stay.area, label: stay.name, others })}</div>
-      <p class="small" style="margin-top:10px">${place?.address ? `${escapeHtml(place.address)} · ` : ''}<a href="${escapeHtml(mapsHref)}" target="_blank" rel="noopener noreferrer">Open in Maps ${icon('external', { size: 13 })}</a>${site ? ` · <a href="${escapeHtml(site)}" target="_blank" rel="noopener noreferrer">${escapeHtml(host)} ${icon('external', { size: 13 })}</a> for room plans and the resort map, where it publishes them` : ''}${place?.geo ? '' : ' · the dot is the beach, not the door: this place has not published its position'}.</p>
+      <p class="small" style="margin-top:10px">${place?.address ? `${escapeHtml(place.address)} · ` : ''}<a href="${escapeHtml(mapsHref)}" target="_blank" rel="noopener noreferrer">Open in Maps ${icon('external', { size: 13 })}</a>${site ? ` · <a href="${escapeHtml(site)}" target="_blank" rel="noopener noreferrer">${escapeHtml(host)} ${icon('external', { size: 13 })}</a> for room plans and the resort map, where it publishes them` : ''}${place?.geo ? '' : ' · the mark is the beach, not the door: we have no position on file for this one'}.</p>
     </section>`;
   } else { wrap.querySelector('#rooms').remove(); wrap.querySelector('#where').remove(); }
 
@@ -476,7 +478,9 @@ export function stayDetail({ store, params, go, query = {} }) {
     // greet everybody with a refusal.
     const today = new Date();
     const soon = new Date(today.getTime() + 14 * 864e5);
-    const iso = (d) => new Date(d).toISOString().slice(0, 10);
+    // The day in Aruba, not the day in UTC. After 20:00 local the two differ, and a week checking
+    // in today — the one the board leads with — would have been refused as already past.
+    const iso = (d) => new Date(new Date(d).getTime() - 4 * 36e5).toISOString().slice(0, 10);
     const dToday = iso(today);
     const dIn = cameFrom && Date.parse(cameFrom.from) >= Date.parse(dToday) ? cameFrom.from : iso(soon);
     const dOut = cameFrom && Date.parse(cameFrom.from) >= Date.parse(dToday) ? cameFrom.to : iso(soon.getTime() + Math.max(1, stay.minNights || 1) * 864e5);

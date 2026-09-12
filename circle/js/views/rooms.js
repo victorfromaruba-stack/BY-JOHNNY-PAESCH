@@ -13,14 +13,33 @@ import { sheet } from '../ui/components.js';
 
 const hostOf = (url) => { try { return new URL(url).host.replace(/^www\./, ''); } catch { return ''; } };
 
+/** Alt text that is machine leavings rather than words: a filename, an og:image marker, a blank. */
+const JUNK_ALT = /^(og:image|image|photo|picture|untitled)$|^\s*$|\.(jpe?g|png|webp|avif)$/i;
+/**
+ * What a member should read under a picture.
+ *
+ * `photos[].what` is the dossier's own note, and on everything filed before 12 September it is a
+ * CURATOR's note — "…; 1920x1078, landscape, no visible people", "use as fallback if the 1920px
+ * aerial fails". Printing that to a member leaks our filing decisions and reads as machine
+ * output, so only the records that carry `kind` (written with a caption for a person) use it.
+ * Everything else falls back to the property's own alt text, and where that is a filename or an
+ * og:image marker, to nothing — the caller then names the room, which is what a member needs.
+ */
+const captionOf = (ph) => {
+  const written = ph.kind ? String(ph.what || '').trim() : '';
+  if (written) return written;
+  const alt = String(ph.alt || '').trim();
+  return JUNK_ALT.test(alt) ? '' : alt;
+};
+
 /** Every photograph on file for a stay, the property's and the Desk's, in one shape. */
 export function roomPhotosFor(stay, place) {
   const bundled = (place?.photos || []).map((ph, i) => ({
-    key: `b${i}`, src: `assets/${ph.file}`, thumb: `assets/${ph.thumb || ph.file}`, alt: ph.alt || ph.what || '', room: ph.room || null,
+    key: `b${i}`, src: `assets/${ph.file}`, thumb: `assets/${ph.thumb || ph.file}`, alt: captionOf(ph) || ph.room || '', room: ph.room || null,
     // `kind` is what the picture IS: a photograph of a room, of the property, or the property's
     // own floor plan. A plan is drawn, not shot, so it is never cropped and never captioned as
     // a photograph — it is the answer to "what is the shape of the room".
-    kind: ph.kind || (ph.room ? 'room' : 'property'), caption: ph.what && ph.what !== 'room' ? ph.what : (ph.alt || ''),
+    kind: ph.kind || (ph.room ? 'room' : 'property'), caption: captionOf(ph),
     from: hostOf(ph.page || ph.source), page: ph.page || ph.source || '', seenOn: ph.seenOn || null, own: false,
   }));
   const own = (Array.isArray(stay?.gallery) ? stay.gallery : []).filter(g => g && g.url).map((g) => ({
@@ -54,7 +73,7 @@ function roomsFromUnits(units) {
   return [...by.values()].sort((a, b) => (a.bedrooms ?? 9) - (b.bedrooms ?? 9)).map(g => ({
     name: g.name,
     bits: [span(g.sleeps, 'sleeps'), g.baths.length ? `${Math.min(...g.baths) === Math.max(...g.baths) ? Math.min(...g.baths) : `${Math.min(...g.baths)}–${Math.max(...g.baths)}`} bath${Math.max(...g.baths) > 1 ? 's' : ''}` : '', list(g.kitchens).join(' or ')].filter(Boolean),
-    description: g.views.size ? `Owners have it ${list(g.views).length === 1 ? `with ${list(g.views)[0] === 'oceanfront' ? 'an oceanfront' : list(g.views)[0].startsWith('o') || list(g.views)[0].startsWith('i') ? `an ${list(g.views)[0]}` : `a ${list(g.views)[0]}`} outlook` : `looking onto ${list(g.views).join(', ')}`}.` : '',
+    description: g.views.size ? `Outlooks owners have filed for this size: ${list(g.views).join(', ')}.` : '',
     photos: [],
   }));
 }
@@ -110,6 +129,10 @@ export function roomPhotoSheet(title, photos) {
         <figcaption class="tiny muted">${ph.own
           ? `${escapeHtml(ph.note || 'The Circle’s own photograph')}${ph.seenOn ? ` · ${escapeHtml(fmtDay(ph.seenOn))}` : ''}`
           : `${ph.kind === 'plan' && !/plan/i.test(ph.caption || ph.alt || '') ? 'The property’s own plan. ' : ''}${escapeHtml(ph.caption || ph.alt || ph.room || 'The property')}${ph.from ? ` · from ${escapeHtml(ph.from)}` : ''}${ph.seenOn ? `, seen ${escapeHtml(fmtDay(ph.seenOn))}` : ''}`}</figcaption></figure>`).join('')}</div>
-      <p class="tiny muted" style="margin-top:12px">${photos.some(p => !p.own) ? 'The property’s own pictures, shown so you know the room you are asking for. They are the property’s copyright.' : 'Photographs the Circle holds the rights to, with where each came from.'}</p>`;
+      <p class="tiny muted" style="margin-top:12px">${photos.every(p => p.own)
+        ? 'Photographs the Circle holds the rights to, with where each came from.'
+        : photos.some(p => p.own)
+          ? 'The ones marked Ours are the Circle’s own, with where each came from; the rest are the property’s, shown so you know the room you are asking for, and they are the property’s copyright.'
+          : 'The property’s own pictures, shown so you know the room you are asking for. They are the property’s copyright.'}</p>`;
   } });
 }

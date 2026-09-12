@@ -282,7 +282,7 @@ in the mono face (a blank is a blank: nothing is estimated), and *Ask for a Pala
 under it, which opens the ask with the room already in the word for Victor. The photographs
 are the properties' own, fetched from their sites with `robots.txt` honoured by
 `.claude/skills/real-rooms`, each carrying the page and the day it was seen
-(`assets/rooms/sources.json`, `data/places.js`). Sixty-odd across ten places. The three
+(`assets/rooms/sources.json`, `data/places.js`). A hundred and eleven across ten places. The three
 Marriott houses — Surf Club, Ocean Club, Renaissance — and the Barceló have none, because
 Marriott and Barceló answer a scripted request with a 403 and that is a no: their pictures are
 their copyright, and the Circle does not take what it has not been given. The page says so, by
@@ -301,7 +301,9 @@ shows, and a note saying where they came from, which is not optional. They are f
 `stays/<id>/rooms/` in the `stay-photos` bucket and recorded in `stays.gallery`; the
 database refuses a record without a note (`gallery_has_provenance`), the preview backend
 refuses the same, and members see the note under each picture with an *Ours* tag on the
-tile. Room plans are never fetched: where a resort publishes them, the page links its site.
+tile. A room plan is only ever the property's own: Boardwalk and Divi publish theirs as pictures
+on the rooms page we are allowed to read, so those five are on file and marked *Plan*; every
+other resort's plans stay where they are, behind a link to its own site.
 
 **Where it is** draws Aruba — a simplified coast in `ui/art.js`, turned the way the tourist
 maps turn it — with the place as a dot where its site or VakayMood published a position, a

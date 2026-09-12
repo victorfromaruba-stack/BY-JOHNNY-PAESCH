@@ -53,7 +53,7 @@ export function home({ store, go }) {
   // Victor objected to.
   const book = store.canBookNow(me.id);
   const head = !book
-    ? { eyebrow: 'The Circle', h1: `${VOCAB.pap.welcome[0]}, ${me.name.split(' ')[0]}`, lede: 'Your points, what the Desk has open, and what the Circle owes you — all on one page.', cta: `<a class="btn" href="#/stays">${icon('bed', { size: 17 })}See what is open</a>` }
+    ? { eyebrow: '', h1: 'Your corner of the Circle', lede: 'Your points, what the Desk has open, and what the Circle owes you — all on one page.', cta: `<a class="btn" href="#/stays">${icon('bed', { size: 17 })}See what is open</a>` }
     : book.can
       ? { eyebrow: 'What you can book today', h1: `${book.nights}${book.capped ? '+' : ''} night${book.nights === 1 ? '' : 's'} at ${book.stay.name}`,
           lede: 'At its cheapest, all in. Pick your dates and the Desk prices those nights exactly.',
@@ -64,7 +64,7 @@ export function home({ store, go }) {
           cta: `<a class="btn" href="#/pay">${icon('arrowUp', { size: 17 })}Send a contribution</a>
                 <a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Other places</a>` };
   wrap.querySelector('#masthead').innerHTML = `<div class="masthead">
-      <p class="eyebrow"><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span>, ${escapeHtml(me.name.split(' ')[0])}${book ? ` · ${escapeHtml(head.eyebrow)}` : ''}</p>
+      <p class="eyebrow"><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span>, ${escapeHtml(me.name.split(' ')[0])}${head.eyebrow ? ` · ${escapeHtml(head.eyebrow)}` : ''}</p>
       <h1>${escapeHtml(head.h1)}</h1>
       <p class="dateline"><b class="num" id="avail">0</b> <span id="avail-usd"></span></p>
       <p class="lede" style="margin-top:10px">${escapeHtml(head.lede)}</p>

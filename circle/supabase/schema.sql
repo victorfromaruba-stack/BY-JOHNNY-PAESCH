@@ -2611,7 +2611,11 @@ alter table stays add column if not exists photo_note text;
 -- backend is not enforced.
 alter table stays add column if not exists gallery jsonb not null default '[]'::jsonb;
 create or replace function gallery_has_provenance(g jsonb) returns boolean
-language sql immutable as $$
+language sql immutable
+-- Pinned: this runs inside a CHECK constraint, so it must not be able to resolve a different
+-- function. Everything it calls is a pg_catalog builtin, which stays in scope with an empty path.
+set search_path = ''
+as $$
   select jsonb_typeof(g) = 'array'
      and not exists (select 1 from jsonb_array_elements(g) e
                      where nullif(trim(coalesce(e->>'note', '')), '') is null or nullif(trim(coalesce(e->>'path', '')), '') is null);
