@@ -144,6 +144,22 @@ export function photoCredit(stay) {
   };
 }
 
+/** Two letters for the beach, for the square where a place has no photograph of its own. */
+export function beachMark(stay) {
+  const a = String(stay?.area || '');
+  return { 'Palm Beach': 'PB', 'Eagle Beach': 'EB', 'Druif Beach': 'DB', 'Oranjestad': 'OR', 'Malmok': 'MA', 'Savaneta': 'SA', 'Noord': 'NO' }[a]
+    || a.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '·';
+}
+/**
+ * A picture of THIS place, or nothing: the Desk's own upload or the bundled licensed photograph.
+ * Never a beach photograph — at thumbnail size its "the beach" tag does not fit, and a beach
+ * standing in for a hotel at 56px is exactly the picture the house rule forbids.
+ */
+export function thumbFor(stay) {
+  const k = photoKind(stay);
+  return k === 'own' || k === 'bundled' ? photoFor(stay) : null;
+}
+
 export const stayStrip = (stay) => {
   const d = document.createElement('div');
   const photo = photoFor(stay);

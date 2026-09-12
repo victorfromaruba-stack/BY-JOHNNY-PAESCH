@@ -2605,6 +2605,19 @@ alter table stays add column if not exists site    text;
 -- under the picture.
 alter table stays add column if not exists photo_path text;
 alter table stays add column if not exists photo_note text;
+-- The Desk's room photographs: [{id, path, room, note, by, at}], each under stays/<id>/rooms/ in
+-- the bucket. Every record carries a note saying where the picture came from, or the row is
+-- refused — the same provenance rule as the hero, checked here because a rule enforced in one
+-- backend is not enforced.
+alter table stays add column if not exists gallery jsonb not null default '[]'::jsonb;
+create or replace function gallery_has_provenance(g jsonb) returns boolean
+language sql immutable as $$
+  select jsonb_typeof(g) = 'array'
+     and not exists (select 1 from jsonb_array_elements(g) e
+                     where nullif(trim(coalesce(e->>'note', '')), '') is null or nullif(trim(coalesce(e->>'path', '')), '') is null);
+$$;
+alter table stays drop constraint if exists stays_gallery_has_provenance;
+alter table stays add constraint stays_gallery_has_provenance check (gallery_has_provenance(gallery));
 alter table stays add column if not exists photo_by   uuid references members(id);
 alter table stays add column if not exists photo_at   timestamptz;
 alter table stays drop constraint if exists stays_photo_needs_provenance;

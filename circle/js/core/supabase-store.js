@@ -133,6 +133,8 @@ export class SupabaseStore extends Store {
       sources: (s.sources && typeof s.sources === 'object') ? s.sources : {},
       // The Desk's photograph, as a public URL. photoFor() prefers it over anything bundled.
       photoUrl: s.photoPath ? this.sb.storage.from('stay-photos').getPublicUrl(s.photoPath).data.publicUrl : null,
+      // The Desk's room photographs: stored as paths in the bucket, read as public URLs.
+      gallery: (Array.isArray(s.gallery) ? s.gallery : []).map(g => ({ ...g, url: g.path ? this.sb.storage.from('stay-photos').getPublicUrl(g.path).data.publicUrl : null })),
       dates: s.startsOn ? { from: s.startsOn, to: s.endsOn } : undefined }));
     // Nobody signed in can read the stays table — every policy is `to authenticated`, on
     // purpose. But the public page still has to show what the Circle is for, and the same
@@ -359,7 +361,7 @@ export class SupabaseStore extends Store {
    * already happened, and the error says exactly that.
    */
   async upsertStay(data) {
-    const { rates = {}, id, dates, photoFile = null, photoRemove = false, photoNote, photoUrl, photoBy, photoAt, ...rest } = data;
+    const { rates = {}, id, dates, photoFile = null, photoRemove = false, photoNote, photoUrl, photoBy, photoAt, gallery, ...rest } = data;
     if (photoFile && !String(photoNote || '').trim()) throw new Error('Say where the photograph came from before saving it.');
     const row = toSnake({ ...rest, rateLowUsd: rates.low, rateHighUsd: rates.high, ratePeakUsd: rates.peak,
       startsOn: dates?.from, endsOn: dates?.to });
@@ -396,6 +398,44 @@ export class SupabaseStore extends Store {
     }
     await this.reload();
     return stayId;
+  }
+  /**
+   * The Desk's room photographs: each object goes to the bucket under the stay's own folder,
+   * then the stay's gallery column gains one record per picture. The note travels with each
+   * record and the database refuses a record without one — the same rule as the hero.
+   */
+  async addStayPhotos(stayId, files, { room = '', note = '' }) {
+    if (!files?.length) throw new Error('Choose at least one photograph.');
+    if (!String(note || '').trim()) throw new Error('Say where the photographs came from before saving them.');
+    const { shrinkImage } = await import('./image.js');
+    const { data: row, error } = await this.sb.from('stays').select('gallery').eq('id', stayId).single();
+    if (error) throw new Error(error.message);
+    const current = Array.isArray(row.gallery) ? row.gallery : [];
+    const added = [];
+    for (const [i, f] of [...files].entries()) {
+      const blob = await shrinkImage(f, { max: 1400 });
+      const path = `stays/${stayId}/rooms/${Date.now()}-${i}.jpg`;
+      const { error: upErr } = await this.sb.storage.from('stay-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+      if (upErr) throw new Error(upErr.message);
+      added.push({ id: `${Date.now()}-${i}`, path, room: String(room || '').trim() || null, note: String(note).trim(), by: this.me?.id || null, at: new Date().toISOString() });
+    }
+    const { error: setErr } = await this.sb.from('stays').update({ gallery: [...current, ...added] }).eq('id', stayId);
+    if (setErr) {
+      await this.sb.storage.from('stay-photos').remove(added.map(a => a.path)).catch(() => {});
+      throw new Error(setErr.message);
+    }
+    await this.reload();
+    return added;
+  }
+  async removeStayPhoto(stayId, photoId) {
+    const { data: row, error } = await this.sb.from('stays').select('gallery').eq('id', stayId).single();
+    if (error) throw new Error(error.message);
+    const current = Array.isArray(row.gallery) ? row.gallery : [];
+    const gone = current.find(g => g.id === photoId);
+    const { error: setErr } = await this.sb.from('stays').update({ gallery: current.filter(g => g.id !== photoId) }).eq('id', stayId);
+    if (setErr) throw new Error(setErr.message);
+    if (gone?.path) await this.sb.storage.from('stay-photos').remove([gone.path]).catch(() => {});
+    await this.reload();
   }
   // ---------- room types, the watch list and deals ----------
   // Without these the base class would happily mutate its own copy of the state and never

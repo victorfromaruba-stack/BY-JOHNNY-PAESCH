@@ -147,6 +147,23 @@ properly. This is what the research found:
 | **Iberostar** | Employee and friends-and-family rates are a rate code, not a feed. | For a group, the **group desk** (10+ rooms) beats any published rate. Iberostar PRO is the agent channel; the affiliate feed is marketing content, not availability. |
 | **Real hotel APIs** | **Yes.** LiteAPI (Nuitée) has genuine self-signup and live availability. Expedia Rapid, RateHawk and Hotelbeds are partner APIs behind an application. | Any of these can be polled on a schedule without breaking anyone's terms. |
 
+### The board
+
+**Stays** is one page and it is the deals: every week open at the places we stay, cheapest a
+night first, the way a front page is laid out rather than a list of cards. The masthead says
+how many are open and when the edition was taken; **Coming up** leads with anything that checks
+in within the week, soonest first, because a Getaway for tonight is worth more than a cheaper
+one in March; then the cover — the cheapest week on the market, its photograph, the price set
+on it — and the rest as numbered rows, spread so no single resort takes the whole lead. A row
+opens the place with that week pinned at the top, the nights already in the date tiles, the
+rooms and the map under it; the ask is one tap from there. Anything that checks in today
+expires at the end of that day in Aruba, not at noon somewhere else.
+
+A Getaway Victor finds on his phone reaches the board through the share sheet: the app is a
+share target (`manifest.webmanifest`), so **Share → Hunto** from Interval's page lands the
+text in the paste sheet already parsed, and one tap posts it. That is the fastest honest path
+while Interval keeps refusing the watcher's sign-in.
+
 ### VakayMood — the one source that can genuinely be watched
 
 After that table was written, Victor found [vakaymood.com/developers](https://vakaymood.com/developers),
@@ -255,10 +272,34 @@ There is no room catalog. There was one — 189 room types across sixteen proper
 square feet, bed configurations and a rate factor each — and it was the thing Victor meant by
 "a million rooms": seven screens of table on a stay page, room chips on the ask, room selects
 on every sheet, and none of it ever changed what anyone was charged. A member now says the
-room they want in their own words on the ask ("a two-bedroom if there is one"), the property's
-own published room list sits under **About the place** for reference, and Victor prices the
-nights. The `room_types` table stays in the schema, empty, so an old room-pinned watch still
-resolves.
+room they want in their own words on the ask ("a two-bedroom if there is one") and Victor
+prices the nights. The `room_types` table stays in the schema, empty, so an old room-pinned
+watch still resolves.
+
+What a stay page shows instead is **the rooms as the property lists them, with every
+photograph on file of each** — a strip a thumb can swipe, the property's own sizes and sleeps
+in the mono face (a blank is a blank: nothing is estimated), and *Ask for a Palapa Lodge*
+under it, which opens the ask with the room already in the word for Victor. The photographs
+are the properties' own, fetched from their sites with `robots.txt` honoured by
+`.claude/skills/real-rooms`, each carrying the page and the day it was seen
+(`assets/rooms/sources.json`, `data/places.js`). Sixty-odd across ten places. The three
+Marriott houses — Surf Club, Ocean Club, Renaissance — and the Barceló have none, because
+Marriott and Barceló answer a scripted request with a 403 and that is a no: their pictures are
+their copyright, and the Circle does not take what it has not been given. The page says so, by
+name, and links their own rooms page.
+
+The Desk can add photographs it holds the rights to — its own, or a resort's media kit with
+their OK — from the stay page (**Add room photographs**): several at once, which room each
+shows, and a note saying where they came from, which is not optional. They are filed under
+`stays/<id>/rooms/` in the `stay-photos` bucket and recorded in `stays.gallery`; the
+database refuses a record without a note (`gallery_has_provenance`), the preview backend
+refuses the same, and members see the note under each picture with an *Ours* tag on the
+tile. Room plans are never fetched: where a resort publishes them, the page links its site.
+
+**Where it is** draws Aruba — a simplified coast in `ui/art.js`, turned the way the tourist
+maps turn it — with the place as a dot where its site or VakayMood published a position, a
+ring at its beach where nothing did (and a sentence saying so), the other places we stay as
+faint dots, and the address with *Open in Maps*.
 
 ## Money that never went through the queue
 

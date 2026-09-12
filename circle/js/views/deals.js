@@ -11,10 +11,10 @@
 
 import { escapeHtml, fmtDay, fmtPoints, fmtRelative, fmtUsd2, nightsBetween, pointsUsd, safeUrl } from '../core/util.js';
 import { VOCAB } from '../core/vocab.js';
-import { quoteStay, fromPoints, seatPoints } from '../core/money.js';
+import { quoteStay, fromPoints, seatPoints, isCruise } from '../core/money.js';
 import { icon } from '../ui/icons.js';
 import { toast, sheet, confirmDialog, setBusy, avatar } from '../ui/components.js';
-import { stayStrip } from './public.js';
+import { stayStrip, thumbFor, beachMark, photoFor, photoKind, photoCredit } from './public.js';
 import { sameName, nameWithin } from '../core/names.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -55,6 +55,122 @@ export function titleWithoutPlace(title, stay, { nights = 0 } = {}) {
 
 /** Points a night, from the row or from the total: older rows and some backends carry only the total. */
 export const nightly = (d) => d?.pointsPerNight || (d?.pointsTotal && d?.nights ? Math.round(d.pointsTotal / d.nights) : 0);
+
+/** "25 Sept – 2 Oct", the year only when it is not this one — a row has no room for four digits twice. */
+export function shortRange(from, to) {
+  const d = (iso) => new Date(`${iso}T12:00:00Z`);
+  const y = new Date().getFullYear();
+  const a = d(from), b = d(to);
+  const f = (x, withYear) => x.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC', ...(withYear ? { year: 'numeric' } : {}) });
+  const sameYear = a.getUTCFullYear() === y && b.getUTCFullYear() === y;
+  if (a.getUTCMonth() === b.getUTCMonth() && a.getUTCFullYear() === b.getUTCFullYear()) return `${a.getUTCDate()} – ${f(b, !sameYear)}`;
+  return `${f(a, false)} – ${f(b, !sameYear)}`;
+}
+
+/**
+ * The page for the place a deal is at, opened ON that week: the stay page pins the deal at the
+ * top of "Open right now", prices those exact nights, and shows the rooms and the map before
+ * anyone commits points. A row on the board goes here; the Ask button goes straight to the ask.
+ */
+export function placeHrefFor(deal, stay) {
+  const seg = stay?.kind === 'trip' ? (isCruise(stay) ? 'cruises' : 'trips') : 'stays';
+  return `#/${seg}/${escapeHtml(deal.stayId)}?from=${escapeHtml(deal.from)}&to=${escapeHtml(deal.to)}&deal=${encodeURIComponent(deal.id)}`;
+}
+/** The ask link for a deal: a posted one carries its id; an owner's week carries the listing link. */
+export function askHrefFor(deal) {
+  return deal.draft
+    ? `#/book/${escapeHtml(deal.stayId)}?from=${escapeHtml(deal.from)}&to=${escapeHtml(deal.to)}${safeUrl(deal.sourceUrl) ? `&src=${encodeURIComponent(deal.sourceUrl)}&srcLabel=${encodeURIComponent('VakayMood')}` : ''}`
+    : `#/book/${escapeHtml(deal.stayId)}?from=${escapeHtml(deal.from)}&to=${escapeHtml(deal.to)}&deal=${escapeHtml(deal.id)}`;
+}
+
+/**
+ * Who or what saw it, and when — the mono mark every row carries. "VM · 14:20" for an owner's
+ * week read off VakayMood at that minute; "Victor · 11 Sep 09:10" for a find a person posted.
+ * Because one man books everything and the app may not invent a fact, provenance is set in
+ * the same face as the ledger's "by Vishnu": the board and the statement are one instrument.
+ */
+export function stampFor(deal, store) {
+  const t = deal.postedAt ? new Date(deal.postedAt) : null;
+  const hhmm = t ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const day = t ? t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+  if (deal.draft) return { text: `VM · ${hhmm}`, feed: true };
+  const who = store.member?.(deal.postedBy)?.name.split(' ')[0] || (SOURCES[deal.source] || SOURCES.other).label;
+  return { text: [who, day && hhmm ? `${day} ${hhmm}` : day || hhmm].filter(Boolean).join(' · '), feed: false };
+}
+
+/**
+ * One deal as a listing row: the row is the ask. A thumb only where a photograph of the place
+ * exists (never a beach photo at 56px), a folio number for its rank on the board, the title, the
+ * dates and the stamp, and the price a night on the right with the all-in under it. `inPlace`
+ * drops the thumb and the place from the title, for rows under a place's own heading.
+ */
+export function dealRow(deal, { store, folio = null, match = null, canEdit = false, inPlace = false, level = 3, picked = false } = {}) {
+  const H = `h${Math.min(6, Math.max(2, level))}`;
+  const s = store.settings;
+  const stay = store.stay(deal.stayId);
+  const draft = !!deal.draft;
+  const thumb = inPlace ? null : thumbFor(stay);
+  const title = inPlace ? titleWithoutPlace(deal.title, stay, { nights: deal.nights }) : (deal.title || stay?.name || 'A deal');
+  const stamp = stampFor(deal, store);
+  const soon = soonLabel(deal.from);
+  const node = el(`<article class="listing-row${inPlace ? ' no-thumb' : ''}${match ? ' asked' : ''}${picked ? ' picked' : ''}" data-deal="${escapeHtml(deal.id)}">
+      ${inPlace ? '' : `<span class="thumb" aria-hidden="true">${thumb ? `<img src="${escapeHtml(thumb)}" alt="" loading="lazy" decoding="async">` : `<b>${escapeHtml(beachMark(stay))}</b>`}</span>`}
+      <span class="main" style="min-width:0">
+        <span class="folio">${picked ? `<span class="asked">${icon('check', { size: 12 })}The week you picked</span>` : match ? `<span class="asked">${icon('bellRing', { size: 12 })}You asked for this</span>` : folio ? `No. ${folio}` : ''}</span>
+        <${H}><a class="row-link" href="${inPlace ? askHrefFor(deal) : placeHrefFor(deal, stay)}">${escapeHtml(title)}</a></${H}>
+        <span class="sub">${soon ? `<span class="soon">${escapeHtml(soon)}</span> · ` : ''}${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'}<span class="l2">${deal.sleeps ? `sleeps ${deal.sleeps} · ` : ''}<span class="stamp${stamp.feed ? ' feed' : ''}">${escapeHtml(stamp.text)}</span></span></span>
+      </span>
+      <span class="price-col"><b>${escapeHtml(fmtPoints(nightly(deal)))}</b><small>a night</small><span class="all">${escapeHtml(fmtPoints(deal.pointsTotal))} all in<span class="usd"> · ${escapeHtml(pointsUsd(deal.pointsTotal, s.pointsPerDollar))}</span></span></span>
+      ${inPlace && !canEdit ? `<span class="go" aria-hidden="true">${icon('chevronRight', { size: 18 })}</span>` : ''}
+      ${canEdit ? `<span class="row-acts">
+        ${safeUrl(deal.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(deal.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}Go and book it</a>` : ''}
+        ${draft ? `<button class="btn quiet sm" data-act="post-draft">${icon('plus', { size: 15 })}Put it on the board</button>` : `<button class="btn quiet sm" data-act="retire">${icon('x', { size: 15 })}Gone</button>`}</span>` : ''}
+    </article>`);
+  return node;
+}
+
+/**
+ * The cover: the cheapest week on the market, its photograph — of this place, or the beach it is
+ * on, tagged — with the price set on it, and the story under it. Where there is no photograph
+ * at all the plate stands in and the price moves into the body.
+ */
+export function dealCover(deal, { store, canEdit = false, match = null, folio = 1 } = {}) {
+  const s = store.settings;
+  const stay = store.stay(deal.stayId);
+  const draft = !!deal.draft;
+  const kind = photoKind(stay);
+  const photo = photoFor(stay);
+  const credit = kind === 'area' ? photoCredit(stay) : null;
+  const stamp = stampFor(deal, store);
+  const soon = soonLabel(deal.from);
+  const who = store.member?.(deal.postedBy)?.name.split(' ')[0];
+  const why = draft
+    ? `Owner’s week on VakayMood${deal.sleeps ? ` · sleeps ${deal.sleeps}` : ''}${deal.usdNightly ? ` · the owner asks ${fmtUsd2(deal.usdNightly)} a night` : ''}`
+    : `${(SOURCES[deal.source] || SOURCES.other).label}${who ? ` · found by ${who}` : ''}${deal.note ? ` · ${deal.note}` : ''}`;
+  const node = el(`<article class="cover${photo ? '' : ' plate'}${match ? ' matched' : ''}" data-deal="${escapeHtml(deal.id)}">
+      <a class="cover-shot" href="${placeHrefFor(deal, stay)}" aria-label="${escapeHtml(stay?.name || 'The place')}: the rooms, the map and this week">
+        <span class="cover-scrim" aria-hidden="true"></span>
+        <span class="eyebrow cover-no">No. ${folio}</span>
+        <span class="cover-price"><span class="num">${escapeHtml(fmtPoints(nightly(deal)))}</span><small>a night</small></span>
+      </a>
+      <div class="cover-body">
+        ${match ? `<p class="eyebrow" style="color:var(--good-text)">${icon('bellRing', { size: 15 })}You asked for this</p>` : ''}
+        <h2><a class="cover-link" href="${placeHrefFor(deal, stay)}">${escapeHtml(deal.title || stay?.name || 'A deal')}</a></h2>
+        <span class="mono">${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'} · ${escapeHtml(fmtPoints(deal.pointsTotal))} all in · ${escapeHtml(pointsUsd(deal.pointsTotal, s.pointsPerDollar))}</span>
+        ${soon ? `<p class="soon">${icon('zap', { size: 15 })}${escapeHtml(soon)}</p>` : ''}
+        <p class="why">${escapeHtml(why)} · <span class="stamp${stamp.feed ? ' feed' : ''}">${escapeHtml(stamp.text)}</span></p>
+        ${credit ? `<p class="tiny muted" style="margin-top:8px">${credit.html}</p>` : ''}
+        <div class="row" style="margin-top:14px">
+          <a class="btn" href="${askHrefFor(deal)}">${icon('send', { size: 16 })}Ask Victor</a>
+          ${canEdit && safeUrl(deal.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(deal.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}Go and book it</a>` : ''}
+          ${canEdit ? (draft ? `<button class="btn quiet sm" data-act="post-draft">${icon('plus', { size: 15 })}Put it on the board</button>` : `<button class="btn quiet sm" data-act="retire">${icon('x', { size: 15 })}Gone</button>`) : ''}
+        </div>
+      </div>
+    </article>`);
+  const shot = node.querySelector('.cover-shot');
+  shot.prepend(stayStrip(stay));
+  return node;
+}
 
 /**
  * One deal, as a card. `match` is set when it answers something this member asked for.
@@ -154,21 +270,25 @@ export const byNight = (a, b) => nightly(a) - nightly(b) || String(a.from).local
  * Some deals as cards, the first few shown and the rest behind one button. `key` is what the
  * button remembers itself by across re-renders; `first` is how many open with the page.
  */
-export function dealList(slot, deals, { store, me = null, canEdit = false, first = 3, key = '', inPlace = true, noun = '', level = 3, showPlace = false } = {}) {
+export function dealList(slot, deals, { store, me = null, canEdit = false, first = 3, key = '', inPlace = true, noun = '', level = 3, showPlace = false, mode = 'cards', folioOf = null, wide = false, pin = null } = {}) {
   const watches = me ? store.watchesFor(me.id) : [];
   const matchFor = (d) => watches.map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
   // What answers a watch comes first, whatever it costs: the two-bedroom somebody asked for is
   // rarely among the cheapest, and a card that says "You asked for this" must not sit behind
   // the button. Stable, so the given order holds within each half.
   const matched = new Map(deals.map(d => [d.id, matchFor(d)]));
-  const ordered = deals.slice().sort((a, b) => (matched.get(b.id) ? 1 : 0) - (matched.get(a.id) ? 1 : 0));
-  const grid = el('<div class="grid g2"></div>');
+  // The one the member tapped through on comes first of all, so the page they land on opens on
+  // the week they picked and not on a cheaper one at the same place.
+  const ordered = deals.slice().sort((a, b) => ((b.id === pin ? 2 : 0) + (matched.get(b.id) ? 1 : 0)) - ((a.id === pin ? 2 : 0) + (matched.get(a.id) ? 1 : 0)));
+  const grid = el(mode === 'rows' ? `<div class="listing${wide ? ' two' : ''}"></div>` : '<div class="grid g2"></div>');
   const more = el('<div class="list-more"></div>');
   const paint = () => {
     // A button that hides one card costs as much as the card: show it.
     const shown = REVEALED.has(key) || ordered.length - first <= 1 ? ordered : ordered.slice(0, first);
     const hidden = ordered.length - shown.length;
-    grid.replaceChildren(...shown.map(d => dealCard(d, { store, match: matched.get(d.id), canEdit, inPlace, level, showPlace })));
+    grid.replaceChildren(...shown.map(d => (mode === 'rows'
+      ? dealRow(d, { store, folio: folioOf?.get(d.id) || null, match: matched.get(d.id), canEdit, inPlace, level, picked: d.id === pin })
+      : dealCard(d, { store, match: matched.get(d.id), canEdit, inPlace, level, showPlace }))));
     more.innerHTML = hidden > 0 ? `<button class="btn ghost sm" data-act="reveal">${icon('chevronDown', { size: 16 })}Show the other ${hidden}${noun ? ` ${noun}` : ''}</button>` : '';
   };
   more.addEventListener('click', (e) => {

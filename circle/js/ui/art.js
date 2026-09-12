@@ -385,6 +385,58 @@ export function plateHtml(stay) {
   return area ? `<span class="plate-area">${escapeHtml(area)}</span>` : '';
 }
 
+/**
+ * Aruba, drawn: a simplified coastline from the California Lighthouse round by Baby Beach and
+ * back up the windward side, turned so the island lies along the page the way the tourist maps
+ * turn it. A place with a known position gets a solid dot and its name; a place we only know
+ * the beach of gets a ring at that beach, which is the honest amount of precision. The other
+ * places we stay sit as faint dots so a member sees the neighbourhood, not a pin in a void.
+ * Colours come from currentColor and the token classes in app.css, so it survives dark mode.
+ */
+const ARUBA = [ // lat, lng — the coast, clockwise from the north-west tip
+  [12.618, -70.053], [12.605, -70.056], [12.594, -70.053], [12.578, -70.045], [12.562, -70.052], [12.548, -70.058], [12.535, -70.049],
+  [12.522, -70.041], [12.512, -70.031], [12.500, -70.012], [12.482, -69.992], [12.462, -69.966], [12.446, -69.945], [12.432, -69.920],
+  [12.420, -69.895], [12.414, -69.876], [12.425, -69.868], [12.446, -69.873], [12.468, -69.888], [12.492, -69.912], [12.518, -69.937],
+  [12.544, -69.958], [12.566, -69.982], [12.584, -70.004], [12.598, -70.024], [12.612, -70.042],
+];
+const AREAS_GEO = {
+  'Palm Beach': [12.577, -70.043], 'Eagle Beach': [12.552, -70.056], 'Druif Beach': [12.537, -70.049], 'Oranjestad': [12.520, -70.036],
+  'Malmok': [12.598, -70.052], 'Savaneta': [12.452, -69.952], 'Noord': [12.573, -70.025], 'San Nicolas': [12.434, -69.912],
+};
+export function islandSvg({ here = null, area = '', label = '', others = [], w = 400, h = 190 } = {}) {
+  // Kilometres from the south-east tip, then turned so the long axis is horizontal.
+  const lat0 = 12.414, lng0 = -70.06, kx = 108.6, ky = 111.2;
+  const turn = -0.86; // radians — the island's axis runs about 49° off the horizontal
+  const c = Math.cos(turn), s = Math.sin(turn);
+  const km = ([lat, lng]) => { const x = (lng - lng0) * kx, y = (lat0 - lat) * ky; return [x * c - y * s, x * s + y * c]; };
+  const coast = ARUBA.map(km);
+  const xs = coast.map(p => p[0]), ys = coast.map(p => p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const pad = 22, scale = Math.min((w - pad * 2) / (maxX - minX), (h - pad * 2) / (maxY - minY));
+  const ox = (w - (maxX - minX) * scale) / 2 - minX * scale, oy = (h - (maxY - minY) * scale) / 2 - minY * scale;
+  const px = (ll) => { const [x, y] = km(ll); return [n1(x * scale + ox), n1(y * scale + oy)]; };
+  const d = coast.map((p, i) => `${i ? 'L' : 'M'}${n1(p[0] * scale + ox)} ${n1(p[1] * scale + oy)}`).join(' ') + ' Z';
+  const marks = [];
+  for (const o of others) { if (!o?.geo) continue; const [x, y] = px([o.geo.lat, o.geo.lng]); marks.push(`<circle class="dim" cx="${x}" cy="${y}" r="3"/>`); }
+  const townLabel = (name, dx = 8, dy = 4, anchor = 'start') => { const g = AREAS_GEO[name]; if (!g) return ''; const [x, y] = px(g); return `<text class="town" x="${n1(x + dx)}" y="${n1(y + dy)}" text-anchor="${anchor}">${escapeHtml(name)}</text>`; };
+  // The name sits above the dot, pulled inwards near either edge so it never leaves the box.
+  const nameAt = (x, y) => { const a = x < w * 0.3 ? 'start' : x > w * 0.7 ? 'end' : 'middle'; const nx = a === 'start' ? x - 8 : a === 'end' ? x + 8 : x; return `<text class="here" x="${n1(nx)}" y="${n1(y)}" text-anchor="${a}">${escapeHtml(label)}</text>`; };
+  let here_ = '';
+  if (here) {
+    const [x, y] = px([here.lat, here.lng]);
+    here_ = `<circle class="dot" cx="${x}" cy="${y}" r="5"/><circle class="halo" cx="${x}" cy="${y}" r="10"/>${label ? nameAt(x, y - 15) : ''}`;
+  } else if (AREAS_GEO[area]) {
+    const [x, y] = px(AREAS_GEO[area]);
+    here_ = `<circle class="ring" cx="${x}" cy="${y}" r="12"/>${label ? nameAt(x, y - 18) : ''}`;
+  }
+  const north = (() => { const deg = -turn * 180 / Math.PI; return `<g class="north" transform="translate(${w - 24} 26)"><path transform="rotate(${n1(-deg)})" d="M0 -11 L4 4 L0 1 L-4 4 Z"/><text y="19" text-anchor="middle">N</text></g>`; })();
+  return `<svg class="island" viewBox="0 0 ${w} ${h}" role="img" aria-label="Aruba, with ${escapeHtml(label || area || 'the place')} marked">
+    <path class="land" d="${d}"/>
+    ${[['Oranjestad', 10, 14], ['Palm Beach', -10, -8, 'end'], ['Eagle Beach', -8, 14, 'end'], ['San Nicolas', -10, -8, 'end']].filter(([n]) => n !== area).map(([n, dx, dy, anchor]) => townLabel(n, dx, dy, anchor)).join('')}
+    ${marks.join('')}${here_}${north}
+  </svg>`;
+}
+
 /** The card's etched contour lines, as an inline SVG string. */
 export function contourSvg(key, { stroke = 'currentColor', lines = 11, w = 340, h = 214 } = {}) {
   const rand = rng(hash(key));

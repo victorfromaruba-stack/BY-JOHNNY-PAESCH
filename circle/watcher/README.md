@@ -299,8 +299,13 @@ settings on every pass — the same two numbers the website prices with — so a
 is the same number as the same week on a live card; if the settings cannot be read, nothing is
 posted that pass rather than something fifteen per cent wrong.
 
-Every post carries an expiry of its own check-in day, so a week that has started drops off the
-board by itself.
+Every post carries an expiry of the end of its own check-in day in Aruba, so a week that has
+started drops off the board by itself — and a Getaway for tonight stays on it all evening.
+
+Interval is asked twice a pass: the next `WATCH_INTERVAL_SOON_DAYS` days first (14 by
+default), then the long window, and the two are merged by listing id. The near window is the
+one that matters most — the board leads with what checks in this week — and it is the one a
+slow or refused sign-in should not cost.
 
 **VakayMood** — the owner-rental feed the website shows live on Deals — is deliberately not
 swept here. It lists the same owner inventory RedWeek does (the same Surf Club studio, the same

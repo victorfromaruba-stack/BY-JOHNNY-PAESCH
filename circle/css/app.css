@@ -10,9 +10,11 @@ body {
   -webkit-font-smoothing: antialiased; overflow-x: hidden;
 }
 h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; line-height: 1.05; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
-h1 { font-size: clamp(2rem, 5vw, 3.2rem); }
-h2 { font-size: clamp(1.35rem, 2.6vw, 1.75rem); letter-spacing: -.015em; }
-h3 { font-size: 1.05rem; letter-spacing: -.01em; }
+/* Archivo's wide axis is the identity: the page title is set wide and heavy, the running heads a
+   little less, a row title at the normal width. The wordmark stays the widest thing on the page. */
+h1 { font-size: clamp(2.1rem, 6.4vw, 3.3rem); font-weight: 700; font-variation-settings: "wdth" 118; letter-spacing: -.028em; line-height: .98; }
+h2 { font-size: clamp(1.3rem, 2.5vw, 1.65rem); font-variation-settings: "wdth" 110; letter-spacing: -.015em; }
+h3 { font-size: 1.02rem; letter-spacing: -.01em; }
 p { margin: 0; text-wrap: pretty; }
 /* Links are underlined where a link is a link — inside a sentence, where the underline is what
    tells you it is one. They are NOT underlined when the whole element is already obviously
@@ -72,8 +74,9 @@ main:focus { outline: none; }
 .sec + .sec { border-top: 1px solid var(--hairline-soft); }
 .sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
 .sec-head p { color: var(--ink-2); font-size: .95rem; max-width: 62ch; margin-top: 10px; }
-.eyebrow { font-size: .7rem; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
-.lede { font-size: clamp(1rem, 1.6vw, 1.12rem); color: var(--ink-2); max-width: 62ch; }
+.eyebrow { font-size: .68rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
+.eyebrow .num { font-size: .7rem; letter-spacing: 0; text-transform: none; }
+.lede { font-size: clamp(1rem, 1.6vw, 1.08rem); line-height: 1.45; color: var(--ink-2); max-width: 46ch; }
 .muted { color: var(--ink-2); }
 .small { font-size: .86rem; }
 .tiny { font-size: .78rem; }
@@ -1003,3 +1006,175 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .route svg { margin-top: 10px; color: var(--ink); }
 /* A week that checks in within days: the one line on a card that changes what you do now. */
 .deal .soon { color: var(--good-text); font-weight: 600; }
+
+
+/* ---------- the edition: masthead, cover, listings, index ---------- */
+/* The board is set like a front page, not a shop. A masthead says which edition you are reading;
+   the cheapest week is the cover story with its price set large; the rest are numbered listing
+   rows the eye reads down a hairline; the places are an index. Photographs appear only where they
+   are true, and every number is in the mono face. */
+.masthead { padding-bottom: 14px; border-bottom: 1px solid var(--hairline); }
+.masthead h1 { margin-top: 6px; }
+.masthead .eyebrow .house, .hero-place .on .eyebrow .house { color: var(--good-text); }
+.dateline { margin-top: 8px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .78rem; color: var(--ink-2); line-height: 1.4; }
+.dateline .stamp { color: var(--good-text); }
+.masthead .row.no-print { margin-top: 12px; }
+@media (min-width: 900px) {
+  .masthead { display: grid; grid-template-columns: 1fr auto; align-items: end; column-gap: 24px; }
+  .masthead > .eyebrow, .masthead > h1, .masthead > .dateline, .masthead > .lede { grid-column: 1; }
+  .masthead > .row.no-print { grid-column: 2; grid-row: 1 / span 3; align-self: end; margin-top: 0; }
+}
+/* A provenance mark: who or what saw it, and when. The same mono as the ledger's "by Vishnu". */
+.stamp { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .04em; color: var(--ink-2); white-space: nowrap; }
+.stamp.feed { color: var(--good-text); }
+
+/* The cover: one photograph, the price on it. The scrim is --card-200 — dark in both themes —
+   so the eyebrow (the card's gold) and the price (teal) read on it in both. */
+.cover { display: block; border-radius: var(--r-card); overflow: hidden; background: var(--surface); border: 1px solid var(--hairline); color: inherit; text-decoration: none; }
+.cover .cover-shot { display: block; position: relative; aspect-ratio: 3 / 2; background: var(--well); overflow: hidden; }
+.cover .cover-shot img, .cover .cover-shot .scene, .cover .cover-shot .scene svg { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover .cover-shot .strip-tag { top: 14px; right: 14px; left: auto; bottom: auto; }
+.cover .cover-scrim { position: absolute; inset: auto 0 0 0; height: 62%; background: linear-gradient(to top, var(--card-200) 0%, transparent 100%); pointer-events: none; }
+.cover .cover-no { position: absolute; top: 14px; left: 14px; color: var(--card-200-etch); background: var(--scrim); padding: 7px 11px; border-radius: var(--r-pill); }
+.cover .cover-price { position: absolute; left: 14px; bottom: 14px; color: var(--good); font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero;
+  font-size: clamp(2.2rem, 9vw, 3.4rem); font-weight: 500; letter-spacing: -.03em; line-height: 1; }
+.cover .cover-price small { font-family: var(--font-body); font-size: .84rem; font-weight: 500; letter-spacing: 0; color: var(--on-photo); opacity: .9; margin-left: .4em; }
+.cover .cover-body { padding: 16px 18px 18px; }
+.cover .cover-body h2 { font-size: 1.32rem; }
+.cover .cover-body .mono { display: block; margin-top: 8px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .84rem; color: var(--ink-2); white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+.cover .cover-body .why { margin-top: 8px; font-size: .9rem; color: var(--ink-2); }
+.cover .cover-body .soon { margin-top: 8px; font-size: .9rem; }
+.cover .cover-body .btn { margin-top: 14px; }
+.cover.plate .cover-price { color: var(--ink); }
+.cover.plate .cover-scrim { display: none; }
+.cover.plate .cover-no { color: var(--ink-2); text-shadow: none; }
+@media (min-width: 900px) {
+  .cover { display: grid; grid-template-columns: 1.5fr 1fr; align-items: stretch; }
+  .cover .cover-shot { aspect-ratio: auto; min-height: 380px; }
+  .cover .cover-body { display: flex; flex-direction: column; justify-content: center; padding: 28px 30px; }
+  .cover .cover-body h2 { font-size: 1.6rem; }
+}
+
+/* Listing rows. The row is the ask: one link, place and unit, dates, the price a night on the
+   right, the all-in under it, and the stamp. A thumb only where a photograph of the place exists;
+   otherwise a --well square with the beach's two-letter mark — never a beach photo at 56px, where
+   its tag would not fit. */
+.listing { display: block; border-top: 1px solid var(--hairline); }
+.listing-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 76px;
+  padding: 12px 0; border-bottom: 1px solid var(--hairline-soft); color: inherit; text-decoration: none; position: relative; }
+.listing-row.no-thumb { grid-template-columns: minmax(0, 1fr) auto; }
+.listing-row .thumb { width: 56px; height: 56px; border-radius: 8px; overflow: hidden; background: var(--well); display: grid; place-items: center; }
+.listing-row .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.listing-row .thumb b { font-family: var(--font-mono); font-size: .72rem; font-weight: 500; letter-spacing: .06em; color: var(--ink-3); }
+.listing-row .folio { font-family: var(--font-mono); font-size: .7rem; color: var(--ink-3); }
+.listing-row .folio .asked { color: var(--good-text); font-family: var(--font-body); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; font-size: .66rem; }
+.listing-row h3, .listing-row h4 { font-size: 1rem; font-variation-settings: "wdth" 100; line-height: 1.2; overflow-wrap: anywhere; margin-top: 2px; }
+.listing-row .sub { margin-top: 4px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .76rem; color: var(--ink-2); line-height: 1.4; }
+.listing-row .sub .soon { color: var(--good-text); font-family: var(--font-body); font-weight: 600; }
+.listing-row .price-col { text-align: right; min-width: 104px; }
+.listing-row .price-col b { display: block; font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; font-size: 1.05rem; font-weight: 500; letter-spacing: -.01em; }
+.listing-row .price-col small { display: block; font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); margin-top: 2px; }
+.listing-row .price-col .all { display: block; margin-top: 3px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .72rem; color: var(--ink-2); }
+.listing-row.asked { background: var(--good-soft); margin-inline: -12px; padding-inline: 12px; border-radius: 10px; }
+.listing-row:active { transform: scale(.985); transition: transform 60ms var(--ease-out); }
+.listing-row .row-acts { grid-column: 1 / -1; display: flex; gap: 8px; }
+@media (min-width: 900px) {
+  .listing.two { display: grid; grid-template-columns: 1fr 1fr; column-gap: 48px; position: relative; }
+  .listing.two::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--hairline); }
+}
+/* The index: one row per place, name and from-price. */
+.index-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 8px 0;
+  border-bottom: 1px solid var(--hairline-soft); color: inherit; text-decoration: none; }
+.index-row .name { display: grid; gap: 2px; min-width: 0; font-family: var(--font-display); font-weight: 600; font-size: .98rem; letter-spacing: -.01em; }
+.index-row .name .meta { display: flex; gap: 10px; align-items: baseline; }
+.index-row .name .house { color: var(--good-text); font-family: var(--font-body); font-weight: 600; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; }
+.index-row .name .beach { color: var(--ink-2); font-family: var(--font-body); font-weight: 400; font-size: .82rem; }
+.index-row .from { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .84rem; color: var(--ink-2); white-space: nowrap; }
+.index-row .from b { color: var(--ink); font-weight: 500; }
+@media (min-width: 900px) { .index { display: grid; grid-template-columns: 1fr 1fr 1fr; column-gap: 40px; } }
+.running-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 34px; padding-bottom: 8px; border-bottom: 1px solid var(--hairline); }
+.running-head h2 { font-size: 1.2rem; }
+.running-head .eyebrow { margin: 0; }
+.rule-block { padding-block: 18px; border-top: 1px solid var(--hairline); }
+.pull { margin: 18px 0 0; padding: 4px 0 4px 16px; border-left: 2px solid var(--good); font-style: italic; font-size: 1rem; line-height: 1.5; }
+.pull cite { display: block; font-style: normal; margin-top: 6px; }
+/* Reduced motion: a row does not press. */
+@media (prefers-reduced-motion: reduce) { .listing-row:active { transform: none; } }
+
+/* A page hero with the place set on it: the picture edge to edge on a phone, the name at its
+   foot on a scrim in the photo tokens. Used by the stay page; the Cruises tab uses .page-hero. */
+.hero-place { position: relative; margin: 18px 0 0; background: var(--well); overflow: hidden; border-radius: var(--r-card); aspect-ratio: 4 / 3; }
+.hero-place img, .hero-place .scene, .hero-place .scene svg { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hero-place .strip-tag { top: 14px; left: 14px; right: auto; bottom: auto; }
+.hero-place .on { position: absolute; inset: auto 0 0 0; padding: 40px 18px 18px; margin: 0;
+  background: linear-gradient(to top, var(--scrim) 0%, var(--scrim-soft) 60%, transparent 100%); color: var(--on-photo); }
+.hero-place .on .eyebrow { color: var(--on-photo); opacity: .82; }
+.hero-place .on h1 { color: var(--on-photo); margin-top: 6px; font-size: clamp(1.9rem, 6.2vw, 3rem); }
+.hero-place .on .from { display: block; margin-top: 8px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .92rem; color: var(--on-photo); opacity: .92; }
+.hero-place .share { position: absolute; top: 12px; right: 12px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--scrim-soft); color: var(--on-photo); display: grid; place-items: center; cursor: pointer; }
+@media (max-width: 779px) { .hero-place.bleed { margin-inline: calc(-1 * clamp(16px, 4vw, 28px)); margin-top: calc(-1 * clamp(28px, 5vw, 56px)); border-radius: 0; aspect-ratio: 5 / 6; } .hero-place.bleed .on { padding-inline: clamp(16px, 4vw, 28px); } }
+@media (min-width: 780px) { .hero-place { aspect-ratio: 2 / 1; } .hero-place .on { padding: 48px 30px 26px; } }
+.hero-place .scene { position: absolute; inset: 0; }
+.hero-place .on .eyebrow .house { color: var(--good); }
+.hero-place + .credit { margin-top: 8px; }
+
+/* The rooms: one block per room, its photographs as a strip a thumb can swipe, the property's
+   own figures set in the mono face, and the ask one tap away. */
+.rooms .room { padding-block: 18px; border-top: 1px solid var(--hairline); }
+.rooms .room:first-of-type { border-top: 0; }
+.rooms .room-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-top: 12px; }
+.rooms .room-head h3 { font-size: 1.12rem; letter-spacing: -.012em; }
+.rooms .room-head .meta { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .8rem; color: var(--ink-2); }
+.rooms .room .small { margin-top: 6px; max-width: 62ch; }
+.rooms .room .btn { margin-top: 10px; }
+.gallery.big { margin-inline: calc(-1 * clamp(16px, 4vw, 28px)); padding-inline: clamp(16px, 4vw, 28px); scroll-padding-inline: clamp(16px, 4vw, 28px); }
+.gallery.big .gallery-tile { width: min(78vw, 300px); height: auto; aspect-ratio: 3 / 2; scroll-snap-align: start; position: relative; }
+.gallery.big .gallery-tile:only-child { width: min(100%, 520px); }
+.gallery .tile-tag { position: absolute; left: 10px; top: 10px; font-size: .64rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--on-photo); background: var(--scrim); padding: 4px 8px; border-radius: var(--r-pill); }
+@media (min-width: 780px) { .gallery.big { margin-inline: 0; padding-inline: 0; } .gallery.big .gallery-tile { width: 300px; } }
+
+/* The island: the coast as a hairline, the land in the well, this place in the accent. */
+.island-wrap { margin-top: 14px; max-width: 560px; }
+.island { width: 100%; height: auto; display: block; color: var(--ink-2); }
+.island .land { fill: var(--well); stroke: var(--hairline-strong, var(--hairline)); stroke-width: 1.2; stroke-linejoin: round; }
+.island .dot { fill: var(--good); }
+.island .halo { fill: none; stroke: var(--good); stroke-width: 1.5; opacity: .45; }
+.island .ring { fill: none; stroke: var(--good); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.island .dim { fill: currentColor; opacity: .45; }
+.island .town { font-family: var(--font-body); font-size: 10px; fill: currentColor; }
+.island .here { font-family: var(--font-display); font-weight: 600; font-size: 12px; fill: var(--ink); letter-spacing: -.01em; }
+.island .north path { fill: currentColor; opacity: .7; }
+.island .north text { font-family: var(--font-mono); font-size: 8px; fill: currentColor; }
+.listing-row .go { display: flex; align-items: center; color: var(--ink-2); }
+.listing-row.no-thumb { grid-template-columns: minmax(0, 1fr) auto auto; }
+
+/* The week the member tapped through on, at the top of the place's own list. */
+.listing-row.picked { background: var(--good-soft, transparent); margin-inline: -10px; padding-inline: 10px; border-radius: 10px; }
+.cover .cover-link { color: inherit; text-decoration: none; }
+.cover .cover-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* The Desk's room photographs sheet: what is on file, and what is being added. */
+.photo-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.photo-rows li { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.photo-rows img { width: 72px; height: 48px; object-fit: cover; border-radius: 8px; display: block; background: var(--well); }
+.photo-rows .what { min-width: 0; font-size: .88rem; }
+.photo-rows .what .meta { display: block; color: var(--ink-2); font-size: .78rem; }
+.ask .ask-rooms { margin: 0 0 16px; }
+.ask .ask-rooms .gallery.big { margin-inline: 0; padding-inline: 0; margin-top: 8px; }
+.ask .ask-rooms .gallery.big .gallery-tile { width: min(62vw, 220px); }
+/* The whole row is the tap: the title's link stretches over the row with a pseudo-element, and
+   the officer's buttons sit above it so they are still their own targets. */
+.listing-row .row-link { color: inherit; text-decoration: none; }
+.listing-row .row-link::after { content: ""; position: absolute; inset: 0; }
+.listing-row .row-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.listing-row .row-acts { position: relative; z-index: 1; margin-top: 2px; }
+.listing-row .price-col { position: relative; }
+
+/* Rows on a phone: a smaller thumb, the dollars folded away, the sub on two lines. */
+.listing-row .sub .l2 { display: block; }
+@media (max-width: 560px) {
+  .listing-row { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; }
+  .listing-row .thumb { width: 44px; height: 44px; }
+  .listing-row .price-col { min-width: 88px; }
+  .listing-row .price-col .all .usd { display: none; }
+}

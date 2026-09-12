@@ -10,7 +10,12 @@ import { columns, tableFor, sparkline } from '../ui/charts.js';
 import { waLink, TEMPLATES, copyText, shareText } from '../core/share.js';
 import { quoteSheet, bookSheet } from './catalog.js';
 import { photoFor } from './public.js';
+import { roomPhotosFor } from './rooms.js';
 import { icon } from '../ui/icons.js';
+
+// The Desk's open tab survives a re-render: saving a stay commits, a commit repaints the route,
+// and the tab used to snap back to Requests with the row just saved out of sight.
+let DESK_TAB = 'requests';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 
@@ -341,7 +346,8 @@ export function desk({ store, go }) {
       <div id="panel" style="margin-top:18px"></div>
     </div></section></div>`);
   const panel = wrap.querySelector('#panel');
-  let tab = 'requests';
+  let tab = DESK_TAB;
+  wrap.querySelectorAll('#tabs [data-tab]').forEach(x => { const on = x.dataset.tab === tab; x.setAttribute('aria-pressed', String(on)); x.className = `btn ${on ? '' : 'quiet '}sm`; });
 
   /** What the Circle has asked to be told about — this is the shopping list. */
   const drawWanted = () => {
@@ -549,7 +555,7 @@ export function desk({ store, go }) {
   });
   wrap.querySelector('#tabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-tab]'); if (!b) return;
-    tab = b.dataset.tab;
+    tab = b.dataset.tab; DESK_TAB = tab;
     wrap.querySelectorAll('[data-tab]').forEach(x => { const on = x.dataset.tab === tab; x.setAttribute('aria-pressed', String(on)); x.className = `btn ${on ? '' : 'quiet'} sm`; });
     draw();
   });
@@ -669,7 +675,8 @@ async function editStay(store, stay) {
     body.querySelector('[data-ok]').addEventListener('click', () => {
       const v = (n) => body.querySelector(`[name=${n}]`)?.value;
       const usd = (n) => Number(body.querySelector(`[data-usd="${n}"]`)?.value) || 0;
-      const data = { id: stay?.id, kind: isTrip ? 'trip' : 'aruba', name: v('name'), area: v('area'), vibe: v('vibe'), dealNote: v('dealNote'),
+      if (!String(v('name') || '').trim()) { toast('Give it a name.', { kind: 'bad' }); body.querySelector('[name=name]')?.focus(); return; }
+      const data = { id: stay?.id, kind: isTrip ? 'trip' : 'aruba', name: String(v('name')).trim(), area: v('area'), vibe: v('vibe'), dealNote: v('dealNote'),
         active: body.querySelector('[name=active]').checked, country: stay?.country || (isTrip ? '' : 'Aruba'), features: stay?.features || [] };
       if (isTrip) {
         const from = v('startsOn'), to = v('endsOn');
@@ -746,6 +753,58 @@ async function editStay(store, stay) {
       toast(out.photoFile ? 'Saved. The photograph is on the stay now.' : out.photoRemove ? 'Saved. The photograph is off.' : 'Saved. Members see the new points immediately.', { kind: 'good' });
     } catch (err) { toast(err.message, { kind: 'bad', timeout: 8000 }); }
   }
+}
+
+/**
+ * Room photographs the Desk holds the rights to, on a stay: what is on file, what is being added,
+ * which room each shows, and — not optional — where it came from. Resolves true when anything
+ * changed, so the page re-draws.
+ */
+export async function roomPhotosSheet(store, stay, { rooms = [] } = {}) {
+  let changed = false;
+  await sheet({ title: `Room photographs · ${stay.name}`, wide: true, render: (body, close) => {
+    const draw = () => {
+      const current = store.stay(stay.id) || stay;
+      const own = roomPhotosFor(current, null);
+      body.innerHTML = `
+        <p class="small muted">Only photographs the Circle may use: ones you took, or the resort's media kit with their OK. Not pictures copied off their website — those are the hotel's copyright, and the Circle does not take what it has not been given. Members see the note under each picture.</p>
+        ${own.length ? `<ul class="photo-rows" style="margin-top:14px">${own.map(ph => `<li><img src="${escapeHtml(ph.thumb)}" alt=""><span class="what"><b>${escapeHtml(ph.room || 'The property')}</b><span class="meta">${escapeHtml(ph.note)}${ph.seenOn ? ` · ${escapeHtml(fmtDay(ph.seenOn))}` : ''}</span></span><button type="button" class="btn quiet sm" data-remove="${escapeHtml(ph.id)}">${icon('x', { size: 14 })}Take off</button></li>`).join('')}</ul>`
+          : '<p class="small muted" style="margin-top:12px">Nothing of ours on file for this place yet.</p>'}
+        <div class="grid g2" style="margin-top:16px">
+          <label class="field"><span>Which room</span>
+            <input name="room" list="room-names" placeholder="Studio · One-bedroom · leave empty for the property" autocomplete="off">
+            <datalist id="room-names">${rooms.map(r => `<option value="${escapeHtml(r)}"></option>`).join('')}</datalist></label>
+          <label class="field"><span>Where they came from</span><input name="note" placeholder="Our own photos, March 2026 · the resort's media kit, with their OK"></label>
+        </div>
+        <div class="row" style="margin-top:8px"><label class="btn ghost sm" style="cursor:pointer">${icon('camera', { size: 15 })}Choose photographs<input type="file" name="files" accept="image/jpeg,image/png,image/webp" multiple hidden></label><span class="small muted" id="picked"></span></div>
+        <div class="sheet-actions"><button class="btn ghost" data-close>${changed ? 'Done' : 'Cancel'}</button><button class="btn" data-ok>Add them</button></div>`;
+      body.querySelector('[name=files]').addEventListener('change', (e) => {
+        const n = e.target.files?.length || 0;
+        body.querySelector('#picked').textContent = n ? `${n} chosen` : '';
+      });
+      body.querySelector('[data-ok]').addEventListener('click', async (e) => {
+        const files = [...(body.querySelector('[name=files]').files || [])];
+        const note = body.querySelector('[name=note]').value.trim();
+        const room = body.querySelector('[name=room]').value.trim();
+        if (!files.length) { toast('Choose at least one photograph.', { kind: 'bad' }); return; }
+        if (!note) { toast('Say where the photographs came from before saving them.', { kind: 'bad' }); body.querySelector('[name=note]').focus(); return; }
+        const btn = e.currentTarget; setBusy(btn, true, 'Adding…');
+        try {
+          await store.addStayPhotos(stay.id, files, { room, note }, store.me.id);
+          changed = true; toast(`${files.length} photograph${files.length === 1 ? '' : 's'} on the stay now.`, { kind: 'good' }); draw();
+        } catch (err) { toast(err.message, { kind: 'bad', timeout: 8000 }); setBusy(btn, false); }
+      });
+    };
+    draw();
+    // Delegated once: draw() replaces the body on every add, and a listener added inside it
+    // would fire once per redraw by the third photograph.
+    body.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-remove]'); if (!b) return;
+      try { await store.removeStayPhoto(stay.id, b.dataset.remove, store.me.id); changed = true; toast('Off the stay.', { kind: 'good' }); draw(); }
+      catch (err) { toast(err.message, { kind: 'bad' }); }
+    });
+  } });
+  return changed;
 }
 
 // ---------------------------------------------------------------- the Pool

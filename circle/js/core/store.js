@@ -1677,6 +1677,35 @@ export class Store {
     return s;
   }
   async removeStay(id, actorId) { const s = this.stay(id); if (!s) return; s.active = false; this.log(actorId, 'stay.retire', 'stay', id, {}); await this.commit('stays'); }
+  /**
+   * Room photographs the Desk holds the rights to, filed on the stay: each one with the room it
+   * shows (or none, for the property) and a note saying where it came from. The note is not
+   * optional — a picture with no provenance is a picture copied off somebody's website.
+   */
+  async addStayPhotos(stayId, files, { room = '', note = '' }, actorId) {
+    if (!this.hasRole('planner', 'comms', 'admin')) throw new Error('Only the Desk can add photographs');
+    const s = this.stay(stayId); if (!s) throw new Error('That place is not on the list');
+    if (!files?.length) throw new Error('Choose at least one photograph.');
+    if (!String(note || '').trim()) throw new Error('Say where the photographs came from before saving them.');
+    const before = Array.isArray(s.gallery) ? s.gallery.slice() : [];
+    const added = [];
+    for (const f of files) added.push({ id: uid('ph'), url: await blobToDataUrl(await shrinkImage(f, { max: 1400 })), room: String(room || '').trim() || null, note: String(note).trim(), by: actorId, at: nowIso() });
+    s.gallery = [...before, ...added];
+    this.log(actorId, 'stay.photos', 'stay', s.id, { name: s.name, added: added.length, room: room || null });
+    await this.commit('stays');
+    if (this.adapter?.lastError?.name === 'QuotaExceededError') {
+      s.gallery = before; this.adapter.lastError = null; await this.commit('stays');
+      throw new Error("This browser's preview cannot hold these photographs — its storage is full. On the real Circle photographs live on the server, so this only affects the preview.");
+    }
+    return added;
+  }
+  async removeStayPhoto(stayId, photoId, actorId) {
+    if (!this.hasRole('planner', 'comms', 'admin')) throw new Error('Only the Desk can remove photographs');
+    const s = this.stay(stayId); if (!s) return;
+    s.gallery = (s.gallery || []).filter(g => g.id !== photoId);
+    this.log(actorId, 'stay.photos', 'stay', s.id, { name: s.name, removed: photoId });
+    await this.commit('stays');
+  }
 
   // ---------- notes from Ian ----------
   async postAnnouncement({ authorId, title, body, pinned = false, kind = 'note' }) {
