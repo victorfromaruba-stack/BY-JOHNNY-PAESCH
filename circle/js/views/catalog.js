@@ -11,7 +11,7 @@ import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/c
 import { shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
 import { routeSvg, islandSvg } from '../ui/art.js';
-import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover } from './deals.js';
+import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, SOURCES } from './deals.js';
 import { openWeeks, resortForStay, bedroomsOf } from './live.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -51,6 +51,25 @@ function datelineOf(res) {
  * the first spread across places; the places are an index at the foot. Victor: "I only need
  * the best deals on the market."
  */
+/**
+ * What the board is actually made of, by source — because "I still see RedWeeks" should be a
+ * thing a member can read off the page rather than infer. Interval is named even when it has
+ * nothing on the board, because its absence is the fact that matters: the Getaways are the
+ * cheapest weeks the Circle can get, and none of them are here until one is put here.
+ */
+function madeOf(list) {
+  if (!list.length) return '';
+  const by = new Map();
+  for (const d of list) {
+    const k = d.draft ? 'vakaymood' : (d.source || 'other');
+    by.set(k, (by.get(k) || 0) + 1);
+  }
+  const bits = [...by.entries()].sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => `<span class="num">${n}</span> from ${escapeHtml((SOURCES[k] || SOURCES.other).label)}`);
+  const noInterval = !by.get('interval');
+  return `<br>${bits.join(' · ')}${noInterval ? ' · <b>nothing from Interval yet</b>' : ''}`;
+}
+
 export function stays({ store, go, query = {} }) {
   const me = store.me, s = store.settings;
   const canEdit = store.canPostDeals();
@@ -69,8 +88,8 @@ export function stays({ store, go, query = {} }) {
           <button class="btn ghost sm" id="post">${icon('plus', { size: 16 })}By hand</button></div>` : ''}
       </header>
       <div id="mine"></div>
-      <div id="soon"></div>
       <div id="cover" style="margin-top:22px"></div>
+      <div id="soon"></div>
       <div id="deals"></div>
       <div id="places"></div>
       <p class="rule-block small muted" style="margin-top:34px">Want something that is not here? <a href="#/watching">Tell the Desk what to watch for${watching ? ` · ${watching} watching` : ''}</a>. Tap any week and Victor books it in your name — you never book anything yourself. <a href="#/rules">How it works</a>.</p>
@@ -79,40 +98,33 @@ export function stays({ store, go, query = {} }) {
   if (mine.length) {
     const mineSlot = wrap.querySelector('#mine');
     mineSlot.appendChild(el(`<div class="running-head"><h2 style="color:var(--good-text)">${icon('bellRing')}What you asked for</h2><p class="eyebrow">${mine.length} on the board</p></div>`));
-    dealList(mineSlot, mine.map(m => m.deal), { store, me, canEdit, first: 4, key: 'mine', inPlace: false, noun: 'you asked for', mode: 'rows' });
+    dealList(mineSlot, mine.map(m => m.deal).sort(byNight), { store, me, canEdit, first: 4, key: 'mine', inPlace: false, noun: 'you asked for', mode: 'rows' });
     if (store.unseenMatches(me.id).length) store.markWatchesSeen(me.id);
   }
 
-  // Cheapest a night first — but the first rows are spread across places, at most two from any
-  // one of them: sixty Surf Club studios at $166 are all genuinely the cheapest and the first
-  // screen would be eight of the same row. The folio number is the true rank by price.
+  // Cheapest a night first, and nothing reorders it. An earlier build spread the lead across
+  // places, at most two from any one of them, so the first screen was not eight identical Surf
+  // Club studios — but that put a dearer week above a cheaper one, and Victor asked for the
+  // opposite in plain words: "always lowest price first". The folio number and the price now
+  // always agree, which is the point of a board.
   const FIRST = 9;
-  const spread = (list) => {
-    const lead = [], rest = [], seen = new Map();
-    for (const d of list) {
-      const n = seen.get(d.stayId) || 0;
-      if (lead.length < FIRST && n < 2) { lead.push(d); seen.set(d.stayId, n + 1); } else rest.push(d);
-    }
-    return [...lead, ...rest];
-  };
   const coverSlot = wrap.querySelector('#cover'), dealsSlot = wrap.querySelector('#deals'), soonSlot = wrap.querySelector('#soon');
   const count = wrap.querySelector('#count'), asof = wrap.querySelector('#asof');
   let drafts = [];
   let loading = true;
   const paintSoon = (list, folioOf) => {
     soonSlot.replaceChildren();
-    const soon = list.filter(d => { const n = daysUntil(d.from); return n >= 0 && n <= 7; })
-      .sort((a, b) => String(a.from).localeCompare(String(b.from)) || byNight(a, b)).slice(0, 4);
+    const soon = list.filter(d => { const n = daysUntil(d.from); return n >= 0 && n <= 7; }).sort(byNight).slice(0, 4);
     if (!soon.length) return;
-    soonSlot.appendChild(el(`<div class="running-head"><h2 style="color:var(--good-text)">${icon('zap')}Coming up</h2><p class="eyebrow">check in within the week · soonest first</p></div>`));
+    soonSlot.appendChild(el(`<div class="running-head"><h2 style="color:var(--good-text)">${icon('zap')}Coming up</h2><p class="eyebrow">check in within the week · cheapest first</p></div>`));
     dealList(soonSlot, soon, { store, me, canEdit, first: 4, key: 'soon', inPlace: false, noun: 'coming up', mode: 'rows', folioOf });
   };
   const paint = (sub) => {
     const ranked = [...posted, ...drafts].sort(byNight);
     const folioOf = new Map(ranked.map((d, i) => [d.id, i + 1]));
-    const all = spread(ranked);
+    const all = ranked;
     count.textContent = `${ranked.length} open`;
-    asof.innerHTML = sub;
+    asof.innerHTML = `${sub}${madeOf(ranked)}`;
     paintSoon(ranked, folioOf);
     coverSlot.replaceChildren();
     dealsSlot.replaceChildren();

@@ -93,9 +93,13 @@ export function stampFor(deal, store) {
   const t = deal.postedAt ? new Date(deal.postedAt) : null;
   const hhmm = t ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
   const day = t ? t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
-  if (deal.draft) return { text: `VM · ${hhmm}`, feed: true };
-  const who = store.member?.(deal.postedBy)?.name.split(' ')[0] || (SOURCES[deal.source] || SOURCES.other).label;
-  return { text: [who, day && hhmm ? `${day} ${hhmm}` : day || hhmm].filter(Boolean).join(' · '), feed: false };
+  // Where the week is, first. An Interval Getaway and an owner's rental on RedWeek are different
+  // things at different prices, and a member choosing between two rows was being told who typed
+  // it in but not what it is.
+  if (deal.draft) return { text: `VakayMood · ${hhmm}`, feed: true };
+  const where = (SOURCES[deal.source] || SOURCES.other).label;
+  const who = store.member?.(deal.postedBy)?.name.split(' ')[0];
+  return { text: [where, who, day && hhmm ? `${day} ${hhmm}` : day || hhmm].filter(Boolean).join(' · '), feed: false };
 }
 
 /**
@@ -273,13 +277,13 @@ export const byNight = (a, b) => nightly(a) - nightly(b) || String(a.from).local
 export function dealList(slot, deals, { store, me = null, canEdit = false, first = 3, key = '', inPlace = true, noun = '', level = 3, showPlace = false, mode = 'cards', folioOf = null, wide = false, pin = null } = {}) {
   const watches = me ? store.watchesFor(me.id) : [];
   const matchFor = (d) => watches.map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
-  // What answers a watch comes first, whatever it costs: the two-bedroom somebody asked for is
-  // rarely among the cheapest, and a card that says "You asked for this" must not sit behind
-  // the button. Stable, so the given order holds within each half.
   const matched = new Map(deals.map(d => [d.id, matchFor(d)]));
-  // The one the member tapped through on comes first of all, so the page they land on opens on
-  // the week they picked and not on a cheaper one at the same place.
-  const ordered = deals.slice().sort((a, b) => ((b.id === pin ? 2 : 0) + (matched.get(b.id) ? 1 : 0)) - ((a.id === pin ? 2 : 0) + (matched.get(a.id) ? 1 : 0)));
+  // Cheapest first, full stop — Victor: "always lowest price first". The caller hands the list in
+  // price order and it is kept; the only thing that moves is the week the member tapped through
+  // on, which leads the place they just opened because it is the one they picked, not because of
+  // its price. A watch match keeps its "You asked for this" badge where it falls, and the board
+  // gives matches a section of their own above the board rather than shuffling them into it.
+  const ordered = deals.slice().sort((a, b) => (b.id === pin ? 1 : 0) - (a.id === pin ? 1 : 0));
   const grid = el(mode === 'rows' ? `<div class="listing${wide ? ' two' : ''}"></div>` : '<div class="grid g2"></div>');
   const more = el('<div class="list-more"></div>');
   const paint = () => {
