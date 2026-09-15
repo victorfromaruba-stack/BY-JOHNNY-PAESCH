@@ -138,10 +138,18 @@ Past two days a card tells members in words. The Desk sees how long since anyone
 These are the ones that scan without anybody breaking anything, and they are the answer to "make it
 run four times a day":
 
-- **Getaway Alerts** — Interval To Go app → Getaways → Alerts. Interval's own machines watch
-  continuously and email every hit; `gmail-forwarder.gs` posts each one within five minutes. Only
-  Victor can switch this on, and as of September 2026 it was still off — worth checking first
-  whenever the board looks empty, because no amount of code substitutes for it.
+- **Getaway Alerts** — Interval's own machines watch continuously and email every hit;
+  `gmail-forwarder.gs` posts each one within five minutes. Only Victor can switch it on, and as of
+  September 2026 it was still off.
+
+  **Do not tell him to do it in the Interval To Go app.** His app login has never worked — this was
+  suggested four times before anyone thought to ask, which is four wasted rounds. His *web* login
+  is fine: his own screen recording shows him signed in at `vip.intervalworld.com` searching
+  Getaways, and the watcher's notes record those credentials working by hand. Interval's app often
+  needs a separate registration from the website account, so the fix is a call to member services,
+  not a retry. Until then, look for alerts on the web — inside the Getaways area, or under account
+  and email preferences. Say "look here", not "it is here": nobody should fetch their site to
+  check, and an instruction he cannot follow is worse than none.
 - **Ongoing Search** — Interval's own standing request: keeps looking until a week appears and books
   it. Needs three resorts *or* three time periods; runs overnight; auto-charges with 24 hours to
   cancel.

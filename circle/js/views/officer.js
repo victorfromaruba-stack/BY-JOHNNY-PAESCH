@@ -426,10 +426,14 @@ export function desk({ store, go }) {
       <details class="panel" style="margin-bottom:16px"${freshness().overdue ? ' open' : ''}>
         <summary style="cursor:pointer;font-weight:600">${icon('zap', { size: 16 })}Grab a whole Interval page at once${freshness().chip}</summary>
         ${freshness().line}
-        <p class="small muted" style="margin-top:10px">Open the Getaways results on Interval the way you always do, signed in as yourself.
-          Scroll so the weeks you want are on screen. Then pick this bookmark. It reads what is on the page,
-          shows you every week it made out — including the ones it could not read — and puts nothing on the
-          board until you tap again. It does not sign in anywhere and it never runs on its own.</p>
+        <p class="small muted" style="margin-top:10px">Open Interval, signed in as yourself, and search Getaways the way you always do
+          — sorting by Price puts the ones worth having on the first screen. Scroll so those weeks are visible.
+          Then pick the bookmark. It reads what is on the page, shows you every week it made out — including the
+          ones it could not read — and puts nothing on the board until you tap again. It does not sign in
+          anywhere and it never runs on its own.</p>
+        <div class="row no-print" style="margin-top:12px">
+          <a class="btn sm" href="https://vip.intervalworld.com/" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}Open Interval</a>
+        </div>
         <div class="copyline" style="margin-top:12px"><code style="font-size:.78rem">${escapeHtml(GRAB.slice(0, 54))}…</code>
           <button class="btn quiet sm" data-copy="${escapeHtml(GRAB)}">Copy</button></div>
         <p class="small muted" style="margin-top:10px">To install it: save any page as a bookmark, edit the bookmark, and paste this over its address.
