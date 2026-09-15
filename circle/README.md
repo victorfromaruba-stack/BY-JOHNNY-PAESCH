@@ -255,6 +255,43 @@ and Ian are the ones who go and book, and they need to know the moment something
 What the app does *not* do is pretend. It never asks for anyone's Interval or RedWeek
 password, and there is no scraper in this repository.
 
+### Interval, by email — the one automatic route that exists
+
+Interval has no API and its terms forbid automated access, so the Circle does not scrape it and
+does not give a robot the login. What Interval *does* do is send its own members email, and
+reading email that was sent to you is not automated access to anybody's site. That is the whole
+mechanism.
+
+`supabase/functions/ingest-deal` is **deployed** and takes a raw message — `{subject, text}` — with
+a token in `x-ingest-token`. It parses Interval Getaway mail itself, so the forwarder needs to know
+nothing about the format:
+
+| read off the message | used for |
+|---|---|
+| Confirmation number | `source_ref`, so the same week can never post twice however often the mail is resent |
+| Resort name (from the subject) | matched to the catalog by name, punctuation ignored |
+| Check-in / check-out | the dates, and `expires_at` at the end of the check-in day in Aruba |
+| Unit line and "Sleeps N Total" | the title a member reads |
+| Paid to Interval + resort fees due | the **all-in** price, which is the only number comparable with an owner's rental |
+
+A real confirmation of Victor's parses to $497.00 to Interval plus $106.46 in resort fees —
+$603.46 all-in, 69,398 points, **9,914 a night**, against 15,952 for the cheapest RedWeek week on
+the board. That is why Interval belongs first: it is genuinely half the price, not a sorting
+preference.
+
+The token lives hashed in `ingest_tokens` rather than in a function secret, so the Desk can rotate
+it without a redeploy, and `ingest_settings.poster_member_id` is who the posts are attributed to.
+Auth is a constant-time compare against the hash; no token and a wrong token both get 401.
+
+`gmail-forwarder.gs` in the same folder is the pipe: an Apps Script on Victor's own account, on a
+five-minute trigger, that posts Interval mail to the function and labels in Gmail what it did.
+
+**One thing only Victor can do.** Getaway Alerts are off. In the year to September 2026 Interval
+sent fifteen threads and every one was a confirmation, a service reply or a newsletter — not one
+alert. Confirmations are weeks the Circle already holds, which is worth having on the board; but
+*new* Getaways only start arriving once alerts are switched on in the Interval To Go app
+(Getaways → Alerts), and no code anywhere can switch them on from here.
+
 **Deploying the ingest function**
 
 ```
