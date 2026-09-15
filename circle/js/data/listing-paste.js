@@ -128,49 +128,127 @@ export function matchStay(text, stays) {
 }
 
 /**
- * Every listing in one paste, not just the first.
+ * Interval prints a TABLE, not a list of listings, and the difference broke every row.
  *
- * Victor checks Interval by eye, on a results page with a dozen Getaways on it. Reading one week
- * per paste meant a dozen round trips, which is why the board had none. This splits the text on
- * the one thing every listing has exactly once — its date range — and gives each chunk the few
- * lines above it, because the resort name sits above the dates on both sites.
+ * What the real Getaway results page says (read off Victor's own screen, September 2026):
  *
- * Deliberately not clever: a chunk that cannot be read is returned with its `missing` filled in
- * rather than dropped, so the Desk sees "three of five could be read" instead of silently
- * getting three.
+ *   Marriott's Aruba Surf Club        <- the resort, named once
+ *   Palm Beach , ARUBA - DCB          <- always under it: town, REGION - code
+ *   MSU / Overall Rating / 48 Member Ratings / Resort Details & Photos
+ *   from US$90.50 Average Night       <- the CHEAPEST week here, not any particular one
+ *   Weekly Rate                       <- the column the figures below sit in
+ *   Sep 17 2026 - Sep 24 2026   US$633.46    Book     <- three weeks under one resort
+ *   Sep 18 2026 - Sep 25 2026   US$633.46    Book
+ *   Sep 19 2026 - Sep 26 2026   US$1,172.54  Book
+ *
+ * Three things follow, and cutting the page into one chunk per date range got all three wrong.
+ *
+ * ONE RESORT, MANY WEEKS. Weeks two and three had no resort name above them, so they were dropped
+ * as "which place is this?" — or worse, inherited the NEXT resort's name. The resort is now
+ * carried forward from its header and changes only at the next header.
+ *
+ * THE FIGURE ON A ROW IS A WEEK, NOT A NIGHT. Interval says so in the column header and again in
+ * the footnote. Read as a nightly rate, US$633.46 goes on the board at seven times the real
+ * price. Three sums off the same screen confirm the reading: 633.46/7 = 90.49 against the
+ * header's "from US$90.50"; 1,008.01/7 = 144.00 against 144.00; 1,172.54/7 = 167.51 against
+ * 167.51.
+ *
+ * THE HEADER'S PRICE IS NOT THE ROW'S. "from US$90.50" is the cheapest week at that resort, so
+ * only money appearing AFTER a row's dates, and before the next row's, belongs to that row.
+ *
+ * Anything that cannot be read is still returned with its `missing` filled in rather than
+ * dropped, so the Desk sees "three of five could be read" instead of quietly getting three.
  */
+
+/** "Palm Beach , ARUBA - DCB" — the line under every resort name, and the only reliable mark of
+ *  where one resort's block ends and the next begins. An ALL-CAPS region is what makes it a
+ *  place line and not a unit line like "Studio Queen, Oceanside". */
+const PLACE_LINE = /,\s*[A-Z]{3,}(?:\s*[-\u2013]\s*[A-Z0-9]{2,5})?\s*$/;
+const MONEY_RE = /(?:US)?\$\s*[\d,]+(?:\.\d{1,2})?/gi;
+
 export function parseListings(text, opts = {}) {
   const clean = String(text || '').trim();
   if (!clean) return [];
-  const lines = clean.split('\n');
-  // Which lines start a date range — that is one per listing on both sites.
-  const dated = lines.map((ln, i) => (parseDates(ln) ? i : -1)).filter(i => i >= 0);
-  if (dated.length <= 1) {
-    const one = parseListing(clean, opts);
-    return one ? [one] : [];
-  }
-  // A listing runs from wherever the last one stopped down to its OWN price line, which sits
-  // below its dates. Cutting on the dates alone put each listing's price into the next one's
-  // chunk — every price a row too low, and the first listing with none at all.
-  const hasMoney = (ln) => /\d/.test(ln) && /\$|\bUSD\b/i.test(ln);
+  const lines = clean.split('\n').map(l => l.trim());
+  const stays = opts.stays || [];
+  // Does this page price by the week? Believing what the page says beats guessing from the size
+  // of the number: $633 could be a week at one resort or two nights at another.
+  const weekly = /weekly[\s\u00a0]*\n?[\s\u00a0]*rate/i.test(clean)
+    || /nightly rates are based on per week/i.test(clean);
+
   const out = [];
-  let prevEnd = -1;
-  for (let k = 0; k < dated.length; k++) {
-    const nextDate = k + 1 < dated.length ? dated[k + 1] : lines.length;
-    let end = dated[k];
-    for (let i = dated[k]; i < nextDate; i++) if (hasMoney(lines[i])) end = i;
-    const chunk = lines.slice(prevEnd + 1, end + 1).join('\n').trim();
-    prevEnd = end;
-    const got = chunk ? parseListing(chunk, opts) : null;
-    if (got) out.push(got);
+  let resortLine = null;
+  let row = null;
+
+  const close = () => {
+    if (!row) return;
+    const chunk = `${resortLine || ''}\n${row.lines.join('\n')}`.trim();
+    out.push(buildListing({
+      chunk,
+      // Once a resort's header has been seen, it is the ONLY thing that names these rows. Reading
+      // the row's own text as a fallback filed Caribbean Palm Village's week under Marriott's
+      // Ocean Club, because the next resort's name lands in the previous resort's last row.
+      nameText: resortLine,
+      dates: row.dates,
+      weekTotal: weekly && row.money.length ? money(row.money[0]) : 0,
+      opts,
+    }));
+    row = null;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    if (!ln) continue;
+    if (PLACE_LINE.test(ln) && i > 0 && !parseDates(ln)) { close(); resortLine = lines[i - 1]; continue; }
+    const d = parseDates(ln);
+    if (d) { close(); row = { dates: d, lines: [ln], money: [] }; continue; }
+    // A short line that names a place in the catalog IS a header, wherever it falls. Neither site
+    // prints a resort's name inside one of its own rows, and without this a page whose place line
+    // carries no comma put every week in the whole table under the first resort on it.
+    if (ln.length < 70 && matchStay(ln, stays)) { close(); resortLine = ln; continue; }
+    if (row) {
+      row.lines.push(ln);
+      const m = ln.match(MONEY_RE);
+      if (m) row.money.push(...m);
+    }
   }
-  return out;
+  close();
+  if (out.length) return out;
+  const one = parseListing(clean, opts);
+  return one ? [one] : [];
 }
 
-/**
- * Everything the Desk needs to put a pasted listing on the board. `stay` is null when the
- * place is not in our catalog, which is a thing to say out loud rather than a thing to guess.
- */
+/** One row of the table, priced and named. */
+function buildListing({ chunk, nameText, dates, weekTotal, opts }) {
+  const { stays = [], pointsPerDollar = 100 } = opts;
+  const nights = nightsBetween(dates.from, dates.to);
+  // Labels beat column headers beat guessing. A row that says "Average Night" or "Weekly Rate" on
+  // itself is answering the question outright; only a row carrying a bare figure falls back to
+  // the Weekly Rate column the page puts it in; only a page with neither is left guessing.
+  const read = parsePrice(chunk, nights);
+  const price = (read.total && !read.guessed) ? read
+    : weekTotal ? { nightly: nights ? Math.round((weekTotal / nights) * 100) / 100 : 0, total: weekTotal, guessed: false }
+    : read;
+  const stay = nameText ? matchStay(nameText, stays) : matchStay(chunk, stays);
+  const unit = parseUnit(chunk);
+  const sleeps = parseSleeps(chunk);
+  const missing = [];
+  if (!price.total) missing.push('the price');
+  if (!stay) missing.push('which place it is');
+  const taken = looksTaken(chunk);
+  return {
+    source: detectSource(chunk), stay, stayId: stay?.id || null,
+    from: dates.from, to: dates.to, nights: nights || null,
+    unit, sleeps, guests: sleeps || null,
+    usdNightly: price.nightly, usdTotal: price.total, priceGuessed: !!price.guessed,
+    pointsTotal: price.total ? Math.round(price.total * pointsPerDollar) : 0,
+    taken,
+    title: [stay?.name, unit].filter(Boolean).join(' \u00b7 ') || unit || 'A week that came up',
+    missing,
+    ok: missing.length === 0 && !taken,
+  };
+}
+
 export function parseListing(text, { stays = [], pointsPerDollar = 100 } = {}) {
   const clean = String(text || '').trim();
   if (!clean) return null;
