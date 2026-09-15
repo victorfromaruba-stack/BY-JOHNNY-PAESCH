@@ -55,6 +55,11 @@ const nightsBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T12:
 
 /** Every date range the two sites print. */
 function parseDates(text: string): { from: string; to: string } | null {
+  const got = readDates(text);
+  // A week must be at least one night. Anything else is a misreading, not a short stay.
+  return got && nightsBetween(got.from, got.to) > 0 ? got : null;
+}
+function readDates(text: string): { from: string; to: string } | null {
   const t = text.replace(/[‐-―]/g, '-').replace(/\s+/g, ' ');
   let m = t.match(/\b([A-Za-z]{3,4})\.?\s+(\d{1,2})\s*-\s*(\d{1,2}),?\s*(\d{4})/);
   if (m && MON3[m[1].toLowerCase()] !== undefined) {
@@ -63,8 +68,13 @@ function parseDates(text: string): { from: string; to: string } | null {
   }
   m = t.match(/\b([A-Za-z]{3,4})\.?\s+(\d{1,2}),?\s*(\d{4})?\s*-\s*([A-Za-z]{3,4})\.?\s+(\d{1,2}),?\s*(\d{4})/);
   if (m && MON3[m[1].toLowerCase()] !== undefined && MON3[m[4].toLowerCase()] !== undefined) {
-    const y2 = +m[6], y1 = m[3] ? +m[3] : y2;
-    return { from: iso(y1, MON3[m[1].toLowerCase()], +m[2]), to: iso(y2, MON3[m[4].toLowerCase()], +m[5]) };
+    const m1 = MON3[m[1].toLowerCase()], m2 = MON3[m[4].toLowerCase()];
+    const y2 = +m[6];
+    // Only one year printed, and the week ends in an earlier month than it starts: a week over
+    // New Year, so the start is the year before. Reading both as 2027 turned a seven-night week
+    // into minus three hundred and fifty-eight.
+    const y1 = m[3] ? +m[3] : (m2 < m1 ? y2 - 1 : y2);
+    return { from: iso(y1, m1, +m[2]), to: iso(y2, m2, +m[5]) };
   }
   m = t.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\s*-\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (m) return { from: iso(+m[3], +m[1] - 1, +m[2]), to: iso(+m[6], +m[4] - 1, +m[5]) };
@@ -174,10 +184,25 @@ function parseOne(text: string, stays: Stay[]): Listing | null {
  * THE HEADER'S PRICE IS NOT THE ROW'S. "from US$90.50" is the cheapest week at that resort, so
  * only money after a row's dates, and before the next row's, belongs to that row.
  */
-/** The line under every resort name. An ALL-CAPS region is what makes it a place line and not a
- *  unit line like "Studio Queen, Oceanside". */
-const PLACE_LINE = /,\s*[A-Z]{3,}(?:\s*[-\u2013]\s*[A-Z0-9]{2,5})?\s*$/;
+/**
+ * The line printed under every resort's name, and the only mark of where one resort's block ends
+ * and the next begins that does not require knowing the resort. That last part is the point:
+ * matching on names we recognise leaves a resort we do not stock invisible, and its weeks then
+ * inherit the name of the resort above them — a real price on the wrong hotel.
+ *
+ * An ALL-CAPS region after a comma or a dot is what makes it a place line: "Palm Beach , ARUBA -
+ * DCB" and "Palm Beach · ARUBA · DCB" both qualify, while "Studio Queen, Oceanside" and
+ * "Sleeps: 12, Building: Compass" do not.
+ */
+const PLACE_LINE = /[,\u00b7]\s*[A-Z]{3,}\b/;
 const MONEY_RE = /(?:US)?\$\s*[\d,]+(?:\.\d{1,2})?/gi;
+
+/** The line above a place line is the resort's name — unless it is plainly something else. */
+function looksLikeName(ln: string): boolean {
+  const s = String(ln || '').trim();
+  return s.length > 2 && s.length < 70 && /[a-z]/.test(s) && /[A-Za-z]{3}/.test(s)
+    && !/\$|\d{4}/.test(s) && !PLACE_LINE.test(s);
+}
 
 function parseListings(text: string, stays: Stay[]): Listing[] {
   const clean = String(text || '').trim();
@@ -204,7 +229,9 @@ function parseListings(text: string, stays: Stay[]): Listing[] {
   for (let i = 0; i < lines.length; i++) {
     const ln = lines[i];
     if (!ln) continue;
-    if (PLACE_LINE.test(ln) && i > 0 && !parseDates(ln)) { close(); resortLine = lines[i - 1]; continue; }
+    if (PLACE_LINE.test(ln) && i > 0 && !parseDates(ln) && looksLikeName(lines[i - 1])) {
+      close(); resortLine = lines[i - 1]; continue;
+    }
     const d = parseDates(ln);
     if (d) { close(); row = { dates: d, lines: [ln], money: [] }; continue; }
     // A short line naming a place in the catalog IS a header, wherever it falls. Neither site
