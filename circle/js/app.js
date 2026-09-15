@@ -144,7 +144,24 @@ async function boot() {
       reloaded = true;
       location.reload();
     });
-    navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* offline extras are optional */ });
+    navigator.serviceWorker.register('./sw.js', { scope: './' }).then((reg) => {
+      // A tab left open does not ask again. The browser only re-checks sw.js on a navigation or
+      // roughly once a day, so an app opened yesterday and switched back to this morning is
+      // yesterday's app — Victor was reading a board from the night before and taking it for the
+      // current one. Coming back to the tab now asks for a new worker (which reloads through the
+      // handler above if there is one) and, either way, refetches the data behind the screen.
+      let away = 0;
+      const AWAY_ENOUGH = 60e3;
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) { away = Date.now(); return; }
+        if (!away || Date.now() - away < AWAY_ENOUGH) return;
+        away = 0;
+        reg.update().catch(() => { /* offline: the old app is the right thing to keep showing */ });
+        // Never yank a sheet or a half-typed ask out from under someone.
+        if (document.querySelector('dialog[open]')) return;
+        store?.reload?.().catch?.(() => {});
+      });
+    }).catch(() => { /* offline extras are optional */ });
   }
 }
 

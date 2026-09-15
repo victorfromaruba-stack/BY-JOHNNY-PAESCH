@@ -84,6 +84,7 @@ export function stays({ store, go, query = {} }) {
         <p class="eyebrow">${icon('trend')}The board · <span class="num" id="count">…</span></p>
         <h1>Cheapest a night, first.</h1>
         <p class="dateline" id="asof">Looking at what owners have open…</p>
+        <p class="small" id="no-interval" hidden></p>
         ${canEdit ? `<div class="row no-print"><button class="btn sm" id="paste">${icon('copy', { size: 16 })}Paste a listing</button>
           <button class="btn ghost sm" id="post">${icon('plus', { size: 16 })}By hand</button></div>` : ''}
       </header>
@@ -125,6 +126,15 @@ export function stays({ store, go, query = {} }) {
     const all = ranked;
     count.textContent = `${ranked.length} open`;
     asof.innerHTML = `${sub}${madeOf(ranked)}`;
+    // Interval's Getaways are the cheapest weeks the Circle can get, and none of them arrive on
+    // their own: Interval refuses the watcher's sign-in. When there is nothing from Interval on
+    // the board, the Desk is told why and handed the two ways in, right where it is looking.
+    const noInterval = !ranked.some(d => !d.draft && d.source === 'interval');
+    const note = wrap.querySelector('#no-interval');
+    if (note) {
+      note.hidden = !(noInterval && canEdit && !loading);
+      note.innerHTML = note.hidden ? '' : `${icon('alert', { size: 15, cls: 'ico-muted' })} Nothing here is an Interval Getaway. Interval will not let the watcher sign in, so a Getaway only reaches the board when you put it there — share one to Hunto from Interval, or <button type="button" class="linkish" id="paste-interval">paste it</button>.`;
+    }
     paintSoon(ranked, folioOf);
     coverSlot.replaceChildren();
     dealsSlot.replaceChildren();
@@ -147,6 +157,7 @@ export function stays({ store, go, query = {} }) {
   wrap.addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-open"]')) load(); });
   wrap.querySelector('#post')?.addEventListener('click', () => postDealSheet({ store }));
   wrap.querySelector('#paste')?.addEventListener('click', () => pasteListingSheet({ store }));
+  wrap.addEventListener('click', (e) => { if (e.target.closest('#paste-interval')) pasteListingSheet({ store }); });
   // Shared to the app from the phone (a Getaway copied off Interval, a RedWeek listing): the
   // share landed the text in sessionStorage on the way in, and the paste sheet opens on it.
   if (query.paste && canEdit) {

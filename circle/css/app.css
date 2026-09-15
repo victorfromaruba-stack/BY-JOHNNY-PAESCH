@@ -1160,6 +1160,9 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .island .north path { fill: currentColor; opacity: .7; }
 .island .north text { font-family: var(--font-mono); font-size: 8px; fill: currentColor; }
 .listing-row .go { display: flex; align-items: center; color: var(--ink-2); }
+/* A button that reads as the link it is, inside a sentence. */
+.linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--good-text); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px; }
 .listing-row.no-thumb { grid-template-columns: minmax(0, 1fr) auto auto; }
 
 /* The week the member tapped through on, at the top of the place's own list. */
