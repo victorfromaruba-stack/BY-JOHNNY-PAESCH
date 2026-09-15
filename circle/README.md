@@ -283,6 +283,15 @@ nothing about the format:
 | Unit line and "Sleeps N Total" | the title a member reads |
 | Paid to Interval + resort fees due | the **all-in** price, which is the only number comparable with an owner's rental |
 
+A **cancellation** notice takes the week back down. Interval quotes the same confirmation number
+when it cancels as when it confirms, so without this a cancellation read as a confirmation would
+put a week the Circle no longer holds on the board under the words "The Circle holds this week" —
+and leave it there, because the second arrival of a number already on the board reads as a
+duplicate. The test is deliberately narrow: the word in the SUBJECT, or one of the whole phrases a
+cancellation notice uses. Every ordinary confirmation carries a *cancellation policy* in its small
+print, and treating that as a cancellation would take live weeks down. This is the one place a
+message may retire something by itself, and it earns that because the source is the seller.
+
 A real confirmation of Victor's parses to $497.00 to Interval plus $106.46 in resort fees —
 $603.46 all-in, 69,398 points, **9,914 a night**, against 15,952 for the cheapest RedWeek week on
 the board. That is why Interval belongs first: it is genuinely half the price, not a sorting

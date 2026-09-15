@@ -16,7 +16,8 @@
  *   4. Triggers (the clock icon) → Add trigger → `pollInterval`, time-driven, every 5 minutes.
  *
  * After that: every Interval Getaway confirmation, and every Getaway Alert once you switch alerts
- * on, is on the board within five minutes of landing in your inbox. Anything it posts is labelled
+ * on, is on the board within five minutes of landing in your inbox — and a cancellation notice
+ * takes that week back off it, which is the one thing here that happens without anybody deciding. Anything it posts is labelled
  * "Hunto/posted" in Gmail so you can see exactly what it did, and anything it could not read is
  * labelled "Hunto/could-not-read" rather than silently dropped.
  */

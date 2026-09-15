@@ -309,6 +309,24 @@ function parseConfirmation(subject = '', text = '') {
 const endOfCheckInDay = (day: string) => new Date(Date.parse(`${day}T23:59:59-04:00`)).toISOString();
 
 /**
+ * Is this mail telling us a Getaway is OFF?
+ *
+ * It matters because Interval quotes the same confirmation number when it cancels as when it
+ * confirms, so a cancellation read as a confirmation would put a week the Circle no longer holds
+ * on the board under the words "The Circle holds this week" — and leave it there, since the
+ * second arrival of a number already on the board reads as a duplicate and is skipped.
+ *
+ * The test is deliberately narrow. Every ordinary confirmation carries a CANCELLATION POLICY in
+ * its small print, and treating that as a cancellation would take live weeks down. So: the word
+ * in the SUBJECT, where Interval puts it and where no policy paragraph reaches, or one of the
+ * whole phrases a cancellation notice actually uses.
+ */
+const CANCELLED = (subject: string, text: string) =>
+  /\bcancell?(ed|ation)\b/i.test(subject)
+  || /\b(getaway|reservation|booking)\s+(has been|was|is)\s+cancell?ed\b/i.test(text)
+  || /\bwe have cancell?ed\b/i.test(text);
+
+/**
  * Which site a page came off — established, not assumed.
  *
  * Page mode used to stamp every row `interval` whatever the text was, which is the one thing the
@@ -347,6 +365,7 @@ Deno.serve(async (req) => {
   if (!tok?.token_sha256) return json({ error: 'ingest is not set up' }, 503);
   if (!safeEqual(tok.token_sha256, await sha256Hex(given))) return json({ error: 'no' }, 401);
 
+  const now = new Date().toISOString();
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json({ error: 'Body must be JSON' }, 400); }
   const subject = String(body.subject ?? '');
@@ -360,7 +379,7 @@ Deno.serve(async (req) => {
   if (Array.isArray(body.retire) && body.retire.length) {
     const ids = (body.retire as unknown[]).map(String).slice(0, 200);
     const { data: done, error } = await sb.from('deals')
-      .update({ status: 'gone', retired_at: new Date().toISOString(),
+      .update({ status: 'gone', retired_at: now,
                 retired_reason: 'Not on the page when the Desk last looked.' })
       .in('id', ids).eq('status', 'live').select('id, title');
     if (error) return json({ error: error.message }, 500);
@@ -382,6 +401,20 @@ Deno.serve(async (req) => {
   // ---------------------------------------------------------------- a confirmation email
   const conf = parseConfirmation(subject, text);
   if (conf) {
+    // A cancellation takes the week DOWN. Interval saying the booking is off is as good an
+    // answer as the Circle can get about a week it holds, so this is the one place a message may
+    // retire something on its own: the source is the seller, not a page that might be paginated.
+    if (CANCELLED(subject, text)) {
+      const ref = `interval:${conf.conf}`;
+      const { data: gone, error } = await sb.from('deals')
+        .update({ status: 'gone', retired_at: now,
+                  retired_reason: `Interval cancelled Getaway #${conf.conf}.` })
+        .eq('source_ref', ref).eq('status', 'live').select('id, title');
+      if (error) return json({ error: error.message }, 500);
+      return json({ ok: true, mode: 'cancellation', conf: conf.conf,
+        retired: (gone ?? []).length, titles: (gone ?? []).map((d) => d.title),
+        why: (gone ?? []).length ? undefined : 'that Getaway was not on the board' });
+    }
     if ('bad' in conf && conf.bad) return json({ ok: false, skipped: true, why: conf.bad, conf: conf.conf }, 200);
     const c = conf as { conf: string; resort: string; from: string; to: string; nights: number; unit: string | null; paidUsd: number | null; feesUsd: number | null; allInUsd: number | null };
     const target = norm(c.resort);
@@ -406,7 +439,7 @@ Deno.serve(async (req) => {
     if (dry) return json({ ok: true, dryRun: true, mode: 'confirmation', wouldPost: row });
     const { data: deal, error } = await sb.from('deals').insert(row).select('id').single();
     if (error) return json({ error: error.message, row }, 500);
-    await sb.from('ingest_tokens').update({ last_used_at: new Date().toISOString() }).eq('id', 'mail');
+    await sb.from('ingest_tokens').update({ last_used_at: now }).eq('id', 'mail');
     return json({ ok: true, mode: 'confirmation', dealId: deal.id, conf: c.conf, place: stay.name, pointsTotal });
   }
 
@@ -424,7 +457,6 @@ Deno.serve(async (req) => {
   // Desk exactly what was read — including the ones it could not read — before anything is posted.
   const results: Record<string, unknown>[] = [];
   const refsOnPage = new Set<string>();
-  const now = new Date().toISOString();
   let posted = 0, ready = 0;
   const perNight = (x: Listing) => (x.usdTotal && x.nights ? x.usdTotal / x.nights : 9e9);
   // Cheapest first among the ones that can go up; everything unreadable after them, however
