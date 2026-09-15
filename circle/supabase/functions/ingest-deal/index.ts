@@ -208,6 +208,33 @@ function parseConfirmation(subject = '', text = '') {
 
 const endOfCheckInDay = (day: string) => new Date(Date.parse(`${day}T23:59:59-04:00`)).toISOString();
 
+/**
+ * Which site a page came off — established, not assumed.
+ *
+ * Page mode used to stamp every row `interval` whatever the text was, which is the one thing the
+ * Circle must never do: a week filed as an Interval Getaway when it is an owner's RedWeek rental
+ * is a lie told to somebody about to spend points, and the two are not the same product at the
+ * same price. The browser knows the answer for certain — it is the host it is sitting on — so the
+ * Grab button says so and this trusts that over any guess made from the words on the page.
+ *
+ * With no host given the caller is the mail forwarder, which only reads mail from Interval's own
+ * senders; that is its own kind of certainty, so it keeps `interval`. Anything else is refused
+ * rather than filed under a source nobody can stand behind.
+ */
+/** What a member reads. VakayMood weeks are owners renting, and are never called Interval. */
+const SAY: Record<string, string> = { interval: 'Interval', redweek: 'RedWeek', vakaymood: 'VakayMood' };
+const SITES: [RegExp, string][] = [
+  [/(^|\.)intervalworld\.com$|(^|\.)intervalintl\.com$/i, 'interval'],
+  [/(^|\.)redweek\.com$/i, 'redweek'],
+  [/(^|\.)vakaymood\.com$/i, 'vakaymood'],
+];
+function sourceOf(host: string): string | null {
+  const h = String(host || '').trim().toLowerCase().replace(/^https?:\/\//, '').split('/')[0];
+  if (!h) return null;
+  for (const [re, name] of SITES) if (re.test(h)) return name;
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
@@ -225,6 +252,7 @@ Deno.serve(async (req) => {
   const subject = String(body.subject ?? '');
   const text = String(body.text ?? body.body ?? body.plain ?? '');
   const dry = body.dryRun === true;
+  const host = String(body.origin ?? '');
   if (!text.trim()) return json({ error: 'Send it as {subject, text}' }, 400);
 
   const { data: stays, error: stayErr } = await sb.from('stays').select('id, name, kind, active').eq('active', true);
@@ -268,7 +296,13 @@ Deno.serve(async (req) => {
     return json({ ok: true, mode: 'confirmation', dealId: deal.id, conf: c.conf, place: stay.name, pointsTotal });
   }
 
-  // ---------------------------------------------------------------- a page of Getaways
+  // ---------------------------------------------------------------- a page of listings
+  // A caller that named its host must have named one we recognise; one that named none is the
+  // mail forwarder, whose senders are already restricted to Interval.
+  const source = host ? sourceOf(host) : 'interval';
+  if (!source) {
+    return json({ ok: false, skipped: true, why: `the Circle does not read weeks off ${host} \u2014 it could not say where they came from` }, 200);
+  }
   const found = parseListings(text, catalog);
   if (!found.length) return json({ ok: false, skipped: true, why: 'nothing on that page read as a week' }, 200);
 
@@ -292,7 +326,7 @@ Deno.serve(async (req) => {
       continue;
     }
     // The same week grabbed twice is the same week: its place and its nights are its identity.
-    const sourceRef = `interval:${m.stay.id}:${m.from}:${m.to}`;
+    const sourceRef = `${source}:${m.stay.id}:${m.from}:${m.to}`;
     const { data: seen } = await sb.from('deals').select('id').eq('source_ref', sourceRef).maybeSingle();
     if (seen) { results.push({ ...seenAs, state: 'already', dealId: seen.id }); continue; }
     const pointsTotal = Math.round(m.usdTotal * ppd * (1 + svc));
@@ -302,8 +336,8 @@ Deno.serve(async (req) => {
       title: [m.stay.name, m.unit].filter(Boolean).join(' · '),
       from_date: m.from, to_date: m.to, nights: m.nights,
       points_total: pointsTotal, points_per_night: pointsPerNight,
-      retail_usd: null, source: 'interval', source_url: null, source_ref: sourceRef,
-      note: `Seen on Interval by the Desk — $${m.usdTotal.toFixed(2)} for ${m.nights} nights`
+      retail_usd: null, source, source_url: null, source_ref: sourceRef,
+      note: `Seen on ${SAY[source] ?? source} by the Desk — $${m.usdTotal.toFixed(2)} for ${m.nights} nights`
         + `${m.sleeps ? `, sleeps ${m.sleeps}` : ''}.`
         + `${m.guessed ? ' The page showed one figure and no label, so it was read as the nightly rate.' : ''}`
         + ' Victor confirms it is still there before he quotes anyone.',
@@ -316,5 +350,5 @@ Deno.serve(async (req) => {
     results.push({ ...seenAs, state: 'posted', dealId: deal.id, pointsPerNight });
   }
   if (!dry && posted) await sb.from('ingest_tokens').update({ last_used_at: new Date().toISOString() }).eq('id', 'mail');
-  return json({ ok: true, mode: 'page', dryRun: dry || undefined, read: found.length, ready, posted, results });
+  return json({ ok: true, mode: 'page', source, sourceLabel: SAY[source] ?? source, dryRun: dry || undefined, read: found.length, ready, posted, results });
 });

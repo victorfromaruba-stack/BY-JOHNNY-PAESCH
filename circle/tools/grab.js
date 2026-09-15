@@ -171,16 +171,28 @@
 
   function summarise(res) {
     var n = res.read || 0, ready = res.ready || 0, up = res.posted || 0;
+    var from = res.sourceLabel ? ' on ' + res.sourceLabel : '';
     if (res.mode === 'confirmation') return 'A Getaway confirmation, not a page of them.';
     if (!n) return res.why || 'Nothing on this page read as a week.';
     if (up) return up + (up === 1 ? ' week is' : ' weeks are') + ' on the board.';
-    if (ready) return n + ' read · ' + ready + ' the Circle does not have yet.';
-    return n + ' read · none of them are new.';
+    if (ready) return n + ' read' + from + ' · ' + ready + ' the Circle does not have yet.';
+    return n + ' read' + from + ' · none of them are new.';
   }
 
   // ---------------------------------------------------------------- the two taps
+  //
+  // The page is read ONCE, on the first tap, and the second tap posts those same words.
+  //
+  // Reading it again would quietly undo the whole point of asking. A results page is live: it
+  // lazy-loads as you scroll, re-renders when a filter settles, and drops a week the moment
+  // somebody else takes it. Re-reading on the second tap would mean Victor approves four weeks
+  // and the Circle posts whatever the page happened to say a few seconds later — which is exactly
+  // the unchecked number the confirmation exists to prevent.
+  var SEEN = null;
+
   function send(dry, tok, then) {
-    var body = JSON.stringify({ subject: document.title, text: document.body.innerText, dryRun: !!dry });
+    if (dry || SEEN === null) SEEN = { subject: document.title, origin: location.hostname, text: document.body.innerText };
+    var body = JSON.stringify({ subject: SEEN.subject, origin: SEEN.origin, text: SEEN.text, dryRun: !!dry });
     fetch(ENDPOINT, { method: 'POST', headers: { 'content-type': 'application/json', 'x-ingest-token': tok }, body: body })
       .then(function (r) { return r.json().then(function (j) { return { status: r.status, json: j }; }); })
       .then(function (out) {
