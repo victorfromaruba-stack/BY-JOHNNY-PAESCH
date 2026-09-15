@@ -1199,3 +1199,7 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
   .listing-row .price-col { min-width: 88px; }
   .listing-row .price-col .all .usd { display: none; }
 }
+
+/* A row that has not been looked at for a couple of days says so by going quiet. It is not an
+   error and not a warning — the week may well still be there — so it recedes rather than shouts. */
+.stamp.aged { opacity: .72; font-style: italic; }

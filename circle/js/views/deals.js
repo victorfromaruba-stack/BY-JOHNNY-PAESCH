@@ -90,7 +90,12 @@ export function askHrefFor(deal) {
  * the same face as the ledger's "by Vishnu": the board and the statement are one instrument.
  */
 export function stampFor(deal, store) {
-  const t = deal.postedAt ? new Date(deal.postedAt) : null;
+  // LAST SEEN, not first posted. A week posted on Monday and confirmed still there on Friday is
+  // a Friday fact, and a week posted on Monday and not looked at since is a Monday fact — the
+  // two look identical under `postedAt`, and the difference is the whole question for anyone
+  // browsing the board on their own. `seenAt` is refreshed every time the Desk reads the page
+  // again; it falls back to `postedAt` for rows from before the board kept the distinction.
+  const t = deal.seenAt || deal.postedAt ? new Date(deal.seenAt || deal.postedAt) : null;
   const hhmm = t ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
   const day = t ? t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
   // Where the week is, first. An Interval Getaway and an owner's rental on RedWeek are different
@@ -99,7 +104,31 @@ export function stampFor(deal, store) {
   if (deal.draft) return { text: `VakayMood · ${hhmm}`, feed: true };
   const where = (SOURCES[deal.source] || SOURCES.other).label;
   const who = store.member?.(deal.postedBy)?.name.split(' ')[0];
-  return { text: [where, who, day && hhmm ? `${day} ${hhmm}` : day || hhmm].filter(Boolean).join(' · '), feed: false };
+  const sameDay = t && new Date().toDateString() === t.toDateString();
+  const when = sameDay ? hhmm : (day && hhmm ? `${day} ${hhmm}` : day || hhmm);
+  return { text: [where, who, when && `seen ${when}`].filter(Boolean).join(' · '), feed: false, seenAt: t, stale: staleDays(t) };
+}
+
+/**
+ * After two days, say so out loud.
+ *
+ * The board exists so the Circle can look without asking, and that only works if a row is honest
+ * about its own age. A week seen this morning and a week seen last Tuesday are not the same
+ * offer, and nothing here can tell whether the older one is still there — Interval does not let
+ * us look without a person looking. So the row says when it was last seen, and past two days it
+ * says it in words rather than leaving a member to work out a date.
+ */
+const STALE_AFTER = 2;
+function ageLine(stamp) {
+  if (!(stamp.stale >= STALE_AFTER)) return '';
+  const days = stamp.stale;
+  return `<p class="tiny muted" style="margin-top:6px">Last seen ${days === 1 ? 'yesterday' : `${days} days ago`}. Victor looks again before he books \u2014 ask and he will tell you within the hour.</p>`;
+}
+
+/** Days since anyone last laid eyes on this week where it lives. Null when we never knew. */
+function staleDays(t) {
+  if (!t) return null;
+  return Math.floor((Date.now() - t.getTime()) / 864e5);
 }
 
 /**
@@ -122,7 +151,7 @@ export function dealRow(deal, { store, folio = null, match = null, canEdit = fal
       <span class="main" style="min-width:0">
         <span class="folio">${picked ? `<span class="asked">${icon('check', { size: 12 })}The week you picked</span>` : match ? `<span class="asked">${icon('bellRing', { size: 12 })}You asked for this</span>` : folio ? `No. ${folio}` : ''}</span>
         <${H}><a class="row-link" href="${inPlace ? askHrefFor(deal) : placeHrefFor(deal, stay)}">${escapeHtml(title)}</a></${H}>
-        <span class="sub">${soon ? `<span class="soon">${escapeHtml(soon)}</span> · ` : ''}${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'}<span class="l2">${deal.sleeps ? `sleeps ${deal.sleeps} · ` : ''}<span class="stamp${stamp.feed ? ' feed' : ''}">${escapeHtml(stamp.text)}</span></span></span>
+        <span class="sub">${soon ? `<span class="soon">${escapeHtml(soon)}</span> · ` : ''}${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'}<span class="l2">${deal.sleeps ? `sleeps ${deal.sleeps} · ` : ''}<span class="stamp${stamp.feed ? ' feed' : ''}${stamp.stale >= STALE_AFTER ? ' aged' : ''}">${escapeHtml(stamp.text)}</span></span></span>
       </span>
       <span class="price-col"><b>${escapeHtml(fmtPoints(nightly(deal)))}</b><small>a night</small><span class="all">${escapeHtml(fmtPoints(deal.pointsTotal))} all in<span class="usd"> · ${escapeHtml(pointsUsd(deal.pointsTotal, s.pointsPerDollar))}</span></span></span>
       ${inPlace && !canEdit ? `<span class="go" aria-hidden="true">${icon('chevronRight', { size: 18 })}</span>` : ''}
@@ -163,6 +192,7 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
         <span class="mono">${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'} · ${escapeHtml(fmtPoints(deal.pointsTotal))} all in · ${escapeHtml(pointsUsd(deal.pointsTotal, s.pointsPerDollar))}</span>
         ${soon ? `<p class="soon">${icon('zap', { size: 15 })}${escapeHtml(soon)}</p>` : ''}
         <p class="why">${escapeHtml(why)} · <span class="stamp${stamp.feed ? ' feed' : ''}">${escapeHtml(stamp.text)}</span></p>
+        ${ageLine(stamp)}
         ${credit ? `<p class="tiny muted" style="margin-top:8px">${credit.html}</p>` : ''}
         <div class="row" style="margin-top:14px">
           <a class="btn" href="${askHrefFor(deal)}">${icon('send', { size: 16 })}Ask Victor</a>

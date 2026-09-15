@@ -353,6 +353,20 @@ Deno.serve(async (req) => {
   const text = String(body.text ?? body.body ?? body.plain ?? '');
   const dry = body.dryRun === true;
   const host = String(body.origin ?? '');
+
+  // Taking weeks DOWN is its own call, and it is always a person's. The Desk sees which weeks
+  // were not on the page it just read and decides; nothing here retires anything on its own,
+  // because a page is one page — Interval paginates, and absence from page one is not proof.
+  if (Array.isArray(body.retire) && body.retire.length) {
+    const ids = (body.retire as unknown[]).map(String).slice(0, 200);
+    const { data: done, error } = await sb.from('deals')
+      .update({ status: 'gone', retired_at: new Date().toISOString(),
+                retired_reason: 'Not on the page when the Desk last looked.' })
+      .in('id', ids).eq('status', 'live').select('id, title');
+    if (error) return json({ error: error.message }, 500);
+    return json({ ok: true, mode: 'retire', retired: (done ?? []).length, titles: (done ?? []).map((d) => d.title) });
+  }
+
   if (!text.trim()) return json({ error: 'Send it as {subject, text}' }, 400);
 
   const { data: stays, error: stayErr } = await sb.from('stays').select('id, name, kind, active').eq('active', true);
@@ -409,6 +423,8 @@ Deno.serve(async (req) => {
   // Every row carries the same fields whatever happened to it, so the Grab button can show the
   // Desk exactly what was read — including the ones it could not read — before anything is posted.
   const results: Record<string, unknown>[] = [];
+  const refsOnPage = new Set<string>();
+  const now = new Date().toISOString();
   let posted = 0, ready = 0;
   const perNight = (x: Listing) => (x.usdTotal && x.nights ? x.usdTotal / x.nights : 9e9);
   // Cheapest first among the ones that can go up; everything unreadable after them, however
@@ -427,8 +443,24 @@ Deno.serve(async (req) => {
     }
     // The same week grabbed twice is the same week: its place and its nights are its identity.
     const sourceRef = `${source}:${m.stay.id}:${m.from}:${m.to}`;
-    const { data: seen } = await sb.from('deals').select('id').eq('source_ref', sourceRef).maybeSingle();
-    if (seen) { results.push({ ...seenAs, state: 'already', dealId: seen.id }); continue; }
+    refsOnPage.add(sourceRef);
+    const { data: seen } = await sb.from('deals').select('id, status').eq('source_ref', sourceRef).maybeSingle();
+    if (seen) {
+      // Seeing it again IS the news. Without this the board could only say when a week was first
+      // posted, which after a few days stops answering the one question a member has on their own.
+      //
+      // And a week that comes back is back: one taken down as vanished goes live again when the
+      // page carries it once more, because the reason it was taken down has stopped being true.
+      // A week the Circle has BOOKED is not revived by anything — it is not a listing any more.
+      const revive = seen.status === 'gone';
+      if (!dry && (seen.status === 'live' || revive)) {
+        await sb.from('deals').update(revive
+          ? { seen_at: now, status: 'live', retired_at: null, retired_reason: null }
+          : { seen_at: now }).eq('id', seen.id);
+      }
+      results.push({ ...seenAs, state: revive ? 'back' : seen.status === 'live' ? 'refreshed' : 'already', dealId: seen.id });
+      continue;
+    }
     const pointsTotal = Math.round(m.usdTotal * ppd * (1 + svc));
     const pointsPerNight = Math.round(pointsTotal / m.nights);
     const row = {
@@ -441,7 +473,7 @@ Deno.serve(async (req) => {
         + `${m.sleeps ? `, sleeps ${m.sleeps}` : ''}.`
         + `${m.guessed ? ' The page showed one figure and no label, so it was read as the nightly rate.' : ''}`
         + ' Victor confirms it is still there before he quotes anyone.',
-      status: 'live', expires_at: endOfCheckInDay(m.from), posted_by: poster,
+      status: 'live', expires_at: endOfCheckInDay(m.from), posted_by: poster, seen_at: now,
     };
     if (dry) { ready++; results.push({ ...seenAs, state: 'would-post', pointsPerNight }); continue; }
     const { data: deal, error } = await sb.from('deals').insert(row).select('id').single();
@@ -449,6 +481,28 @@ Deno.serve(async (req) => {
     posted++;
     results.push({ ...seenAs, state: 'posted', dealId: deal.id, pointsPerNight });
   }
-  if (!dry && posted) await sb.from('ingest_tokens').update({ last_used_at: new Date().toISOString() }).eq('id', 'mail');
-  return json({ ok: true, mode: 'page', source, sourceLabel: SAY[source] ?? source, dryRun: dry || undefined, read: found.length, ready, posted, results });
+  // Weeks the Circle is showing that this page did not carry. Scoped hard — same source, same
+  // resorts, and a check-in inside the span the page actually covered — because a search for
+  // September says nothing about November. Reported, never acted on: see the retire branch.
+  const stayIds = [...new Set(found.filter((f) => f.stay).map((f) => f.stay!.id))];
+  const ok = found.filter((f) => f.ok);
+  // The window the page vouches for is the period it DISPLAYED: the first check-in through the
+  // last check-out. Bounding it by check-in days alone made a page showing one week vouch for one
+  // day, so a week that had vanished could never surface — which is the whole point of looking.
+  const first = ok.map((f) => f.from).sort()[0];
+  const last = ok.map((f) => f.to).sort().slice(-1)[0];
+  let missing: Record<string, unknown>[] = [];
+  if (stayIds.length && first && last) {
+    const { data: onBoard } = await sb.from('deals')
+      .select('id, title, from_date, to_date, points_per_night, source_ref, seen_at')
+      .eq('source', source).eq('status', 'live').in('stay_id', stayIds)
+      .gte('from_date', first).lte('from_date', last);
+    missing = (onBoard ?? []).filter((d) => !refsOnPage.has(d.source_ref ?? ''))
+      .map((d) => ({ dealId: d.id, title: d.title, from: d.from_date, to: d.to_date,
+                     pointsPerNight: d.points_per_night, lastSeen: d.seen_at }));
+  }
+
+  if (!dry && posted) await sb.from('ingest_tokens').update({ last_used_at: now }).eq('id', 'mail');
+  return json({ ok: true, mode: 'page', source, sourceLabel: SAY[source] ?? source, dryRun: dry || undefined,
+    read: found.length, ready, posted, results, missing });
 });

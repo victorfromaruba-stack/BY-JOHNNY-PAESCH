@@ -481,6 +481,11 @@ create table if not exists deals (
   status        text not null default 'live' check (status in ('live','gone','expired','booked')),
   posted_by     uuid references members(id),
   posted_at     timestamptz not null default now(),
+  -- When this week was last SEEN on the source's own page, as distinct from when it was first
+  -- posted here. The two drift apart the moment a week sits on the board for a few days, and
+  -- posted_at then stops being an answer to "is this still there?" — which is the only question a
+  -- member browsing on their own actually has. A re-grab of the same page refreshes this.
+  seen_at       timestamptz default now(),
   expires_at    timestamptz,
   retired_at    timestamptz,
   retired_reason text,
@@ -488,6 +493,7 @@ create table if not exists deals (
 );
 create index if not exists deals_live_idx on deals(status, posted_at desc);
 create index if not exists deals_stay_idx on deals(stay_id, from_date);
+create index if not exists deals_seen_idx on deals(source, status, seen_at desc);
 
 -- ---------- notes from the Voice of the Circle ----------
 create table if not exists announcements (

@@ -391,6 +391,29 @@ export function desk({ store, go }) {
    * browser has already drawn, only when he taps it. Nothing goes on the board until he has seen
    * what it read and tapped again.
    */
+  /**
+   * How long since anyone actually looked at Interval on the Circle's behalf.
+   *
+   * The board is only worth browsing unattended if its rows are recent, and nothing can refresh
+   * them by itself: Interval has no feed, so a person has to look. Saying how stale the rows have
+   * got turns "tap Grab sometime" into a thing with an answer, and the panel opens itself once
+   * they are older than a day.
+   */
+  const freshness = () => {
+    const rows = store.liveDeals().filter(d => d.source === 'interval' && (d.seenAt || d.postedAt));
+    if (!rows.length) return { chip: '', line: '', overdue: false };
+    const newest = Math.max(...rows.map(d => Date.parse(d.seenAt || d.postedAt)));
+    const hours = Math.floor((Date.now() - newest) / 36e5);
+    const said = hours < 1 ? 'in the last hour' : hours < 24 ? `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`
+      : `${Math.floor(hours / 24)} ${Math.floor(hours / 24) === 1 ? 'day' : 'days'} ago`;
+    const overdue = hours >= 24;
+    return {
+      overdue,
+      chip: overdue ? ` <span class="tag" style="background:var(--flight-soft);color:var(--ink);border-color:transparent">${escapeHtml(said)}</span>` : '',
+      line: `<p class="small muted" style="margin-top:10px">The ${rows.length} Interval ${rows.length === 1 ? 'week' : 'weeks'} on the board ${rows.length === 1 ? 'was' : 'were'} last seen <b>${escapeHtml(said)}</b>. Members see that on every row, so a stale board tells on itself \u2014 but only you can look again.</p>`,
+    };
+  };
+
   const GRAB = "javascript:(function(){var d=document,s=d.createElement('script');"
     + "s.src='https://victorfromaruba-stack.github.io/BY-JOHNNY-PAESCH/circle/tools/grab.js?'+Date.now();"
     + "d.documentElement.appendChild(s);})()";
@@ -400,8 +423,9 @@ export function desk({ store, go }) {
     panel.replaceChildren(el(`<div>
       <div class="row" style="margin-bottom:16px"><button class="btn sm" id="post-deal">${icon('plus', { size: 16 })}Post a deal</button>
         <a class="btn ghost sm" href="#/stays">${icon('eye', { size: 15 })}See it as a member does</a></div>
-      <details class="panel" style="margin-bottom:16px">
-        <summary style="cursor:pointer;font-weight:600">${icon('zap', { size: 16 })}Grab a whole Interval page at once</summary>
+      <details class="panel" style="margin-bottom:16px"${freshness().overdue ? ' open' : ''}>
+        <summary style="cursor:pointer;font-weight:600">${icon('zap', { size: 16 })}Grab a whole Interval page at once${freshness().chip}</summary>
+        ${freshness().line}
         <p class="small muted" style="margin-top:10px">Open the Getaways results on Interval the way you always do, signed in as yourself.
           Scroll so the weeks you want are on screen. Then pick this bookmark. It reads what is on the page,
           shows you every week it made out — including the ones it could not read — and puts nothing on the

@@ -320,6 +320,34 @@ no cookie of anyone's held anywhere); it does not crawl (it requests no page, fo
 cannot reach a page he has not opened); it does not run on a schedule (it runs when a finger touches
 it and never otherwise). It is his clipboard with the retyping taken out.
 
+### Keeping the board current
+
+The Circle's friends browse the board on their own, so a row has to be honest about its own age.
+Every week carries `seen_at` — when it was last seen on the source's own page, not when it was
+first posted here. Those two stop being the same thing after a day or two, and only the first one
+answers "is this still there?".
+
+One Grab is therefore a full re-sync of the page in front of Victor, not just an importer:
+
+| what the page says | what happens |
+|---|---|
+| a week the board does not have | posted, on his second tap |
+| a week the board already has | `seen_at` moves to now — **Still there** |
+| a week the board took down as gone, and the page carries again | back on the board, `retired_at` cleared — **Back on** |
+| a week the board has that the page did NOT carry | listed separately, with a **Take it off the board** button |
+
+That last row is reported, never acted on. Interval paginates, so a week's absence from the page
+in front of you is not proof it is gone — only a person can tell the difference between "sold"
+and "on the next screen", so only a person decides. Even so the sweep is scoped hard: same
+source, same resorts, and a check-in inside the window the page actually displayed (its first
+check-in through its last check-out). A search for September never touches November.
+
+Members see the age on every row. Past two days a card says it in words — "Last seen 3 days ago.
+Victor looks again before he books" — and the row's stamp goes quiet. The Desk sees the other
+half: the Deals tab says how long since anyone looked, and opens the Grab panel by itself once
+the rows are over a day old. Nothing can refresh them automatically, because Interval has no feed
+and a person has to look — but a stale board now tells on itself instead of pretending.
+
 The bookmark is on **the Desk → Deals**, with a Copy button and the install steps. The token is
 prompted on first use and kept in `localStorage` on that browser only — it is not in the bookmark,
 not in this repository, and not in the app, so a bookmark copied off a shared screen is useless. A

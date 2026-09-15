@@ -99,11 +99,17 @@
     '  border:1px solid #C9D2D0;border-radius:12px;color:#121A26;font-weight:500}',
     '.ghost:focus-visible{outline:2px solid #136D78;outline-offset:2px}',
     '.note{padding:12px 16px;color:#5C6A6F;font-size:13px}',
+    '.group{padding:12px 16px 10px;background:#E3E9E8;border-bottom:1px solid #C9D2D0}',
+    '.group b{display:block;font-size:14px}',
+    '.group span{display:block;font-size:12px;color:#5C6A6F;margin-top:3px}',
+    '.group .ghost{margin-top:10px;min-height:44px;font-size:14px}',
+    '.group:empty{padding:0;border-bottom:0}',
     '@media (prefers-color-scheme:dark){',
     '  .wrap{color:#E8EEF0;background:#0B1220;border-top-color:rgba(255,255,255,.14)}',
     '  .head,.foot{background:#131C2B;border-color:rgba(255,255,255,.08)}',
     '  .mark{color:#5CD3DF}.said,.sub,.num span,.note{color:#9AA8AD}',
     '  .row{border-bottom-color:rgba(255,255,255,.08)}.row.no{background:#060B14;color:#9AA8AD}',
+  '  .group{background:#060B14;border-bottom-color:rgba(255,255,255,.14)}.group span{color:#9AA8AD}',
     '  .tag.ok{background:#0E3A41;color:#8FE3EC}.tag.was{background:#1B2637;color:#9AA8AD}',
     '  .tag.warn{background:#4A3B08;color:#F7ECC4}',
     '  .go{background:#E8EEF0;color:#0B1220}.go[disabled]{background:#1B2637;color:#7A8A90}',
@@ -141,11 +147,54 @@
     return a.toLocaleDateString('en-GB', DAY) + (b ? ' – ' + b.toLocaleDateString('en-GB', DAY) : '')
       + (r.nights ? ' · ' + r.nights + ' nights' : '');
   }
+  /** How long ago, in the words a person would use. */
+  function ago(iso) {
+    var ms = Date.now() - Date.parse(iso);
+    if (!(ms >= 0)) return 'just now';
+    var mins = Math.round(ms / 6e4);
+    if (mins < 2) return 'just now';
+    if (mins < 60) return mins + ' minutes ago';
+    var hrs = Math.round(mins / 60);
+    if (hrs < 24) return hrs + (hrs === 1 ? ' hour ago' : ' hours ago');
+    var days = Math.round(hrs / 24);
+    return days + (days === 1 ? ' day ago' : ' days ago');
+  }
+
   var WORD = { posted: ['ok', 'On the board'], 'would-post': null, already: ['was', 'Already up'],
+               refreshed: ['was', 'Still there'], back: ['ok', 'Back on'],
                skipped: null, failed: ['warn', 'Would not save'] };
 
   function draw(res) {
     list.replaceChildren();
+    if (res.missing && res.missing.length) {
+      var head = el('div', 'group');
+      head.appendChild(el('b', null, res.missing.length + (res.missing.length === 1 ? ' week on the board was not on this page' : ' weeks on the board were not on this page')));
+      head.appendChild(el('span', null, 'They may be gone, or they may be on a page you have not scrolled to. Clearing them is your call.'));
+      var ids = res.missing.map(function (m) { return m.dealId; });
+      var clear = button('ghost', 'Take ' + (ids.length === 1 ? 'it' : 'them') + ' off the board', function () {
+        clear.disabled = true;
+        clear.textContent = 'Taking them off\u2026';
+        send(false, tokenHeld, function (done) {
+          said.textContent = (done.retired || 0) + (done.retired === 1 ? ' week is off the board.' : ' weeks are off the board.');
+          res.missing = [];
+          draw(res);
+        }, { retire: ids });
+      });
+      head.appendChild(clear);
+      list.appendChild(head);
+      res.missing.forEach(function (m) {
+        var row = el('div', 'row no');
+        var who = el('div', 'who');
+        who.appendChild(el('div', 'name', m.title || 'A week'));
+        who.appendChild(el('div', 'sub', span(m) + (m.lastSeen ? ' · last seen ' + ago(m.lastSeen) : '')));
+        row.appendChild(who);
+        var num = el('div', 'num');
+        if (m.pointsPerNight) { num.appendChild(el('span', null, m.pointsPerNight.toLocaleString('en-US'))); num.appendChild(el('span', null, 'pts a night')); }
+        row.appendChild(num);
+        list.appendChild(row);
+      });
+      list.appendChild(el('div', 'group'));
+    }
     (res.results || []).forEach(function (r) {
       var gone = r.state === 'skipped';
       var row = el('div', 'row' + (gone ? ' no' : ''));
@@ -169,14 +218,22 @@
     });
   }
 
+  /** How many rows the Circle already holds and this page has just confirmed are still there. */
+  function standing(res) {
+    return (res.results || []).filter(function (r) { return r.state === 'refreshed' || r.state === 'already' || r.state === 'back'; }).length;
+  }
+
   function summarise(res) {
-    var n = res.read || 0, ready = res.ready || 0, up = res.posted || 0;
+    var n = res.read || 0, ready = res.ready || 0, up = res.posted || 0, held = standing(res);
     var from = res.sourceLabel ? ' on ' + res.sourceLabel : '';
     if (res.mode === 'confirmation') return 'A Getaway confirmation, not a page of them.';
     if (!n) return res.why || 'Nothing on this page read as a week.';
-    if (up) return up + (up === 1 ? ' week is' : ' weeks are') + ' on the board.';
+    if (up || (!ready && !res.dryRun)) {
+      return [up ? up + (up === 1 ? ' week added' : ' weeks added') : '',
+              held ? held + ' still there' : ''].filter(Boolean).join(' · ') || 'The board is up to date.';
+    }
     if (ready) return n + ' read' + from + ' · ' + ready + ' the Circle does not have yet.';
-    return n + ' read' + from + ' · none of them are new.';
+    return n + ' read' + from + ' · the Circle already has ' + (held === 1 ? 'it' : 'them') + '.';
   }
 
   // ---------------------------------------------------------------- the two taps
@@ -189,10 +246,13 @@
   // and the Circle posts whatever the page happened to say a few seconds later — which is exactly
   // the unchecked number the confirmation exists to prevent.
   var SEEN = null;
+  var tokenHeld = null;
 
-  function send(dry, tok, then) {
-    if (dry || SEEN === null) SEEN = { subject: document.title, origin: location.hostname, text: document.body.innerText };
-    var body = JSON.stringify({ subject: SEEN.subject, origin: SEEN.origin, text: SEEN.text, dryRun: !!dry });
+  function send(dry, tok, then, instead) {
+    tokenHeld = tok;
+    if (!instead && (dry || SEEN === null)) SEEN = { subject: document.title, origin: location.hostname, text: document.body.innerText };
+    var body = JSON.stringify(instead
+      || { subject: SEEN.subject, origin: SEEN.origin, text: SEEN.text, dryRun: !!dry });
     fetch(ENDPOINT, { method: 'POST', headers: { 'content-type': 'application/json', 'x-ingest-token': tok }, body: body })
       .then(function (r) { return r.json().then(function (j) { return { status: r.status, json: j }; }); })
       .then(function (out) {
@@ -225,18 +285,24 @@
     said.textContent = summarise(res);
     if (!res.results || !res.results.length) { note(res.why || 'Nothing on this page read as a week. Scroll the results into view and tap again — a page only shows what it has drawn.'); return; }
     draw(res);
-    var ready = res.ready || 0;
+    var ready = res.ready || 0, held = standing(res);
+    // Confirming a week is STILL there is worth a tap of its own. The board stamps every row with
+    // when it was last seen, and that stamp is the only thing a member browsing on their own has
+    // to go on — so a page with nothing new on it still has something to tell the Circle.
+    var label = ready ? 'Put ' + ready + (ready === 1 ? ' week' : ' weeks') + ' on the board'
+      : held ? 'Mark ' + (held === 1 ? 'it' : 'these ' + held) + ' as still there'
+      : 'Nothing to put up';
     foot.hidden = false;
-    var go = button('go', ready ? 'Put ' + ready + (ready === 1 ? ' week' : ' weeks') + ' on the board' : 'Nothing new to put up', function () {
+    var go = button('go', label, function () {
       go.disabled = true;
-      go.textContent = 'Putting them up…';
+      go.textContent = ready ? 'Putting them up…' : 'Marking them…';
       send(false, tok, function (done) {
         said.textContent = summarise(done);
         draw(done);
         foot.replaceChildren(button('ghost', 'Close', function () { host.remove(); }));
       });
     });
-    go.disabled = !ready;
+    go.disabled = !(ready || held);
     foot.replaceChildren(go, button('ghost', 'Close', function () { host.remove(); }));
   }
 
