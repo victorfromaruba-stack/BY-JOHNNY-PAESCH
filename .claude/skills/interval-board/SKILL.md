@@ -31,10 +31,13 @@ Two specific temptations, both of which have already been tried in this repo:
   Leave it.
 
 If someone asks for scheduled scanning — and they will, because it is the obvious thing to want —
-do not argue the ethics at length. Say it in a sentence, then give them the route that genuinely
-delivers it, which is better anyway: **Interval's own Getaway Alerts scan continuously and email
-every hit, and the Circle already turns those emails into board rows within five minutes.** That
-beats four times a day. See "The automatic routes" below.
+say it in one sentence and do not argue the ethics at length. Then be straight about the rest,
+because there is no clever substitute to offer: **nothing watches Interval for the Circle, and
+nothing can.** Alerts do not exist on this account (see below). A person has to look. The useful
+work is making that look cost almost nothing — Grab, and a reminder — not finding a way around it.
+
+Do not offer a route without checking he can reach it. Four rounds went on recommending the app,
+alerts and Ongoing Search before anyone asked, and all three turned out to be closed to him.
 
 ## How a week actually reaches the board
 
@@ -91,9 +94,11 @@ The host is `vip.intervalworld.com` once signed in. Dates are `Sep 17 2026 - Sep
 comma, both years.
 
 Price precedence, which is the rule that keeps all of this straight: **labels beat column headers
-beat guessing.** A row saying "Average Night" answers outright. A row with a bare figure falls back
-to the Weekly Rate column it sits in. A page with neither is left guessing, and a guessed figure is
-flagged so the Desk sees it before anyone else does.
+beat refusing.** A row saying "Average Night" answers outright. A row with a bare figure falls back
+to the Weekly Rate column it sits in. A page with neither gives a figure whose meaning is unknown,
+and that is REFUSED rather than quoted — the two readings are a factor of seven apart, so a guess
+is not a price. The Desk sees the figure and the words "could not read whether that figure is a
+night or a week", which is a two-second fix by eye and never a wrong number in front of a member.
 
 ## When a week reads wrong
 
@@ -133,29 +138,32 @@ revived.
 
 Past two days a card tells members in words. The Desk sees how long since anyone looked.
 
-## The automatic routes
+## There is no automatic route, and stop looking for one
 
-These are the ones that scan without anybody breaking anything, and they are the answer to "make it
-run four times a day":
+Checked, in this order, and all three are closed:
 
-- **Getaway Alerts** — Interval's own machines watch continuously and email every hit;
-  `gmail-forwarder.gs` posts each one within five minutes. Only Victor can switch it on, and as of
-  September 2026 it was still off.
+| route | why not |
+|---|---|
+| **Getaway Alerts** | Victor looked: there is no email alert option at all on his account. |
+| **Interval To Go app** | His app login has never worked. Web login is fine — his own screen recording shows him signed in at `vip.intervalworld.com` searching Getaways. The app commonly needs its own registration; that is a call to member services, not a retry. |
+| **Ongoing Search** | Lives behind the same app. Worth asking member services about, not worth suggesting again until someone confirms he can reach it. |
 
-  **Do not tell him to do it in the Interval To Go app.** His app login has never worked — this was
-  suggested four times before anyone thought to ask, which is four wasted rounds. His *web* login
-  is fine: his own screen recording shows him signed in at `vip.intervalworld.com` searching
-  Getaways, and the watcher's notes record those credentials working by hand. Interval's app often
-  needs a separate registration from the website account, so the fix is a call to member services,
-  not a retry. Until then, look for alerts on the web — inside the Getaways area, or under account
-  and email preferences. Say "look here", not "it is here": nobody should fetch their site to
-  check, and an instruction he cannot follow is worse than none.
-- **Ongoing Search** — Interval's own standing request: keeps looking until a week appears and books
-  it. Needs three resorts *or* three time periods; runs overnight; auto-charges with 24 hours to
-  cancel.
+Four rounds were spent recommending these before anyone asked whether he could use them. If the
+board looks empty, do not open with "switch on alerts" — it is not there. **Somebody has to look at
+Interval, and that somebody is a person, not this repo.** Say that plainly and spend the effort on
+making the looking cheap.
+
+What actually exists, and is the whole system:
+
+- **Grab** — he is on the page anyway; two taps put the whole page on the board, refresh what is
+  still there, and flag what has gone. This is not a fallback. It is the mechanism.
+- **The reminder** — `circle/tools/check-interval.ics`, a subscribed calendar that nudges him four
+  times a day with the link. Automation of the person, since the site cannot be automated.
+- **The mail pipe** — still live and still worth having: confirmations post the weeks the Circle
+  holds, and cancellations take them down by themselves. That half needs no alerts.
 - **VakayMood** — the one source with a public documented API (60 req/min, no login). Poll it
-  freely; that is what a sanctioned feed looks like, and it is the contrast worth drawing when
-  someone asks why Interval is different.
+  freely. It is what a sanctioned feed looks like, and the contrast worth drawing when someone asks
+  why Interval is different.
 
 ## House rules that apply to anything you touch here
 

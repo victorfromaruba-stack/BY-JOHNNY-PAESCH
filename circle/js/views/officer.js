@@ -433,7 +433,11 @@ export function desk({ store, go }) {
           anywhere and it never runs on its own.</p>
         <div class="row no-print" style="margin-top:12px">
           <a class="btn sm" href="https://vip.intervalworld.com/" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}Open Interval</a>
+          <a class="btn ghost sm" href="tools/check-interval.ics" download>${icon('calendar', { size: 15 })}Remind me four times a day</a>
         </div>
+        <p class="small muted" style="margin-top:10px">Nothing watches Interval for the Circle. They publish no feed, and there is no
+          alert to switch on — the only way to know what is open is for somebody to look. So the reminder comes to you instead:
+          four a day at 08:00, 12:00, 16:30 and 20:30, each one a tap away from a current board. Open it once and your phone keeps it.</p>
         <div class="copyline" style="margin-top:12px"><code style="font-size:.78rem">${escapeHtml(GRAB.slice(0, 54))}…</code>
           <button class="btn quiet sm" data-copy="${escapeHtml(GRAB)}">Copy</button></div>
         <p class="small muted" style="margin-top:10px">To install it: save any page as a bookmark, edit the bookmark, and paste this over its address.

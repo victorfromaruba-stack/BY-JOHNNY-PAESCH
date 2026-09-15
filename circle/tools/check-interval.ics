@@ -1,0 +1,86 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Hunto//The Circle//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Check Interval
+X-WR-CALDESC:Four looks a day at Interval Getaways for the Circle's board.
+X-WR-TIMEZONE:America/Aruba
+BEGIN:VTIMEZONE
+TZID:America/Aruba
+BEGIN:STANDARD
+DTSTART:19700101T000000
+TZOFFSETFROM:-0400
+TZOFFSETTO:-0400
+TZNAME:AST
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:check-interval-0800@hunto.circle
+DTSTAMP:20260915T120000Z
+DTSTART;TZID=America/Aruba:20260916T080000
+DURATION:PT5M
+RRULE:FREQ=DAILY
+SUMMARY:Check Interval
+DESCRIPTION:Open Interval\, search Getaways for Aruba\, sort by Price\, then
+  tap the Grab bookmark. Two taps and the board is current.\n\nhttps://vip.in
+  tervalworld.com/\n\nNothing watches Interval for you: there is no feed and n
+  o alert to switch on. The board is as fresh as the last time somebody looked
+ \, and it says so on every row.
+URL:https://vip.intervalworld.com/
+BEGIN:VALARM
+TRIGGER:PT0M
+ACTION:DISPLAY
+DESCRIPTION:Check Interval — open Getaways, sort by Price, tap Grab
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:check-interval-1200@hunto.circle
+DTSTAMP:20260915T120000Z
+DTSTART;TZID=America/Aruba:20260916T120000
+DURATION:PT5M
+RRULE:FREQ=DAILY
+SUMMARY:Check Interval
+DESCRIPTION:Open Interval\, search Getaways for Aruba\, sort by Price\, then
+  tap the Grab bookmark.\n\nhttps://vip.intervalworld.com/
+URL:https://vip.intervalworld.com/
+BEGIN:VALARM
+TRIGGER:PT0M
+ACTION:DISPLAY
+DESCRIPTION:Check Interval — open Getaways, sort by Price, tap Grab
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:check-interval-1630@hunto.circle
+DTSTAMP:20260915T120000Z
+DTSTART;TZID=America/Aruba:20260916T163000
+DURATION:PT5M
+RRULE:FREQ=DAILY
+SUMMARY:Check Interval
+DESCRIPTION:Open Interval\, search Getaways for Aruba\, sort by Price\, then
+  tap the Grab bookmark.\n\nhttps://vip.intervalworld.com/
+URL:https://vip.intervalworld.com/
+BEGIN:VALARM
+TRIGGER:PT0M
+ACTION:DISPLAY
+DESCRIPTION:Check Interval — open Getaways, sort by Price, tap Grab
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:check-interval-2030@hunto.circle
+DTSTAMP:20260915T120000Z
+DTSTART;TZID=America/Aruba:20260916T203000
+DURATION:PT5M
+RRULE:FREQ=DAILY
+SUMMARY:Check Interval
+DESCRIPTION:Open Interval\, search Getaways for Aruba\, sort by Price\, then
+  tap the Grab bookmark. A week checking in tomorrow is often cheapest tonigh
+ t.\n\nhttps://vip.intervalworld.com/
+URL:https://vip.intervalworld.com/
+BEGIN:VALARM
+TRIGGER:PT0M
+ACTION:DISPLAY
+DESCRIPTION:Check Interval — open Getaways, sort by Price, tap Grab
+END:VALARM
+END:VEVENT
+END:VCALENDAR

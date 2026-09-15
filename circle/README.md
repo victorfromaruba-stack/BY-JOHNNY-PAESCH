@@ -304,7 +304,16 @@ Auth is a constant-time compare against the hash; no token and a wrong token bot
 `gmail-forwarder.gs` in the same folder is the pipe: an Apps Script on Victor's own account, on a
 five-minute trigger, that posts Interval mail to the function and labels in Gmail what it did.
 
-**One thing only Victor can do.** Getaway Alerts are off. In the year to September 2026 Interval
+**There is no alert to switch on.** Victor checked his account: no email alert option exists at
+all, and the Interval To Go app — where alerts usually live — has never accepted his login, though
+the website does. So nothing watches Interval for the Circle, and nothing can: they publish no
+feed, and the only honest way to know what is open is for a person to look. The Grab bookmark is
+therefore the mechanism rather than the fallback, and `tools/check-interval.ics` is a subscribed
+calendar that reminds him four times a day, since the site cannot be automated but the person can.
+What follows describes the mail pipe, which still earns its place: confirmations post the weeks
+the Circle holds, and cancellations take them down by themselves.
+
+**Historical note.** Getaway Alerts were off. In the year to September 2026 Interval
 sent fifteen threads and every one was a confirmation, a service reply or a newsletter — not one
 alert. Confirmations are weeks the Circle already holds, which is worth having on the board; but
 *new* Getaways only start arriving once alerts are switched on in the Interval To Go app
