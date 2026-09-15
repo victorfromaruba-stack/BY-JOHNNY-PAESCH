@@ -118,6 +118,46 @@ export function matchStay(text, stays) {
 }
 
 /**
+ * Every listing in one paste, not just the first.
+ *
+ * Victor checks Interval by eye, on a results page with a dozen Getaways on it. Reading one week
+ * per paste meant a dozen round trips, which is why the board had none. This splits the text on
+ * the one thing every listing has exactly once — its date range — and gives each chunk the few
+ * lines above it, because the resort name sits above the dates on both sites.
+ *
+ * Deliberately not clever: a chunk that cannot be read is returned with its `missing` filled in
+ * rather than dropped, so the Desk sees "three of five could be read" instead of silently
+ * getting three.
+ */
+export function parseListings(text, opts = {}) {
+  const clean = String(text || '').trim();
+  if (!clean) return [];
+  const lines = clean.split('\n');
+  // Which lines start a date range — that is one per listing on both sites.
+  const dated = lines.map((ln, i) => (parseDates(ln) ? i : -1)).filter(i => i >= 0);
+  if (dated.length <= 1) {
+    const one = parseListing(clean, opts);
+    return one ? [one] : [];
+  }
+  // A listing runs from wherever the last one stopped down to its OWN price line, which sits
+  // below its dates. Cutting on the dates alone put each listing's price into the next one's
+  // chunk — every price a row too low, and the first listing with none at all.
+  const hasMoney = (ln) => /\d/.test(ln) && /\$|\bUSD\b/i.test(ln);
+  const out = [];
+  let prevEnd = -1;
+  for (let k = 0; k < dated.length; k++) {
+    const nextDate = k + 1 < dated.length ? dated[k + 1] : lines.length;
+    let end = dated[k];
+    for (let i = dated[k]; i < nextDate; i++) if (hasMoney(lines[i])) end = i;
+    const chunk = lines.slice(prevEnd + 1, end + 1).join('\n').trim();
+    prevEnd = end;
+    const got = chunk ? parseListing(chunk, opts) : null;
+    if (got) out.push(got);
+  }
+  return out;
+}
+
+/**
  * Everything the Desk needs to put a pasted listing on the board. `stay` is null when the
  * place is not in our catalog, which is a thing to say out loud rather than a thing to guess.
  */

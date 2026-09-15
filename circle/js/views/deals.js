@@ -571,7 +571,7 @@ export async function addWatchSheet({ store, prefill = {} }) {
  * read it leaves blank rather than guessing, and he confirms everything before it is posted.
  */
 export async function pasteListingSheet({ store, prefill = {} }) {
-  const { parseListing } = await import('../data/listing-paste.js');
+  const { parseListing, parseListings } = await import('../data/listing-paste.js');
   const stays = [...store.arubaStays(), ...store.trips()];
   const ppd = store.settings.pointsPerDollar;
 
@@ -585,8 +585,12 @@ export async function pasteListingSheet({ store, prefill = {} }) {
       <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button>
         <button class="btn" data-ok disabled>${icon('chevronRight', { size: 16 })}Check it over</button></div>`;
     const ta = body.querySelector('[name=raw]'), out = body.querySelector('#read'), okBtn = body.querySelector('[data-ok]');
-    let parsed = null;
+    let parsed = null, many = [];
     const draw = () => {
+      // A whole results page pastes as well as one listing does. Victor checks Interval by eye
+      // on a page with a dozen Getaways; reading one per paste is what kept them off the board.
+      many = parseListings(ta.value, { stays, pointsPerDollar: ppd });
+      if (many.length > 1) { drawMany(); return; }
       parsed = parseListing(ta.value, { stays, pointsPerDollar: ppd });
       if (!parsed) { out.innerHTML = '<p class="small muted">Waiting for a paste.</p>'; okBtn.disabled = true; return; }
       const rows = [
@@ -604,11 +608,59 @@ export async function pasteListingSheet({ store, prefill = {} }) {
         ${parsed.missing.length ? `<p class="small" style="margin-top:8px">You will need to fill in ${escapeHtml(parsed.missing.join(' and '))} yourself.</p>` : ''}`;
       okBtn.disabled = !parsed.from;
     };
+    // Several at once: every week its own line, the ones that can be read ticked, cheapest first.
+    const drawMany = () => {
+      const usable = many.filter(m => m.ok);
+      const rows = many.slice().sort((a, b) => (a.usdTotal && a.nights ? a.usdTotal / a.nights : 9e9) - (b.usdTotal && b.nights ? b.usdTotal / b.nights : 9e9));
+      out.className = `notice ${usable.length ? 'good' : 'warn'}`;
+      out.innerHTML = `<b>${many.length} week${many.length === 1 ? '' : 's'} in that paste${usable.length < many.length ? `, ${usable.length} ready to post` : ''}</b>
+        <ul class="photo-rows" style="margin-top:10px;grid-template-columns:auto minmax(0,1fr) auto">${rows.map((m, i) => `
+          <li><input type="checkbox" data-pick="${i}" ${m.ok ? 'checked' : 'disabled'} style="width:20px;height:20px">
+            <span class="what"><b>${escapeHtml(m.stay?.name || 'Not one of ours')}</b>
+              <span class="meta">${m.from ? `${escapeHtml(shortRange(m.from, m.to))} · ${m.nights} nights` : 'no dates'}${m.unit ? ` · ${escapeHtml(m.unit)}` : ''}${m.taken ? ' · says it is gone' : ''}${m.ok ? '' : ` · needs ${escapeHtml(m.missing.join(' and '))}`}</span></span>
+            <span class="small num" style="text-align:right">${m.usdTotal && m.nights ? `${escapeHtml(fmtUsd2(m.usdTotal / m.nights))}<br><span class="muted">a night</span>` : '—'}</span></li>`).join('')}</ul>
+        <p class="tiny muted" style="margin-top:8px">Each one is priced at the Circle's own rate and goes on the board cheapest first. Nothing was fetched — this only reads what you pasted.</p>`;
+      out.querySelectorAll('[data-pick]').forEach((cb) => cb.addEventListener('change', () => {
+        okBtn.disabled = !out.querySelector('[data-pick]:checked');
+      }));
+      okBtn.disabled = !usable.length;
+      okBtn.innerHTML = `${icon('plus', { size: 16 })}Put ${usable.length > 1 ? `${usable.length} on the board` : 'it on the board'}`;
+      // Which ones are ticked, in the order shown.
+      many = rows;
+    };
     ta.addEventListener('input', draw);
     ta.addEventListener('paste', () => setTimeout(draw, 0));
     if (prefill.raw) draw();
-    body.querySelector('[data-ok]').addEventListener('click', () => close(parsed));
+    body.querySelector('[data-ok]').addEventListener('click', () => {
+      if (many.length > 1) {
+        const picked = [...out.querySelectorAll('[data-pick]:checked')].map(cb => many[Number(cb.dataset.pick)]).filter(Boolean);
+        close({ batch: picked });
+        return;
+      }
+      close(parsed);
+    });
   } });
+
+  // A batch goes straight onto the board: each week was read from the paste, shown on its own
+  // line, and ticked by the Desk — putting a dozen through the one-at-a-time sheet would be the
+  // retyping this exists to remove. The Desk can take any of them down again with "Gone".
+  if (read?.batch) {
+    const posted = [];
+    for (const m of read.batch) {
+      try {
+        const deal = await store.postDeal({
+          stayId: m.stayId, from: m.from, to: m.to, nights: m.nights,
+          pointsTotal: Math.round((m.usdTotal || 0) * ppd * (1 + (store.settings.serviceRate || 0))),
+          title: m.title, source: m.source === 'redweek' ? 'redweek' : m.source === 'interval' ? 'interval' : 'other',
+          note: [m.unit, m.sleeps ? `sleeps ${m.sleeps}` : ''].filter(Boolean).join(' · '),
+          expiresAt: new Date(Date.parse(`${m.from}T23:59:59-04:00`)).toISOString(),
+        });
+        if (deal) posted.push(deal);
+      } catch (err) { toast(`${m.stay?.name || 'One week'}: ${err.message}`, { kind: 'bad', timeout: 7000 }); }
+    }
+    if (posted.length) toast(`${posted.length} on the board, cheapest first.`, { kind: 'good' });
+    return posted;
+  }
 
   if (!read?.from) return;
   // Straight into the normal posting sheet, filled in, so every guard it already has still runs.
