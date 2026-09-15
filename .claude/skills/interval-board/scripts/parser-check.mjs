@@ -158,6 +158,57 @@ $525/night        $4,031 total`,
     },
   },
   {
+    // From the adversarial review: `total(?:\s*price)?\s*:?[^$\d]{0,24}\$?\s*([\d.]+)` made the
+    // dollar sign optional and [^$\d] matched newlines, so "Total\nSleeps 8" read 8 as the price.
+    name: 'a bare number after the word "total" is not a price',
+    text: `Marriott's Aruba Surf Club
+Palm Beach , ARUBA - DCB
+Sep 20 2026 - Sep 27 2026
+Total
+Sleeps 8
+Guests 4`,
+    check: (rows) => {
+      const r = rows[0];
+      if (!r) return 'nothing read';
+      if (r.usdTotal) return `read $${r.usdTotal} for the week from an occupancy figure`;
+      if (r.ok) return 'posted a week with no price on it';
+      return null;
+    },
+  },
+  {
+    // A lone unlabelled figure is a number and a coin toss: read as a night it is 7x wrong.
+    name: 'a figure with no label is refused, not quoted as a nightly rate',
+    text: `Marriott's Aruba Ocean Club
+Palm Beach , ARUBA - DCB
+Sep 26 2026 - Oct 3 2026
+US$1,172.54`,
+    check: (rows) => {
+      const r = rows[0];
+      if (!r) return 'nothing read';
+      if (Math.abs(r.usdNightly - 1172.54) < 1) return 'read the week as a NIGHT — seven times over';
+      if (r.ok) return 'put an unlabelled figure on the board';
+      if (!r.missing.some((m) => /night or a week/.test(m))) return `skipped, but for the wrong reason: ${r.missing.join(', ')}`;
+      return null;
+    },
+  },
+  {
+    // A brand word in a header or footer must not name the week.
+    name: 'a brand in the page furniture does not file the week at that brand',
+    text: `Interval International
+Getaways
+Some Resort Nobody Stocks
+Oranjestad , ARUBA - XYZ
+Sep 20 2026 - Sep 27 2026
+US$700.00 Total
+Marriott Vacation Club is a registered trademark`,
+    check: (rows) => {
+      const r = rows[0];
+      if (!r) return 'nothing read';
+      if (r.stay) return `filed at ${r.stay.name} on a brand word in the page furniture`;
+      return null;
+    },
+  },
+  {
     name: 'no row ever carries a night count of zero or less',
     text: REAL_PAGE,
     check: (rows) => {

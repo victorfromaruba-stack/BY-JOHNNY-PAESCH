@@ -58,6 +58,10 @@
   root.innerHTML = [
     '<style>',
     ':host,*{box-sizing:border-box}',
+    // The user agent's [hidden] rule loses to any author display declaration, and this sheet sets
+    // .foot{display:flex}. Without this the footer bar shows empty from first paint and every
+    // `hidden = true` in the panel is a no-op.
+    '[hidden]{display:none!important}',
     '.wrap{font:400 15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;',
     '  color:#121A26;background:#EDF1F0;border-top:1px solid #C9D2D0;',
     '  max-height:76vh;display:flex;flex-direction:column;',
@@ -261,16 +265,29 @@
           note('Tap Try another token and paste the one the Desk was given.');
           foot.hidden = false;
           foot.replaceChildren(button('ghost', 'Try another token', function () {
-            var t = token(true); if (t) { said.textContent = 'Reading this page…'; note(''); foot.hidden = true; send(true, t); }
+            var t = token(true);
+            if (!t) return;
+            said.textContent = 'Reading this page…'; note(''); foot.hidden = true;
+            // The continuation matters, and so does passing the NEW token through it: `afterDry`
+            // closes over whichever token it is handed, and that is the one the posting tap uses.
+            // Without it the retry threw on success and the panel blamed the network.
+            send(true, t, function (res) { afterDry(t, res); });
           }));
           return;
         }
         if (out.status >= 400) { said.textContent = 'The Circle answered ' + out.status + '.'; note(String(out.json && out.json.error || '')); return; }
-        then(out.json);
+        if (typeof then === 'function') then(out.json);
       })
       .catch(function (err) {
         said.textContent = 'Could not reach the Circle.';
-        note('That is the connection, not this page. Nothing was sent. (' + (err && err.message || 'no detail') + ')');
+        // A read that fails has certainly changed nothing. A POST that fails has not: the Circle
+        // saves the weeks one at a time and answers at the end, so a dropped answer can sit on
+        // either side of the save. Saying "nothing was sent" there would be a guess presented as
+        // a fact, and the Desk would find rows it had been told were not posted.
+        note(dry
+          ? 'That is the connection, not this page. Nothing was sent. (' + (err && err.message || 'no detail') + ')'
+          : 'The answer never came back, so some weeks may have been saved and some not. Open the Desk and look before tapping again. ('
+            + (err && err.message || 'no detail') + ')');
       });
   }
 

@@ -94,19 +94,24 @@ function parsePrice(text: string, nights: number | null) {
   const t = text.replace(/,/g, '');
   // "US$ 132.71 Average Night", "$150/night", "132.71 USD nightly", "Average Night US$132.71".
   const per = t.match(/(?:us)?\$\s*([\d.]+)\s*(?:usd\s*)?(?:\/\s*night|per\s*night|average\s*night|avg\.?\s*night|a night|nightly)/i)
-           || t.match(/(?:average|avg\.?|per)\s*night[^$\d]{0,24}(?:us)?\$?\s*([\d.]+)/i);
+           || t.match(/(?:average|avg\.?|per)\s*night[^$\d]{0,24}(?:us)?\$\s*([\d.]+)/i);
   // "$1050 total", "$929 USD Total", "Weekly US$ 929.00", "Total: 929".
   const tot = t.match(/(?:us)?\$\s*([\d.]+)\s*(?:usd\s*)?(?:total|for the week|weekly|\/\s*week)/i)
-           || t.match(/(?:weekly(?:\s*rate)?|total(?:\s*price)?)\s*:?[^$\d]{0,24}(?:us)?\$?\s*([\d.]+)/i);
+           || t.match(/(?:weekly(?:\s*rate)?|total(?:\s*price)?)\s*:?[^$\d]{0,24}(?:us)?\$\s*([\d.]+)/i);
   let nightly = per ? money(per[1]) : 0;
   let total = tot ? money(tot[1]) : 0;
-  // A card carrying exactly one money figure and no label at all is showing its price: there is
-  // nothing else it could be. Read it as the nightly rate, but say so — a figure read without a
-  // label is the one the Desk should look at twice before it goes in front of anybody.
+  // A card carrying exactly one money figure and no label at all is showing SOME price — but which
+  // one is exactly what it does not say, and the two readings are a factor of seven apart. Reading
+  // it as a nightly rate put US$633.46 on the board as a night when it was a week.
+  //
+  // So it is read as the stay's TOTAL, which is what both sites sell (Interval prices whole weeks;
+  // a RedWeek listing's lone figure is its asking price), and it is flagged. The flag is what
+  // matters: `guessed` makes the row not-ok below, so it never reaches the board at all. The Desk
+  // sees the figure and the reason, and can read the label off the page itself in two seconds.
   let guessed = false;
   if (!nightly && !total) {
     const alone = t.match(/(?:us)?\$\s*[\d.]+/gi) || [];
-    if (alone.length === 1) { nightly = money(alone[0]); guessed = true; }
+    if (alone.length === 1) { total = money(alone[0]); guessed = true; }
   }
   if (!total && nightly && nights) total = Math.round(nightly * nights * 100) / 100;
   if (!nightly && total && nights) nightly = Math.round((total / nights) * 100) / 100;
@@ -120,19 +125,38 @@ const WORDS: [string, string][] = [
   ['renaissance', 'Renaissance'], ['casa del mar', 'Casa del Mar'], ['eagle aruba', 'Eagle Aruba'],
   ['barcel', 'Barcel'], ['tamarijn', 'Tamarijn'], ['riu', 'RIU'], ['marriott', 'Marriott'],
 ];
-function matchStay(text: string, stays: Stay[]): Stay | null {
+function matchStay(text: string, stays: Stay[], opts: { loose?: boolean } = {}): Stay | null {
   const hay = text.toLowerCase().replace(/[’'`]/g, "'");
   const hit = stays.filter((s) => s.kind !== 'trip')
     .map((s) => ({ s, name: s.name.toLowerCase().replace(/[’'`]/g, "'") }))
     .filter(({ name }) => hay.includes(name))
     .sort((a, b) => b.name.length - a.name.length)[0];
   if (hit) return hit.s;
+  if (opts.loose === false) return null;
   for (const [needle, label] of WORDS) {
     if (!hay.includes(needle)) continue;
     const s = stays.find((x) => x.kind !== 'trip' && x.name.toLowerCase().includes(label.toLowerCase()));
     if (s) return s;
   }
   return null;
+}
+
+/**
+ * Which place a WHOLE PAGE is about, when it carries a single listing.
+ *
+ * The exact catalog name is trusted wherever it appears — a full "Marriott's Aruba Surf Club"
+ * anywhere in a page is that resort, footer or not. The loose brand word is not: "Interval
+ * International" in a site header, or a Marriott advert in a sidebar, would otherwise file an
+ * unrelated week at a Marriott, which is a real price on the wrong hotel. So the brand pass only
+ * runs over the lines ABOVE the dates, which is where both sites put the resort's name.
+ */
+function nameScope(text: string, stays: Stay[]): Stay | null {
+  const exact = matchStay(text, stays, { loose: false });
+  if (exact) return exact;
+  const lines = String(text).split('\n');
+  const at = lines.findIndex((ln) => parseDates(ln));
+  const above = at > 0 ? lines.slice(0, at + 1).join('\n') : (at === 0 ? lines[0] : text);
+  return matchStay(above, stays);
 }
 
 type Listing = {
@@ -146,10 +170,11 @@ function parseOne(text: string, stays: Stay[]): Listing | null {
   const dates = parseDates(clean);
   const nights = dates ? nightsBetween(dates.from, dates.to) : null;
   const price = parsePrice(clean, nights);
-  const stay = matchStay(clean, stays);
+  const stay = nameScope(clean, stays);
   const missing: string[] = [];
   if (!dates) missing.push('the dates');
   if (!price.total) missing.push('the price');
+  else if (price.guessed) missing.push('whether that figure is a night or a week');
   if (!stay) missing.push('which place it is');
   const taken = looksTaken(clean);
   return {
@@ -266,6 +291,10 @@ function buildListing(chunk: string, nameText: string | null, dates: { from: str
   const stay = nameText ? matchStay(nameText, stays) : matchStay(chunk, stays);
   const missing: string[] = [];
   if (!price.total) missing.push('the price');
+  // A figure whose LABEL could not be read is not a price the Circle may quote: it is a number and
+  // a coin toss between a night and a week. Saying so puts the row in front of the Desk instead of
+  // in front of somebody spending points.
+  else if (price.guessed) missing.push('whether that figure is a night or a week');
   if (!stay) missing.push('which place it is');
   const taken = looksTaken(chunk);
   return {
