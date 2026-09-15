@@ -140,7 +140,7 @@ properly. This is what the research found:
 
 | Source | Can a robot watch it? | What the club does instead |
 |---|---|---|
-| **Interval International** | **No.** Membership terms clause (s) prohibits automated access and clause (k) restricts to personal, non-commercial use. Sharing a login is grounds for termination. No API exists. | Turn on **Getaway Alerts** in the Interval To Go app, and use **Ongoing Search** — Interval's own standing request, which is exactly "keep looking until it appears" and books it for you. Note it needs three resorts *or* three time periods, runs as an overnight batch, and auto-charges with 24 hours to cancel. |
+| **Interval International** | **No.** Membership terms clause (s) prohibits automated access and clause (k) restricts to personal, non-commercial use. Sharing a login is grounds for termination. No API exists. | Turn on **Getaway Alerts** in the Interval To Go app, and use **Ongoing Search** — Interval's own standing request, which is exactly "keep looking until it appears" and books it for you. Note it needs three resorts *or* three time periods, runs as an overnight batch, and auto-charges with 24 hours to cancel. Plus the two routes that need no robot at all: forwarded Interval mail, and the **Grab** bookmark that reads the results page Victor already has open. |
 | **RedWeek** | **No.** Terms of service carry an explicit anti-scraping clause; they publish an `llms.txt` saying the same. No API. | Turn on **Posting Alerts** — RedWeek emails you when a matching posting appears. Sanctioned, and it is the fastest legitimate signal there is. |
 | **Marriott Vacation Club / Abound** | No API. | The owner-site **waitlist** emails you when inventory frees up. |
 | **Airbnb** | **No.** No public API; the Partner API is closed to operators this size; scraping is forbidden and has been litigated. | Vrbo through the Expedia Rapid partner API is the nearest legitimate equivalent, and needs an application. |
@@ -255,12 +255,21 @@ and Ian are the ones who go and book, and they need to know the moment something
 What the app does *not* do is pretend. It never asks for anyone's Interval or RedWeek
 password, and there is no scraper in this repository.
 
-### Interval, by email — the one automatic route that exists
+### Interval: two routes in, and neither of them signs in
 
-Interval has no API and its terms forbid automated access, so the Circle does not scrape it and
-does not give a robot the login. What Interval *does* do is send its own members email, and
-reading email that was sent to you is not automated access to anybody's site. That is the whole
-mechanism.
+Victor asked, in plain words, why the Circle can poll VakayMood but not Interval. The answer is
+that VakayMood publishes an API — documented, no login, a stated sixty requests a minute — and
+Interval publishes nothing, forbids automated access in its membership terms, runs bot management
+that refuses a scripted sign-in, and terminates memberships for it. The Circle's whole supply of
+cheap weeks is Victor's own VIP Gold membership, so the cost of being caught is not a warning, it
+is the end of the business. **We automate where there is a door.** Where there is no door, the
+system is built around the person who is already inside, and there are exactly two such routes:
+
+1. **Email.** Interval sends its own members confirmations, and Getaway Alerts once switched on.
+   Reading mail that was sent to you is not automated access to anybody's site.
+2. **The page he is already looking at.** The Grab bookmark, below.
+
+Both post to the same endpoint, so the parsing is fixed in one place.
 
 `supabase/functions/ingest-deal` is **deployed** and takes a raw message — `{subject, text}` — with
 a token in `x-ingest-token`. It parses Interval Getaway mail itself, so the forwarder needs to know
@@ -292,16 +301,43 @@ alert. Confirmations are weeks the Circle already holds, which is worth having o
 *new* Getaways only start arriving once alerts are switched on in the Interval To Go app
 (Getaways → Alerts), and no code anywhere can switch them on from here.
 
+### Grab — the button on the page he is already on
+
+`tools/grab.js` is a bookmarklet. Victor is signed in to Interval as himself, on a Getaways results
+page he opened himself, looking at it. He picks the bookmark; it reads `document.body.innerText` of
+the page his browser has already drawn, posts that text to the same endpoint, and shows him every
+week it made out. **Nothing reaches the board on the first tap.** The panel lists what it read —
+place, dates, unit, the price it found, what a member would pay — and the rows it could *not* read,
+with the reason. A second tap is what posts them.
+
+That second tap is not ceremony. Text can be misread, and a week on the board with a wrong price on
+it is a member spending real points against a number nobody checked. A miss is cheap; a confident
+mistake is not. Where a card carries exactly one money figure and no label, the parser reads it as
+the nightly rate and says so on the row and in the note, rather than quietly believing it.
+
+What it is not, line by line: it does not sign in (there is no second session, no stored password,
+no cookie of anyone's held anywhere); it does not crawl (it requests no page, follows no link, and
+cannot reach a page he has not opened); it does not run on a schedule (it runs when a finger touches
+it and never otherwise). It is his clipboard with the retyping taken out.
+
+The bookmark is on **the Desk → Deals**, with a Copy button and the install steps. The token is
+prompted on first use and kept in `localStorage` on that browser only — it is not in the bookmark,
+not in this repository, and not in the app, so a bookmark copied off a shared screen is useless. A
+new page format that reads as nothing is a parser fix in `parseListings`/`parsePrice`, which exist
+twice on purpose: `js/data/listing-paste.js` for the Desk's paste sheet and the same functions
+inside the edge function for the two callers that have no browser.
+
 **Deploying the ingest function**
 
 ```
 supabase functions deploy ingest-deal --no-verify-jwt
-supabase secrets set INGEST_SECRET="$(openssl rand -hex 32)" DEAL_POSTER_MEMBER_ID="<victor's members.id>"
 ```
 
-The email worker POSTs JSON — `{property, roomType, from, to, points | usd, source, sourceUrl, note}`
-— with an `x-ingest-secret` header. Property names are matched against the catalog, so
-"Marriott's Aruba Surf Club" in an email finds the right row.
+It needs no secrets: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are in the function environment
+already, and the caller's token is checked against `ingest_tokens`. Both callers POST the same body
+— `{subject, text, dryRun?}` — with `x-ingest-token`. A body carrying a confirmation number is read
+as a confirmation; anything else is read as a page of listings. `dryRun: true` reports what it would
+post and writes nothing, which is what Grab's first tap and the forwarder's `runOnce` both use.
 
 ## The rooms
 

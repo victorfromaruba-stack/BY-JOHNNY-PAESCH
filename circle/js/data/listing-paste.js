@@ -81,15 +81,25 @@ export function parseSleeps(text) {
  */
 export function parsePrice(text, nights) {
   const t = text.replace(/,/g, '');
-  const per = t.match(/(?:us)?\$\s*([\d.]+)\s*(?:\/\s*night|per night|average night|a night|nightly)/i)
-           || t.match(/average night[^$]*\$\s*([\d.]+)/i);
-  const tot = t.match(/(?:us)?\$\s*([\d.]+)\s*(?:total|for the week)/i)
-           || t.match(/(?:weekly rate|total)[^$]*\$\s*([\d.]+)/i);
+  // "US$ 132.71 Average Night", "$150/night", "132.71 USD nightly", "Average Night US$132.71".
+  const per = t.match(/(?:us)?\$\s*([\d.]+)\s*(?:usd\s*)?(?:\/\s*night|per\s*night|average\s*night|avg\.?\s*night|a night|nightly)/i)
+           || t.match(/(?:average|avg\.?|per)\s*night[^$\d]{0,24}(?:us)?\$?\s*([\d.]+)/i);
+  // "$1050 total", "$929 USD Total", "Weekly US$ 929.00", "Total: 929".
+  const tot = t.match(/(?:us)?\$\s*([\d.]+)\s*(?:usd\s*)?(?:total|for the week|weekly|\/\s*week)/i)
+           || t.match(/(?:weekly(?:\s*rate)?|total(?:\s*price)?)\s*:?[^$\d]{0,24}(?:us)?\$?\s*([\d.]+)/i);
   let nightly = per ? money(per[1]) : 0;
   let total = tot ? money(tot[1]) : 0;
+  // A card carrying exactly one money figure and no label at all is showing its price: there is
+  // nothing else it could be. Read it as the nightly rate, but say so — a figure read without a
+  // label is the one the Desk should look at twice before it goes in front of anybody.
+  let guessed = false;
+  if (!nightly && !total) {
+    const alone = t.match(/(?:us)?\$\s*[\d.]+/gi) || [];
+    if (alone.length === 1) { nightly = money(alone[0]); guessed = true; }
+  }
   if (!total && nightly && nights) total = Math.round(nightly * nights * 100) / 100;
   if (!nightly && total && nights) nightly = Math.round((total / nights) * 100) / 100;
-  return { nightly, total };
+  return { nightly, total, guessed };
 }
 
 /** Already gone. RedWeek keeps sold listings on the page and marks them. */
@@ -179,7 +189,7 @@ export function parseListing(text, { stays = [], pointsPerDollar = 100 } = {}) {
     source, stay, stayId: stay?.id || null,
     from: dates?.from || '', to: dates?.to || '', nights: nights || null,
     unit, sleeps, guests: sleeps || null,
-    usdNightly: price.nightly, usdTotal: price.total,
+    usdNightly: price.nightly, usdTotal: price.total, priceGuessed: !!price.guessed,
     pointsTotal: price.total ? Math.round(price.total * pointsPerDollar) : 0,
     taken: looksTaken(clean),
     title: [stay?.name, unit].filter(Boolean).join(' · ') || unit || 'A week that came up',

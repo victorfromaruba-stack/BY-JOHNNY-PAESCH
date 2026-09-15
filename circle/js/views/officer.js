@@ -381,11 +381,37 @@ export function desk({ store, go }) {
     </div>`));
   };
 
+  /**
+   * The bookmark that reads an Interval page Victor is already looking at.
+   *
+   * It is a bookmark and not a service on purpose. Interval has no API, their terms forbid
+   * automated access, and a bot sign-in is refused — and the penalty falls on Victor's own
+   * membership, which is where every cheap week the Circle sells comes from. So nothing signs in
+   * on his behalf: he is already signed in, already on the page, and this reads the text his
+   * browser has already drawn, only when he taps it. Nothing goes on the board until he has seen
+   * what it read and tapped again.
+   */
+  const GRAB = "javascript:(function(){var d=document,s=d.createElement('script');"
+    + "s.src='https://victorfromaruba-stack.github.io/BY-JOHNNY-PAESCH/circle/tools/grab.js?'+Date.now();"
+    + "d.documentElement.appendChild(s);})()";
+
   const drawDeals = () => {
     const live = store.liveDeals();
     panel.replaceChildren(el(`<div>
       <div class="row" style="margin-bottom:16px"><button class="btn sm" id="post-deal">${icon('plus', { size: 16 })}Post a deal</button>
         <a class="btn ghost sm" href="#/stays">${icon('eye', { size: 15 })}See it as a member does</a></div>
+      <details class="panel" style="margin-bottom:16px">
+        <summary style="cursor:pointer;font-weight:600">${icon('zap', { size: 16 })}Grab a whole Interval page at once</summary>
+        <p class="small muted" style="margin-top:10px">Open the Getaways results on Interval the way you always do, signed in as yourself.
+          Scroll so the weeks you want are on screen. Then pick this bookmark. It reads what is on the page,
+          shows you every week it made out — including the ones it could not read — and puts nothing on the
+          board until you tap again. It does not sign in anywhere and it never runs on its own.</p>
+        <div class="copyline" style="margin-top:12px"><code style="font-size:.78rem">${escapeHtml(GRAB.slice(0, 54))}…</code>
+          <button class="btn quiet sm" data-copy="${escapeHtml(GRAB)}">Copy</button></div>
+        <p class="small muted" style="margin-top:10px">To install it: save any page as a bookmark, edit the bookmark, and paste this over its address.
+          The first tap asks for the Desk’s ingest token — the one you were given. It is kept in that browser
+          and nowhere else, so it is not in the bookmark and not in this app.</p>
+      </details>
       ${live.length ? `<div class="stack">${live.map(d => {
         const stay = store.stay(d.stayId);
         const hits = store.matchesForDeal(d.id);
@@ -517,6 +543,9 @@ export function desk({ store, go }) {
   // is called on — so Deals → Requests → "Quote it" opened two quote sheets stacked, and on Stays
   // a save wrote twice, the second overwriting the first with untouched values.
   panel.addEventListener('click', async (e) => {
+    // Copy works on whichever tab is open, so it is answered before the tabs are.
+    const cp = e.target.closest('[data-copy]');
+    if (cp) { const got = await copyText(cp.dataset.copy); return toast(got ? 'Copied.' : 'Select it and copy by hand — this browser would not.', { kind: got ? 'good' : 'bad' }); }
     if (tab === 'requests') {
       const b = e.target.closest('[data-quote]');
       if (b) { const r = store.redemption(b.dataset.quote); return quoteSheet(store, r, store.stay(r.stayId)); }

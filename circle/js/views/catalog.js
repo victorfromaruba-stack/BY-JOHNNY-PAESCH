@@ -133,7 +133,7 @@ export function stays({ store, go, query = {} }) {
     const note = wrap.querySelector('#no-interval');
     if (note) {
       note.hidden = !(noInterval && canEdit && !loading);
-      note.innerHTML = note.hidden ? '' : `${icon('alert', { size: 15, cls: 'ico-muted' })} Nothing here is an Interval Getaway. Interval will not let the watcher sign in, so a Getaway only reaches the board when you put it there — share one to Hunto from Interval, or <button type="button" class="linkish" id="paste-interval">paste it</button>.`;
+      note.innerHTML = note.hidden ? '' : `${icon('alert', { size: 15, cls: 'ico-muted' })} Nothing here is an Interval Getaway. Interval will not let the watcher sign in, so a Getaway only reaches the board when you put it there — tap Grab on the Interval page you are looking at (<a href="#/desk">the Desk</a> has the bookmark), share one to Hunto, or <button type="button" class="linkish" id="paste-interval">paste it</button>.`;
     }
     paintSoon(ranked, folioOf);
     coverSlot.replaceChildren();
