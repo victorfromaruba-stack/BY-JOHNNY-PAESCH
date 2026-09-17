@@ -9,7 +9,7 @@
 // There is no Deals page any more. The Stays tab IS the deals — every live one, cheapest a
 // night first — and this module is what it draws them with.
 
-import { escapeHtml, fmtDay, fmtPoints, fmtRelative, fmtUsd2, nightsBetween, pointsUsd, safeUrl } from '../core/util.js';
+import { escapeHtml, fmtDay, fmtPoints, fmtRelative, fmtUsd, fmtUsd2, nightsBetween, pointsUsd, safeUrl } from '../core/util.js';
 import { VOCAB } from '../core/vocab.js';
 import { quoteStay, fromPoints, seatPoints, isCruise } from '../core/money.js';
 import { icon } from '../ui/icons.js';
@@ -55,6 +55,12 @@ export function titleWithoutPlace(title, stay, { nights = 0 } = {}) {
 
 /** Points a night, from the row or from the total: older rows and some backends carry only the total. */
 export const nightly = (d) => d?.pointsPerNight || (d?.pointsTotal && d?.nights ? Math.round(d.pointsTotal / d.nights) : 0);
+/**
+ * The dollar a night, rounded, no cents — the calm number a person reads at a glance. Five-figure
+ * point counts shouting on every row are what made the board read like a slot machine; the money
+ * is human-scale and quiet. Points stay on the row as the all-in, which is the figure you spend.
+ */
+export const usdNight = (d, ppd = 100) => fmtUsd((nightly(d) || 0) / (ppd || 100));
 
 /** "25 Sept – 2 Oct", the year only when it is not this one — a row has no room for four digits twice. */
 export function shortRange(from, to) {
@@ -153,7 +159,7 @@ export function dealRow(deal, { store, folio = null, match = null, canEdit = fal
         <${H}><a class="row-link" href="${inPlace ? askHrefFor(deal) : placeHrefFor(deal, stay)}">${escapeHtml(title)}</a></${H}>
         <span class="sub">${soon ? `<span class="soon">${escapeHtml(soon)}</span> · ` : ''}${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'}<span class="l2">${deal.sleeps ? `sleeps ${deal.sleeps} · ` : ''}<span class="stamp${stamp.feed ? ' feed' : ''}${stamp.stale >= STALE_AFTER ? ' aged' : ''}">${escapeHtml(stamp.text)}</span></span></span>
       </span>
-      <span class="price-col"><b>${escapeHtml(fmtPoints(nightly(deal)))}</b><small>a night</small><span class="all">${escapeHtml(fmtPoints(deal.pointsTotal))} all in<span class="usd"> · ${escapeHtml(pointsUsd(deal.pointsTotal, s.pointsPerDollar))}</span></span></span>
+      <span class="price-col"><b>${escapeHtml(usdNight(deal, s.pointsPerDollar))}</b><small>a night</small><span class="all">${escapeHtml(fmtPoints(deal.pointsTotal))} pts all in</span></span>
       ${inPlace && !canEdit ? `<span class="go" aria-hidden="true">${icon('chevronRight', { size: 18 })}</span>` : ''}
       ${canEdit ? `<span class="row-acts">
         ${safeUrl(deal.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(deal.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}Go and book it</a>` : ''}
@@ -184,12 +190,12 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
       <a class="cover-shot" href="${placeHrefFor(deal, stay)}" aria-label="${escapeHtml(stay?.name || 'The place')}: the rooms, the map and this week">
         <span class="cover-scrim" aria-hidden="true"></span>
         <span class="eyebrow cover-no">No. ${folio}</span>
-        <span class="cover-price"><span class="num">${escapeHtml(fmtPoints(nightly(deal)))}</span><small>a night</small></span>
+        <span class="cover-price"><span class="num">${escapeHtml(usdNight(deal, s.pointsPerDollar))}</span><small>a night</small></span>
       </a>
       <div class="cover-body">
         ${match ? `<p class="eyebrow" style="color:var(--good-text)">${icon('bellRing', { size: 15 })}You asked for this</p>` : ''}
         <h2><a class="cover-link" href="${placeHrefFor(deal, stay)}">${escapeHtml(deal.title || stay?.name || 'A deal')}</a></h2>
-        <span class="mono">${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'} · ${escapeHtml(fmtPoints(deal.pointsTotal))} all in · ${escapeHtml(pointsUsd(deal.pointsTotal, s.pointsPerDollar))}</span>
+        <span class="mono">${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'} · <b>${escapeHtml(fmtPoints(deal.pointsTotal))} pts</b> all in · ${escapeHtml(pointsUsd(deal.pointsTotal, s.pointsPerDollar))}</span>
         ${soon ? `<p class="soon">${icon('zap', { size: 15 })}${escapeHtml(soon)}</p>` : ''}
         <p class="why">${escapeHtml(why)} · <span class="stamp${stamp.feed ? ' feed' : ''}">${escapeHtml(stamp.text)}</span></p>
         ${ageLine(stamp)}

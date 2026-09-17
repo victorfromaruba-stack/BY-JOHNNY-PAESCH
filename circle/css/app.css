@@ -1038,8 +1038,8 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .cover .cover-shot .strip-tag { top: 14px; right: 14px; left: auto; bottom: auto; }
 .cover .cover-scrim { position: absolute; inset: auto 0 0 0; height: 62%; background: linear-gradient(to top, var(--card-200) 0%, transparent 100%); pointer-events: none; }
 .cover .cover-no { position: absolute; top: 14px; left: 14px; color: var(--card-200-etch); background: var(--scrim); padding: 7px 11px; border-radius: var(--r-pill); }
-.cover .cover-price { position: absolute; left: 14px; bottom: 14px; color: var(--good); font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero;
-  font-size: clamp(2.2rem, 9vw, 3.4rem); font-weight: 500; letter-spacing: -.03em; line-height: 1; }
+.cover .cover-price { position: absolute; left: 16px; bottom: 15px; color: var(--on-photo); font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero;
+  font-size: clamp(2rem, 7.5vw, 2.9rem); font-weight: 500; letter-spacing: -.03em; line-height: 1; }
 .cover .cover-price small { font-family: var(--font-body); font-size: .84rem; font-weight: 500; letter-spacing: 0; color: var(--on-photo); opacity: .9; margin-left: .4em; }
 .cover .cover-body { padding: 16px 18px 18px; }
 .cover .cover-body h2 { font-size: 1.32rem; }
@@ -1074,9 +1074,9 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .listing-row .sub { margin-top: 4px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .76rem; color: var(--ink-2); line-height: 1.4; }
 .listing-row .sub .soon { color: var(--good-text); font-family: var(--font-body); font-weight: 600; }
 .listing-row .price-col { text-align: right; min-width: 104px; }
-.listing-row .price-col b { display: block; font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; font-size: 1.05rem; font-weight: 500; letter-spacing: -.01em; }
-.listing-row .price-col small { display: block; font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); margin-top: 2px; }
-.listing-row .price-col .all { display: block; margin-top: 3px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .72rem; color: var(--ink-2); }
+.listing-row .price-col b { display: block; font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; font-size: 1.28rem; font-weight: 500; letter-spacing: -.02em; line-height: 1.05; }
+.listing-row .price-col small { display: block; font-size: .64rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-top: 3px; }
+.listing-row .price-col .all { display: block; margin-top: 5px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .7rem; color: var(--ink-3); }
 .listing-row.asked { background: var(--good-soft); margin-inline: -12px; padding-inline: 12px; border-radius: 10px; }
 .listing-row:active { transform: scale(.985); transition: transform 60ms var(--ease-out); }
 .listing-row .row-acts { grid-column: 1 / -1; display: flex; gap: 8px; }
