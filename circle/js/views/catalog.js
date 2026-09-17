@@ -1,5 +1,5 @@
 // Stays (the deals), cruises and trips, requesting one, and the life of a request.
-import { escapeHtml, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, countdownTo, initials, nightsBetween, safeUrl } from '../core/util.js';
+import { escapeHtml, fmtUsd, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, countdownTo, initials, nightsBetween, safeUrl } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
 import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth, round2, hotelOwedUsd, isCruise, unitWord } from '../core/money.js';
 import { versusLine } from '../ui/pieces.js';
@@ -16,6 +16,12 @@ import { openWeeks, resortForStay, bedroomsOf } from './live.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 const AREAS = ['Palm Beach', 'Eagle Beach', 'Druif Beach', 'Oranjestad', 'Malmok', 'Savaneta', 'Noord'];
+
+// A points-a-night figure shown as the dollars it is worth, so a browse price reads like a
+// hotel's and not a jackpot. Used on the surfaces a member scans — the cover, the hero caption,
+// the places index. Points stay primary only where a member actually spends them: the pricing
+// panel, where the live quote does the arithmetic in the currency they hold.
+const usdFrom = (pts, ppd = 100) => fmtUsd((pts || 0) / (ppd || 100));
 
 /**
  * One line, under every list of what is open: where the owner weeks came from and when.
@@ -174,7 +180,7 @@ export function stays({ store, go, query = {} }) {
   const index = el('<div class="index"></div>');
   for (const st of places) index.appendChild(el(`<a class="index-row" href="#/stays/${escapeHtml(st.id)}">
       <span class="name">${escapeHtml(st.name)}${st.house ? '<span class="house">where we stay</span>' : ''}<span class="beach">${escapeHtml(st.area)}</span></span>
-      <span class="from">from <b>${escapeHtml(fmtPoints(fromPoints(st, s)))}</b> a night</span></a>`));
+      <span class="from">from <b>${escapeHtml(usdFrom(fromPoints(st, s), s.pointsPerDollar))}</b> a night</span></a>`));
   placesSlot.appendChild(index);
   return wrap;
 }
@@ -251,7 +257,7 @@ export function stayDetail({ store, params, go, query = {} }) {
   // One sentence of the place's own description at the top; the rest of it stays on the card.
   const lede = (() => { const v = String(stay.vibe || '').trim(); const m = v.match(/^(.{20,}?[.!?])(\s|$)/); return m ? m[1] : v; })();
   const eyebrow = `${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}${isTrip ? '' : ` · ${stay.onSand ? 'on the sand' : 'across the road'}`}${stay.house ? ' · <span class="house">where we stay</span>' : ''}`;
-  const fromLine = isTrip ? `${escapeHtml(fmtPoints(seatPoints(stay, s)))} a ${unitWord(stay)} · all in` : `from ${escapeHtml(fmtPoints(fromPoints(stay, s)))} a night · all in`;
+  const fromLine = isTrip ? `${escapeHtml(usdFrom(seatPoints(stay, s), s.pointsPerDollar))} a ${unitWord(stay)} · all in` : `from ${escapeHtml(usdFrom(fromPoints(stay, s), s.pointsPerDollar))} a night · all in`;
   // The name on the picture, the picture edge to edge on a phone: the page opens on the place,
   // not on a heading about it. A place with no photograph opens as a masthead instead — never on
   // a beach standing in for a hotel, and never on a drawing pretending to be one.
