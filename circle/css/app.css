@@ -363,8 +363,8 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .stay-card h3 { font-size: 1.02rem; }
 .stay-card .where { font-size: .82rem; color: var(--ink-2); }
 .stay-card .price { display: flex; align-items: baseline; gap: 8px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.stay-card .price b { font-size: 1.05rem; font-weight: 500; }
-.stay-card .price small { color: var(--ink-2); }
+.stay-card .price b { font-size: 1.28rem; font-weight: 600; letter-spacing: -.02em; }
+.stay-card .price small { color: var(--ink-3); font-size: .68rem; }
 .stay-card .flags { display: flex; flex-wrap: wrap; gap: 6px; }
 /* A statement section: one sentence at display size, no card, no heading, no label. It exists
    to break the rhythm of eight sections that all open the same way, and because the sentence

@@ -1,5 +1,5 @@
 // Public and entry screens: the landing page, the rules, sign-in, and the invitation.
-import { escapeHtml, html, raw, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, fmtDay, fmtPct, initials } from '../core/util.js';
+import { escapeHtml, html, raw, fmtUsd, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, fmtDay, fmtPct, initials } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, projectPoints, fromPoints, seatPoints, unitPoints, pointsPerMonth, monthsToAfford } from '../core/money.js';
 import { poolGauge, memberCard, ring, tierLadder } from '../ui/pieces.js';
@@ -212,6 +212,10 @@ export function stayCard(stay, { store, href = null, footer = '' } = {}) {
   // on the card and the number in the quote could disagree, which is the one thing a price
   // must never do.
   const per = unitPoints(stay, store?.settings);
+  // The dollar the points are worth leads the card, the way a hotel prints a rate; the points
+  // stay underneath, in the currency a member spends. pointsPerDollar, not a hardcoded 100, so
+  // the card never disagrees with the quote if Victor ever moves the rate.
+  const ppd = store?.settings?.pointsPerDollar || 100;
   // A card whose picture is the blank plate already carries the beach, in display type, two
   // centimetres above this line. Saying it twice is the kind of thing that makes a page feel
   // machine-assembled, so the body line drops it and keeps only what the plate does not say.
@@ -221,7 +225,7 @@ export function stayCard(stay, { store, href = null, footer = '' } = {}) {
       <span class="body">
         <h3>${escapeHtml(stay.name)}</h3>
         <span class="where">${plated ? '' : `${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}`}${stay.kind === 'trip' ? `${plated ? '' : ' · '}${stay.nights} nights` : plated ? (stay.onSand ? 'On the sand' : 'Across the road') : stay.onSand ? ' · on the sand' : ' · across the road'}</span>
-        <span class="price"><b class="num">${escapeHtml(fmtPoints(per))}</b><small>${escapeHtml(stay.kind === 'trip' ? `a ${stay.cruise ? 'cabin' : 'seat'} · ${fmtUsd2(per / 100)}` : `from, a night · ${fmtUsd2(per / 100)}`)}</small></span>
+        <span class="price"><b class="num">${escapeHtml(fmtUsd(per / ppd))}</b><small>${escapeHtml(stay.kind === 'trip' ? `a ${stay.cruise ? 'cabin' : 'seat'} · ${fmtPoints(per)}` : `from, a night · ${fmtPoints(per)}`)}</small></span>
         <span class="flags">${stay.house ? '<span class="tag house">Where we stay</span>' : ''}${(stay.features || []).slice(0, stay.house ? 2 : 3).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</span>
         ${sourceLine(stay)}
         ${footer}
