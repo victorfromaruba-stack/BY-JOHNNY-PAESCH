@@ -259,25 +259,29 @@ export function landing({ store, go }) {
   const featured = ['stay_oceanclub', 'stay_surfclub', 'stay_divi', 'stay_renaissance', 'trip_japan'].map(id => store.stayLike(id)).filter(Boolean);
 
   wrap.appendChild(el(`<section class="sec hero-sec">
-    <div class="wrap hero">
-      <div class="hero-copy">
-        <h1 class="enter" style="max-width:14ch">A private travel circle in Aruba.</h1>
-        <p class="lede enter" style="--d:60ms;margin-top:16px;max-width:46ch">Put in a hundred dollars a month. Take it out as hotel, at cost, with people you know.</p>
-        <div class="row enter" style="--d:120ms;margin-top:22px">
-          <a class="btn" href="#/sign-in">${icon('key', { size: 17 })}I have an invitation</a>
-          <a class="btn ghost" href="#/rules">${icon('compass', { size: 17 })}How the Circle works</a>
-        </div>
-      </div>
-      <figure class="hero-shot enter" style="--d:140ms">
+      <figure class="hero-cover enter">
         <!-- The frame is 4:5 above 900px and 16:10 below it, so the tall file belongs to the
              WIDE viewport, not the narrow one. Serving these the other way round crops the
              sea out of both. -->
         <!-- One tall still, on every width: 4:5 beside the copy on a desktop, 4:5 above it on a
              phone. A photograph of the mood, not of a room — the rooms are on the stay pages. -->
-        <img src="assets/hero-tall.jpg" alt="A windswept fofoti tree leaning over calm water at first light" fetchpriority="high" decoding="async">
-        <figcaption>${icon('mapPin', { size: 14 })}The west coast — every place on the list is on this water or ten minutes from it.</figcaption>
+        <!-- The wide file belongs to the wide viewport. Cover-fitting the 4:5 portrait into a
+             1440px frame crops it to empty sky, which is what the front page used to do. -->
+        <picture>
+          <source media="(min-width: 780px)" srcset="assets/hero.jpg">
+          <img src="assets/hero-tall.jpg" alt="A windswept fofoti tree leaning over calm water at first light" fetchpriority="high" decoding="async">
+        </picture>
+        <figcaption class="on"><div class="wrap">
+          <h1 style="max-width:16ch">A private travel circle in Aruba.</h1>
+          <p class="lede" style="margin-top:14px">Put in a hundred dollars a month. Take it out as hotel, at cost, with people you know.</p>
+          <div class="row" style="margin-top:22px">
+            <a class="btn" href="#/sign-in">${icon('key', { size: 17 })}I have an invitation</a>
+            <a class="btn ghost" href="#/rules">${icon('compass', { size: 17 })}How the Circle works</a>
+          </div>
+          <p class="where">${icon('mapPin', { size: 14 })}The west coast — every place on the list is on this water or ten minutes from it.</p>
+        </div></figcaption>
       </figure>
-      <div class="hero-gauge enter" style="--d:180ms">
+      <div class="wrap"><div class="hero-gauge enter" style="--d:180ms">
         <div id="gauge-slot">${blind ? `<p class="eyebrow">${icon('shield', { size: 14 })}Proof of reserves</p>
           <p class="small muted" style="margin-top:4px;max-width:46ch">Every point is backed by money in a Reserve account that is checked against the bank
           and published inside the Circle. Sign in to see the current figure.</p>` : ''}</div>

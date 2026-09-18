@@ -396,33 +396,43 @@ tr.best td:first-child { border-radius: var(--r-chip) 0 0 var(--r-chip); }
 tr.best td:last-child { border-radius: 0 var(--r-chip) var(--r-chip) 0; }
 
 /* ---------- landing hero ---------- */
-/* The one photograph on the site. Everything else is drawn, but the first thing a person
-   sees should be the actual water, not an illustration of it. */
-.hero { display: grid; grid-template-columns: minmax(0, 1.06fr) minmax(0, .94fr);
-  grid-template-areas: "copy shot" "gauge gauge"; gap: clamp(24px, 4vw, 52px); align-items: center; }
-.hero-copy { grid-area: copy; min-width: 0; }
-.hero-shot { grid-area: shot; }
-.hero-gauge { grid-area: gauge; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: clamp(20px, 4vw, 48px);
-  align-items: center; margin-top: -8px; padding-top: 22px; border-top: 1px solid var(--hairline); }
+/* The landing opens ON the photograph, edge to edge, with the promise set into it — the same
+   move the stay pages and the Cruises tab already make, and the one thing the front page was
+   not doing. It used to be a 4:5 card floating in grey next to a column of text: a template
+   split that left a pocket of empty ground under the buttons ("a lot of space being used for
+   nothing") and made a private club's first screen read like a dashboard. Photography leads,
+   type sits on it, the figures come after. */
+.hero-sec { padding-top: 0; }
+.hero-cover { position: relative; display: grid; margin: 0; overflow: hidden;
+  background: var(--well); min-height: clamp(480px, 76vh, 620px); }
+@media (min-width: 780px) { .hero-cover { min-height: min(68vh, 600px); } }
+/* A grid item will not shrink below its content's intrinsic width unless told to, and the
+   portrait file is 880px wide — which pushed the whole section past a 768px viewport. */
+.hero-cover picture { grid-area: 1 / 1; display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.hero-cover img { width: 100%; height: 100%; object-fit: cover; object-position: center 46%; display: block; }
+/* The copy rides the bottom of the frame on its own scrim, and keeps the page's measure by
+   carrying a .wrap inside it rather than being padded by hand. */
+.hero-cover .on { grid-area: 1 / 1; align-self: end; width: 100%; margin: 0; color: var(--on-photo);
+  padding-block: clamp(120px, 30vh, 280px) clamp(28px, 5vw, 56px);
+  background: linear-gradient(to top, var(--scrim) 0%, var(--scrim) 30%, var(--scrim-soft) 68%, transparent 100%); }
+.hero-cover h1 { color: var(--on-photo); }
+.hero-cover .lede { color: var(--on-photo); opacity: .94; max-width: 44ch; }
+.hero-cover .where { display: flex; align-items: center; gap: 6px; margin-top: clamp(18px, 3vw, 26px);
+  font-size: .78rem; line-height: 1.35; color: var(--on-photo); opacity: .76; max-width: 52ch; }
+.hero-cover .where svg { width: 14px; height: 14px; flex: none; }
+/* A ghost button on a photograph has to be drawn in the photo tokens, or it disappears into
+   the scrim in light mode and into the sky in dark. */
+.hero-cover .btn.ghost { color: var(--on-photo); border-color: rgba(255, 255, 255, .52); background: rgba(255, 255, 255, .10); }
+@media (hover: hover) { .hero-cover .btn.ghost:hover { background: rgba(255, 255, 255, .18); border-color: rgba(255, 255, 255, .7); } }
+.hero-cover .btn.ghost:active { background: rgba(255, 255, 255, .24); }
+.hero-gauge { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: clamp(20px, 4vw, 48px);
+  align-items: center; margin-top: clamp(26px, 4vw, 44px); padding-top: 22px; border-top: 1px solid var(--hairline); }
 .hero-facts { display: flex; gap: clamp(20px, 3vw, 40px); flex-wrap: wrap; }
 .hero-facts p:not(.eyebrow) { font-size: .88rem; color: var(--ink-2); margin-top: 3px; }
 .hero-facts b { color: var(--ink); font-size: 1rem; }
 .hero-facts .eyebrow { display: inline-flex; align-items: center; gap: 5px; }
 .hero-facts .eyebrow svg { width: 14px; height: 14px; }
 @media (max-width: 780px) { .hero-gauge { grid-template-columns: 1fr; gap: 18px; } }
-.hero-shot { position: relative; margin: 0; border-radius: var(--r-card); overflow: hidden; background: var(--well);
-  box-shadow: inset 0 0 0 1px var(--hairline); }
-.hero-shot img { width: 100%; height: 100%; aspect-ratio: 4 / 5; object-fit: cover; }
-.hero-shot figcaption { position: absolute; inset: auto 0 0 0; display: flex; align-items: center; gap: 6px;
-  padding: 26px 16px 13px; font-size: .78rem; line-height: 1.35; color: #fff;
-  background: linear-gradient(180deg, rgba(8,20,30,0), rgba(8,20,30,.72)); }
-.hero-shot figcaption svg { width: 14px; height: 14px; flex: none; opacity: .8; }
-@media (max-width: 900px) {
-  /* The photograph first on a phone, and tall: it is the first thing a stranger sees. */
-  .hero { grid-template-columns: 1fr; grid-template-areas: "shot" "copy" "gauge"; gap: 22px; }
-  .hero-shot img { aspect-ratio: 4 / 5; }
-  .hero-gauge { margin-top: 0; }
-}
 
 .horizon { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(252px, 1fr); gap: 14px; overflow-x: auto; overscroll-behavior-x: contain;
   padding: 2px 2px 10px; scroll-snap-type: x proximity; scrollbar-width: thin; }
