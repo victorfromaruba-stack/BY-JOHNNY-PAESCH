@@ -11,7 +11,7 @@ import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/c
 import { shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
 import { routeSvg, islandSvg } from '../ui/art.js';
-import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, SOURCES } from './deals.js';
+import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, SOURCES } from './deals.js';
 import { openWeeks, resortForStay, bedroomsOf } from './live.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -175,13 +175,43 @@ export function stays({ store, go, query = {} }) {
   // The index: every place, one row, where we actually stay first, then by price. For a member
   // who wants a place on their own dates rather than a week somebody else has open.
   const placesSlot = wrap.querySelector('#places');
-  const places = store.arubaStays().slice().sort((a, b) => (b.house ? 1 : 0) - (a.house ? 1 : 0) || fromPoints(a, s) - fromPoints(b, s));
-  placesSlot.appendChild(el(`<div class="running-head"><h2>The places · ${places.length}</h2><p class="eyebrow">from-price a night, all in</p></div>`));
-  const index = el('<div class="index"></div>');
-  for (const st of places) index.appendChild(el(`<a class="index-row" href="#/stays/${escapeHtml(st.id)}">
-      <span class="name">${escapeHtml(st.name)}${st.house ? '<span class="house">where we stay</span>' : ''}<span class="beach">${escapeHtml(st.area)}</span></span>
-      <span class="from">from <b>${escapeHtml(usdFrom(fromPoints(st, s), s.pointsPerDollar))}</b> a night</span></a>`));
-  placesSlot.appendChild(index);
+  // The index used to print "from $155 a night" against all twenty-three places, sorted by that
+  // figure. But the figure is the Circle's own rate card, not a week anybody can have: eighteen of
+  // the twenty-three have nothing open at all. A price on a place with no week behind it is the
+  // same overclaim as a coverage figure the bank never confirmed — it reads as an offer and it is
+  // not one. So the index splits: what is genuinely open, priced off the cheapest REAL week; and
+  // the rest of the island, with no number at all and the one honest verb, which is to ask.
+  const cheapestOpen = new Map();
+  for (const d of store.liveDeals()) {
+    const per = nightly(d);
+    if (!per) continue;
+    const had = cheapestOpen.get(d.stayId);
+    if (!had || per < had) cheapestOpen.set(d.stayId, per);
+  }
+  const all = store.arubaStays().slice();
+  const open = all.filter(st => cheapestOpen.has(st.id))
+    .sort((a, b) => cheapestOpen.get(a.id) - cheapestOpen.get(b.id));
+  const rest = all.filter(st => !cheapestOpen.has(st.id))
+    .sort((a, b) => (b.house ? 1 : 0) - (a.house ? 1 : 0) || a.name.localeCompare(b.name));
+
+  if (open.length) {
+    placesSlot.appendChild(el(`<div class="running-head"><h2>Open now · ${open.length}</h2><p class="eyebrow">cheapest week on the board</p></div>`));
+    const idx = el('<div class="index"></div>');
+    for (const st of open) idx.appendChild(el(`<a class="index-row" href="#/stays/${escapeHtml(st.id)}">
+        <span class="name">${escapeHtml(st.name)}${st.house ? '<span class="house">where we stay</span>' : ''}<span class="beach">${escapeHtml(st.area)}</span></span>
+        <span class="from"><b>${escapeHtml(usdFrom(cheapestOpen.get(st.id), s.pointsPerDollar))}</b> a night</span></a>`));
+    placesSlot.appendChild(idx);
+  }
+
+  if (rest.length) {
+    placesSlot.appendChild(el(`<div class="running-head"><h2>${open.length ? `The rest of the island · ${rest.length}` : `The places · ${rest.length}`}</h2>
+      <p class="eyebrow">nothing on the board today · Victor prices these on your dates</p></div>`));
+    const idx = el('<div class="index quiet-index"></div>');
+    for (const st of rest) idx.appendChild(el(`<a class="index-row" href="#/stays/${escapeHtml(st.id)}">
+        <span class="name">${escapeHtml(st.name)}${st.house ? '<span class="house">where we stay</span>' : ''}<span class="beach">${escapeHtml(st.area)}</span></span>
+        <span class="from ask">Ask${icon('chevronRight', { size: 15 })}</span></a>`));
+    placesSlot.appendChild(idx);
+  }
   return wrap;
 }
 

@@ -1112,6 +1112,11 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .index-row .name .beach { color: var(--ink-2); font-family: var(--font-body); font-weight: 400; font-size: .82rem; }
 .index-row .from { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .84rem; color: var(--ink-2); white-space: nowrap; }
 .index-row .from b { color: var(--ink); font-weight: 500; }
+/* A place with no week open carries no number — only the verb. It should read as a quieter row
+   than one with a real price, without looking broken or disabled. */
+.index-row .from.ask { display: inline-flex; align-items: center; gap: 2px; color: var(--ink-3); font-family: var(--font-body); }
+.index-row .from.ask svg { width: 15px; height: 15px; }
+.quiet-index .index-row .name { font-weight: 500; }
 @media (min-width: 900px) { .index { display: grid; grid-template-columns: 1fr 1fr 1fr; column-gap: 40px; } }
 .running-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin-top: 34px; padding-bottom: 8px; border-bottom: 1px solid var(--hairline); }
 /* The heading keeps its line; the eyebrow gives way and drops under it when the row is short. */
