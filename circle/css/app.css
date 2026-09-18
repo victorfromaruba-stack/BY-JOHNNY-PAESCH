@@ -1095,6 +1095,10 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .listing-row .price-col { text-align: right; min-width: 104px; }
 .listing-row .price-col b { display: block; font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; font-size: 1.28rem; font-weight: 500; letter-spacing: -.02em; line-height: 1.05; }
 .listing-row .price-col small { display: block; font-size: .64rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-top: 3px; }
+/* A week whose board has not opened: the column keeps its shape so the row does not jump when
+   the price lands, but says nothing it has not established. */
+.listing-row .price-col.teased b { color: var(--ink-3); font-weight: 400; }
+.listing-row .price-col.teased .all { color: var(--good-text); font-family: var(--font-body); letter-spacing: 0; text-transform: none; }
 .listing-row .price-col .all { display: block; margin-top: 5px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .7rem; color: var(--ink-3); }
 .listing-row.asked { background: var(--good-soft); margin-inline: -12px; padding-inline: 12px; border-radius: 10px; }
 .listing-row:active { transform: scale(.985); transition: transform 60ms var(--ease-out); }

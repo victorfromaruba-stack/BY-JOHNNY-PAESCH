@@ -481,6 +481,13 @@ create table if not exists deals (
   status        text not null default 'live' check (status in ('live','gone','expired','booked')),
   posted_by     uuid references members(id),
   posted_at     timestamptz not null default now(),
+  -- THE BOARD. A week can be posted before it shows its price. Victor puts six up on a Thursday
+  -- with drop_at set to Friday 8pm Aruba; until that moment a member sees the place and the hour
+  -- the board opens, and nothing else. At 8pm the prices are simply there — no scheduler and no
+  -- job, only a timestamp the screens compare against. Null means live immediately, as always.
+  -- The tease is a ritual rather than a secret: the row still carries its price, and sealing it
+  -- would mean a view that nulls the money columns, which is more than forty friends need.
+  drop_at       timestamptz,
   -- When this week was last SEEN on the source's own page, as distinct from when it was first
   -- posted here. The two drift apart the moment a week sits on the board for a few days, and
   -- posted_at then stops being an answer to "is this still there?" — which is the only question a
@@ -1700,12 +1707,17 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function current_is_bot() from public, anon, authenticated;
 
+-- Adding a parameter to a Postgres function creates an OVERLOAD, it does not replace. Drop the
+-- previous signature by its exact argument list so a rebuild over an existing database does not
+-- end up with two post_deal functions and an ambiguous call.
+drop function if exists post_deal(uuid, date, date, int, uuid, text, int, numeric, text, text,
+                                  text, int, timestamptz, text);
 create or replace function post_deal(
   p_stay uuid, p_from date, p_to date, p_points int,
   p_room_type uuid default null, p_title text default null, p_nights int default null,
   p_retail_usd numeric default null, p_source text default 'other', p_source_url text default '',
   p_source_ref text default '', p_units int default 1, p_expires_at timestamptz default null,
-  p_note text default '')
+  p_note text default '', p_drop_at timestamptz default null)
 returns deals language plpgsql security definer set search_path = public as $$
 declare d deals; st stays; n int;
 begin
@@ -1719,16 +1731,20 @@ begin
   if p_to < p_from then raise exception 'Those dates are the wrong way round'; end if;
   n := greatest(1, coalesce(p_nights, (p_to - p_from)));
   if coalesce(p_points, 0) <= 0 then raise exception 'What does it cost in points?'; end if;
+  -- A board that opens after the week has already started is a ritual nobody can attend.
+  if p_drop_at is not null and p_drop_at::date > p_from then
+    raise exception 'That board opens after the week starts';
+  end if;
   insert into deals(stay_id, room_type_id, kind, title, from_date, to_date, nights, points_total,
-                    points_per_night, retail_usd, source, source_url, source_ref, units, note, posted_by, expires_at)
+                    points_per_night, retail_usd, source, source_url, source_ref, units, note, posted_by, expires_at, drop_at)
     values (p_stay, p_room_type, case when st.kind = 'trip' then 'trip' else 'aruba' end,
             coalesce(nullif(trim(p_title), ''), st.name), p_from, p_to, n, p_points,
             round(p_points::numeric / n), p_retail_usd, p_source, clean_link(p_source_url),
             nullif(trim(p_source_ref), ''), greatest(1, p_units), nullif(trim(p_note), ''),
-            current_member_id(), p_expires_at)
+            current_member_id(), p_expires_at, p_drop_at)
     returning * into d;
   perform log_audit('deal.post','deal', d.id::text,
-                    jsonb_build_object('stayId', p_stay, 'points', p_points, 'source', p_source));
+                    jsonb_build_object('stayId', p_stay, 'points', p_points, 'source', p_source, 'dropAt', p_drop_at));
   return d;
 end $$;
 

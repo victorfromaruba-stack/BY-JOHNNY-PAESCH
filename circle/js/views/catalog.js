@@ -11,7 +11,7 @@ import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/c
 import { shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
 import { routeSvg, islandSvg } from '../ui/art.js';
-import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, SOURCES } from './deals.js';
+import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, dropWhen, SOURCES } from './deals.js';
 import { openWeeks, resortForStay, bedroomsOf } from './live.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -81,7 +81,9 @@ export function stays({ store, go, query = {} }) {
   const canEdit = store.canPostDeals();
   const mine = store.matchesForMember(me.id);
   const mineIds = new Set(mine.map(m => m.deal.id));
-  const posted = store.liveDeals().filter(d => !mineIds.has(d.id));
+  const isTeased = (d) => typeof store.teased === 'function' && store.teased(d);
+  const teasedWeeks = store.liveDeals().filter(isTeased).sort((a, b) => String(a.dropAt).localeCompare(String(b.dropAt)));
+  const posted = store.liveDeals().filter(d => !mineIds.has(d.id) && !isTeased(d));
   const watching = store.watchesFor(me.id).length;
   const watches = store.watchesFor(me.id);
   const matchFor = (d) => watches.map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
@@ -94,6 +96,7 @@ export function stays({ store, go, query = {} }) {
         ${canEdit ? `<div class="row no-print"><button class="btn sm" id="paste">${icon('copy', { size: 16 })}Paste a listing</button>
           <button class="btn ghost sm" id="post">${icon('plus', { size: 16 })}By hand</button></div>` : ''}
       </header>
+      <div id="board"></div>
       <div id="mine"></div>
       <div id="cover" style="margin-top:22px"></div>
       <div id="soon"></div>
@@ -101,6 +104,18 @@ export function stays({ store, go, query = {} }) {
       <div id="places"></div>
       <p class="rule-block small muted" style="margin-top:34px">Want something that is not here? <a href="#/watching">Tell the Desk what to watch for${watching ? ` · ${watching} watching` : ''}</a>. Tap any week and Victor books it in your name — you never book anything yourself. <a href="#/rules">How it works</a>.</p>
     </div></section></div>`);
+
+  // THE BOARD — the weeks Victor has lined up for the next opening. Names only until the hour,
+  // which is the whole point: forty people spend the evening guessing at six places. It claims
+  // nothing (no price, no dates, no "available"), and it needs no scheduler — when the clock
+  // passes dropAt these rows simply stop being teased and join the board below.
+  if (teasedWeeks.length) {
+    const boardSlot = wrap.querySelector('#board');
+    const when = dropWhen(teasedWeeks[0].dropAt);
+    boardSlot.appendChild(el(`<div class="running-head"><h2>${icon('zap')}The Board</h2>
+      <p class="eyebrow">${teasedWeeks.length} week${teasedWeeks.length === 1 ? '' : 's'} · prices ${escapeHtml(when)}</p></div>`));
+    dealList(boardSlot, teasedWeeks, { store, me, canEdit, first: 6, key: 'board', inPlace: false, noun: 'on the board', mode: 'rows' });
+  }
 
   if (mine.length) {
     const mineSlot = wrap.querySelector('#mine');
@@ -183,6 +198,9 @@ export function stays({ store, go, query = {} }) {
   // the rest of the island, with no number at all and the one honest verb, which is to ask.
   const cheapestOpen = new Map();
   for (const d of store.liveDeals()) {
+    // A week whose board has not opened is not open, and pricing the index off it would both
+    // overclaim and give away the number the whole ritual exists to hold back.
+    if (isTeased(d)) continue;
     const per = nightly(d);
     if (!per) continue;
     const had = cheapestOpen.get(d.stayId);

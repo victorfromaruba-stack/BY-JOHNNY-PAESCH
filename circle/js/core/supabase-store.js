@@ -452,12 +452,13 @@ export class SupabaseStore extends Store {
   async markWatchesSeen() { return this.rpc('mark_watches_seen', {}); }
 
   async postDeal({ stayId, roomTypeId = null, from, to, pointsTotal = null, pointsPerNight = null, nights = null,
-                   title = '', retailUsd = null, source = 'other', sourceUrl = '', sourceRef = '', units = 1, expiresAt = null, note = '' }) {
+                   title = '', retailUsd = null, source = 'other', sourceUrl = '', sourceRef = '', units = 1, expiresAt = null, note = '', dropAt = null }) {
     const n = nights || null;
     const points = pointsTotal != null ? pointsTotal : (pointsPerNight != null && n ? pointsPerNight * n : null);
     const d = await this.rpc('post_deal', { p_stay: stayId, p_from: from, p_to: to, p_points: points,
       p_room_type: roomTypeId, p_title: title, p_nights: n, p_retail_usd: retailUsd, p_source: source,
-      p_source_url: sourceUrl, p_source_ref: sourceRef, p_units: units, p_expires_at: expiresAt, p_note: note });
+      p_source_url: sourceUrl, p_source_ref: sourceRef, p_units: units, p_expires_at: expiresAt, p_note: note,
+      p_drop_at: dropAt });
     return d ? { ...d, from: d.fromDate, to: d.toDate } : d;
   }
   async retireDeal(id, _actorId, reason = '') { return this.rpc('retire_deal', { p_id: id, p_reason: reason }); }

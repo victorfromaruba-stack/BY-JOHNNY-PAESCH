@@ -60,6 +60,14 @@ export const nightly = (d) => d?.pointsPerNight || (d?.pointsTotal && d?.nights 
  * point counts shouting on every row are what made the board read like a slot machine; the money
  * is human-scale and quiet. Points stay on the row as the all-in, which is the figure you spend.
  */
+/** "Friday 8pm" — the hour a board opens, in the member's own clock. */
+export const dropWhen = (iso) => {
+  const t = new Date(iso);
+  if (Number.isNaN(+t)) return '';
+  const day = t.toLocaleDateString([], { weekday: 'long' });
+  const time = t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(':00', '').toLowerCase().replace(' ', '');
+  return `${day} ${time}`;
+};
 export const usdNight = (d, ppd = 100) => fmtUsd((nightly(d) || 0) / (ppd || 100));
 
 /** "25 Sept – 2 Oct", the year only when it is not this one — a row has no room for four digits twice. */
@@ -152,14 +160,18 @@ export function dealRow(deal, { store, folio = null, match = null, canEdit = fal
   const title = inPlace ? titleWithoutPlace(deal.title, stay, { nights: deal.nights }) : (deal.title || stay?.name || 'A deal');
   const stamp = stampFor(deal, store);
   const soon = soonLabel(deal.from);
+  // Posted ahead of the hour its board opens: the place shows, the price and the dates do not.
+  const teased = typeof store.teased === 'function' && store.teased(deal);
   const node = el(`<article class="listing-row${inPlace ? ' no-thumb' : ''}${match ? ' asked' : ''}${picked ? ' picked' : ''}" data-deal="${escapeHtml(deal.id)}">
       ${inPlace ? '' : `<span class="thumb" aria-hidden="true">${thumb ? `<img src="${escapeHtml(thumb)}" alt="" loading="lazy" decoding="async">` : `<b>${escapeHtml(beachMark(stay))}</b>`}</span>`}
       <span class="main" style="min-width:0">
         <span class="folio">${picked ? `<span class="asked">${icon('check', { size: 12 })}The week you picked</span>` : match ? `<span class="asked">${icon('bellRing', { size: 12 })}You asked for this</span>` : folio ? `No. ${folio}` : ''}</span>
         <${H}><a class="row-link" href="${inPlace ? askHrefFor(deal) : placeHrefFor(deal, stay)}">${escapeHtml(title)}</a></${H}>
-        <span class="sub">${soon ? `<span class="soon">${escapeHtml(soon)}</span> · ` : ''}${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'}<span class="l2">${deal.sleeps ? `sleeps ${deal.sleeps} · ` : ''}<span class="stamp${stamp.feed ? ' feed' : ''}${stamp.stale >= STALE_AFTER ? ' aged' : ''}">${escapeHtml(stamp.text)}</span></span></span>
+        <span class="sub">${teased ? `on the board ${escapeHtml(dropWhen(deal.dropAt))}` : `${soon ? `<span class="soon">${escapeHtml(soon)}</span> · ` : ''}${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'}`}<span class="l2">${deal.sleeps ? `sleeps ${deal.sleeps} · ` : ''}<span class="stamp${stamp.feed ? ' feed' : ''}${stamp.stale >= STALE_AFTER ? ' aged' : ''}">${escapeHtml(stamp.text)}</span></span></span>
       </span>
-      <span class="price-col"><b>${escapeHtml(usdNight(deal, s.pointsPerDollar))}</b><small>a night</small><span class="all">${escapeHtml(fmtPoints(deal.pointsTotal))} pts all in</span></span>
+      ${teased
+        ? `<span class="price-col teased"><b>—</b><small>opens</small><span class="all">${escapeHtml(dropWhen(deal.dropAt))}</span></span>`
+        : `<span class="price-col"><b>${escapeHtml(usdNight(deal, s.pointsPerDollar))}</b><small>a night</small><span class="all">${escapeHtml(fmtPoints(deal.pointsTotal))} pts all in</span></span>`}
       ${inPlace && !canEdit ? `<span class="go" aria-hidden="true">${icon('chevronRight', { size: 18 })}</span>` : ''}
       ${canEdit ? `<span class="row-acts">
         ${safeUrl(deal.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(deal.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}Go and book it</a>` : ''}
@@ -419,15 +431,47 @@ export async function postDealSheet({ store, prefill = {} }) {
         </div>
         <label class="field"><span>Link to it</span><input type="url" name="sourceUrl" placeholder="https://…" value="${escapeHtml(prefill.sourceUrl || '')}"></label>
         <label class="field"><span>Anything the Circle should know</span><input name="note" placeholder="Lighthouse tower, owner rental, Saturday to Saturday." value="${escapeHtml(prefill.note || '')}"></label>
+        <!-- THE BOARD. Leave it empty and the week goes up now, as it always has. Set an hour and
+             the Circle sees the place tonight and the price at that hour — which is the whole
+             ritual: six names on a Thursday, forty people guessing until Friday. -->
+        <label class="field"><span>Hold the price until <em class="muted">— optional</em></span>
+          <input type="datetime-local" name="dropAt" value=""></label>
+        <div class="row" style="margin-top:-6px">
+          <button type="button" class="btn ghost sm" data-drop="fri">Next Friday, 8pm</button>
+          <button type="button" class="btn ghost sm" data-drop="clear">Put it up now</button>
+          <span class="small muted" id="drop-note"></span>
+        </div>
         <div id="who" class="notice" style="margin-top:4px"></div>
         <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>${icon('send', { size: 16 })}Post it</button></div>`;
 
       const v = (n) => body.querySelector(`[name=${n}]`);
 
+      // The ritual is a habit, not a feature, so the Desk gets the habit as one tap. The board
+      // has to open BEFORE the week starts or nobody can attend it, which the stores enforce too.
+      const local = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      body.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-drop]'); if (!b) return;
+        if (b.dataset.drop === 'clear') { v('dropAt').value = ''; }
+        else {
+          const d = new Date(); d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7 || 7)); d.setHours(20, 0, 0, 0);
+          v('dropAt').value = local(d);
+        }
+        dropNote();
+      });
+      const dropNote = () => {
+        const el2 = body.querySelector('#drop-note'); if (!el2) return;
+        const val = v('dropAt').value;
+        const from = v('from').value;
+        el2.textContent = !val ? 'Goes up the moment you post it.'
+          : (from && val.slice(0, 10) > from) ? 'That is after the week starts — nobody could use it.'
+          : `The Circle sees the name now, the price ${dropWhen(new Date(val).toISOString())}.`;
+      };
+
       // Dollars and points stay in step, the way they do everywhere else in the Desk.
       body.addEventListener('input', (e) => {
         if (e.target.name === 'usd') v('points').value = Math.round((Number(e.target.value) || 0) * s.pointsPerDollar);
         if (e.target.name === 'points') v('usd').value = ((Math.round(Number(e.target.value) || 0)) / s.pointsPerDollar).toFixed(2);
+        if (e.target.name === 'dropAt' || e.target.name === 'from') dropNote();
         preview();
       });
 
@@ -454,6 +498,7 @@ export async function postDealSheet({ store, prefill = {} }) {
         pointsTotal: Number(v('points').value) || 0,
         retailUsd: Number(v('retailUsd').value) || null,
         source: v('source').value, sourceUrl: v('sourceUrl').value, note: v('note').value,
+        dropAt: v('dropAt').value ? new Date(v('dropAt').value).toISOString() : null,
       }));
     },
   });

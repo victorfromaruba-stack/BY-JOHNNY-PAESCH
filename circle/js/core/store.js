@@ -1454,6 +1454,7 @@ export class Store {
     if (!this.member(memberId)) throw new Error('No such member');
     if (!from || !to) throw new Error('Say roughly when you would go');
     if (from > to) throw new Error('Those dates are the wrong way round');
+    if (dropAt && String(dropAt).slice(0, 10) > from) throw new Error('That board opens after the week starts');
     if (!(nights > 0)) throw new Error('How many nights?');
     if (stayId && !this.stay(stayId)) throw new Error('That place is no longer on the list');
     const dup = this.watchesFor(memberId).find(w => w.stayId === stayId && w.roomTypeId === roomTypeId && w.from === from && w.to === to);
@@ -1510,8 +1511,18 @@ export class Store {
     const now = nowIso();
     return this.deals().filter(d => d.status === 'live' && (!d.expiresAt || d.expiresAt > now));
   }
+  /**
+   * THE BOARD. A week posted ahead of the hour its board opens: the place shows, the price does
+   * not. Victor puts six up on a Thursday with dropAt on Friday 8pm and forty people spend the
+   * night guessing. It is a ritual, not a secret — the row still carries its price, and anybody
+   * determined enough to open the network tab can read it early. Sealing it would take a view
+   * that nulls the money columns, which is more than this club needs.
+   */
+  teased(d) { return !!d?.dropAt && d.dropAt > nowIso(); }
+  /** Weeks waiting on a board that has not opened yet, soonest board first. */
+  teasedDeals() { return this.liveDeals().filter(d => this.teased(d)).sort((a, b) => String(a.dropAt).localeCompare(String(b.dropAt))); }
   async postDeal({ stayId, roomTypeId = null, title = '', from, to, nights = null, pointsTotal = null, pointsPerNight = null,
-                   retailUsd = null, source = 'other', sourceUrl = '', sourceRef = '', units = 1, expiresAt = null, note = '' }, actorId) {
+                   retailUsd = null, source = 'other', sourceUrl = '', sourceRef = '', units = 1, expiresAt = null, note = '', dropAt = null }, actorId) {
     if (!this.canPostDeals()) throw new Error('Only Victor or Ian can post a deal');
     const stay = this.stay(stayId); if (!stay) throw new Error('Pick a place from the catalog');
     if (!from || !to) throw new Error('A deal needs the dates it is for');
@@ -1524,7 +1535,7 @@ export class Store {
       title: title.trim() || stay.name, from, to, nights: n, pointsTotal: total,
       pointsPerNight: Math.round(total / n), retailUsd: retailUsd != null ? round(retailUsd) : null,
       source, sourceUrl: sourceUrl.trim(), sourceRef: sourceRef.trim(), units: Math.max(1, Math.round(units)),
-      note: note.trim(), status: 'live', postedBy: actorId, postedAt: nowIso(), expiresAt, claimedBy: [] };
+      note: note.trim(), status: 'live', postedBy: actorId, postedAt: nowIso(), expiresAt, dropAt, claimedBy: [] };
     (this.state.deals ||= []).push(d);
     this.log(actorId, 'deal.post', 'deal', d.id, { stayId, from, to, pointsTotal: total, source });
     await this.commit('deals');
