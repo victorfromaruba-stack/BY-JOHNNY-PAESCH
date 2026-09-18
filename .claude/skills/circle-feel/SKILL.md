@@ -107,6 +107,41 @@ So: no placeholder avatars that imply a person, no "available" without a look be
 sample data in an empty state, no stock photo of a room nobody has seen. When there is nothing
 to show, say what is missing and what would fill it.
 
+## The Edition: the design system, and why it is what it is
+
+The overhaul that finally read as a private club rather than a template was judged against four
+art directions and two adversarial critiques; the pieces below survived both. Keep them, and when
+something new is built, build it in this grammar rather than beside it.
+
+- **Two registers and one apparatus face.** What is *said* — a page title, a section head, the one
+  italic word — is Instrument Serif, weight 400 and never bold (the face ships one weight, and a
+  faux bold is the cheapest thing a serif can do; `font-synthesis-weight: none` guards it). What is
+  *read and pressed* — body, row titles, panel heads, controls — is Instrument Sans. Every figure
+  AND every piece of apparatus — eyebrows, stamps, folios, datelines, table heads, tags — is Geist
+  Mono, small and letterspaced. A panel head is a sans label at `--t-body` 600, never a serif.
+- **One italic word.** `<em class="ac">` in a title carries the *variable* part of the sentence:
+  the place on Home, "first" on the board, "in Aruba" on the landing. It is never a colour and never
+  goes on a one-word or proper-name title. Anywhere else it is decoration, so it goes nowhere else.
+- **The scale is in tokens.css and nowhere else.** Nine type steps (`--t-folio` … `--t-masthead`,
+  two figure sizes) and eight space steps (`--s-1` … `--s-8`). No `clamp()` in the type scale, no
+  inline `style="font-size"` in the views — the one exception is the avatar, whose size is a
+  proportion of its box. A size that is not on the scale was not chosen.
+- **Rules, not boxes.** The masthead carries the one 2px ink rule on a page; sections and lists
+  are separated by the (now visible) hairline; on a phone a `.panel` is a ruled, transparent block
+  and only a photograph, a form with a picture, the quoted `.flat` block and the officer's job list
+  stay boxed — the exclusions are written into the selector so file order cannot undo them.
+- **Nothing is printed on a photograph.** The cover's folio, title and price all sit in the body;
+  the price is a figure on a caption line at `--t-fig`, not a stamp over the picture. The unit
+  ("a night · all in") is printed once as a column head, never under every figure.
+- **Teal means money or points that moved in the member's favour**, the attention dot, a money
+  action and focus. Everything else that used to be teal for emphasis is ink.
+- **Corners are 4px** (`--r-card`, `--r-input`, `--r-btn`, `--r-chip` 3px). `--r-pill` stays
+  9999px because the switch, the split bars and the count badge are pills as objects.
+- **One filled action and one ruled link** (`.link-rule`), never two boxes of equal weight.
+- **Motion is a fade, and a photograph settles.** Nothing slides in from a corner; a row dims when
+  pressed rather than shrinking. Anything that transforms an image needs the copy on it to be
+  positioned with a z-index, or the picture paints over the words (this happened).
+
 ## Working in this codebase
 
 **No build step.** Vanilla ES modules, hash router, served straight from `circle/`. A missing

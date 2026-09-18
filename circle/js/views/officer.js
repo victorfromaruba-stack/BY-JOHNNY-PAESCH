@@ -48,14 +48,14 @@ export function bank({ store, go }) {
         <span class="small muted">Only confirm what you can see on the statement.</span></div>` : ''}
       <div class="stack" id="queue" style="margin-top:18px"></div>
       <div class="panel" style="margin-top:22px">
-        <h2 style="font-size:1.1rem">Not sent yet this month</h2>
+        <h2>Not sent yet this month</h2>
         <p class="small muted" style="margin-top:6px">Only you and Ian see this. Nobody is ever shown a public late list.</p>
         <div class="row" style="margin-top:12px" id="missing"></div>
       </div>
     </div></section></div>`);
 
   const queue = wrap.querySelector('#queue');
-  if (!pending.length) queue.appendChild(el(`<div class="empty">${icon('checkCircle', { size: 28, cls: 'ico-muted' })}<b style="display:block;margin-top:10px">Nothing waiting</b><p class="small muted">Every transfer marked as sent has been confirmed or returned. ${escapeHtml(VOCAB.pap.thanks[0])}.</p></div>`));
+  if (!pending.length) queue.appendChild(el(`<div class="empty">${icon('checkCircle', { size: 28, cls: 'ico-muted' })}<b style="display:block">Nothing waiting</b><p class="small muted">Every transfer marked as sent has been confirmed or returned. ${escapeHtml(VOCAB.pap.thanks[0])}.</p></div>`));
   for (const c of pending) {
     const m = store.member(c.memberId);
     const row = el(`<div class="panel" data-id="${c.id}">
@@ -66,7 +66,7 @@ export function bank({ store, go }) {
               <br><span class="small muted">${c.extra ? 'Extra, not a monthly' : escapeHtml(fmtMonth(c.forMonth))} · sent ${escapeHtml(fmtDay(c.submittedAt))} · ${escapeHtml(c.bank || c.method || 'bank transfer')}${c.recordedBy ? ' · entered by the Banker' : ''}</span>
               ${(c.proofName || c.proofPath || c.proofDataUrl) ? `<br><button class="btn ghost sm" data-proof="${escapeHtml(c.id)}" style="padding-inline:0">${icon('eye', { size: 14 })}See the screenshot</button>` : ''}</div>
           </div>
-          <div style="text-align:right"><b class="num" style="font-size:1.2rem">${escapeHtml(fmtUsd2(c.expectedUsd))}</b>
+          <div style="text-align:right"><b class="num fig">${escapeHtml(fmtUsd2(c.expectedUsd))}</b>
             <br><span class="small muted num">${escapeHtml(fmtAfl2(c.expectedUsd, s.awgPerUsd))}</span></div>
         </div>
         <div class="copyline" style="margin-top:12px"><code class="num">${escapeHtml(c.reference || 'no reference given')}</code>
@@ -306,7 +306,7 @@ export function monthClose({ store, params, go }) {
             </ul>
           </div>
           <form class="panel" id="close-form">
-            <h2 style="font-size:1.05rem">Seal the month</h2>
+            <h2>Seal the month</h2>
             <label class="field" style="margin-top:12px"><span>Reserve balance on the bank statement</span>
               <input name="balance" type="number" step="0.01" inputmode="decimal" value="${p.treasury.reserveExpectedUsd.toFixed(2)}" required>
               <span class="hint">The ledger says it should be ${escapeHtml(fmtUsd2(p.treasury.reserveExpectedUsd))}. A gap of more than $${s.closeToleranceUsd} blocks the close.</span></label>
@@ -371,19 +371,19 @@ export function desk({ store, go }) {
         return `<div class="panel">
           <div class="row-between" style="align-items:flex-start;gap:14px">
             <div>
-              <h3 style="font-size:1.05rem">${escapeHtml(stay?.name || 'Anywhere on the island')}</h3>
+              <h3>${escapeHtml(stay?.name || 'Anywhere on the island')}</h3>
               <p class="small muted" style="margin-top:6px">${icon('users', { size: 14, cls: 'ico-muted' })}
                 ${r.count} ${r.count === 1 ? 'Insider' : 'Insiders'}: ${escapeHtml(names.join(', '))}</p>
               <p class="small muted" style="margin-top:4px">${icon('calendar', { size: 14, cls: 'ico-muted' })} ${escapeHtml(windows.join(' · '))}</p>
             </div>
             <div class="row" style="flex:none">
-              ${r.matched ? `<span class="tag" style="background:var(--good-soft);color:var(--good-text);border-color:transparent">${icon('check', { size: 13 })}on the board</span>` : ''}
+              ${r.matched ? `<span class="tag">${icon('check', { size: 13 })}on the board</span>` : ''}
               ${stay ? `<button class="btn sm" data-post="${escapeHtml(stay.id)}" data-room="${escapeHtml(r.roomTypeId || '')}">${icon('plus', { size: 15 })}Post one</button>` : ''}
             </div>
           </div></div>`;
       }).join('')}</div>`
       : `<div class="empty">${icon('bell', { size: 30, cls: 'ico-muted' })}
-          <b style="display:block;margin-top:10px">Nobody is watching for anything yet</b>
+          <b style="display:block">Nobody is watching for anything yet</b>
           <p class="small muted">When Insiders start adding watches, this becomes the list of what to hunt for.</p></div>`}
     </div>`));
   };
@@ -445,7 +445,7 @@ export function desk({ store, go }) {
         <p class="small muted" style="margin-top:10px">Nothing watches Interval for the Circle. They publish no feed, and there is no
           alert to switch on — the only way to know what is open is for somebody to look. So the reminder comes to you instead:
           four a day at 08:00, 12:00, 16:30 and 20:30, each one a tap away from a current board. Open it once and your phone keeps it.</p>
-        <div class="copyline" style="margin-top:12px"><code style="font-size:.78rem">${escapeHtml(GRAB.slice(0, 54))}…</code>
+        <div class="copyline" style="margin-top:12px"><code class="tiny">${escapeHtml(GRAB.slice(0, 54))}…</code>
           <button class="btn ghost sm" data-copy="${escapeHtml(GRAB)}">Copy</button></div>
         <p class="small muted" style="margin-top:10px">To install it: save any page as a bookmark, edit the bookmark, and paste this over its address.
           The first tap asks for the Desk’s ingest token — the one you were given. It is kept in that browser
@@ -457,10 +457,10 @@ export function desk({ store, go }) {
         return `<div class="panel" data-deal="${escapeHtml(d.id)}">
           <div class="row-between" style="align-items:flex-start;gap:14px">
             <div>
-              <h3 style="font-size:1.02rem">${escapeHtml(d.title || stay?.name || '')}</h3>
+              <h3>${escapeHtml(d.title || stay?.name || '')}</h3>
               <p class="small muted" style="margin-top:5px">${escapeHtml(fmtDay(d.from))} – ${escapeHtml(fmtDay(d.to))} · ${d.nights} nights · ${escapeHtml(fmtPoints(d.pointsTotal))}
                 · from ${escapeHtml(d.source)}</p>
-              <p class="small" style="margin-top:6px;color:${hits.length ? 'var(--good-text)' : 'var(--ink-3)'}">
+              <p class="small${hits.length ? '' : ' muted'}" style="margin-top:6px">
                 ${icon(hits.length ? 'bellRing' : 'bell', { size: 14 })}
                 ${hits.length ? `${hits.length} ${hits.length === 1 ? 'Insider was' : 'Insiders were'} waiting for this` : 'Nobody was watching for this one'}</p>
             </div>
@@ -471,7 +471,7 @@ export function desk({ store, go }) {
           </div></div>`;
       }).join('')}</div>`
       : `<div class="empty">${icon('zap', { size: 30, cls: 'ico-muted' })}
-          <b style="display:block;margin-top:10px">Nothing on the board</b>
+          <b style="display:block">Nothing on the board</b>
           <p class="small muted">Post the moment you see something — a good week goes within hours.</p></div>`}
     </div>`));
   };
@@ -523,7 +523,7 @@ export function desk({ store, go }) {
   const drawCatalog = () => {
     const list = store.stays;
     panel.replaceChildren(el(`<div class="panel">
-      <div class="row-between"><h2 style="font-size:1.1rem">What the Circle offers</h2>
+      <div class="row-between"><h2>What the Circle offers</h2>
         <button class="btn ghost sm" id="add">Add a stay, trip or cruise</button></div>
       <div class="tablewrap" style="margin-top:14px;border:0"><table>
         <thead><tr><th>Name</th><th>Area</th><th class="num">From, a night</th><th>State</th><th></th></tr></thead>
@@ -544,17 +544,17 @@ export function desk({ store, go }) {
     const notes = store.announcements();
     panel.replaceChildren(el(`<div class="stack">
       <form class="panel" id="note-form">
-        <h2 style="font-size:1.1rem">Write to the Circle</h2>
+        <h2>Write to the Circle</h2>
         <p class="small muted" style="margin-top:6px">Every note opens “Bon dia, Circle” and is signed by you. Nothing is ever sent without you tapping send.</p>
         <label class="field" style="margin-top:12px"><span>Title</span><input name="title" required placeholder="Samaná is open — fourteen seats"></label>
         <label class="field"><span>Note</span><textarea name="body" rows="5" required placeholder="Bon dia, Circle. …"></textarea></label>
         <label class="row" style="gap:10px;margin-bottom:14px"><input type="checkbox" name="pinned" style="width:20px;height:20px"><span class="small">Pin it to the top</span></label>
         <button class="btn" type="submit">Publish</button>
       </form>
-      <div class="panel"><h2 style="font-size:1.1rem">Ready-made messages</h2>
+      <div class="panel"><h2>Ready-made messages</h2>
         <p class="small muted" style="margin-top:6px">Open in WhatsApp with the details already filled in. You decide what to send and to whom.</p>
         <div class="row" style="margin-top:12px" id="templates"></div></div>
-      <div class="panel"><h2 style="font-size:1.1rem">Published</h2>
+      <div class="panel"><h2>Published</h2>
         <ul class="ledger" style="margin-top:10px">${notes.map(n => `<li><span class="what"><b>${escapeHtml(n.title)}</b>
           <span class="meta">${escapeHtml(store.member(n.authorId)?.name.split(' ')[0] || '')} · ${escapeHtml(fmtDay(n.at))}${n.pinned ? ' · pinned' : ''}</span></span>
           <span class="delta"><button class="btn ghost sm" data-del="${n.id}">Delete</button></span></li>`).join('')}</ul></div>
@@ -900,7 +900,7 @@ export function pool({ store }) {
 
       <div class="side" style="margin-top:24px">
         <div class="panel">
-          <h2 style="font-size:1.1rem">Where the money has gone</h2>
+          <h2>Where the money has gone</h2>
           <ul class="ledger" style="margin-top:12px">
             <li><span class="what"><b>Collected from Insiders</b><span class="meta">every confirmed contribution</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.collected))}</b></span></li>
             <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta">15%, earned when points are spent on a room</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.serviceEarnedUsd))}</b></span></li>
@@ -912,7 +912,7 @@ export function pool({ store }) {
           </ul>
         </div>
         <div class="panel flat">
-          <h2 style="font-size:1.1rem">The two accounts</h2>
+          <h2>The two accounts</h2>
           <p class="small muted" style="margin-top:8px">${escapeHtml(s.reserveAccount.holder || 'Not registered yet')}<br><span class="num">${escapeHtml(s.reserveAccount.number || '—')}</span></p>
           <p class="small muted" style="margin-top:10px">${escapeHtml(s.operatingAccount.holder || 'Not registered yet')}<br><span class="num">${escapeHtml(s.operatingAccount.number || '—')}</span></p>
           ${t.lastClose ? `<p class="small muted" style="margin-top:14px">Last sealed: ${escapeHtml(fmtMonth(t.lastClose.month))}, closed by ${escapeHtml(store.member(t.lastClose.closedBy)?.name.split(' ')[0] || '')} and co-signed by ${escapeHtml(store.member(t.lastClose.cosignedBy)?.name.split(' ')[0] || '')}.</p>` : ''}
@@ -921,7 +921,7 @@ export function pool({ store }) {
       </div>
 
       <div class="panel" style="margin-top:20px">
-        <div class="row-between"><h2 style="font-size:1.1rem">Confirmed each month</h2><button class="btn ghost sm" id="toggle-table">Show the numbers</button></div>
+        <div class="row-between"><h2>Confirmed each month</h2><button class="btn ghost sm" id="toggle-table">Show the numbers</button></div>
         <div id="chart" style="margin-top:14px"></div>
         <div id="table" hidden style="margin-top:14px"></div>
       </div>
@@ -1012,7 +1012,7 @@ export function circle({ store }) {
       </div>`));
     } else if (tab === 'notes') {
       panel.replaceChildren(el(`<div class="stack">${notes.map(n => `<div class="panel">
-          <div class="row-between"><h2 style="font-size:1.1rem">${escapeHtml(n.title)}</h2>${n.pinned ? '<span class="tag">Pinned</span>' : ''}</div>
+          <div class="row-between"><h2>${escapeHtml(n.title)}</h2>${n.pinned ? '<span class="tag">Pinned</span>' : ''}</div>
           <p class="small muted" style="margin-top:6px">${escapeHtml(store.member(n.authorId)?.name || '')} · ${escapeHtml(fmtDay(n.at))}</p>
           <p style="margin-top:12px;max-width:70ch">${escapeHtml(n.body)}</p>
           <div class="row" style="margin-top:12px"><button class="btn ghost sm" data-copy="${escapeHtml(n.body)}">Copy for WhatsApp</button></div>
@@ -1025,7 +1025,7 @@ export function circle({ store }) {
       const ladder = Object.entries(s.streakBonuses).map(([n, pts]) => ({ n: Number(n), pts }));
       const mine = store.streak(me.id);
       panel.replaceChildren(el(`<div class="panel">
-        <h2 style="font-size:1.1rem">Streak bonuses</h2>
+        <h2>Streak bonuses</h2>
         <p class="small muted" style="margin-top:6px">Funded by the Circle out of its 15%, never out of anyone else’s backing. Only months where the full amount arrived count, and a pause freezes your run rather than resetting it.</p>
         <ul class="ledger" style="margin-top:14px">${ladder.map(l => `<li>
           <span class="what"><b>${l.n} consecutive contributions</b><span class="meta">${mine >= l.n ? 'You have this' : `${l.n - mine} to go`}</span></span>
@@ -1054,8 +1054,8 @@ async function showLogin({ name, username, password }) {
     body.innerHTML = `
       <p class="sheet-text">Send them these two lines. Both are on your clipboard already.</p>
       <div class="panel flat" style="margin-top:12px">
-        <p class="eyebrow">Username</p><p class="mono" style="font-size:1.2rem">${escapeHtml(username)}</p>
-        <p class="eyebrow" style="margin-top:14px">Password</p><p class="mono" style="font-size:1.2rem;word-break:break-all">${escapeHtml(password)}</p>
+        <p class="eyebrow">Username</p><p class="mono fig">${escapeHtml(username)}</p>
+        <p class="eyebrow" style="margin-top:14px">Password</p><p class="mono fig" style="word-break:break-all">${escapeHtml(password)}</p>
       </div>
       <p class="small muted" style="margin-top:12px">This is the only time it is shown. The app makes them
         choose their own the first time they sign in, so it stops mattering straight away.</p>
@@ -1084,7 +1084,7 @@ export function settings({ store, go }) {
 
       <div data-pane="accounts"${isAdmin ? ' hidden' : ''}>
       <form class="panel" id="accounts" style="margin-top:20px">
-        <h2 style="font-size:1.1rem">The two accounts</h2>
+        <h2>The two accounts</h2>
         <p class="small muted" style="margin-top:6px">Coverage can only be verified when the Reserve and Operating are two different accounts. Be honest about who holds them.</p>
         <div class="grid g2" style="margin-top:12px">
           <div><p class="eyebrow">${icon('vault')}Reserve · backs the points</p>
@@ -1100,7 +1100,7 @@ export function settings({ store, go }) {
       </form>
 
       <form class="panel" id="wallet-form" style="margin-top:16px">
-        <h2 style="font-size:1.1rem">Apple Wallet passes</h2>
+        <h2>Apple Wallet passes</h2>
         <p class="small muted" style="margin-top:6px">A Wallet pass has to be signed with a certificate Apple issues to the club, so a browser cannot make one. Deploy the <code>issue-pass</code> function (it is in <code>supabase/functions/</code>, and the README walks through the certificate), then paste its URL here. Until then, members can still save the card as an image and add the app to their home screen.</p>
         <label class="field" style="margin-top:12px"><span>Pass service URL</span>
           <input name="walletUrl" value="${escapeHtml(s.wallet?.url || '')}" placeholder="https://xxxx.supabase.co/functions/v1/issue-pass" class="mono"></label>
@@ -1111,7 +1111,7 @@ export function settings({ store, go }) {
 
       <div data-pane="money" hidden>
       <div class="panel" style="margin-top:20px">
-        <h2 style="font-size:1.1rem">Dollars and points</h2>
+        <h2>Dollars and points</h2>
         <p class="small muted" style="margin-top:6px">${s.pointsPerDollar} points = $1.00. Type either side to check a price before you put it in the catalog.</p>
         <div class="grid g2" style="margin-top:14px">
           <label class="field" style="margin:0"><span>Dollars</span>
@@ -1123,7 +1123,7 @@ export function settings({ store, go }) {
       </div>
 
       ${isAdmin ? `<form class="panel" id="rules-form" style="margin-top:16px">
-        <h2 style="font-size:1.1rem">The rules of the club</h2>
+        <h2>The rules of the club</h2>
         <p class="small muted" style="margin-top:6px">Changing the share or the value of a point affects everyone. Tell the Circle before you do, and never after someone has booked against it.</p>
         <div class="grid g3" style="margin-top:12px">
           <label class="field"><span>The Circle’s share</span><input name="serviceRate" type="number" step="0.01" min="0" max="0.5" value="${s.serviceRate}" inputmode="decimal"><span class="hint">0.15 is 15%</span></label>
@@ -1147,7 +1147,7 @@ export function settings({ store, go }) {
 
       ${isAdmin ? `<div data-pane="people">
       <div class="panel" style="margin-top:20px">
-        <div class="row-between"><h2 style="font-size:1.1rem">Insiders · ${store.members.length}</h2>
+        <div class="row-between"><h2>Insiders · ${store.members.length}</h2>
           <div class="row">${isAdmin ? `<button class="btn sm" id="add-member">${icon('plus', { size: 16 })}Add an Insider</button>` : ''}
             </div></div>
         <p class="small muted" style="margin-top:6px">Adding someone puts them on the list. Then <b>Give a login</b> makes them a username
@@ -1159,7 +1159,7 @@ export function settings({ store, go }) {
             <td><b>${escapeHtml(m.name)}</b>${m.bot ? ' <span class="chip chip-muted">robot</span>' : ''}<br><span class="small ${m.username ? 'muted mono' : ''}" ${m.username ? '' : 'style="color:var(--flag)"'}>${escapeHtml(m.username ? `@${m.username}${m.mustChangePassword ? ' · has not changed their password yet' : ''}` : 'no login yet — they cannot sign in')}</span><br><span class="small muted">${m.bot ? 'no seat, pays nothing' : escapeHtml([tierName(m.monthlyUsd), m.roles.join(', ')].filter(Boolean).join(' · '))}</span></td>
             <td data-k="State">${chip(m.status === 'active' ? 'active' : m.status)}</td>
             <td class="num" data-k="Points">${escapeHtml(fmtPoints(store.availablePoints(m.id)))}</td>
-            <td><div class="row nowrap" style="gap:6px;justify-content:flex-end;flex-wrap:nowrap">
+            <td><div class="row" style="gap:6px;justify-content:flex-end">
               ${isAdmin ? `<button class="btn ghost sm" data-login="${m.id}">${icon('key', { size: 15 })}${m.username ? 'New password' : 'Give a login'}</button>` : ''}
               ${isAdmin ? `<button class="btn ghost sm" data-edit="${m.id}">${icon('edit', { size: 15 })}Edit</button>` : ''}
               ${isAdmin ? `<button class="btn ghost sm" data-adjust="${m.id}">Adjust</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>
@@ -1168,7 +1168,7 @@ export function settings({ store, go }) {
 
       <div data-pane="record" hidden>
       <div class="panel" style="margin-top:20px">
-        <h2 style="font-size:1.1rem">The record</h2>
+        <h2>The record</h2>
         <p class="small muted" style="margin-top:6px">Everything anyone did, oldest at the bottom. The ledger itself can never be edited — corrections are new lines with a reason.</p>
         <div class="row" style="margin-top:12px">
           <button class="btn ghost sm" id="backup">${icon('download', { size: 15 })}Back up everything</button>

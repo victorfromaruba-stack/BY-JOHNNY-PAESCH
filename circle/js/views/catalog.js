@@ -90,7 +90,7 @@ export function stays({ store, go, query = {} }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <header class="masthead">
         <p class="eyebrow">${icon('trend')}The board · <span class="num" id="count">…</span></p>
-        <h1>Cheapest a night, first.</h1>
+        <h1>Cheapest a night, <em class="ac">first</em>.</h1>
         <p class="dateline" id="asof">Looking at what owners have open…</p>
         <p class="small" id="no-interval" hidden></p>
         ${canEdit ? `<div class="row no-print"><button class="btn sm" id="paste">${icon('copy', { size: 16 })}Paste a listing</button>
@@ -119,7 +119,7 @@ export function stays({ store, go, query = {} }) {
 
   if (mine.length) {
     const mineSlot = wrap.querySelector('#mine');
-    mineSlot.appendChild(el(`<div class="running-head"><h2 style="color:var(--good-text)">${icon('bellRing')}What you asked for</h2><p class="eyebrow">${mine.length} on the board</p></div>`));
+    mineSlot.appendChild(el(`<div class="running-head"><h2>${icon('bellRing')}What you asked for</h2><p class="eyebrow">${mine.length} on the board</p></div>`));
     dealList(mineSlot, mine.map(m => m.deal).sort(byNight), { store, me, canEdit, first: 4, key: 'mine', inPlace: false, noun: 'you asked for', mode: 'rows' });
     if (store.unseenMatches(me.id).length) store.markWatchesSeen(me.id);
   }
@@ -138,7 +138,7 @@ export function stays({ store, go, query = {} }) {
     soonSlot.replaceChildren();
     const soon = list.filter(d => { const n = daysUntil(d.from); return n >= 0 && n <= 7; }).sort(byNight).slice(0, 4);
     if (!soon.length) return;
-    soonSlot.appendChild(el(`<div class="running-head"><h2 style="color:var(--good-text)">${icon('zap')}Coming up</h2><p class="eyebrow">check in within the week · cheapest first</p></div>`));
+    soonSlot.appendChild(el(`<div class="running-head"><h2>${icon('zap')}Coming up</h2><p class="eyebrow">check in within the week · cheapest first</p></div>`));
     dealList(soonSlot, soon, { store, me, canEdit, first: 4, key: 'soon', inPlace: false, noun: 'coming up', mode: 'rows', folioOf });
   };
   const paint = (sub) => {
@@ -213,11 +213,11 @@ export function stays({ store, go, query = {} }) {
     .sort((a, b) => (b.house ? 1 : 0) - (a.house ? 1 : 0) || a.name.localeCompare(b.name));
 
   if (open.length) {
-    placesSlot.appendChild(el(`<div class="running-head"><h2>Open now · ${open.length}</h2><p class="eyebrow">cheapest week on the board</p></div>`));
+    placesSlot.appendChild(el(`<div class="running-head"><h2>Open now · ${open.length}</h2><p class="eyebrow">cheapest week on the board · a night, all in</p></div>`));
     const idx = el('<div class="index"></div>');
     for (const st of open) idx.appendChild(el(`<a class="index-row" href="#/stays/${escapeHtml(st.id)}">
-        <span class="name">${escapeHtml(st.name)}${st.house ? '<span class="house">where we stay</span>' : ''}<span class="beach">${escapeHtml(st.area)}</span></span>
-        <span class="from"><b>${escapeHtml(usdFrom(cheapestOpen.get(st.id), s.pointsPerDollar))}</b> a night</span></a>`));
+        <span class="name">${escapeHtml(st.name)}<span class="meta">${st.house ? '<span class="house">where we stay</span>' : ''}<span class="beach">${escapeHtml(st.area)}</span></span></span>
+        <span class="from"><b>${escapeHtml(usdFrom(cheapestOpen.get(st.id), s.pointsPerDollar))}</b></span></a>`));
     placesSlot.appendChild(idx);
   }
 
@@ -226,7 +226,7 @@ export function stays({ store, go, query = {} }) {
       <p class="eyebrow">nothing on the board today · Victor prices these on your dates</p></div>`));
     const idx = el('<div class="index quiet-index"></div>');
     for (const st of rest) idx.appendChild(el(`<a class="index-row" href="#/stays/${escapeHtml(st.id)}">
-        <span class="name">${escapeHtml(st.name)}${st.house ? '<span class="house">where we stay</span>' : ''}<span class="beach">${escapeHtml(st.area)}</span></span>
+        <span class="name">${escapeHtml(st.name)}<span class="meta">${st.house ? '<span class="house">where we stay</span>' : ''}<span class="beach">${escapeHtml(st.area)}</span></span></span>
         <span class="from ask">Ask${icon('chevronRight', { size: 15 })}</span></a>`));
     placesSlot.appendChild(idx);
   }
@@ -254,7 +254,7 @@ export function cruises({ store }) {
       </figure>
       <p class="lede" style="max-width:46ch">Interval trades a deposited week for a cabin. Victor posts the sailings worth it; you ask for a cabin and he books it in your name.</p>
       <div class="grid g3" id="list" style="margin-top:22px"></div>
-      ${sailings.length ? '' : `<div class="empty">${icon('compass', { size: 28, cls: 'ico-muted' })}<b style="display:block;margin-top:10px">No cruise on the board yet</b><p class="small muted">Victor posts one when Interval has a sailing worth it. <a href="#/watching">A watch</a> tells you first.</p></div>`}
+      ${sailings.length ? '' : `<div class="empty">${icon('compass', { size: 28, cls: 'ico-muted' })}<b style="display:block">No cruise on the board yet</b><p class="small muted">Victor posts one when Interval has a sailing worth it. <a href="#/watching">A watch</a> tells you first.</p></div>`}
       <div id="trips" style="margin-top:34px"></div>
     </div></section></div>`);
   const card = (t) => {
@@ -278,7 +278,7 @@ export function cruises({ store }) {
   if (trips.length) {
     const slot = wrap.querySelector('#trips');
     slot.appendChild(el(`<div class="sec-head tight"><div><p class="eyebrow">${icon('plane')}Trips with the Circle</p>
-      <h2 style="font-size:1.2rem">${trips.length} trip${trips.length === 1 ? '' : 's'}, a seat each</h2>
+      <h2>${trips.length} trip${trips.length === 1 ? '' : 's'}, a seat each</h2>
       <p class="small muted" style="margin-top:6px;max-width:62ch">Everyone can come on everything. A seat covers the hotels and every transfer on the ground; flights to and from Aruba are extra unless the note says otherwise. At ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))}, so a seat further afield takes longer to save for — ${look.holds} open request${look.holds > 1 ? 's' : ''} at a time, ${look.windowMonths} months ahead.</p></div></div>`));
     const grid = el('<div class="grid g3"></div>');
     grid.replaceChildren(...trips.map(card));
@@ -491,7 +491,7 @@ export function stayDetail({ store, params, go, query = {} }) {
     const srcLine = (place.sources || []).map(x => `<a href="${escapeHtml(x.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(x.label)}</a>, seen ${escapeHtml(fmtDay(x.seenOn))}`).join('; ');
     wrap.querySelector('#place').innerHTML = `<details class="fineprint" style="margin-top:16px"><summary>About the place</summary><section class="panel" style="margin-top:10px" id="the-place">
       <div><p class="eyebrow">${icon('home')}The place</p>
-        <h2 style="font-size:1.15rem;margin-top:6px">What ${escapeHtml(stay.name)} publishes about itself</h2></div>
+        <h2 style="margin-top:6px">What ${escapeHtml(stay.name)} publishes about itself</h2></div>
       ${facts.length ? `<ul class="facts" style="margin-top:10px">${facts.map(f => `<li>${f}</li>`).join('')}</ul>` : ''}
       ${allAmen.length ? `<div class="flags" id="amen" style="margin-top:14px">${allAmen.slice(0, SHOW).map(({ a, label }) => `<span class="tag" title="${escapeHtml(label)}">${escapeHtml(a)}</span>`).join('')}
         ${allAmen.length > SHOW ? `<button type="button" class="btn ghost sm" id="amen-more">All ${allAmen.length} on the list</button>` : ''}</div>` : ''}
@@ -519,7 +519,7 @@ export function stayDetail({ store, params, go, query = {} }) {
     if (resort || posted.length) {
       const panel = el(`<section class="panel" style="margin-top:22px" id="open-now">
         <div><p class="eyebrow">${icon('trend')}Open right now</p>
-          <h2 style="font-size:1.15rem;margin-top:6px" id="open-h"></h2>
+          <h2 style="margin-top:6px" id="open-h"></h2>
           <p class="small muted" id="open-sub" style="margin-top:6px;max-width:62ch"></p></div>
         <div id="open-list" style="margin-top:12px"></div>
       </section>`);
@@ -883,7 +883,7 @@ export function requests({ store }) {
     const items = mine.filter(r => r.status === status);
     if (!items.length) continue;
     groups.appendChild(el(`<div class="panel">
-      <div class="row-between"><h2 style="font-size:1.05rem">${escapeHtml(label)}</h2><span class="small muted">${items.length}</span></div>
+      <div class="row-between"><h2>${escapeHtml(label)}</h2><span class="small muted">${items.length}</span></div>
       <ul class="ledger" style="margin-top:10px">${items.map(r => {
         const st = store.stay(r.stayId);
         const left = r.status === 'quoted' ? countdownTo(r.quoteExpiresAt) : null;
@@ -942,7 +942,7 @@ export function requestDetail({ store, params, go, refresh }) {
             const links = store.whereToBook(r.id);
             const gated = store.needsLook?.(r);
             const seen = gated ? store.lookFor?.(r.stayId, r.checkIn, r.checkOut) : null;
-            return `<div class="panel" style="border-color:var(--good)">
+            return `<div class="panel boxed" style="border-color:var(--ink)">
               <p class="eyebrow">${icon('external')}Go and look</p>
               <p class="small muted" style="margin-top:6px">Open it, then say what you saw. Nothing here checks the hotel &mdash; you are the only thing that can.</p>
               ${links.length ? `<ul class="stack" style="margin-top:10px;list-style:none;padding:0;gap:10px">
@@ -1015,7 +1015,7 @@ export function requestDetail({ store, params, go, refresh }) {
   const money = wrap.querySelector('#money');
   const pts = r.quotedPoints || r.indicativePoints || r.points;
   money.innerHTML = `
-    <div class="row-between"><h2 style="font-size:1.1rem">${r.quotedPoints ? 'The quote' : 'Indicative price'}</h2>
+    <div class="row-between"><h2>${r.quotedPoints ? 'The quote' : 'Indicative price'}</h2>
       ${left && r.status === 'quoted' ? `<span class="chip chip-warn"><i></i>expires in <span class="num">${escapeHtml(left)}</span></span>` : ''}</div>
     <ul class="ledger" style="margin-top:10px">
       <li><span class="what"><b>${r.nights} night${r.nights > 1 ? 's' : ''} all-in</b>
@@ -1054,7 +1054,7 @@ export function requestDetail({ store, params, go, refresh }) {
     const parts = [{ memberId: r.memberId, points: r.points, owner: true }, ...(r.pledges || [])];
     chip$.className = 'panel';
     chip$.innerHTML = `
-      <div class="row-between"><h2 style="font-size:1.1rem">Everyone chipping in</h2>
+      <div class="row-between"><h2>Everyone chipping in</h2>
         <span class="small muted num">${escapeHtml(fmtPoints(covered))} of ${escapeHtml(fmtPoints(target))}</span></div>
       <div class="balbar" style="margin-top:12px" role="img" aria-label="${covered} of ${target} points covered">
         <span class="b-avail" style="width:${Math.min(100, (covered / Math.max(target, 1)) * 100)}%"></span></div>

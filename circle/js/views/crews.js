@@ -48,7 +48,7 @@ export function crews({ store, go }) {
     const rooms = store.approvedRoomsFor(me.id);
     list.appendChild(el(`<div class="panel empty">
       <span class="ico">${icon('users', { size: 30, cls: 'ico-muted' })}</span>
-      <h2 style="margin-top:10px;font-size:1.15rem">${rooms.length ? 'Start one around a room' : 'A crew starts with a room'}</h2>
+      <h2 style="margin-top:10px">${rooms.length ? 'Start one around a room' : 'A crew starts with a room'}</h2>
       <p class="small muted" style="margin-top:8px;max-width:54ch">${rooms.length
         ? `You have ${rooms.length} approved booking${rooms.length === 1 ? '' : 's'} to build one around. Name it whatever you already call yourselves, add the people coming with you, and the thread is yours — nobody else in the Circle can read it, not the Desk, not the Banker.`
         : 'A crew is the people on a booking, so it needs a booking first. Ask for a room, and once the Desk quotes it and you accept, you can start the crew around it and bring the others in.'}</p>
@@ -65,7 +65,7 @@ export function crews({ store, go }) {
     list.appendChild(el(`<a class="panel crew-card" href="#/crews/${escapeHtml(c.id)}">
         <div class="row-between" style="align-items:flex-start;gap:12px">
           <div style="min-width:0">
-            <h2 style="font-size:1.1rem">${escapeHtml(c.name)}${
+            <h2>${escapeHtml(c.name)}${
               store.leadsCrew(c.id, me.id) ? '<span class="tag" style="margin-left:8px">you lead it</span>' : ''}</h2>
             ${c.about ? `<p class="small muted" style="margin-top:4px">${escapeHtml(c.about)}</p>` : ''}
             ${(() => {
@@ -163,7 +163,7 @@ export function crewDetail({ store, params, go, refresh }) {
       <p class="small"><a href="#/crews" class="back">${icon('chevronRight', { size: 14 })}Your crews</a></p>
       <div class="row-between" style="align-items:flex-start;gap:14px;margin-top:8px">
         <div style="min-width:0">
-          <h1 style="font-size:1.5rem">${escapeHtml(c.name)}</h1>
+          <h1>${escapeHtml(c.name)}</h1>
           ${c.about ? `<p class="lede" style="margin-top:6px">${escapeHtml(c.about)}</p>` : ''}
         </div>
         <div class="row" style="gap:8px;flex:none">

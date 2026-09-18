@@ -20,7 +20,7 @@ const niceMax = (v) => {
 };
 
 /** Sparkline: single series, area wash, emphasized endpoint. */
-export function sparkline(values, { width = 160, height = 44, stroke = 'var(--series-1)', fill = 'var(--series-1)' } = {}) {
+export function sparkline(values, { width = 160, height = 44, stroke = 'var(--ink-2)', fill = 'var(--well)' } = {}) {
   const svg = el('svg', { viewBox: `0 0 ${width} ${height}`, width: '100%', height, role: 'img', 'aria-label': 'trend' , class: 'spark' });
   if (!values.length) return svg;
   const max = Math.max(...values, 1), min = Math.min(...values, 0);
@@ -28,7 +28,7 @@ export function sparkline(values, { width = 160, height = 44, stroke = 'var(--se
   const x = (i) => pad + (i / Math.max(values.length - 1, 1)) * (width - pad * 2);
   const y = (v) => height - pad - ((v - min) / Math.max(max - min, 1)) * (height - pad * 2);
   const pts = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
-  svg.appendChild(el('path', { d: `M${pts[0]} L${pts.slice(1).join(' L')} L${x(values.length - 1).toFixed(1)},${height - pad} L${x(0)},${height - pad} Z`, fill, 'fill-opacity': '.1', stroke: 'none' }));
+  svg.appendChild(el('path', { d: `M${pts[0]} L${pts.slice(1).join(' L')} L${x(values.length - 1).toFixed(1)},${height - pad} L${x(0)},${height - pad} Z`, fill, 'fill-opacity': '1', stroke: 'none' }));
   svg.appendChild(el('path', { d: `M${pts.join(' L')}`, fill: 'none', stroke, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
   const last = values.length - 1;
   svg.appendChild(el('circle', { cx: x(last), cy: y(values[last]), r: 4.5, fill: stroke, stroke: 'var(--surface-1)', 'stroke-width': 2 }));

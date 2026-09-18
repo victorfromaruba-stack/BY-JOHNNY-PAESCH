@@ -57,16 +57,18 @@ export function home({ store, go }) {
     ? { eyebrow: '', h1: 'Your corner of the Circle', lede: 'Your points, what the Desk has open, and what the Circle owes you — all on one page.', cta: `<a class="btn" href="#/stays">${icon('bed', { size: 17 })}See what is open</a>` }
     : book.can
       ? { eyebrow: 'What you can book today', h1: `${book.nights}${book.capped ? '+' : ''} night${book.nights === 1 ? '' : 's'} at ${book.stay.name}`,
+          h1Html: `${book.nights}${book.capped ? '+' : ''} night${book.nights === 1 ? '' : 's'} at <em class="ac">${escapeHtml(book.stay.name)}</em>`,
           lede: 'At its cheapest, all in. Pick your dates and the Desk prices those nights exactly.',
           cta: `<a class="btn" href="#/book/${escapeHtml(book.stay.id)}">${icon('send', { size: 17 })}Ask for these dates</a>
-                <a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Other places</a>` }
+                <a class="link-rule" href="#/stays">Other places</a>` }
       : { eyebrow: 'The first thing within reach', h1: `${book.nights} night${book.nights === 1 ? '' : 's'} at ${book.stay.name}`,
+          h1Html: `${book.nights} night${book.nights === 1 ? '' : 's'} at <em class="ac">${escapeHtml(book.stay.name)}</em>`,
           lede: `${fmtPoints(book.short)} to go — about ${book.months} more month${book.months === 1 ? '' : 's'} at ${fmtUsd2(me.monthlyUsd)}. You can ask for it before then and close the gap in cash.`,
           cta: `<a class="btn" href="#/pay">${icon('arrowUp', { size: 17 })}Send a contribution</a>
-                <a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Other places</a>` };
+                <a class="link-rule" href="#/stays">Other places</a>` };
   wrap.querySelector('#masthead').innerHTML = `<div class="masthead">
       <p class="eyebrow"><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span>, ${escapeHtml(me.name.split(' ')[0])}${head.eyebrow ? ` · ${escapeHtml(head.eyebrow)}` : ''}</p>
-      <h1>${escapeHtml(head.h1)}</h1>
+      <h1>${head.h1Html || escapeHtml(head.h1)}</h1>
       <p class="dateline"><b class="num" id="avail">0</b> <span id="avail-usd"></span></p>
       <p class="lede" style="margin-top:10px">${escapeHtml(head.lede)}</p>
       <div class="row no-print">${head.cta}</div>
@@ -174,7 +176,7 @@ export function home({ store, go }) {
     if (!g) {
       goalPanel.innerHTML = `
         <p class="eyebrow">${icon('target')}What you are saving for</p>
-        <h2 style="font-size:1.15rem;margin-top:8px">Pick something and watch it come closer</h2>
+        <h2 style="margin-top:8px">Pick something and watch it come closer</h2>
         <p class="small muted" style="margin-top:8px">Every contribution moves a bar instead of a number. Choose a place and how many nights, and the app works out how many months it takes at your level — and what would get you there sooner.</p>
         <div class="row" style="margin-top:14px">
           <button class="btn sm" id="set-goal">${icon('target', { size: 16 })}Choose one</button>
@@ -187,7 +189,7 @@ export function home({ store, go }) {
     goalPanel.innerHTML = `
       <div class="row-between"><p class="eyebrow">${icon('target')}What you are saving for</p>
         <button class="btn ghost sm" id="set-goal">${icon('edit', { size: 15 })}Change</button></div>
-      <h2 style="font-size:1.2rem;margin-top:10px">${escapeHtml(g.stay.name)}</h2>
+      <h2 style="margin-top:10px">${escapeHtml(g.stay.name)}</h2>
       <p class="small muted" style="margin-top:4px">${g.isTrip
         ? `A seat · ${g.nights} nights · ${escapeHtml(fmtDay(g.stay.dates.from))}`
         : `${g.nights} night${g.nights === 1 ? '' : 's'} · from ${escapeHtml(fmtPointsUsd(g.target, s.pointsPerDollar))}`}</p>
@@ -300,7 +302,7 @@ export function home({ store, go }) {
   // 4 — the ledger, last five lines
   const recent = store.ledgerFor(me.id).slice(0, 5);
   const ledgerPanel = el(`<div class="panel">
-      <div class="row-between"><h2 style="font-size:1.1rem">Your ledger</h2><a class="small" href="#/ledger">All of it</a></div>
+      <div class="row-between"><h2>Your ledger</h2><a class="small" href="#/ledger">All of it</a></div>
       <ul class="ledger" style="margin-top:10px">${recent.map(l => ledgerRow(l, s)).join('') || '<li><span class="what"><b>No lines yet</b><span class="meta">Your first confirmed contribution will appear here with its split.</span></span></li>'}</ul>
     </div>`);
   left.appendChild(ledgerPanel);
@@ -559,7 +561,7 @@ export function ledger({ store, params }) {
       <p class="small muted" style="margin-top:12px">You have turned ${escapeHtml(fmtUsd2(lt.paidUsd))} into ${escapeHtml(fmtUsd2(lt.balance / s.pointsPerDollar + lt.burnedPoints / s.pointsPerDollar))} of hotel so far — every dollar backed a point, and the bonuses are on top. Committed points still count against the Circle’s coverage until they are burned.</p>
 
       <div class="panel" style="margin-top:20px">
-        <div class="row-between"><h2 style="font-size:1.1rem">Contributions</h2></div>
+        <div class="row-between"><h2>Contributions</h2></div>
         <div class="tablewrap" style="margin-top:12px">
           <table class="bands"><thead><tr><th>Month</th><th>Sent</th><th>Received</th><th class="num">Points</th><th>State</th></tr></thead>
           <tbody id="contrib-rows"></tbody></table>
@@ -567,7 +569,7 @@ export function ledger({ store, params }) {
       </div>
 
       <div class="panel" style="margin-top:16px">
-        <h2 style="font-size:1.1rem">Points, line by line</h2>
+        <h2>Points, line by line</h2>
         <ul class="ledger" style="margin-top:10px" id="rows"></ul>
         <button class="btn ghost sm" id="rows-more" type="button" style="margin-top:12px" hidden></button>
       </div>
@@ -630,7 +632,7 @@ export function card({ store, go }) {
   const wrap = el(`<div class="nocturne" style="background:var(--ground);color:var(--ink);min-height:100vh">
     <section class="sec"><div class="wrap" style="max-width:560px">
       <p class="eyebrow">${escapeHtml(tierName(me.monthlyUsd))} · ${escapeHtml(VOCAB.clubName)}</p>
-      <h1 style="font-size:1.6rem;margin-top:6px">Your card</h1>
+      <h1 style="margin-top:6px">Your card</h1>
       <div id="card" style="margin-top:20px"></div>
       <p class="small muted" style="margin-top:12px">Tap the card to turn it over. The face carries no numbers — a card someone can read your balance off is a card you cannot leave on a table.</p>
 
@@ -825,7 +827,7 @@ function drawBadges(panel, { store, me, refresh }) {
       </button>`).join('') : '<p class="small muted">None yet. The earned ones arrive on their own.</p>'}</div>
 
     ${shop.length ? `<hr class="rule" style="margin:20px 0">
-    <div class="row-between"><h2 style="font-size:1.1rem">For sale</h2>
+    <div class="row-between"><h2>For sale</h2>
       <span class="tiny muted">you have ${escapeHtml(fmtPoints(lt.available))}</span></div>
     <p class="small muted" style="margin-top:6px">Points spent here are hotel you are choosing not to have. That is the whole cost — nothing else changes.</p>
     <div class="badge-grid" style="margin-top:14px">${shop.map(b => {

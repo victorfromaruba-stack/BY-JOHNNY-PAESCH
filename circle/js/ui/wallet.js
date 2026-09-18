@@ -99,7 +99,9 @@ export function cardImage(member, { scale = 3, withQr = true } = {}) {
     qrRoom = drawn + pad;
   }
   x.fillStyle = ink;
-  x.font = '700 34px Archivo, system-ui, sans-serif';
+  // The serif, if the page has it; the sans if the pass is drawn before the fonts arrive.
+  const serif = document.fonts?.check?.('400 34px "Instrument Serif"') ? '"Instrument Serif", Georgia, serif' : '"Instrument Sans", system-ui, sans-serif';
+  x.font = `400 34px ${serif}`;
   x.letterSpacing = '6px';
   x.fillText(VOCAB.wordmark, 56, 84);
   x.letterSpacing = '2px';
@@ -108,11 +110,11 @@ export function cardImage(member, { scale = 3, withQr = true } = {}) {
   x.fillText(tierName(member.monthlyUsd).toUpperCase(), W - 56 - x.measureText(tierName(member.monthlyUsd).toUpperCase()).width, 84);
   x.globalAlpha = 1;
   x.letterSpacing = '0px';
-  x.font = '600 68px Archivo, system-ui, sans-serif';
+  x.font = `400 68px ${serif}`;
   // keep the name clear of the QR block
   let nameSize = 68;
   while (x.measureText(member.name).width > W - 112 - qrRoom && nameSize > 32) {
-    nameSize -= 2; x.font = `600 ${nameSize}px Archivo, system-ui, sans-serif`;
+    nameSize -= 2; x.font = `400 ${nameSize}px ${serif}`;
   }
   x.fillText(member.name, 56, H - 132);
   x.globalAlpha = 0.8;

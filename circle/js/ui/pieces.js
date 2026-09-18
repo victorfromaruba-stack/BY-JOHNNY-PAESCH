@@ -99,21 +99,32 @@ export function splitBar({ amountUsd, shareRate = 0, points = null, showLegend =
 }
 
 /**
- * A rank crest with its name. The emblems live as SVG in circle/assets/ranks and are drawn by
- * .claude/skills/circle-images/scripts/crests.py, so the five stay a family — change the shield
- * once and all of them change.
- *
- * `size` is the emblem's width. At 28 it sits beside a name; at 96 it is the thing you are
- * looking at. Standing is deliberately not the tier: the crest says how long, the tree says
- * how much, and a member can hold a high one of either.
+ * The five crests are one drawing: a shield, and one rule more inside it at each rung, with the
+ * top rung the frame filled. Drawn inline in the text colour, so the same mark holds in both
+ * themes and reads beside a name at 28px — the bevelled gold shield it replaces was a dark blob
+ * at that size and the most template-looking object in the app at any size.
+ */
+function crestSvg(rung, size) {
+  const n = Math.min(rung + 1, 5);
+  const gap = 11, top = 62 - ((n - 1) * gap) / 2;
+  const bars = Array.from({ length: n }, (_, i) => {
+    const half = 15 - i * 1.6, y = top + i * gap;
+    return `<path d="M${64 - half} ${y}H${64 + half}" stroke="${n === 5 ? 'var(--ground)' : 'currentColor'}" stroke-width="3.2" stroke-linecap="round"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 128 128" width="${size}" height="${size}" fill="none" aria-hidden="true">
+    <path d="M64 16 L102 27 L102 60 C102 83 87 100 64 112 C41 100 26 83 26 60 L26 27 Z" fill="${n === 5 ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="3.6" stroke-linejoin="round"/>${bars}</svg>`;
+}
+
+/**
+ * A rank crest with its name. `size` is the emblem's width. At 28 it sits beside a name; at 96
+ * it is the thing you are looking at. Standing is deliberately not the tier: the crest says how
+ * long, the tree says how much, and a member can hold a high one of either.
  */
 export function rankCrest(standing, { size = 28, withName = true, sub = '' } = {}) {
-  const KEY = ['seated', 'steady', 'anchor', 'oldguard', 'pillar'];
-  const i = Math.max(0, Math.min(KEY.length - 1, standing?.rankIndex ?? 0));
+  const i = Math.max(0, Math.min(4, standing?.rankIndex ?? 0));
   const el = document.createElement('span');
   el.className = 'rank-crest';
-  el.innerHTML = `<img src="assets/ranks/${KEY[i]}.svg" width="${size}" height="${size}" alt=""
-      loading="lazy" decoding="async" style="flex:none;display:block">
+  el.innerHTML = `${crestSvg(i, size)}
     ${withName ? `<span style="min-width:0"><b>${escapeHtml(standing?.rankName || 'Seated')}</b>${
       sub ? `<br><span class="small muted">${escapeHtml(sub)}</span>` : ''}</span>` : ''}`;
   el.style.cssText = 'display:inline-flex;align-items:center;gap:10px;min-width:0';
@@ -228,11 +239,10 @@ export function memberCard(member, { store, flippable = true, compact = false } 
   const front = `
     <div class="card-obj front" style="--face:${face};--etch:${etch};--line:${line};color:${etch}">
       <div class="contours">${contourSvg(member.id, { stroke: etch })}</div>
-      <div class="sheen"></div>
       <div class="card-face">
         <div class="c-top">
           <span class="c-brand">${escapeHtml(VOCAB.wordmark)}</span>
-          <span class="c-tier">${escapeHtml(tierName(tier))}${treeSvg(VOCAB.tierLean[tier] || 12, { size: 15, stroke: etch })}</span>
+          <span class="c-tier">${escapeHtml(tierName(tier))}</span>
         </div>
         <div class="c-name">${escapeHtml(member.name)}</div>
         <div class="c-foot">
@@ -251,7 +261,7 @@ export function memberCard(member, { store, flippable = true, compact = false } 
         <ul style="list-style:none;margin:0;padding:0;display:grid;gap:4px;align-content:start">
           ${last.map(l => `<li class="row-between"><span>${escapeHtml(l.note)}</span><span class="num">${l.points > 0 ? '+' : ''}${l.points.toLocaleString('en-US')}</span></li>`).join('') || '<li>No lines yet.</li>'}
         </ul>
-        <p style="font-size:.62rem;opacity:.85">Leave any time: base points are refunded at face minus $25 after a 12-month window. Points are not deposits or investments.</p>
+        <p style="opacity:.85">Leave any time: base points are refunded at face minus $25 after a 12-month window. Points are not deposits or investments.</p>
       </div>
     </div>`;
   const flip = document.createElement('div');
@@ -277,11 +287,6 @@ function attachTilt(wrap) {
     set((((e.clientX - r.left) / r.width) * 100).toFixed(1), (((e.clientY - r.top) / r.height) * 100).toFixed(1));
   });
   wrap.addEventListener('pointerleave', () => set(50, 50));
-  // Touch devices have no pointer to follow: a slow idle sheen keeps the card alive.
-  if (window.matchMedia('(hover: none)').matches) {
-    let on = false;
-    setInterval(() => { on = !on; wrap.querySelector('.card-obj')?.classList.toggle('shine', on); set(on ? 78 : 22, 50); }, 8000);
-  }
 }
 
 /**

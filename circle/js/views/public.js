@@ -272,16 +272,16 @@ export function landing({ store, go }) {
           <img src="assets/hero-tall.jpg" alt="A windswept fofoti tree leaning over calm water at first light" fetchpriority="high" decoding="async">
         </picture>
         <figcaption class="on"><div class="wrap">
-          <h1 style="max-width:16ch">A private travel circle in Aruba.</h1>
+          <h1 style="max-width:16ch">A private travel circle <em class="ac">in Aruba</em>.</h1>
           <p class="lede" style="margin-top:14px">Put in a hundred dollars a month. Take it out as hotel, at cost, with people you know.</p>
-          <div class="row" style="margin-top:22px">
+          <div class="row" style="margin-top:22px;gap:20px">
             <a class="btn" href="#/sign-in">${icon('key', { size: 17 })}I have an invitation</a>
-            <a class="btn ghost" href="#/rules">${icon('compass', { size: 17 })}How the Circle works</a>
+            <a class="link-rule" href="#/rules">How the Circle works</a>
           </div>
-          <p class="where">${icon('mapPin', { size: 14 })}The west coast — every place on the list is on this water or ten minutes from it.</p>
         </div></figcaption>
       </figure>
-      <div class="wrap"><div class="hero-gauge enter" style="--d:180ms">
+      <div class="wrap"><p class="hero-credit enter" style="--d:120ms">${icon('mapPin', { size: 14 })}The west coast — every place on the list is on this water or ten minutes from it.</p>
+      <div class="hero-gauge enter" style="--d:180ms">
         <div id="gauge-slot">${blind ? `<p class="eyebrow">${icon('shield', { size: 14 })}Proof of reserves</p>
           <p class="small muted" style="margin-top:4px;max-width:46ch">Every point is backed by money in a Reserve account that is checked against the bank
           and published inside the Circle. Sign in to see the current figure.</p>` : ''}</div>
@@ -605,7 +605,7 @@ export function setPassword({ store, go }) {
     const { passwordStrength } = await import('../core/passwords.js');
     const s = passwordStrength(form.password.value);
     meter.innerHTML = form.password.value
-      ? `<div class="pw-bar"><span style="width:${Math.round(s.score * 100)}%;background:${s.ok ? 'var(--good)' : 'var(--flag)'}"></span></div>
+      ? `<div class="pw-bar"><span style="width:${Math.round(s.score * 100)}%;background:${s.ok ? 'var(--ink)' : 'var(--flag)'}"></span></div>
          <span class="small ${s.ok ? 'muted' : ''}">${escapeHtml(s.label)}</span>` : '';
   };
   form.addEventListener('input', draw);

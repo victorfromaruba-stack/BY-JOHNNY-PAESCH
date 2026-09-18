@@ -20,9 +20,10 @@ async function fontShim(p) {
 export async function open({ width = 1280, height = 900, role = 'admin', scale = 1 } = {}) {
   const b = await chromium.launch();
   const p = await b.newPage({ viewport: { width, height }, deviceScaleFactor: scale });
-  // The real typefaces. This sandbox cannot reach Google Fonts, so headless Chromium would draw
-  // every screenshot in a fallback face and every judgement about type would be about the wrong
-  // font. If the files were saved once (scratchpad/fonts + fonts.css), answer both hosts from disk.
+  // The real typefaces, from disk. Answering both font hosts from the saved bundle
+  // (scratchpad/fonts + fonts.css) keeps every render deterministic and off the network; when a
+  // face is added to index.html, add its @font-face blocks and woff2 files to the bundle first or
+  // every judgement about type will be about a fallback font.
   await fontShim(p);
   const errors = [];
   p.on('pageerror', e => errors.push(String(e.message)));

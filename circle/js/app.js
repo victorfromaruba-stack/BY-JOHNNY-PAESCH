@@ -267,7 +267,7 @@ function mountChrome() {
   bar.innerHTML = `
     <div class="wrap">
       <a class="brand" href="#/" aria-label="${escapeHtml(VOCAB.clubName)} home">
-        <span class="mark" style="color:var(--good)">${starSvg({ size: 22, fill: 'currentColor' })}</span>
+        <span class="mark">${starSvg({ size: 22, fill: 'currentColor' })}</span>
         <span><b>${escapeHtml(VOCAB.wordmark)}</b><br><small>${escapeHtml(VOCAB.subtitle)}</small></span>
       </a>
       <nav class="tabs" id="tabs" aria-label="Sections"></nav>
@@ -331,7 +331,7 @@ function updateChrome(current) {
   const jobs = me ? (() => { try { return store.officerWork(); } catch { return []; } })() : [];
   const urgent = jobs.filter(j => j.urgent).length;
   who.innerHTML = me
-    ? `<a class="btn ghost sm" href="#/profile">${escapeHtml(me.name.split(' ')[0])}${
+    ? `<a class="btn quiet sm" href="#/profile">${escapeHtml(me.name.split(' ')[0])}${
         urgent ? `<span class="nav-badge">${urgent > 9 ? '9+' : urgent}</span><span class="sr-only">, ${urgent} thing${urgent === 1 ? '' : 's'} waiting for you</span>` : ''}</a>`
     : `<a class="btn sm" href="#/sign-in">Sign in</a>`;
   document.getElementById('botnav').hidden = !me;
