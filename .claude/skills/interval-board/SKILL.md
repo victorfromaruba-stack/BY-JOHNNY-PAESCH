@@ -87,8 +87,34 @@ Four consequences, each of which was a real bug:
    as nightly, US$633.46 goes up at seven times the real price. The arithmetic checks three ways:
    633.46/7 = 90.49 against the header's own "from US$90.50"; 1,008.01/7 = 144.00; 1,172.54/7 = 167.51.
 3. **The header's price is not the row's.** Only money *after* a row's dates belongs to it.
-4. **Occupancy and kitchen are ICONS.** `innerText` will not contain them, so `unit` and `sleeps`
-   are usually blank on a real Interval page. That is correct, not a miss.
+4. **Occupancy and kitchen are ICONS**, and their digits are drawn inside the image, so
+   `innerText` will not contain them: `unit` and `sleeps` come back blank from a paste or a Grab.
+   That is correct, not a miss — but it is not the whole story, because a person looking at the
+   page CAN read them, and they carry the four facts that name the unit.
+
+### Reading the blue icons
+
+Victor had to explain this after a round was wasted saying the icons were unreadable. They are
+readable — three digits in one square, plus an optional kitchen tile beside it:
+
+```
+ 2   4      <- top-left = BEDS,  top-right = SLEEPS
+   0        <- bottom-centre = BEDROOMS, and 0 means a STUDIO
+```
+
+So `2 / 0 / 4` is a studio with two beds beading four; `6 / 2 / 8` is a two-bedroom with six beds
+sleeping eight. The tile next to it is the kitchen: **K** a full kitchen, **LK** a limited one,
+and no tile at all means Interval showed none.
+
+The reading checks itself against the money, which is the reason to trust it: on a real page the
+studio sleeping two is always the cheapest row at that resort and the two-bedroom sleeping eight
+the dearest. If a unit you have read does not sit in that order against its neighbours, you have
+read a digit wrong — go back and look rather than posting it.
+
+Worth holding on to for the catalog as well: Interval, which is the source of the cheapest
+inventory the Circle has, describes a unit with exactly four facts — beds, bedrooms, sleeps,
+kitchen. The Circle's own catalog carries 184 room types across 23 places. The source of truth is
+simpler than our model of it, and that is a hint about which one is wrong.
 
 The host is `vip.intervalworld.com` once signed in. Dates are `Sep 17 2026 - Sep 24 2026` — no
 comma, both years.
