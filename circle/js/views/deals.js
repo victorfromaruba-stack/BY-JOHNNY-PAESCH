@@ -163,7 +163,7 @@ export function dealRow(deal, { store, folio = null, match = null, canEdit = fal
       ${inPlace && !canEdit ? `<span class="go" aria-hidden="true">${icon('chevronRight', { size: 18 })}</span>` : ''}
       ${canEdit ? `<span class="row-acts">
         ${safeUrl(deal.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(deal.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}Go and book it</a>` : ''}
-        ${draft ? `<button class="btn quiet sm" data-act="post-draft">${icon('plus', { size: 15 })}Put it on the board</button>` : `<button class="btn quiet sm" data-act="retire">${icon('x', { size: 15 })}Gone</button>`}</span>` : ''}
+        ${draft ? `<button class="btn ghost sm" data-act="post-draft">${icon('plus', { size: 15 })}Put it on the board</button>` : `<button class="btn ghost sm" data-act="retire">${icon('x', { size: 15 })}Gone</button>`}</span>` : ''}
     </article>`);
   return node;
 }
@@ -203,7 +203,7 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
         <div class="row" style="margin-top:14px">
           <a class="btn" href="${askHrefFor(deal)}">${icon('send', { size: 16 })}Ask Victor</a>
           ${canEdit && safeUrl(deal.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(deal.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}Go and book it</a>` : ''}
-          ${canEdit ? (draft ? `<button class="btn quiet sm" data-act="post-draft">${icon('plus', { size: 15 })}Put it on the board</button>` : `<button class="btn quiet sm" data-act="retire">${icon('x', { size: 15 })}Gone</button>`) : ''}
+          ${canEdit ? (draft ? `<button class="btn ghost sm" data-act="post-draft">${icon('plus', { size: 15 })}Put it on the board</button>` : `<button class="btn ghost sm" data-act="retire">${icon('x', { size: 15 })}Gone</button>`) : ''}
         </div>
       </div>
     </article>`);
@@ -288,8 +288,8 @@ export function dealCard(deal, { store, match = null, canEdit = false, inPlace =
         <div class="row" style="margin-top:14px">
           <a class="btn sm" href="${askHref}">${icon('send', { size: 16 })}Ask for it</a>
           ${canEdit && safeUrl(deal.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(deal.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 16 })}Go and book it</a>` : ''}
-          ${canEdit && draft ? `<button class="btn quiet sm" data-act="post-draft">${icon('plus', { size: 16 })}Put it on the board</button>` : ''}
-          ${canEdit && !draft ? `<button class="btn quiet sm" data-act="retire">${icon('x', { size: 16 })}Gone</button>` : ''}
+          ${canEdit && draft ? `<button class="btn ghost sm" data-act="post-draft">${icon('plus', { size: 16 })}Put it on the board</button>` : ''}
+          ${canEdit && !draft ? `<button class="btn ghost sm" data-act="retire">${icon('x', { size: 16 })}Gone</button>` : ''}
         </div>
       </div>
     </article>`);
@@ -500,7 +500,7 @@ export function watching({ store, go }) {
               ${w.maxPoints ? ` · up to ${escapeHtml(fmtPoints(w.maxPoints))}` : ''}</p>
             ${w.note ? `<p class="small muted" style="margin-top:8px">“${escapeHtml(w.note)}”</p>` : ''}
           </div>
-          <button class="btn quiet sm" data-act="stop">${icon('x', { size: 15 })}Stop</button>
+          <button class="btn ghost sm" data-act="stop">${icon('x', { size: 15 })}Stop</button>
         </div>
         ${hits.length ? `<div class="notice good" style="margin-top:12px"><b>${icon('checkCircle', { size: 16 })} ${hits.length} on the board right now</b>
            <p style="margin-top:8px"><a class="btn sm" href="#/stays">Look at ${hits.length === 1 ? 'it' : 'them'}</a></p></div>`

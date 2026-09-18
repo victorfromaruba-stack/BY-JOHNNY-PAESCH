@@ -76,7 +76,7 @@ export function home({ store, go }) {
           <div id="balbar"></div>
           <div class="row" style="margin-top:12px">
             ${book?.can === false ? '' : `<a class="btn ghost sm" href="#/pay">${icon('arrowUp', { size: 16 })}Send a contribution</a>`}
-            <a class="btn quiet sm" href="#/ledger">${icon('receipt', { size: 16 })}Statement</a>
+            <a class="btn ghost sm" href="#/ledger">${icon('receipt', { size: 16 })}Statement</a>
           </div>
         </div>
         <a class="mini" href="#/card" aria-label="Open your card"><span id="mini-card"></span></a>
@@ -163,7 +163,7 @@ export function home({ store, go }) {
     const others = g.ways.filter(w => !w.mine && w.months < g.months);
     goalPanel.innerHTML = `
       <div class="row-between"><p class="eyebrow">${icon('target')}What you are saving for</p>
-        <button class="btn quiet sm" id="set-goal">${icon('edit', { size: 15 })}Change</button></div>
+        <button class="btn ghost sm" id="set-goal">${icon('edit', { size: 15 })}Change</button></div>
       <h2 style="font-size:1.2rem;margin-top:10px">${escapeHtml(g.stay.name)}</h2>
       <p class="small muted" style="margin-top:4px">${g.isTrip
         ? `A seat · ${g.nights} nights · ${escapeHtml(fmtDay(g.stay.dates.from))}`
@@ -318,7 +318,7 @@ export function home({ store, go }) {
   right.querySelector('#rollcall').replaceChildren(ring({ total: t.expectedThisMonth, filled: t.confirmedThisMonth, size: 76 }));
   const cov = el(`<div class="rule-block"><p class="eyebrow">${icon('shield')}Proof of reserves</p><div id="cov" style="margin-top:12px"></div>
       <p class="small muted" style="margin-top:10px"><a href="#/pool">The whole Pool</a></p></div>`);
-  cov.querySelector('#cov').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, configured: t.accountsConfigured }));
+  cov.querySelector('#cov').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, liabilityUsd: t.liabilityUsd, configured: t.accountsConfigured }));
   right.appendChild(cov);
   // The Voice's note reads as a note: set as a pull quote, in his words, signed.
   if (note) right.appendChild(el(`<div class="rule-block"><p class="eyebrow">${icon('inbox')}From the Voice</p>
@@ -353,7 +353,7 @@ export async function goalSheet({ store }) {
         </div>
         <div id="prev" class="notice"></div>
         <div class="sheet-actions">
-          ${me.goal ? '<button class="btn quiet" data-clear>Stop saving for it</button>' : ''}
+          ${me.goal ? '<button class="btn ghost" data-clear>Stop saving for it</button>' : ''}
           <button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Set it</button></div>`;
       const v = (n) => body.querySelector(`[name=${n}]`);
       const draw = () => {
@@ -412,11 +412,11 @@ export function pay({ store, go }) {
           <div class="stack">
             <div class="copyline"><code>${escapeHtml(s.reserveAccount.bank)}</code></div>
             <div class="copyline"><code>${escapeHtml(s.reserveAccount.holder)}</code></div>
-            <div class="copyline"><code class="num">${escapeHtml(s.reserveAccount.number)}</code><button class="btn quiet sm" data-copy="${escapeHtml(s.reserveAccount.number)}">Copy</button></div>
+            <div class="copyline"><code class="num">${escapeHtml(s.reserveAccount.number)}</code><button class="btn ghost sm" data-copy="${escapeHtml(s.reserveAccount.number)}">Copy</button></div>
           </div>
           <div class="stack">
             <div><p class="eyebrow">${icon('tag')}Put this in the description</p>
-              <div class="copyline" style="margin-top:6px"><code class="num">${escapeHtml(reference)}</code><button class="btn quiet sm" data-copy="${escapeHtml(reference)}">Copy</button></div></div>
+              <div class="copyline" style="margin-top:6px"><code class="num">${escapeHtml(reference)}</code><button class="btn ghost sm" data-copy="${escapeHtml(reference)}">Copy</button></div></div>
             <p class="small muted">It is how Vishnu matches your transfer against the statement in seconds. Same reference every month, with the month on the end.</p>
           </div>
         </div>`;
@@ -537,8 +537,8 @@ export function ledger({ store, params }) {
 
       <div class="panel" style="margin-top:20px">
         <div class="row-between"><h2 style="font-size:1.1rem">Contributions</h2></div>
-        <div class="tablewrap" style="margin-top:12px;border:0">
-          <table><thead><tr><th>Month</th><th>Sent</th><th>Received</th><th>Split</th><th class="num">Points</th><th>State</th></tr></thead>
+        <div class="tablewrap" style="margin-top:12px">
+          <table class="bands"><thead><tr><th>Month</th><th>Sent</th><th>Received</th><th class="num">Points</th><th>State</th></tr></thead>
           <tbody id="contrib-rows"></tbody></table>
         </div>
       </div>
@@ -552,14 +552,13 @@ export function ledger({ store, params }) {
 
   const contribs = store.contributionsFor(me.id).filter(c => !month || c.forMonth === month || (c.extra && (c.reviewedAt || '').slice(0, 7) === month));
   wrap.querySelector('#contrib-rows').innerHTML = contribs.map(c => `<tr>
-      <td>${c.extra ? 'Extra' : escapeHtml(fmtMonth(c.forMonth))}<br><span class="small muted num">${escapeHtml(c.reference || (c.extra ? c.note || 'handed over' : '—'))}</span></td>
-      <td class="num">${escapeHtml(fmtUsd2(c.expectedUsd))}</td>
-      <td class="num">${c.receivedUsd == null ? '—' : escapeHtml(fmtUsd2(c.receivedUsd))}</td>
-      <td style="min-width:150px">${c.status === 'confirmed' ? `<div class="split drawn" style="--cut:100%"><i style="width:100%"></i></div><span class="small muted num">${escapeHtml(fmtUsd2(c.backingUsd))} to the Reserve</span>` : '<span class="small muted">—</span>'}</td>
-      <td class="num">${c.points == null ? '—' : escapeHtml(fmtPoints(c.points))}</td>
+      <td>${c.extra ? 'Extra' : escapeHtml(fmtMonth(c.forMonth))}<br><span class="small muted num">${escapeHtml(c.reference || (c.extra ? c.note || 'handed over' : '—'))}</span>${c.status === 'confirmed' ? `<br><span class="small muted">${escapeHtml(fmtUsd2(c.backingUsd))} to the Reserve</span>` : ''}</td>
+      <td class="num" data-k="Sent">${escapeHtml(fmtUsd2(c.expectedUsd))}</td>
+      <td class="num" data-k="Received">${c.receivedUsd == null ? '—' : escapeHtml(fmtUsd2(c.receivedUsd))}</td>
+      <td class="num" data-k="Points">${c.points == null ? '—' : escapeHtml(fmtPoints(c.points))}</td>
       <td>${chip(c.status === 'rejected' ? 'rejected' : c.status)}${c.reason ? `<br><span class="small muted">${escapeHtml(c.reason)}</span>` : ''}
         ${c.reviewedAt && c.status === 'confirmed' ? `<br><span class="small muted">by ${escapeHtml(store.member(c.reviewedBy)?.name.split(' ')[0] || 'the Banker')} · ${escapeHtml(fmtDayTime(c.reviewedAt))}</span>` : ''}</td>
-    </tr>`).join('') || '<tr><td colspan="6" class="muted small">Nothing yet.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="5" class="muted small">Nothing yet.</td></tr>';
 
   let running = 0;
   const ordered = [...rows].reverse();

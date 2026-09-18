@@ -35,8 +35,13 @@ export function bank({ store, go }) {
       <div class="grid g4" style="margin-top:20px">
         <div class="stat"><span class="k">Waiting for you</span><b class="num">${pending.length}</b><span class="sub">${escapeHtml(fmtUsd2(t.pendingUsd))} marked as sent</span></div>
         <div class="stat"><span class="k">Confirmed this month</span><b class="num">${t.confirmedThisMonth} / ${t.expectedThisMonth}</b><span class="sub">${escapeHtml(fmtMonth(month))}</span></div>
-        <div class="stat"><span class="k">Reserve</span><b class="num">${escapeHtml(fmtUsd2(t.reserveUsd))}</b><span class="sub">backs ${escapeHtml(fmtPoints(t.outstandingPoints))}</span></div>
-        <div class="stat"><span class="k">Coverage</span><b class="num">${escapeHtml(fmtPct(t.coverage))}</b><span class="sub">${t.verified ? `verified ${escapeHtml(fmtDay(t.verified.at))}` : 'not yet verified'}</span></div>
+        <div class="stat"><span class="k">Reserve</span><b class="num">${escapeHtml(fmtUsd2(t.reserveUsd))}</b><span class="sub">by the ledger · backs ${escapeHtml(fmtPoints(t.outstandingPoints))}</span></div>
+        <!-- "Verified" was doing a lot of work it had not earned: t.coverage is the ledger over its
+             own liability, so the word described arithmetic, not a bank statement. Say what the
+             bank actually said, and on what date — this now agrees with the gauge word for word. -->
+        <div class="stat"><span class="k">Coverage</span><b class="num">${escapeHtml(fmtPct(t.liabilityUsd && t.verified ? (t.reserveUsd + (t.verifiedVarianceUsd || 0)) / t.liabilityUsd : t.coverage))}</b><span class="sub">${t.verified
+          ? `bank said ${escapeHtml(fmtUsd2(t.verified.balanceUsd))} on ${escapeHtml(fmtDay(t.verified.at))}${Math.abs(t.verifiedVarianceUsd || 0) < 0.005 ? ' — the ledger agreed' : ` · ${escapeHtml(fmtUsd2(Math.abs(t.verifiedVarianceUsd)))} ${t.verifiedVarianceUsd > 0 ? 'more' : 'less'} than the ledger expected`}`
+          : 'from the ledger — never checked against the bank'}</span></div>
       </div>
       ${pending.length ? `<div class="row" style="margin-top:18px" id="bulk">
         <button class="btn sm" id="confirm-all">Confirm all ${pending.length}</button>
@@ -59,13 +64,13 @@ export function bank({ store, go }) {
             ${avatar(m, 40)}
             <div><b>${escapeHtml(m.name)}</b> · ${escapeHtml(tierName(m.monthlyUsd))}
               <br><span class="small muted">${c.extra ? 'Extra, not a monthly' : escapeHtml(fmtMonth(c.forMonth))} · sent ${escapeHtml(fmtDay(c.submittedAt))} · ${escapeHtml(c.bank || c.method || 'bank transfer')}${c.recordedBy ? ' · entered by the Banker' : ''}</span>
-              ${(c.proofName || c.proofPath || c.proofDataUrl) ? `<br><button class="btn quiet sm" data-proof="${escapeHtml(c.id)}" style="padding-inline:0">${icon('eye', { size: 14 })}See the screenshot</button>` : ''}</div>
+              ${(c.proofName || c.proofPath || c.proofDataUrl) ? `<br><button class="btn ghost sm" data-proof="${escapeHtml(c.id)}" style="padding-inline:0">${icon('eye', { size: 14 })}See the screenshot</button>` : ''}</div>
           </div>
           <div style="text-align:right"><b class="num" style="font-size:1.2rem">${escapeHtml(fmtUsd2(c.expectedUsd))}</b>
             <br><span class="small muted num">${escapeHtml(fmtAfl2(c.expectedUsd, s.awgPerUsd))}</span></div>
         </div>
         <div class="copyline" style="margin-top:12px"><code class="num">${escapeHtml(c.reference || 'no reference given')}</code>
-          <button class="btn quiet sm" data-copy="${escapeHtml(c.reference || '')}">Copy</button></div>
+          <button class="btn ghost sm" data-copy="${escapeHtml(c.reference || '')}">Copy</button></div>
         ${c.note ? `<p class="small muted" style="margin-top:10px">“${escapeHtml(c.note)}”</p>` : ''}
         <div class="row" style="margin-top:14px">
           <button class="btn good" data-act="confirm">${icon('check', { size: 16 })}Confirm ${escapeHtml(fmtUsd2(c.expectedUsd))}</button>
@@ -336,18 +341,20 @@ export function desk({ store, go }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <p class="eyebrow">${icon('clipboard')}Victor and Ian</p>
       <h1>The Desk</h1>
-      <div class="row no-print" style="margin-top:16px" role="tablist" id="tabs">
-        <button class="btn sm" data-tab="requests" aria-pressed="true">Requests${open.length ? ` · ${open.length}` : ''}</button>
-        <button class="btn quiet sm" data-tab="wanted" aria-pressed="false">${icon('bell', { size: 15 })}Wanted${store.watches().length ? ` · ${store.watches().length}` : ''}</button>
-        <button class="btn quiet sm" data-tab="deals" aria-pressed="false">${icon('zap', { size: 15 })}Deals${store.liveDeals().length ? ` · ${store.liveDeals().length}` : ''}</button>
-        <button class="btn quiet sm" data-tab="catalog" aria-pressed="false">Stays, cruises &amp; trips</button>
-        <button class="btn quiet sm" data-tab="notes" aria-pressed="false">Notes</button>
+      <!-- One control with a thumb, not five buttons that happen to sit in a row: the same
+           segmented component /settings uses, so the Desk and Settings agree. -->
+      <div class="segmented no-print" role="group" aria-label="Desk sections" id="tabs">
+        <button type="button" data-tab="requests" aria-pressed="true">Requests${open.length ? ` · ${open.length}` : ''}</button>
+        <button type="button" data-tab="wanted" aria-pressed="false">${icon('bell', { size: 15 })}Wanted${store.watches().length ? ` · ${store.watches().length}` : ''}</button>
+        <button type="button" data-tab="deals" aria-pressed="false">${icon('zap', { size: 15 })}Deals${store.liveDeals().length ? ` · ${store.liveDeals().length}` : ''}</button>
+        <button type="button" data-tab="catalog" aria-pressed="false">Stays, cruises &amp; trips</button>
+        <button type="button" data-tab="notes" aria-pressed="false">Notes</button>
       </div>
       <div id="panel" style="margin-top:18px"></div>
     </div></section></div>`);
   const panel = wrap.querySelector('#panel');
   let tab = DESK_TAB;
-  wrap.querySelectorAll('#tabs [data-tab]').forEach(x => { const on = x.dataset.tab === tab; x.setAttribute('aria-pressed', String(on)); x.className = `btn ${on ? '' : 'quiet '}sm`; });
+  wrap.querySelectorAll('#tabs [data-tab]').forEach(x => { const on = x.dataset.tab === tab; x.setAttribute('aria-pressed', String(on)); });
 
   /** What the Circle has asked to be told about — this is the shopping list. */
   const drawWanted = () => {
@@ -439,7 +446,7 @@ export function desk({ store, go }) {
           alert to switch on — the only way to know what is open is for somebody to look. So the reminder comes to you instead:
           four a day at 08:00, 12:00, 16:30 and 20:30, each one a tap away from a current board. Open it once and your phone keeps it.</p>
         <div class="copyline" style="margin-top:12px"><code style="font-size:.78rem">${escapeHtml(GRAB.slice(0, 54))}…</code>
-          <button class="btn quiet sm" data-copy="${escapeHtml(GRAB)}">Copy</button></div>
+          <button class="btn ghost sm" data-copy="${escapeHtml(GRAB)}">Copy</button></div>
         <p class="small muted" style="margin-top:10px">To install it: save any page as a bookmark, edit the bookmark, and paste this over its address.
           The first tap asks for the Desk’s ingest token — the one you were given. It is kept in that browser
           and nowhere else, so it is not in the bookmark and not in this app.</p>
@@ -459,7 +466,7 @@ export function desk({ store, go }) {
             </div>
             <div class="row" style="flex:none">
               ${safeUrl(d.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(d.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}</a>` : ''}
-              <button class="btn quiet sm" data-retire="${escapeHtml(d.id)}">${icon('x', { size: 15 })}Gone</button>
+              <button class="btn ghost sm" data-retire="${escapeHtml(d.id)}">${icon('x', { size: 15 })}Gone</button>
             </div>
           </div></div>`;
       }).join('')}</div>`
@@ -527,7 +534,7 @@ export function desk({ store, go }) {
             ? `<td class="num">${escapeHtml(fmtPoints(seatPoints(st, s)))} a ${st.cruise ? 'cabin' : 'seat'}</td>`
             : `<td class="num">${escapeHtml(fmtPoints(fromPoints(st, s)))}</td>`}
           <td>${st.active ? chip('confirmed', 'Live') : chip('cancelled', 'Draft')}</td>
-          <td><button class="btn quiet sm" data-edit="${st.id}">Edit</button></td></tr>`).join('')}</tbody>
+          <td><button class="btn ghost sm" data-edit="${st.id}">Edit</button></td></tr>`).join('')}</tbody>
       </table></div>
       <p class="small muted" style="margin-top:12px">The cheapest night of the year at each place — open one to set all three of its rates. Members see the points; you edit the dollars.</p>
     </div>`));
@@ -550,7 +557,7 @@ export function desk({ store, go }) {
       <div class="panel"><h2 style="font-size:1.1rem">Published</h2>
         <ul class="ledger" style="margin-top:10px">${notes.map(n => `<li><span class="what"><b>${escapeHtml(n.title)}</b>
           <span class="meta">${escapeHtml(store.member(n.authorId)?.name.split(' ')[0] || '')} · ${escapeHtml(fmtDay(n.at))}${n.pinned ? ' · pinned' : ''}</span></span>
-          <span class="delta"><button class="btn quiet sm" data-del="${n.id}">Delete</button></span></li>`).join('')}</ul></div>
+          <span class="delta"><button class="btn ghost sm" data-del="${n.id}">Delete</button></span></li>`).join('')}</ul></div>
     </div>`));
     const month = monthKey();
     panel.querySelector('#templates').innerHTML = store.expectedMembers(month).slice(0, 6).map(m => `
@@ -617,7 +624,7 @@ export function desk({ store, go }) {
   wrap.querySelector('#tabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-tab]'); if (!b) return;
     tab = b.dataset.tab; DESK_TAB = tab;
-    wrap.querySelectorAll('[data-tab]').forEach(x => { const on = x.dataset.tab === tab; x.setAttribute('aria-pressed', String(on)); x.className = `btn ${on ? '' : 'quiet'} sm`; });
+    wrap.querySelectorAll('[data-tab]').forEach(x => { const on = x.dataset.tab === tab; x.setAttribute('aria-pressed', String(on)); });
     draw();
   });
   return wrap;
@@ -704,7 +711,7 @@ async function editStay(store, stay) {
           : '<span class="small muted">No photograph yet — the card shows a blank plate until there is one.</span>'}</div>
         <div class="row" style="margin-top:8px">
           <label class="btn ghost sm" style="cursor:pointer">${icon('camera', { size: 15 })}Choose a photograph<input type="file" name="photo" accept="image/jpeg,image/png,image/webp" hidden></label>
-          ${stay?.photoUrl ? `<button type="button" class="btn quiet sm" id="photo-remove">${icon('x', { size: 15 })}Take it off</button>` : ''}
+          ${stay?.photoUrl ? `<button type="button" class="btn ghost sm" id="photo-remove">${icon('x', { size: 15 })}Take it off</button>` : ''}
         </div>
         <label class="field" style="margin-top:10px"><span>Where it came from</span>
           <input name="photoNote" value="${escapeHtml(stay?.photoNote || '')}" placeholder="Our own photo, March 2026 · the resort's media kit, with their OK">
@@ -829,7 +836,7 @@ export async function roomPhotosSheet(store, stay, { rooms = [] } = {}) {
       const own = roomPhotosFor(current, null);
       body.innerHTML = `
         <p class="small muted">Only photographs the Circle may use: ones you took, or the resort's media kit with their OK. Not pictures copied off their website — those are the hotel's copyright, and the Circle does not take what it has not been given. Members see the note under each picture.</p>
-        ${own.length ? `<ul class="photo-rows" style="margin-top:14px">${own.map(ph => `<li><img src="${escapeHtml(ph.thumb)}" alt=""><span class="what"><b>${escapeHtml(ph.room || 'The property')}</b><span class="meta">${escapeHtml(ph.note)}${ph.seenOn ? ` · ${escapeHtml(fmtDay(ph.seenOn))}` : ''}</span></span><button type="button" class="btn quiet sm" data-remove="${escapeHtml(ph.id)}">${icon('x', { size: 14 })}Take off</button></li>`).join('')}</ul>`
+        ${own.length ? `<ul class="photo-rows" style="margin-top:14px">${own.map(ph => `<li><img src="${escapeHtml(ph.thumb)}" alt=""><span class="what"><b>${escapeHtml(ph.room || 'The property')}</b><span class="meta">${escapeHtml(ph.note)}${ph.seenOn ? ` · ${escapeHtml(fmtDay(ph.seenOn))}` : ''}</span></span><button type="button" class="btn ghost sm" data-remove="${escapeHtml(ph.id)}">${icon('x', { size: 14 })}Take off</button></li>`).join('')}</ul>`
           : '<p class="small muted" style="margin-top:12px">Nothing of ours on file for this place yet.</p>'}
         <div class="grid g2" style="margin-top:16px">
           <label class="field"><span>Which room</span>
@@ -914,12 +921,12 @@ export function pool({ store }) {
       </div>
 
       <div class="panel" style="margin-top:20px">
-        <div class="row-between"><h2 style="font-size:1.1rem">Confirmed each month</h2><button class="btn quiet sm" id="toggle-table">Show the numbers</button></div>
+        <div class="row-between"><h2 style="font-size:1.1rem">Confirmed each month</h2><button class="btn ghost sm" id="toggle-table">Show the numbers</button></div>
         <div id="chart" style="margin-top:14px"></div>
         <div id="table" hidden style="margin-top:14px"></div>
       </div>
     </div></section></div>`);
-  wrap.querySelector('#gauge').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, configured: t.accountsConfigured, size: 'full' }));
+  wrap.querySelector('#gauge').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, liabilityUsd: t.liabilityUsd, configured: t.accountsConfigured, size: 'full' }));
   const data = series.map(m => ({ label: fmtMonth(m.month).slice(0, 3), values: [m.backing, m.share] }));
   wrap.querySelector('#chart').appendChild(columns(data, { series: ['Into the Reserve', 'The Circle’s share'], height: 200, unit: '', ariaLabel: 'Money confirmed each month, split between the Reserve and the Circle’s share' }));
   const table = tableFor(series, [
@@ -945,11 +952,11 @@ export function circle({ store }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <p class="eyebrow">${roster.length} Insiders · capped at ${s.memberCap} · ${s.memberCap - roster.length} seats open</p>
       <h1>The Circle</h1>
-      <div class="row no-print" style="margin-top:16px" role="tablist" id="tabs">
-        <button class="btn sm" data-tab="people" aria-pressed="true">Insiders</button>
-        <button class="btn quiet sm" data-tab="chipin" aria-pressed="false">Chip in${store.openToChipIn().length ? ` · ${store.openToChipIn().length}` : ''}</button>
-        <button class="btn quiet sm" data-tab="notes" aria-pressed="false">Notes from Ian</button>
-        <button class="btn quiet sm" data-tab="milestones" aria-pressed="false">Milestones</button>
+      <div class="segmented no-print" role="group" aria-label="Circle sections" id="tabs">
+        <button type="button" data-tab="people" aria-pressed="true">Insiders</button>
+        <button type="button" data-tab="chipin" aria-pressed="false">Chip in${store.openToChipIn().length ? ` · ${store.openToChipIn().length}` : ''}</button>
+        <button type="button" data-tab="notes" aria-pressed="false">Notes from Ian</button>
+        <button type="button" data-tab="milestones" aria-pressed="false">Milestones</button>
       </div>
       <div id="panel" style="margin-top:18px"></div>
     </div></section></div>`);
@@ -1008,7 +1015,7 @@ export function circle({ store }) {
           <div class="row-between"><h2 style="font-size:1.1rem">${escapeHtml(n.title)}</h2>${n.pinned ? '<span class="tag">Pinned</span>' : ''}</div>
           <p class="small muted" style="margin-top:6px">${escapeHtml(store.member(n.authorId)?.name || '')} · ${escapeHtml(fmtDay(n.at))}</p>
           <p style="margin-top:12px;max-width:70ch">${escapeHtml(n.body)}</p>
-          <div class="row" style="margin-top:12px"><button class="btn quiet sm" data-copy="${escapeHtml(n.body)}">Copy for WhatsApp</button></div>
+          <div class="row" style="margin-top:12px"><button class="btn ghost sm" data-copy="${escapeHtml(n.body)}">Copy for WhatsApp</button></div>
         </div>`).join('')}</div>`));
       panel.addEventListener('click', async (e) => {
         const c = e.target.closest('[data-copy]'); if (!c) return;
@@ -1033,7 +1040,7 @@ export function circle({ store }) {
   wrap.querySelector('#tabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-tab]'); if (!b) return;
     tab = b.dataset.tab;
-    wrap.querySelectorAll('[data-tab]').forEach(x => { const on = x.dataset.tab === tab; x.setAttribute('aria-pressed', String(on)); x.className = `btn ${on ? '' : 'quiet'} sm`; });
+    wrap.querySelectorAll('[data-tab]').forEach(x => { const on = x.dataset.tab === tab; x.setAttribute('aria-pressed', String(on)); });
     draw();
   });
   return wrap;
@@ -1166,7 +1173,7 @@ export function settings({ store, go }) {
         <div class="row" style="margin-top:12px">
           <button class="btn ghost sm" id="backup">${icon('download', { size: 15 })}Back up everything</button>
           ${store.mode === 'supabase' ? '' : `<button class="btn ghost sm" id="restore">Restore from a backup</button>
-          <button class="btn quiet sm" id="reset">Reset the preview</button>`}
+          <button class="btn ghost sm" id="reset">Reset the preview</button>`}
         </div>
         ${store.mode === 'supabase' ? `<p class="tiny muted" style="margin-top:8px">The backup is a record you can keep and read, not a restore point — putting data back is a job for Supabase, where the ledger's own history lives.</p>` : ''}
         <ul class="ledger" style="margin-top:14px">${store.audit(25).map(a => `<li>

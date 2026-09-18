@@ -149,16 +149,25 @@ export function quoteBar({ basePoints, servicePoints, settings, showLegend = tru
  * The Pool gauge — proof of reserves. A bowl silhouette filled to the coverage
  * level, with the live mono pair beside it (the gauge confirms; the figures inform).
  */
-export function poolGauge({ coverage = 1, reserveUsd = 0, outstandingPoints = 0, verifiedAt = null, verifiedVarianceUsd = null, configured = true, size = 'chip' }) {
+export function poolGauge({ coverage = 1, reserveUsd = 0, outstandingPoints = 0, verifiedAt = null, verifiedVarianceUsd = null, liabilityUsd = null, configured = true, size = 'chip' }) {
   const w = size === 'full' ? 220 : 132, h = size === 'full' ? 76 : 44;
-  const level = configured ? Math.max(0, Math.min(coverage, 1.06)) : 0;
+  // `coverage` off the store is reserveExpectedUsd / liabilityUsd — the ledger divided by its own
+  // liability. That is a real fact about the ledger's internal consistency, but it is NOT proof
+  // that the money is in the account, and this gauge is the club's proof of reserves. The only
+  // externally checked number in the object is the variance the Banker recorded against the bank
+  // statement. So when a check exists, lead with what the BANK said and name the date; the
+  // ledger's own figure drops to the line underneath, where it belongs.
+  const bankUsd = verifiedAt && verifiedVarianceUsd !== null ? reserveUsd + verifiedVarianceUsd : null;
+  const bankCoverage = bankUsd !== null && liabilityUsd ? bankUsd / liabilityUsd : null;
+  const shown = bankCoverage === null ? coverage : bankCoverage;
+  const level = configured ? Math.max(0, Math.min(shown, 1.06)) : 0;
   const bowlTop = 8, bowlBottom = h - 8;
   const waterY = bowlBottom - (bowlBottom - bowlTop) * level;
   const el = document.createElement('div');
   el.className = 'gauge';
   el.innerHTML = `
     <svg width="${w * 0.42}" height="${h}" viewBox="0 0 ${w * 0.42} ${h}" role="img"
-         aria-label="${configured ? `Coverage ${fmtPct(coverage)}` : 'Coverage not yet verifiable'}">
+         aria-label="${configured ? `Coverage ${fmtPct(shown)}${bankUsd === null ? ', from the ledger, not yet checked against the bank' : ', checked against the bank'}` : 'Coverage not yet verifiable'}">
       <defs><clipPath id="bowl-${size}"><path d="M4 ${bowlTop} L${w * 0.42 * 0.22} ${bowlBottom} H${w * 0.42 - w * 0.42 * 0.22} L${w * 0.42 - 4} ${bowlTop} Z"/></clipPath></defs>
       <rect class="water" x="0" y="${waterY}" width="${w * 0.42}" height="${bowlBottom - waterY + 2}" fill="var(--good)" clip-path="url(#bowl-${size})" opacity=".9"/>
       <path d="M4 ${bowlTop} L${w * 0.42 * 0.22} ${bowlBottom} H${w * 0.42 - w * 0.42 * 0.22} L${w * 0.42 - 4} ${bowlTop}" fill="none" stroke="var(--ink)" stroke-width="1.25" stroke-linejoin="round"/>
@@ -166,12 +175,15 @@ export function poolGauge({ coverage = 1, reserveUsd = 0, outstandingPoints = 0,
     </svg>
     <div class="g-read">
       ${configured
-        ? `<b>Coverage ${escapeHtml(fmtPct(coverage))}</b>
-           <span>Reserve ${escapeHtml(fmtUsd2(reserveUsd))} · backs ${escapeHtml(fmtPoints(outstandingPoints))}</span>
-           <span>${verifiedAt
-             ? `checked against the bank ${escapeHtml(new Date(verifiedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))}${
-                 verifiedVarianceUsd === null ? '' : Math.abs(verifiedVarianceUsd) < 0.005 ? ' · matched to the cent' : ` · ${escapeHtml(fmtUsd2(Math.abs(verifiedVarianceUsd)))} ${verifiedVarianceUsd > 0 ? 'more' : 'less'} in the account`}`
-             : 'not yet checked against the bank'}</span>`
+        ? `<b>Coverage ${escapeHtml(fmtPct(shown))}${bankCoverage === null ? '' : ''}</b>
+           <span>${bankUsd === null
+             ? `Reserve ${escapeHtml(fmtUsd2(reserveUsd))} by the ledger · backs ${escapeHtml(fmtPoints(outstandingPoints))}`
+             : `${escapeHtml(fmtUsd2(bankUsd))} in the account on ${escapeHtml(new Date(verifiedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))} · owes ${escapeHtml(fmtPoints(outstandingPoints))}`}</span>
+           <span>${bankUsd === null
+             ? 'from the ledger — not yet checked against the bank'
+             : Math.abs(verifiedVarianceUsd) < 0.005
+               ? `the ledger expected the same, to the cent`
+               : `the ledger expected ${escapeHtml(fmtUsd2(reserveUsd))} — ${escapeHtml(fmtUsd2(Math.abs(verifiedVarianceUsd)))} ${verifiedVarianceUsd > 0 ? 'more' : 'less'} was there`}</span>`
         : `<b>Coverage: not yet verifiable</b><span>The Banker has not registered separate Reserve and Operating accounts.</span>`}
     </div>`;
   return el;

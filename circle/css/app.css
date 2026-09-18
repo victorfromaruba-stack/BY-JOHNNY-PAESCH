@@ -111,6 +111,7 @@ main:focus { outline: none; }
 .btn svg { width: 17px; height: 17px; flex: none; }
 .btn.ghost { background: transparent; color: var(--ink); border-color: var(--hairline); }
 @media (hover: hover) { .btn.ghost:hover { background: var(--raised); } }
+.btn.ghost:active, .btn.quiet:active { background: var(--well); }
 .btn.quiet { background: transparent; color: var(--ink-2); border-color: transparent; padding-inline: 10px; }
 @media (hover: hover) { .btn.quiet:hover { color: var(--ink); background: var(--raised); } }
 .btn.good { background: var(--good); color: var(--on-good); }
@@ -849,10 +850,13 @@ button.badge-card:hover { border-color: var(--ink-3); }
   background: transparent; color: var(--ink-2); border-radius: 999px; white-space: nowrap;
   font: 500 .84rem/1 var(--font-body); letter-spacing: -.005em;
   transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
-.segmented > button:hover { color: var(--ink); }
+@media (hover: hover) { .segmented > button:hover { color: var(--ink); } }
+/* The Desk's labels carry an icon, which the settings tabs did not. */
+.segmented > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.segmented > button svg { width: 15px; height: 15px; flex: none; }
 .segmented > button[aria-pressed="true"] { background: var(--surface); color: var(--ink);
   box-shadow: 0 1px 2px rgba(9, 14, 22, .08), inset 0 0 0 1px var(--hairline); }
-.segmented > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.segmented > button:focus-visible { outline: 2px solid var(--good); outline-offset: 1px; }
 /* Full width on a phone, where an even row of four reads as one control and there is no room
    to spare. On a desktop it hugs its labels instead: stretched across 1,060px the four tabs
    read as four separate links with a stray border around them. */

@@ -167,15 +167,15 @@ export function crewDetail({ store, params, go, refresh }) {
           ${c.about ? `<p class="lede" style="margin-top:6px">${escapeHtml(c.about)}</p>` : ''}
         </div>
         <div class="row" style="gap:8px;flex:none">
-          ${lead ? `<button class="btn quiet sm" id="rename">${icon('edit', { size: 15 })}Rename</button>` : ''}
-          <button class="btn quiet sm" id="leave">Leave</button>
+          ${lead ? `<button class="btn ghost sm" id="rename">${icon('edit', { size: 15 })}Rename</button>` : ''}
+          <button class="btn ghost sm" id="leave">Leave</button>
         </div>
       </div>
 
       <div class="panel" style="margin-top:18px">
         <div class="row-between">
           <p class="eyebrow">${icon('users')}Who is in it</p>
-          ${lead ? `<button class="btn quiet sm" id="add">${icon('plus', { size: 15 })}Add someone</button>` : ''}
+          ${lead ? `<button class="btn ghost sm" id="add">${icon('plus', { size: 15 })}Add someone</button>` : ''}
         </div>
         <ul class="roster" id="roster" style="margin-top:12px"></ul>
       </div>
@@ -201,7 +201,7 @@ export function crewDetail({ store, params, go, refresh }) {
         <span style="min-width:0"><b>${escapeHtml(m.member.name)}</b>${m.memberId === me.id ? ' <span class="tiny muted">(you)</span>' : ''}
           <br><span class="tiny muted">${m.role === 'lead' ? 'Leads the crew' : 'In the crew'} · joined ${escapeHtml(fmtDay(m.joinedAt))}</span></span>
       </span>
-      ${lead && m.memberId !== me.id ? `<button class="btn quiet sm" data-remove="${escapeHtml(m.memberId)}">Remove</button>` : ''}
+      ${lead && m.memberId !== me.id ? `<button class="btn ghost sm" data-remove="${escapeHtml(m.memberId)}">Remove</button>` : ''}
     </li>`);
     rosterEl.appendChild(row);
   }

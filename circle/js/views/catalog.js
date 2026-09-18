@@ -32,7 +32,7 @@ function asOfLine(res, where = 'the places we stay') {
   const time = t ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
   const day = t ? t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
   const eye = icon('eye', { size: 14, cls: 'ico-muted' });
-  if (res.error) return `${eye} This phone could not reach VakayMood just now${res.blocked ? ' — mobile data, or a content blocker' : ''}, so owner weeks are missing here. What the Desk has posted is what you see. <button type="button" class="btn quiet sm" data-act="retry-open" style="margin-left:6px">${icon('refresh', { size: 14 })}Try again</button>`;
+  if (res.error) return `${eye} This phone could not reach VakayMood just now${res.blocked ? ' — mobile data, or a content blocker' : ''}, so owner weeks are missing here. What the Desk has posted is what you see. <button type="button" class="btn ghost sm" data-act="retry-open" style="margin-left:6px">${icon('refresh', { size: 14 })}Try again</button>`;
   const n = res.total.toLocaleString('en-US');
   const weeks = `${n} owner week${res.total === 1 ? '' : 's'} open at ${escapeHtml(where)}`;
   return res.fromCopy
@@ -45,7 +45,7 @@ function datelineOf(res) {
   const t = res.generatedAt ? new Date(res.generatedAt) : new Date();
   const time = t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const day = t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  if (res.error) return `Edition of ${escapeHtml(day)} · ${escapeHtml(time)} · what the Desk has posted. This phone could not reach VakayMood${res.blocked ? ' — mobile data, or a content blocker' : ''}, so owner weeks are missing. <button type="button" class="btn quiet sm" data-act="retry-open" style="margin-left:6px">${icon('refresh', { size: 14 })}Try again</button>`;
+  if (res.error) return `Edition of ${escapeHtml(day)} · ${escapeHtml(time)} · what the Desk has posted. This phone could not reach VakayMood${res.blocked ? ' — mobile data, or a content blocker' : ''}, so owner weeks are missing. <button type="button" class="btn ghost sm" data-act="retry-open" style="margin-left:6px">${icon('refresh', { size: 14 })}Try again</button>`;
   const n = res.total.toLocaleString('en-US');
   return `Edition of ${escapeHtml(day)} · <span class="stamp">${escapeHtml(time)}</span> · ${n} owner week${res.total === 1 ? '' : 's'} on VakayMood${res.fromCopy ? ' (the Circle’s copy — this phone could not reach it live)' : ''}${res.failed ? ` · ${res.failed} place${res.failed === 1 ? '' : 's'} did not answer` : ''}`;
 }
@@ -364,7 +364,7 @@ export function stayDetail({ store, params, go, query = {} }) {
         ${r.photos.length ? galleryStrip(r.photos, { room: i }) : ''}
         <div class="room-head"><h3>${escapeHtml(r.name)}</h3>${r.bits.length ? `<span class="meta num">${escapeHtml(r.bits.join(' · '))}</span>` : ''}</div>
         ${r.description ? `<p class="small muted">${escapeHtml(r.description)}</p>` : ''}
-        ${r.unnamed ? '' : `<a class="btn quiet sm" href="#/book/${escapeHtml(stay.id)}?note=${encodeURIComponent(`The ${r.name}, if there is one.`)}">${icon('send', { size: 14 })}Ask for the ${escapeHtml(r.name)}</a>`}
+        ${r.unnamed ? '' : `<a class="btn ghost sm" href="#/book/${escapeHtml(stay.id)}?note=${encodeURIComponent(`The ${r.name}, if there is one.`)}">${icon('send', { size: 14 })}Ask for the ${escapeHtml(r.name)}</a>`}
       </article>`).join('')}
       ${property.length ? `<article class="room" data-room="property">${galleryStrip(property, { room: 'property' })}<div class="room-head"><h3>The property</h3><span class="meta">${property.length} photograph${property.length === 1 ? '' : 's'}</span></div></article>` : ''}
       ${!pics.length ? `<p class="small muted" style="margin-top:10px">No photographs of the rooms yet. ${chain ? `${chain} does not let a program copy its pictures, and the Circle does not take what it has not been given.` : 'The property\u2019s own pictures are its copyright, and the Circle does not take what it has not been given.'}${site ? ` The rooms are on <a href="${escapeHtml(site)}" target="_blank" rel="noopener noreferrer">${escapeHtml(host)} ${icon('external', { size: 13 })}</a>.` : ''}</p>` : ''}
@@ -423,7 +423,7 @@ export function stayDetail({ store, params, go, query = {} }) {
         <h2 style="font-size:1.15rem;margin-top:6px">What ${escapeHtml(stay.name)} publishes about itself</h2></div>
       ${facts.length ? `<ul class="facts" style="margin-top:10px">${facts.map(f => `<li>${f}</li>`).join('')}</ul>` : ''}
       ${allAmen.length ? `<div class="flags" id="amen" style="margin-top:14px">${allAmen.slice(0, SHOW).map(({ a, label }) => `<span class="tag" title="${escapeHtml(label)}">${escapeHtml(a)}</span>`).join('')}
-        ${allAmen.length > SHOW ? `<button type="button" class="btn quiet sm" id="amen-more">All ${allAmen.length} on the list</button>` : ''}</div>` : ''}
+        ${allAmen.length > SHOW ? `<button type="button" class="btn ghost sm" id="amen-more">All ${allAmen.length} on the list</button>` : ''}</div>` : ''}
       ${!facts.length && !allAmen.length ? `<p class="small muted" style="margin-top:8px">Nothing this place publishes in a form we can read yet.</p>` : ''}
       <p class="tiny muted" style="margin-top:12px">Facts and pictures from ${srcLine}. What is not stated there is not stated here.</p>
     </section></details>`;
@@ -994,7 +994,7 @@ export function requestDetail({ store, params, go, refresh }) {
               <span class="meta">${p.owner ? 'their own points' : `chipped in ${escapeHtml(fmtDay(p.at))}`}</span></span>
             <span class="delta"><b>${escapeHtml(fmtPoints(p.points))}</b><small>${escapeHtml(pointsUsd(p.points, s.pointsPerDollar))}</small>
               ${!p.owner && (p.memberId === me.id || store.hasRole('planner', 'admin')) && !['confirmed', 'completed'].includes(r.status)
-                ? `<button class="btn quiet sm" data-unpledge="${escapeHtml(p.memberId)}">Take it back</button>` : ''}</span></li>`;
+                ? `<button class="btn ghost sm" data-unpledge="${escapeHtml(p.memberId)}">Take it back</button>` : ''}</span></li>`;
         }).join('')}
       </ul>
       ${outstanding > 0
@@ -1169,9 +1169,9 @@ function lookBlock(store, r) {
     ${links.length ? `<ul class="stack" style="list-style:none;padding:0;gap:8px">
       ${links.map(l => `<li class="row" style="gap:8px;flex-wrap:wrap"><a class="btn ${l.exact ? '' : 'ghost'} sm" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}${escapeHtml(l.label)}</a>
         ${may ? `<button type="button" class="btn ghost sm" data-look="showing" data-url="${escapeHtml(l.url)}" data-label="${escapeHtml(l.label)}">It is there</button>
-        <button type="button" class="btn quiet sm" data-look="gone" data-url="${escapeHtml(l.url)}" data-label="${escapeHtml(l.label)}">It is gone</button>` : ''}</li>`).join('')}
+        <button type="button" class="btn ghost sm" data-look="gone" data-url="${escapeHtml(l.url)}" data-label="${escapeHtml(l.label)}">It is gone</button>` : ''}</li>`).join('')}
     </ul>` : '<p class="small muted">No link on file for this one.</p>'}
-    ${may ? '<p class="small" style="margin-top:8px"><button type="button" class="btn quiet sm" data-look="phone">I rang them instead</button></p>' : ''}
+    ${may ? '<p class="small" style="margin-top:8px"><button type="button" class="btn ghost sm" data-look="phone">I rang them instead</button></p>' : ''}
     ${gated ? `<p class="tiny look-line" style="margin-top:6px${seen ? '' : ';color:var(--flag)'}">${seen
       ? `Last look: ${escapeHtml(store.member(seen.lookedBy)?.name.split(' ')[0] || 'someone')} ${seen.found === 'showing' ? 'saw it open' : seen.found === 'booked' ? 'booked it' : `found it ${escapeHtml(seen.found)}`} · ${escapeHtml(fmtDayTime(seen.lookedAt))}`
       : `Nobody has looked at these nights${r.status === 'held' ? ' since they said yes' : ''}${may ? ' — open it and say what you saw first.' : ' — Victor or Ian looks before it can be booked.'}`}</p>` : ''}
