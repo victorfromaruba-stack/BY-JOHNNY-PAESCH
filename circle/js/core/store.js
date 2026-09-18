@@ -3,7 +3,7 @@
 //   SupabaseStore          – same API; every rule runs server-side (supabase/schema.sql).
 // Business rules live here so the demo and the real club produce identical numbers.
 
-import { uid, nowIso, sum, monthKey, fmtMonth, nightsBetween, safeUrl } from './util.js';
+import { uid, nowIso, sum, monthKey, fmtMonth, nightsBetween, safeUrl, arubaDate } from './util.js';
 import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, fromPoints, seatPoints, pointsPerMonth, hotelOwedUsd } from './money.js';
 import { initialsOf, refFor } from './vocab.js';
 import { standingFrom, rankFor, RANKS, effectiveTier } from './standing.js';
@@ -378,13 +378,15 @@ export class Store {
     await this.commit('crews');
     return c;
   }
-  async sendCrewMessage(crewId, body) {
+  async sendCrewMessage(crewId, body, { momentId = null } = {}) {
     const me = this.me; if (!me) throw new Error('Sign in first');
     if (!this.isInCrew(crewId, me.id)) throw new Error('You are not in that crew');
     const text = String(body || '').trim();
-    if (!text) throw new Error('Say something first');
+    // A postcard dropped into the thread needs no words, and must be one the sender can read.
+    if (!text && !momentId) throw new Error('Say something first');
+    if (momentId && !this.moment(momentId)) throw new Error('That postcard is gone');
     if (text.length > 4000) throw new Error('That is too long for one message');
-    const m = { id: uid('msg'), crewId, memberId: me.id, body: text, momentId: null,
+    const m = { id: uid('msg'), crewId, memberId: me.id, body: text || null, momentId: momentId || null,
       createdAt: nowIso(), editedAt: null, deletedAt: null };
     (this.state.crewMessages ||= []).push(m);
     await this.commit('crewMessages');
@@ -400,6 +402,139 @@ export class Store {
     await this.commit('crewMessages');
     return m;
   }
+
+  // ---------- postcards ----------
+  // A photograph taken on the moment, sent to the whole Circle or to one crew. The row keeps the
+  // picture's facts — who, when it was sent, what the phone said about when it was taken — and,
+  // only when the sender names one of their own approved bookings, the place: worked out here
+  // exactly as the server's moments_place() trigger works it out, so both backends print the same
+  // 'DAY 2 OF 4' and neither ever prints a place the Desk did not book.
+  postcardsOn() { return !!this.settings.momentsOn; }
+  /** The preview keeps pictures in localStorage, so it keeps them smaller. */
+  postcardEncoding() { return { max: 1200, quality: 0.8 }; }
+  _approvedStays(memberId) {
+    return this.state.redemptions.filter(r => r.memberId === memberId && ['held', 'confirmed', 'completed'].includes(r.status) && r.checkIn && r.checkOut);
+  }
+  /** Day N of M for a booking on the Aruba date of `at`, or null when that date is outside it. */
+  _stayWindow(r, at) {
+    const d = arubaDate(at); const from = String(r.checkIn).slice(0, 10), to = String(r.checkOut).slice(0, 10);
+    if (d < from || d > to) return null;
+    const dayNum = (s) => Math.round(Date.parse(`${s}T00:00:00Z`) / 86400000);
+    return { redemption: r, stay: this.stay(r.stayId), day: dayNum(d) - dayNum(from) + 1, days: dayNum(to) - dayNum(from) + 1, ends: to };
+  }
+  /** The member's own booking that today (in Aruba) falls inside, if any. */
+  islandDay(memberId = this.me?.id, at = new Date()) {
+    if (!memberId) return null;
+    for (const r of this._approvedStays(memberId).sort(desc('checkIn'))) { const w = this._stayWindow(r, at); if (w) return w; }
+    return null;
+  }
+  /** The member's own bookings a photograph taken on `takenAt` (or now) could be from. */
+  placesFor(memberId = this.me?.id, takenAt = null) {
+    if (!memberId) return [];
+    return this._approvedStays(memberId).sort(desc('checkIn')).map(r => this._stayWindow(r, takenAt || new Date())).filter(Boolean);
+  }
+  /** What this member may read: the Circle's, plus the crews they are in. The server's RLS says the same. */
+  momentsReadable(memberId = this.me?.id) {
+    return (this.state.moments || []).filter(m => !m.crewId || this.isInCrew(m.crewId, memberId));
+  }
+  moments({ mine = false } = {}) {
+    const me = this.me; if (!me) return [];
+    return this.momentsReadable(me.id).filter(m => !mine || m.memberId === me.id).sort(desc('createdAt'));
+  }
+  moment(id) { const me = this.me; if (!me) return null; return this.momentsReadable(me.id).find(m => m.id === id) || null; }
+  momentCount() {
+    const rows = this.moments(); const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    return { total: rows.length, thisWeek: rows.filter(m => m.createdAt >= weekAgo).length,
+      insiders: new Set(rows.map(m => m.memberId)).size, firstAt: rows.length ? rows[rows.length - 1].createdAt : null };
+  }
+  /** The preview's pictures are asset paths or data: URLs, which are their own addresses. */
+  async momentUrls(paths) { return new Map((paths || []).map(p => [p, p])); }
+  /** Every rule the server's policies and trigger enforce, in the same words. */
+  _checkPostcard({ me, caption, crewId, redemptionId, takenAt, bytes }) {
+    if (!me) throw new Error('Sign in first');
+    if (!this.postcardsOn()) throw new Error('Postcards are switched off right now');
+    if (String(caption || '').length > 140) throw new Error('Keep it to 140 characters');
+    if (bytes > 8 * 1024 * 1024) throw new Error('That file is bigger than the club’s album allows');
+    if (crewId && !this.isInCrew(crewId, me.id)) throw new Error('You are not in that crew');
+    if (takenAt && new Date(takenAt) > new Date(Date.now() + 5 * 60000)) throw new Error('The phone says that photograph was taken later than now. Check the phone’s clock.');
+    const dayAgo = new Date(Date.now() - 86400000).toISOString();
+    if ((this.state.moments || []).filter(m => m.memberId === me.id && m.createdAt > dayAgo).length >= 20) throw new Error('Twenty in a day is plenty — send the rest tomorrow.');
+    const place = { stayId: null, stayDay: null, stayDays: null, stayEnds: null };
+    if (redemptionId) {
+      const r = this.state.redemptions.find(x => x.id === redemptionId);
+      if (!r || r.memberId !== me.id) throw new Error('That booking is not yours');
+      if (!['held', 'confirmed', 'completed'].includes(r.status)) throw new Error('That room is not approved');
+      const w = this._stayWindow(r, takenAt || new Date());
+      if (!w) throw new Error('That photograph is not from those dates');
+      Object.assign(place, { stayId: r.stayId, stayDay: w.day, stayDays: w.days, stayEnds: w.ends });
+    }
+    return place;
+  }
+  async postMoment({ blob, width, height, bytes, mime = 'image/jpeg', caption = '', crewId = null, redemptionId = null, takenAt = null, takenFrom = 'none' }) {
+    const me = this.me;
+    const place = this._checkPostcard({ me, caption, crewId, redemptionId, takenAt, bytes });
+    const path = await blobToDataUrl(blob);
+    const m = { id: uid('mom'), memberId: me.id, crewId: crewId || null, stayId: null, redemptionId: redemptionId || null, path, kind: 'photo', mime, bytes, width, height,
+      durationS: null, caption: String(caption || '').trim() || null, takenAt: takenAt || null, takenFrom, ...place, createdAt: nowIso() };
+    const rows = (this.state.moments ||= []);
+    // localStorage is the whole album here: the preview keeps the twelve newest member-sent cards.
+    const own = rows.filter(x => !x.example).sort(asc('createdAt'));
+    for (const old of own.slice(0, Math.max(0, own.length - 11))) rows.splice(rows.indexOf(old), 1);
+    rows.push(m);
+    this.log(me.id, 'moment.post', 'moment', m.id, { crewId: m.crewId, stayId: m.stayId, takenFrom });
+    await this.commit('moments');
+    if (this.adapter?.lastError?.name === 'QuotaExceededError') {
+      rows.splice(rows.indexOf(m), 1);
+      await this.commit('moments');
+      throw new Error('This browser’s preview cannot hold another photograph — its storage is full. On the real Circle photographs live on the server, so this only affects the preview.');
+    }
+    return m;
+  }
+  /** 'Take it back': your own, or Victor's as admin. The row and the picture go; a crew thread that showed it keeps a tombstone. */
+  async deleteMoment(id) {
+    const me = this.me; if (!me) throw new Error('Sign in first');
+    const rows = this.state.moments || []; const m = rows.find(x => x.id === id);
+    if (!m) throw new Error('That postcard is already gone');
+    if (m.memberId !== me.id && !this.hasRole('admin')) throw new Error('That is not your postcard');
+    rows.splice(rows.indexOf(m), 1);
+    this.state.momentReactions = (this.state.momentReactions || []).filter(r => r.momentId !== id);
+    this.log(me.id, 'moment.delete', 'moment', id, { of: m.memberId });
+    await this.commit('moments');
+  }
+  /** A crew's postcard may go out to the whole Circle. It never goes the other way. */
+  async setMomentAudience(id, crewId = null) {
+    const me = this.me; if (!me) throw new Error('Sign in first');
+    const m = (this.state.moments || []).find(x => x.id === id);
+    if (!m || m.memberId !== me.id) throw new Error('That is not your postcard');
+    if (crewId !== null) throw new Error('A postcard can only go out to the whole Circle, never back into a crew');
+    m.crewId = null;
+    await this.commit('moments');
+    return m;
+  }
+  async toggleCheer(momentId) {
+    const me = this.me; if (!me) throw new Error('Sign in first');
+    if (!this.postcardsOn()) throw new Error('Postcards are switched off right now');
+    if (!this.moment(momentId)) throw new Error('That postcard is gone');
+    const rows = (this.state.momentReactions ||= []);
+    const i = rows.findIndex(r => r.momentId === momentId && r.memberId === me.id && r.emoji === 'cheers');
+    if (i >= 0) rows.splice(i, 1); else rows.push({ momentId, memberId: me.id, emoji: 'cheers', at: nowIso() });
+    await this.commit('momentReactions');
+    return i < 0;
+  }
+  cheersFor(momentId) {
+    return (this.state.momentReactions || []).filter(r => r.momentId === momentId && r.emoji === 'cheers').sort(asc('at'))
+      .map(r => ({ memberId: r.memberId, member: this.member(r.memberId), at: r.at }));
+  }
+  /** Readable postcards newer than the last time this device opened the feed, not your own. Per device, like the crews. */
+  unseenPostcards(memberId = this.me?.id) {
+    if (!memberId || !this.postcardsOn()) return [];
+    let seen = null; try { seen = localStorage.getItem('hunto.postcardsSeen'); } catch { /* private mode */ }
+    return this.momentsReadable(memberId).filter(m => m.memberId !== memberId && (!seen || m.createdAt > seen));
+  }
+  /** Opening the feed is reading it. */
+  markPostcardsSeen() { try { localStorage.setItem('hunto.postcardsSeen', new Date().toISOString()); } catch { /* nothing to remember */ } }
+  /** What this app has uploaded, in bytes, over the rows this member can read. An admin reads all of them. */
+  albumBytes() { return sum(this.momentsReadable(this.me?.id), m => m.bytes || 0); }
 
   // ---------- badges ----------
   // Three kinds, and the difference matters. `earned` are facts the club already records, so

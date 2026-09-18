@@ -2363,9 +2363,11 @@ create table if not exists crew_messages (
 );
 create index if not exists crew_messages_thread on crew_messages(crew_id, id desc);
 
--- The file itself lives in storage, byte for byte as the phone made it; this row is only the
--- label on it. width/height/duration are read off the file in the browser for layout — nothing
--- is re-encoded, ever, because re-encoding IS the quality loss.
+-- The picture lives in storage; this row is the label on it. The file is re-encoded in the
+-- browser to JPEG at 2048px on the long side before upload, deliberately: a HEIC kept byte for
+-- byte is a broken image on every Chrome member's phone, the bucket is 1 GB for the whole club,
+-- and the canvas strips every EXIF field including GPS. The taken date is read off the original
+-- first and kept only on this row (taken_at, and how it was established in taken_from).
 create table if not exists moments (
   id            uuid primary key default gen_random_uuid(),
   member_id     uuid not null references members(id) on delete cascade,
@@ -2555,7 +2557,7 @@ values ('avatars', 'avatars', true, 5242880,
 on conflict (id) do update set public = excluded.public,
   file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('moments', 'moments', false, 52428800, null)
+values ('moments', 'moments', false, 8388608, array['image/jpeg','image/png','image/webp'])
 on conflict (id) do update set public = excluded.public,
   file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
@@ -2576,7 +2578,84 @@ create policy moments_file_write on storage.objects for insert to authenticated
   with check (bucket_id = 'moments' and (storage.foldername(name))[1] = current_member_id()::text);
 drop policy if exists moments_file_own on storage.objects;
 create policy moments_file_own on storage.objects for delete to authenticated
-  using (bucket_id = 'moments' and (storage.foldername(name))[1] = current_member_id()::text);
+  using (bucket_id = 'moments' and ((storage.foldername(name))[1] = current_member_id()::text or (select has_role('admin'))));
+
+-- =====================================================================
+--  Postcards, v1 — the screen for the moments tables
+--
+--  Photographs only, one line on the back, one word of reaction, and the place taken from the
+--  member's own booking or not printed at all. Applied to the live project as one migration.
+-- =====================================================================
+alter table moments add column if not exists taken_from text not null default 'none'
+  check (taken_from in ('camera','exif','exif_day','none'));
+alter table moments add column if not exists stay_day  smallint;   -- written by moments_place(), never by the client
+alter table moments add column if not exists stay_days smallint;
+alter table moments add column if not exists stay_ends date;
+alter table moments drop constraint if exists moments_caption_line;
+alter table moments add constraint moments_caption_line check (caption is null or length(caption) <= 140);
+alter table moments drop constraint if exists moments_postcard_size;
+alter table moments add constraint moments_postcard_size check (bytes is null or bytes <= 8388608);
+alter table moments drop constraint if exists moments_taken_before_sent;
+alter table moments add constraint moments_taken_before_sent check (taken_at is null or taken_at <= created_at + interval '5 minutes');
+
+-- Where a postcard is from is established from the booking, server side, or not at all. The
+-- client may name one of its own approved bookings; the trigger checks it and writes the place,
+-- overwriting anything sent. Because members cannot read each other's bookings, the moment row
+-- is the only place a reader learns 'DAY 2 OF 4 · MANCHEBO', and it is a fact the server wrote.
+create or replace function moments_place() returns trigger language plpgsql security definer set search_path = public as $$
+declare r redemptions%rowtype; d date;
+begin
+  if new.kind <> 'photo' then raise exception 'Postcards are photographs for now'; end if;
+  if tg_op = 'INSERT' and (select count(*) from moments where member_id = new.member_id and created_at > now() - interval '1 day') >= 20 then
+    raise exception 'Twenty in a day is plenty — send the rest tomorrow.';
+  end if;
+  new.stay_id := null; new.stay_day := null; new.stay_days := null; new.stay_ends := null;
+  if new.redemption_id is null then return new; end if;
+  select * into r from redemptions where id = new.redemption_id;
+  if r.id is null or r.member_id <> new.member_id then raise exception 'That booking is not yours'; end if;
+  if r.status not in ('held','confirmed','completed') then raise exception 'That room is not approved'; end if;
+  d := (coalesce(new.taken_at, now()) at time zone 'America/Aruba')::date;
+  if d < r.check_in or d > r.check_out then raise exception 'That photograph is not from those dates'; end if;
+  new.stay_id := r.stay_id; new.stay_day := (d - r.check_in) + 1; new.stay_days := (r.check_out - r.check_in) + 1; new.stay_ends := r.check_out;
+  return new;
+end $$;
+drop trigger if exists moments_place_t on moments;
+create trigger moments_place_t before insert or update of redemption_id, taken_at on moments
+  for each row execute function moments_place();
+
+-- The video door stays shut in the policy, not in the type, so opening it later is one line.
+drop policy if exists moments_post on moments;
+create policy moments_post on moments for insert to authenticated
+  with check (member_id = current_member_id()
+              and kind = 'photo'
+              and (crew_id is null or (select in_crew(crew_id)))
+              and (select moments_on from settings where id = 1));
+
+-- A reaction is a club word, never a glyph, and reacting is switched off with the feature.
+comment on column moment_reactions.emoji is 'A club word, not an emoji: only ''cheers'' in v1. The column keeps its name.';
+alter table moment_reactions drop constraint if exists reactions_word;
+alter table moment_reactions add constraint reactions_word check (emoji in ('cheers'));
+drop policy if exists reactions_own on moment_reactions;
+create policy reactions_own on moment_reactions for all to authenticated
+  using (member_id = current_member_id())
+  with check (member_id = current_member_id()
+              and (select moments_on from settings where id = 1)
+              and exists (select 1 from moments mo where mo.id = moment_id and (mo.crew_id is null or (select in_crew(mo.crew_id)))));
+
+-- A postcard dropped into a crew thread must be one the sender can read.
+drop policy if exists crew_messages_send on crew_messages;
+create policy crew_messages_send on crew_messages for insert to authenticated
+  with check (member_id = current_member_id() and (select in_crew(crew_id))
+              and deleted_at is null and edited_at is null
+              and (moment_id is null or exists (select 1 from moments mo where mo.id = moment_id and (mo.crew_id is null or (select in_crew(mo.crew_id))))));
+
+-- Live for open apps. One block per table: a single statement fails whole if any table is already
+-- a member, and crew_messages / crew_members were never added, so the crew thread's 'live' claim
+-- had been silent until now.
+do $$ begin alter publication supabase_realtime add table moments;           exception when others then null; end $$;
+do $$ begin alter publication supabase_realtime add table moment_reactions;  exception when others then null; end $$;
+do $$ begin alter publication supabase_realtime add table crew_messages;     exception when others then null; end $$;
+do $$ begin alter publication supabase_realtime add table crew_members;      exception when others then null; end $$;
 
 -- Stay photographs. One per stay, uploaded by the Desk, public to read (a stay card is not a
 -- secret). Written only under stays/<stay uuid>/ by planner, comms or admin — the folder test is

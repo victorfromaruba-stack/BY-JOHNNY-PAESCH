@@ -8,6 +8,7 @@
 // Deliberately small: a name, who is in it, and somewhere to talk. Everything the Circle
 // already does well — quoting, pledging, the board — stays where it is.
 import { escapeHtml, fmtDay, fmtDayTime, fmtPoints, fmtUsd2 } from '../core/util.js';
+import { fmtClock } from '../core/util.js';
 import { toast, sheet, confirmDialog, avatar, setBusy } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 
@@ -217,8 +218,16 @@ export function crewDetail({ store, params, go, refresh }) {
 
   // --- the thread
   const thread = wrap.querySelector('#thread');
+  // Postcards dropped into the thread need their pictures signed; one call per draw, then redraw.
+  let urls = new Map();
+  const signPictures = (msgs) => {
+    const paths = msgs.map(m => m.momentId && store.moment?.(m.momentId)?.path).filter(p => p && !urls.has(p));
+    if (!paths.length || typeof store.momentUrls !== 'function') return;
+    store.momentUrls(paths).then(map => { map.forEach((v, k) => urls.set(k, v)); draw(); }).catch(() => {});
+  };
   const draw = () => {
     const msgs = store.crewThread(c.id);
+    signPictures(msgs);
     if (!msgs.length) {
       thread.innerHTML = `<p class="small muted" style="padding:18px 2px">Nothing said yet. Whatever you
         are planning, this is the place for it.</p>`;
@@ -233,6 +242,22 @@ export function crewDetail({ store, params, go, refresh }) {
       const mine = m.memberId === me.id;
       if (m.deletedAt) {
         return `${rule}<div class="msg ${mine ? 'mine' : ''} gone"><span class="bubble">taken back</span></div>`;
+      }
+      if (m.momentId) {
+        // A postcard in the thread: the picture, small, and where it is from. Gone means a tombstone.
+        const mo = store.moment?.(m.momentId);
+        if (!mo) return `${rule}<div class="msg ${mine ? 'mine' : ''} gone"><span class="bubble">a postcard that was taken back</span></div>`;
+        const src = urls.get(mo.path) || '';
+        const place = mo.stayId ? `${store.stay(mo.stayId)?.name || ''} · day ${mo.stayDay} of ${mo.stayDays}` : '';
+        return `${rule}<div class="msg ${mine ? 'mine' : ''}">
+          ${mine ? '' : avatar(who, 28)}
+          <a class="bubble bubble-card" href="#/postcards/${escapeHtml(mo.id)}">
+            ${mine ? '' : `<b class="who">${escapeHtml(who?.name.split(' ')[0] || 'Someone')}</b>`}
+            <span class="card-shot" style="--w:${Number(mo.width) || 4};--h:${Number(mo.height) || 3}">${src ? `<img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async">` : ''}</span>
+            ${m.body ? `<span class="what">${escapeHtml(m.body)}</span>` : ''}
+            <span class="tiny">${escapeHtml(place || 'A postcard')}</span>
+            <span class="when">${escapeHtml(fmtClock(m.createdAt))}</span>
+          </a></div>`;
       }
       return `${rule}<div class="msg ${mine ? 'mine' : ''}">
         ${mine ? '' : avatar(who, 28)}

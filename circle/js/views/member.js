@@ -1,5 +1,5 @@
 // The member's own screens: home, sending a contribution, the ledger, the card, the profile.
-import { escapeHtml, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDay, fmtDayTime, fmtMonth, fmtPct, monthKey, countdownTo, initials, toCsv, downloadText } from '../core/util.js';
+import { escapeHtml, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDay, fmtDayTime, fmtMonth, fmtPct, monthKey, countdownTo, initials, toCsv, downloadText, arubaDate, fmtClock } from '../core/util.js';
 import { RANKS, nextRank } from '../core/standing.js';
 import { VOCAB, tierName, refFor } from '../core/vocab.js';
 import { splitContribution, tierFor, fromPoints, seatPoints, pointsPerMonth } from '../core/money.js';
@@ -7,6 +7,7 @@ import { memberCard, poolGauge, rankCrest, ring, tierLadder, badgeMark, badgeRow
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel, avatar } from '../ui/components.js';
 import { dropWhen } from './deals.js';
+import { postCard, postcardSheet, cheersLine } from './postcards.js';
 import { sparkline, columns, tableFor } from '../ui/charts.js';
 import { waLink, TEMPLATES, copyText, shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
@@ -119,6 +120,44 @@ export function home({ store, go }) {
         <p class="small muted" style="margin-top:8px">${escapeHtml(names.join(' · '))}</p>
         <p class="tiny muted" style="margin-top:10px">Victor looked at these himself. The prices go up ${escapeHtml(when)} and the board stays open all weekend — there is no race.</p>
       </div>`));
+    }
+  }
+
+  // 1 and three quarters — a postcard, when there is one to show.
+  //
+  // On a day this member is on the island (their own approved booking covers today in Aruba) the
+  // panel asks for one, and once one is sent it shows it. On any other day it shows the newest
+  // postcard from the last fortnight. When neither applies nothing is drawn: Home never gains an
+  // empty box, and booking stays the headline — the postcard is the second thing, like the board.
+  if (typeof store.postcardsOn === 'function' && store.postcardsOn()) {
+    const day = store.islandDay(me.id);
+    const today = arubaDate(new Date());
+    const sentToday = store.moments({ mine: true }).find(m => arubaDate(m.createdAt) === today);
+    const latest = store.moments().find(m => Date.now() - new Date(m.createdAt) < 14 * 86400000);
+    const send = (capture) => postcardSheet({ store, prefill: { capture, redemptionId: day?.redemption?.id || null } }).then(m => { if (m) refresh(); });
+    if (day) {
+      const box = el(`<div class="panel" id="postcard-day">
+        <p class="eyebrow">${icon('camera')}Today’s postcard</p>
+        <p class="mono tiny muted place-line" style="margin-top:6px">DAY ${day.day} OF ${day.days} · ${escapeHtml(String(day.stay?.name || '').toUpperCase())}</p>
+        ${sentToday ? '<div id="today-card" style="margin-top:12px"></div>' : '<p class="big-line">Send one from the island.</p>'}
+        <div class="row" style="margin-top:14px;gap:20px">
+          ${sentToday
+            ? `<button type="button" class="link-rule" data-postcard="capture">Another one</button><a class="link-rule" href="#/postcards">All of them</a>`
+            : `<button type="button" class="btn" data-postcard="capture">Take one now</button><button type="button" class="link-rule" data-postcard="roll">From your roll</button>`}
+        </div>
+      </div>`);
+      if (sentToday) {
+        store.momentUrls([sentToday.path]).then(urls => { box.querySelector('#today-card')?.replaceChildren(postCard(sentToday, { store, urls, compact: true })); });
+      }
+      box.addEventListener('click', (e) => { const b = e.target.closest('[data-postcard]'); if (b) send(b.dataset.postcard === 'capture'); });
+      left.appendChild(box);
+    } else if (latest) {
+      const block = el(`<div class="rule-block">
+        <div class="row-between"><p class="eyebrow">${icon('camera')}The latest postcard</p><a class="small" href="#/postcards">All of them</a></div>
+        <div id="latest-card" style="margin-top:12px"></div>
+      </div>`);
+      store.momentUrls([latest.path]).then(urls => { block.querySelector('#latest-card')?.replaceChildren(postCard(latest, { store, urls, compact: true })); });
+      left.appendChild(block);
     }
   }
 

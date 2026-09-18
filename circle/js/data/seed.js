@@ -45,6 +45,8 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
     reserveAccount: { bank: 'Aruba Bank', holder: `${VOCAB.clubName} Reserve — held by Vishnu on behalf of the Circle`, number: '6001 2233 4455' },
     operatingAccount: { bank: 'Aruba Bank', holder: `${VOCAB.clubName} Operating — held by Vishnu on behalf of the Circle`, number: '6001 2233 4460' },
     whatsappGroupUrl: '',
+    // The preview shows the feed switched on; the real club's switch is in Settings and starts off.
+    momentsOn: true,
     // The gate starts now, so the requests seeded above (which are older) are exempt exactly as
     // the real open queue is, and anything asked for from here on has to be looked at first.
     looksFrom: iso(now),
@@ -325,5 +327,32 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
     { memberId: 'mem_daniela', badgeKey: 'kitchen', paidPoints: 2000, at: '2026-05-14T18:30:00Z' },
   ];
 
-  return { version: 2, seededAt: iso(now), settings, members, contributions, ledger, stays, roomTypes, watches: [], deals: [], looks: [], redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, crews, crewMembers, crewMessages, badgeCatalog, memberBadges, moments: [], momentReactions: [], session: null };
+  // Three example postcards for the preview, on the openly licensed beach photographs the app
+  // already carries. None is a picture of a person, none claims a taken time, and each prints its
+  // credit and the word EXAMPLE. The one with a place line derives it from a booking the seed
+  // itself establishes (Diego's completed Manchebo stay, 10–13 Aug), the way the trigger would.
+  const diegoManchebo = redemptions.find(r => r.memberId === 'mem_diego' && r.stayId === 'stay_manchebo');
+  const moments = [
+    { id: 'mom_1', memberId: 'mem_diego', crewId: null, stayId: diegoManchebo ? 'stay_manchebo' : null, redemptionId: diegoManchebo?.id || null,
+      path: 'assets/areas/eagle-a.jpg', kind: 'photo', mime: 'image/jpeg', bytes: 183540, width: 1280, height: 591, durationS: null,
+      caption: 'Eagle Beach at the end of the day. Nobody else on it.', takenAt: null, takenFrom: 'none',
+      stayDay: diegoManchebo ? 2 : null, stayDays: diegoManchebo ? 4 : null, stayEnds: diegoManchebo ? '2026-08-13' : null,
+      createdAt: '2026-08-11T22:05:00Z', example: true, credit: 'Photograph by Rarends297, CC0 1.0, via Wikimedia Commons' },
+    { id: 'mom_2', memberId: 'mem_sasha', crewId: null, stayId: null, redemptionId: null,
+      path: 'assets/areas/palm-b.jpg', kind: 'photo', mime: 'image/jpeg', bytes: 434340, width: 1280, height: 960, durationS: null,
+      caption: 'Palapa 14, the usual.', takenAt: null, takenFrom: 'none', stayDay: null, stayDays: null, stayEnds: null,
+      createdAt: '2026-09-01T13:40:00Z', example: true, credit: 'Photograph by Ginelly.Q, CC BY 4.0, via Wikimedia Commons' },
+    { id: 'mom_3', memberId: 'mem_ana', crewId: 'crw_october', stayId: null, redemptionId: null,
+      path: 'assets/areas/oranjestad-a.jpg', kind: 'photo', mime: 'image/jpeg', bytes: 167020, width: 1280, height: 960, durationS: null,
+      caption: 'Surfside after work. October cannot come soon enough.', takenAt: null, takenFrom: 'none', stayDay: null, stayDays: null, stayEnds: null,
+      createdAt: '2026-09-04T16:12:00Z', example: true, credit: 'Photograph by Caribiana, CC BY-SA 4.0, via Wikimedia Commons' },
+  ];
+  const momentReactions = [
+    { momentId: 'mom_1', memberId: 'mem_sasha', emoji: 'cheers', at: '2026-08-11T23:10:00Z' },
+    { momentId: 'mom_1', memberId: 'mem_ana', emoji: 'cheers', at: '2026-08-12T01:02:00Z' },
+    { momentId: 'mom_1', memberId: 'mem_victor', emoji: 'cheers', at: '2026-08-12T12:30:00Z' },
+    { momentId: 'mom_3', memberId: 'mem_sasha', emoji: 'cheers', at: '2026-09-04T17:00:00Z' },
+  ];
+
+  return { version: 2, seededAt: iso(now), settings, members, contributions, ledger, stays, roomTypes, watches: [], deals: [], looks: [], redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, crews, crewMembers, crewMessages, badgeCatalog, memberBadges, moments, momentReactions, session: null };
 }

@@ -162,7 +162,7 @@ export class SupabaseStore extends Store {
     // crew_messages is here for the same reason: a thread that only updates when you reload
     // is not a conversation. Row-level security still decides what comes back on the reload,
     // so listening for the event tells this browser nothing it could not already read.
-    ['contributions', 'redemptions', 'ledger', 'announcements', 'deals', 'watches', 'crew_messages', 'crew_members']
+    ['contributions', 'redemptions', 'ledger', 'announcements', 'deals', 'watches', 'crew_messages', 'crew_members', 'moments', 'moment_reactions']
       .forEach(t => this.channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => this.reload()));
     this.channel.subscribe();
   }
@@ -498,11 +498,11 @@ export class SupabaseStore extends Store {
       ? 'Only the crew’s lead can change this' : error.message);
     await this.reload();
   }
-  async sendCrewMessage(crewId, body) {
+  async sendCrewMessage(crewId, body, { momentId = null } = {}) {
     const text = String(body || '').trim();
-    if (!text) throw new Error('Say something first');
+    if (!text && !momentId) throw new Error('Say something first');
     const { error } = await this.sb.from('crew_messages')
-      .insert({ crew_id: crewId, member_id: this.me.id, body: text });
+      .insert({ crew_id: crewId, member_id: this.me.id, body: text || null, moment_id: momentId });
     if (error) throw new Error(/row-level security/i.test(error.message)
       ? 'You are not in that crew' : error.message);
     await this.reload();
@@ -551,6 +551,71 @@ export class SupabaseStore extends Store {
   }
   async proofUrl(path) { const { data } = await this.sb.storage.from('proofs').createSignedUrl(path, 600); return data?.signedUrl || null; }
 
+  // ---------- postcards ----------
+  // The rules live in the database: moments_post (own row, kind photo, crew membership, the
+  // switch), moments_place() (the booking check that writes DAY N OF M), the checks on caption and
+  // size, and the twenty-a-day trigger. This side uploads, inserts, and turns their refusals into
+  // the same sentences the preview uses.
+  postcardEncoding() { return { max: 2048, quality: 0.85 }; }
+  async postMoment({ blob, width, height, bytes, mime = 'image/jpeg', caption = '', crewId = null, redemptionId = null, takenAt = null, takenFrom = 'none' }) {
+    const me = this.me; if (!me) throw new Error('Sign in first');
+    if (!this.postcardsOn()) throw new Error('Postcards are switched off right now');
+    if (String(caption || '').length > 140) throw new Error('Keep it to 140 characters');
+    if (bytes > 8 * 1024 * 1024) throw new Error('That file is bigger than the club’s album allows');
+    const path = `${me.id}/${crypto.randomUUID()}.jpg`;
+    const { error: upErr } = await this.sb.storage.from('moments').upload(path, blob, { contentType: mime, upsert: false });
+    if (upErr) throw new Error(postcardError(upErr));
+    const { data, error } = await this.sb.from('moments').insert({
+      member_id: me.id, crew_id: crewId || null, redemption_id: redemptionId || null, path, kind: 'photo', mime, bytes, width, height,
+      caption: String(caption || '').trim() || null, taken_at: takenAt || null, taken_from: takenFrom }).select('*').single();
+    if (error) { await this.sb.storage.from('moments').remove([path]).catch(() => {}); throw new Error(postcardError(error)); }
+    await this.reload();
+    return toCamel(data);
+  }
+  /** Signed for an hour, cached for fifty minutes, never written anywhere. */
+  async momentUrls(paths) {
+    this._momentUrls ||= new Map();
+    const out = new Map(), need = [];
+    for (const p of paths || []) {
+      if (/^(assets\/|data:)/.test(p)) { out.set(p, p); continue; }
+      const c = this._momentUrls.get(p);
+      if (c && c.until > Date.now()) out.set(p, c.url); else need.push(p);
+    }
+    if (need.length) {
+      const { data } = await this.sb.storage.from('moments').createSignedUrls(need, 3600);
+      for (const row of data || []) if (row.signedUrl && !row.error) { out.set(row.path, row.signedUrl); this._momentUrls.set(row.path, { url: row.signedUrl, until: Date.now() + 50 * 60000 }); }
+    }
+    return out;
+  }
+  async deleteMoment(id) {
+    const m = (this.state.moments || []).find(x => x.id === id);
+    if (!m) throw new Error('That postcard is already gone');
+    const { data, error } = await this.sb.from('moments').delete().eq('id', id).select('id');
+    if (error) throw new Error(postcardError(error));
+    if (!data?.length) throw new Error('That is not your postcard');
+    await this.sb.storage.from('moments').remove([m.path]).catch(() => {});
+    await this.reload();
+  }
+  async setMomentAudience(id, crewId = null) {
+    if (crewId !== null) throw new Error('A postcard can only go out to the whole Circle, never back into a crew');
+    const { data, error } = await this.sb.from('moments').update({ crew_id: null }).eq('id', id).select('*');
+    if (error) throw new Error(postcardError(error));
+    if (!data?.length) throw new Error('That is not your postcard');
+    await this.reload();
+    return toCamel(data[0]);
+  }
+  async toggleCheer(momentId) {
+    const me = this.me; if (!me) throw new Error('Sign in first');
+    if (!this.postcardsOn()) throw new Error('Postcards are switched off right now');
+    const on = (this.state.momentReactions || []).some(r => r.momentId === momentId && r.memberId === me.id && r.emoji === 'cheers');
+    const { error } = on
+      ? await this.sb.from('moment_reactions').delete().match({ moment_id: momentId, member_id: me.id, emoji: 'cheers' })
+      : await this.sb.from('moment_reactions').insert({ moment_id: momentId, member_id: me.id, emoji: 'cheers' });
+    if (error) throw new Error(postcardError(error));
+    await this.reload();
+    return !on;
+  }
+
   async rpc(fn, args) {
     const { data, error } = await this.sb.rpc(fn, args);
     if (error) throw new Error(error.message);
@@ -578,4 +643,16 @@ export class SupabaseStore extends Store {
   async acceptInvitation() {
     throw new Error('Ask Victor or Ian for a username and a password — they hand it to you directly, nothing is emailed.');
   }
+}
+
+/** The database's refusals, in the sentences the screen already knows. */
+function postcardError(err) {
+  const m = String(err?.message || err || '');
+  if (/moments_taken_before_sent/i.test(m)) return 'The phone says that photograph was taken later than now. Check the phone’s clock.';
+  if (/moments_caption_line/i.test(m)) return 'Keep it to 140 characters';
+  if (/moments_postcard_size|maximum allowed size|payload too large|exceeded/i.test(m)) return 'That file is bigger than the club’s album allows';
+  if (/mime type|not supported/i.test(m)) return 'That is not a photograph this phone can read — JPEG, PNG or WebP, please';
+  if (/row-level security/i.test(m)) return 'Postcards are switched off right now';
+  if (/failed to fetch|networkerror|load failed/i.test(m)) return 'The Circle is not answering — your postcard is still here, try again';
+  return m || 'The Circle is not answering — your postcard is still here, try again';
 }

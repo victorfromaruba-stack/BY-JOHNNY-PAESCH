@@ -102,7 +102,7 @@ export function stays({ store, go, query = {} }) {
       <div id="soon"></div>
       <div id="deals"></div>
       <div id="places"></div>
-      <p class="rule-block small muted" style="margin-top:34px">Want something that is not here? <a href="#/watching">Tell the Desk what to watch for${watching ? ` · ${watching} watching` : ''}</a>. Tap any week and Victor books it in your name — you never book anything yourself. <a href="#/rules">How it works</a>.</p>
+      <p class="rule-block small muted" style="margin-top:34px">Want something that is not here? <a href="#/watching">Tell the Desk what to watch for${watching ? ` · ${watching} watching` : ''}</a>. Tap any week and Victor books it in your name — you never book anything yourself. <a href="#/rules">How it works</a>. <a href="#/cruises">Cruises and trips</a>.</p>
     </div></section></div>`);
 
   // THE BOARD — the weeks Victor has lined up for the next opening. Names only until the hour,

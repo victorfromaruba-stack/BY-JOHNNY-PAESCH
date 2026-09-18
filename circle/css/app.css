@@ -454,7 +454,7 @@ tr.best td:last-child { border-radius: 0 var(--r-chip) var(--r-chip) 0; }
   font-family: var(--font-mono); font-size: var(--t-fine); line-height: 1.4; color: var(--ink-2); max-width: 60ch; }
 .hero-credit svg { width: 14px; height: 14px; flex: none; margin-top: 2px; }
 /* One filled action and one ruled link, never two boxes of equal weight. */
-.link-rule { display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; font-size: var(--t-small); font-weight: 500;
+.link-rule { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 2px; font-size: var(--t-small); font-weight: 500;
   color: inherit; text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 1px; text-decoration-color: currentColor; }
 .hero-cover .link-rule { color: var(--on-photo); }
 /* A ghost button on a photograph has to be drawn in the photo tokens, or it disappears into
@@ -1302,3 +1302,86 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 @media (prefers-reduced-motion: reduce) { .hero-cover img, .hero-place img, .page-hero img, .cover-shot img { animation: none; } }
 /* The rank crest is drawn inline in the text colour, so it survives both themes. */
 .rank-crest svg { display: block; flex: none; }
+
+/* ---------- postcards ----------
+   A photograph whole, nothing printed on it, and the facts under it in mono. The frame is the
+   page, not a box: a figure with a hairline between it and the next, bled edge to edge on a
+   phone like the board's cover, and from 900px the picture sits beside its body the way the
+   board's No. 1 does. Tokens only, so both themes come for free; no shadow anywhere; teal
+   nowhere, because here it would mean money. */
+.postcard { margin: 0; padding-block: var(--s-4); }
+.postcard-list > .postcard + .postcard { border-top: 1px solid var(--hairline-soft); }
+.postcard-list > .thread-day + .postcard { padding-top: var(--s-2); }
+/* The frame is reserved from the row's own width/height before the picture arrives, so nothing
+   jumps. Taller than 4:5 is held at 4:5 and centre-cropped, wider than 2:1 at 2:1; the detail
+   page shows the whole picture at its own ratio. */
+.postcard-shot { display: block; position: relative; overflow: hidden; aspect-ratio: var(--w, 4) / var(--h, 3); background: var(--well); color: inherit; }
+.postcard-shot.tall { aspect-ratio: 4 / 5; }
+.postcard-shot.wide { aspect-ratio: 2 / 1; }
+.postcard-shot img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity var(--dur-water) var(--ease-out); }
+.postcard-shot img.in { opacity: 1; animation: settle 1400ms var(--ease-out) both; }
+.postcard.full .postcard-shot { aspect-ratio: var(--w, 4) / var(--h, 3); max-height: 80vh; }
+.postcard.full .postcard-shot img { object-fit: contain; }
+.postcard-body { display: grid; gap: var(--s-2); padding-top: var(--s-3); margin: 0; min-width: 0; }
+.postcard-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.postcard-who b { font-weight: 600; font-size: var(--t-body); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.postcard-who .stamp { margin-left: auto; }
+/* Every fact line is mono; the caption is the member's words in the sans. The two registers say
+   which is which. */
+.postcard-place { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); overflow-wrap: anywhere; }
+.postcard-place .tag { white-space: normal; letter-spacing: .04em; }
+.postcard-caption { max-width: 60ch; font-size: var(--t-body); line-height: 1.45; overflow-wrap: anywhere; }
+.postmark { font-family: var(--font-mono); font-size: var(--t-fine); font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.postcard-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); margin-top: var(--s-1); }
+.postcard-cheers { font-family: var(--font-mono); font-size: var(--t-fine); color: var(--ink-2); overflow-wrap: anywhere; }
+.postcard-cheers:empty { display: none; }
+/* Cheers, pressed, takes the ink fill; the word does not change. A press dims; hover only where
+   there is a pointer to hover with. */
+.cheer[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.cheer:active { opacity: .6; }
+.btn.ghost.cheer[aria-pressed="true"]:active { background: var(--ink); }
+@media (hover: hover) {
+  .btn.ghost.cheer:hover { background: var(--raised); }
+  .btn.ghost.cheer[aria-pressed="true"]:hover { background: var(--ink); color: var(--on-ink); }
+}
+.postcard-links { display: flex; flex-wrap: wrap; gap: 0 var(--s-4); }
+/* A ruled link that acts rather than navigates is a button drawn as the link. */
+button.link-rule { background: none; border: 0; cursor: pointer; }
+/* The island day, under the masthead's rule and only on such a day. */
+.island-strip { padding-block: var(--s-4); border-bottom: 1px solid var(--hairline); }
+.island-strip .row { margin-top: var(--s-2); }
+.postcard-empty { display: grid; gap: var(--s-2); padding-block: var(--s-5); max-width: 54ch; }
+.postcard-empty > p:first-child { font-weight: 600; }
+.postcard-more { padding-block: var(--s-4); }
+/* The composer: two ways in, then the picture whole, then the back of the card. */
+.postcard-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.postcard-pick .choice { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; text-align: center; font-size: var(--t-small); font-weight: 500; }
+.postcard-pick .choice svg { width: 17px; height: 17px; flex: none; }
+.postcard-form { margin-top: var(--s-4); }
+.postcard-preview { overflow: hidden; border-radius: var(--r-card); background: var(--well); margin-bottom: var(--s-2); }
+.postcard-preview img { display: block; width: 100%; max-height: 48vh; object-fit: contain; animation: settle 1400ms var(--ease-out) both, enter var(--dur-water) var(--ease-out) both; }
+.postcard-form > .postmark { margin-bottom: var(--s-4); }
+.postcard-form .segmented { margin-top: 0; }
+.postcard-where { font-family: var(--font-mono); font-size: var(--t-fine); color: var(--ink); }
+@media (prefers-reduced-motion: reduce) {
+  .postcard-shot img, .postcard-shot img.in, .postcard-preview img { animation: none; transition: none; }
+}
+/* On a phone the picture bleeds to the edges like the board's cover; zero scrolls to the first
+   one. The body keeps the text column. Corners only where there is a margin to round into. */
+@media (max-width: 779px) {
+  .postcard-list .postcard-shot, .postcard.full .postcard-shot { margin-inline: calc(-1 * clamp(16px, 4vw, 28px)); }
+}
+@media (min-width: 780px) {
+  .postcard-shot { border-radius: var(--r-card); }
+}
+/* From 900px a postcard is the board's No. 1: picture left, body right, top-aligned, one hairline
+   under the row, the day rules still spanning both columns so the order is never in doubt. */
+@media (min-width: 900px) {
+  .postcard-list .postcard, .postcard.full { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: var(--s-6); align-items: start; }
+  .postcard-list .postcard-shot { max-height: 640px; }
+  .postcard-list .postcard-body, .postcard.full .postcard-body { padding-top: 0; }
+}
+/* The word on a toast is a ruled link in the toast's own colour, not a grey box: on the ink toast
+   the browser's default button face made "Tell the group" light-on-light. The padding gives the
+   tap its 44px and the negative margins hand the height straight back, so the toast does not grow. */
+.toast .undo { background: none; border: 0; padding: 12px 4px; margin: -12px 0 -12px 6px; min-height: 44px; text-underline-offset: 4px; }

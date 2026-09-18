@@ -122,3 +122,35 @@ export function countdownTo(iso) {
   return h >= 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : h >= 1 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
 }
 export const hoursUntil = (iso) => (new Date(iso) - Date.now()) / 3600000;
+
+/** The calendar date in Aruba (UTC-4, no daylight saving) — the club's day, wherever the phone is. */
+export const arubaDate = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Aruba', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d));
+/** '2:14 PM' — a clock time on the viewer's phone. Never a relative time: nothing on the page may go stale. */
+export const fmtClock = (iso) => (iso ? new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '');
+/** The day rule over a run of postcards: TODAY, YESTERDAY, then the date in capitals. */
+export function dayRule(iso) {
+  const d = new Date(iso), now = new Date();
+  const key = (x) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if (key(d) === key(now)) return 'TODAY';
+  if (key(d) === key(y)) return 'YESTERDAY';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase();
+}
+/**
+ * The postmark: what the phone said about when the picture was made, and how long after that it
+ * was sent. Only from facts on the row — a taken time prints as a clock only when the phone gave
+ * one with a zone ('camera', 'exif'); a bare EXIF day prints the day; nothing prints 'From the roll'.
+ */
+export function postmarkLabel(m) {
+  if (!m?.takenAt || !m.takenFrom || m.takenFrom === 'none') return 'From the roll';
+  const day = new Date(m.takenAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  if (m.takenFrom === 'exif_day') return `Taken ${day}`;
+  const gapMin = Math.max(0, Math.round((new Date(m.createdAt) - new Date(m.takenAt)) / 60000));
+  if (gapMin <= 10) return 'On the spot';
+  const later = gapMin < 60 ? `${gapMin} min later`
+    : gapMin < 60 * 48 ? `${Math.round(gapMin / 60)} h later`
+    : gapMin < 60 * 24 * 14 ? `${Math.round(gapMin / 1440)} days later`
+    : `${Math.round(gapMin / (1440 * 7))} weeks later`;
+  const sameDay = new Date(m.takenAt).toDateString() === new Date(m.createdAt).toDateString();
+  return sameDay ? `Taken ${fmtClock(m.takenAt)} · sent ${later}` : `Taken ${day} · sent ${later}`;
+}

@@ -13,6 +13,7 @@ import * as catalog from './views/catalog.js';
 import * as officer from './views/officer.js';
 import * as dealsView from './views/deals.js';
 import * as crewsView from './views/crews.js';
+import * as postcards from './views/postcards.js';
 import { icon } from './ui/icons.js';
 
 const ROUTES = [
@@ -41,6 +42,8 @@ const ROUTES = [
   { path: '/deals', redirect: '/stays', title: 'Stays' },
   { path: '/live', redirect: '/stays', title: 'Stays' },
   { path: '/watching', view: dealsView.watching, title: 'What you are watching', auth: true },
+  { path: '/postcards', view: postcards.feed, title: 'Postcards', auth: true },
+  { path: '/postcards/:id', view: postcards.one, title: 'Postcard', auth: true },
   { path: '/crews', view: crewsView.crews, title: 'Your crews', auth: true },
   { path: '/crews/:id', view: crewsView.crewDetail, title: 'Crew', auth: true },
   { path: '/circle', view: officer.circle, title: 'The Circle', auth: true },
@@ -292,21 +295,38 @@ function toggleTheme() {
   localStorage.setItem('hunto.theme', root.dataset.theme);
 }
 
-// The five that live in the thumb bar. Everything else is in the top bar.
-const NAV = [
+// The five that live in the thumb bar. Everything else is in the top bar. While Postcards is
+// switched on it takes the third slot from Cruises — five tabs, not six: at 390px six labelled
+// tabs crowd the 44px targets, and a feed two taps deep is a dead feed. Cruises keeps its route,
+// its top-bar tab and a link at the foot of the board. While it is off the bar is exactly as it
+// was, so the switch in Settings never claims something a member cannot see.
+const NAV_OFF = [
   { path: '/home', label: 'Home', icon: 'home' },
   { path: '/stays', label: 'Stays', icon: 'bed', badge: 'deals' },
   { path: '/cruises', label: 'Cruises', icon: 'compass' },
   { path: '/crews', label: 'Crews', icon: 'users', badge: 'crews' },
   { path: '/circle', label: 'Circle', icon: 'globe' },
 ];
+const NAV_ON = [
+  { path: '/home', label: 'Home', icon: 'home' },
+  { path: '/stays', label: 'Stays', icon: 'bed', badge: 'deals' },
+  { path: '/postcards', label: 'Postcards', icon: 'camera', badge: 'postcards' },
+  { path: '/crews', label: 'Crews', icon: 'users', badge: 'crews' },
+  { path: '/circle', label: 'Circle', icon: 'globe' },
+];
+const postcardsOn = () => { try { return !!store?.postcardsOn?.(); } catch { return false; } };
+const NAV = () => (postcardsOn() ? NAV_ON : NAV_OFF);
 
 // A detail route belongs to the tab it was opened from: open a cruise and the bar should still
 // say Cruises. Comparing the whole path meant every /stays/:id, /cruises/:id and /trips/:id left
 // the bottom bar with nothing marked, which reads as the app losing its place. /trips has no
-// index of its own, so it answers to Cruises.
-const NAV_PARENT = { '/trips': '/cruises' };
-const navRoot = (path) => { const seg = '/' + String(path).split('/')[1]; return NAV_PARENT[seg] || seg; };
+// index of its own, so it answers to Cruises — and when Cruises has left the bar, both answer
+// to Stays, where the link to them now lives.
+const navRoot = (path) => {
+  const seg = '/' + String(path).split('/')[1];
+  const parent = postcardsOn() ? { '/trips': '/stays', '/cruises': '/stays' } : { '/trips': '/cruises' };
+  return parent[seg] || seg;
+};
 
 function updateChrome(current) {
   const me = store.me;
@@ -321,6 +341,7 @@ function updateChrome(current) {
   // on Home when something is waiting, and always under their profile — rather than as three
   // extra tabs that only three people can open.
   const main = me ? [{ path: '/home', label: 'Home' }, { path: '/stays', label: 'Stays', badge: unseen }, { path: '/cruises', label: 'Cruises' },
+                     ...(postcardsOn() ? [{ path: '/postcards', label: 'Postcards' }] : []),
                      { path: '/pay', label: 'Send' },
                      { path: '/circle', label: 'Circle' }, { path: '/crews', label: 'Crews' }, { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }]
                   : [{ path: '/rules', label: 'How it works' }];
@@ -335,9 +356,10 @@ function updateChrome(current) {
         urgent ? `<span class="nav-badge">${urgent > 9 ? '9+' : urgent}</span><span class="sr-only">, ${urgent} thing${urgent === 1 ? '' : 's'} waiting for you</span>` : ''}</a>`
     : `<a class="btn sm" href="#/sign-in">Sign in</a>`;
   document.getElementById('botnav').hidden = !me;
-  list.innerHTML = me ? NAV.map(n => {
+  list.innerHTML = me ? NAV().map(n => {
     const count = n.badge === 'deals' ? unseen
-      : n.badge === 'crews' ? (() => { try { return store.unreadCrews().length; } catch { return 0; } })() : 0;
+      : n.badge === 'crews' ? (() => { try { return store.unreadCrews().length; } catch { return 0; } })()
+      : n.badge === 'postcards' ? (() => { try { return store.unseenPostcards().length; } catch { return 0; } })() : 0;
     return `<li><a href="#${n.path}"${navRoot(path) === n.path ? ' aria-current="page"' : ''}>
       <span class="botnav-ico">${icon(n.icon, { size: 22, stroke: 1.6 })}${count ? `<span class="nav-dot" aria-hidden="true"></span>` : ''}</span>
       ${escapeHtml(n.label)}${count ? `<span class="sr-only">, ${count} new</span>` : ''}</a></li>`;

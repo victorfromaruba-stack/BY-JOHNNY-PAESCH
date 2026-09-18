@@ -3,7 +3,7 @@ import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
 import { execFileSync } from 'node:child_process';
 export const LOCAL = `export const CONFIG = { backend: 'local', supabaseUrl: '', supabaseKey: '' };`;
 export const ROUTES = ['/', '/home', '/stays', '/stays/stay_surfclub', '/cruises', '/cruises/trip_cruise_abc', '/trips/trip_japan',
-  '/requests', '/pay', '/ledger', '/pool', '/circle', '/crews', '/watching',
+  '/postcards', '/requests', '/pay', '/ledger', '/pool', '/circle', '/crews', '/watching',
   '/card', '/profile', '/rules', '/desk', '/bank', '/settings', '/sign-in'];
 const FONT_DIR = process.env.CIRCLE_FONTS || '/tmp/claude-0/-home-user-BY-JOHNNY-PAESCH/84807211-e7d2-5336-9e3f-7549cf10be4d/scratchpad';
 async function fontShim(p) {

@@ -21,6 +21,9 @@ export const VOCAB = {
   share: 'the Circle’s share',
   reserve: 'the Reserve', operating: 'Operating',
   stay: 'Stay', trip: 'Trip', drop: 'Drop',
+  // The photo feed. A postcard is sent from somewhere by someone you know; the one word you can
+  // say back is the club's, not a glyph.
+  postcard: 'Postcard', postcards: 'Postcards', cheer: 'Cheers',
   tiers: { 100: 'Watapana', 150: 'Fofoti', 200: 'Kibrahacha' },
   tierLean: { 100: 12, 150: 20, 200: 28 },   // degrees the tree glyph leans
   founding: 'Founding Insider · 2026',

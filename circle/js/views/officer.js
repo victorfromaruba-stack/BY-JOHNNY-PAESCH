@@ -1137,13 +1137,18 @@ export function settings({ store, go }) {
       </form>` : ''}
       </div>
 
-      <!-- "Pictures from your trips" used to sit here: a switch, over copy promising "it is built
-           and ready… nothing has to be rebuilt". There is no /moments route, no view file, and
-           nothing anywhere in the app reads or writes either table — so turning it on changed
-           nothing a member could see. A control that claims a feature the app does not have is
-           the purest form of what Victor is calling slop, and the honest fix is to take the
-           switch away rather than to keep offering it. The two tables and their policies stay in
-           the database, harmless and ready, for whoever builds the screen. -->
+      <!-- Postcards: the switch is back because the screen now exists (js/views/postcards.js,
+           the /postcards route, the tab). While it is off nothing claims otherwise: no tab, no
+           Home block, and the database refuses every insert. -->
+      ${isAdmin ? `<div class="panel" style="margin-top:16px">
+        <h2>${escapeHtml(VOCAB.postcards)}</h2>
+        <label class="row-between ask-switch" style="margin-top:12px">
+          <span><b>${escapeHtml(VOCAB.postcards)} — a ${escapeHtml(VOCAB.postcards)} tab appears for every Insider</b>
+            <span class="small muted">Photographs sent from the island, to the whole Circle or to a crew. Seen by Insiders only.</span></span>
+          <input class="switch" type="checkbox" id="moments-on"${s.momentsOn ? ' checked' : ''}>
+        </label>
+        <p class="tiny muted mono" style="margin-top:10px">Album: ${(store.albumBytes() / 1048576).toFixed(0)} MB of 1 GB, of what this app uploaded</p>
+      </div>` : ''}
 
       ${isAdmin ? `<div data-pane="people">
       <div class="panel" style="margin-top:20px">
@@ -1234,6 +1239,11 @@ export function settings({ store, go }) {
     const yes = await confirmDialog({ title: 'Change the rules?', confirmText: 'Change them',
       message: 'The share and the value of a point are promises to every Insider. Tell the Circle first, and never change them after someone has booked against them.' });
     if (yes) { await store.updateSettings(patch, me.id); toast('Saved. Tell the Circle what changed.', { kind: 'good' }); }
+  });
+  wrap.querySelector('#moments-on')?.addEventListener('change', async (e) => {
+    const on = e.target.checked;
+    try { await store.updateSettings({ momentsOn: on }, me.id); toast(on ? `${VOCAB.postcards} are on. The tab is there for everyone.` : `${VOCAB.postcards} are off.`, { kind: 'good' }); }
+    catch (err) { e.target.checked = !on; toast(err.message, { kind: 'bad' }); }
   });
   // Adding an Insider, roles and all. This is the path that means nobody ever has to open
   // the table editor: name, email, level, what they do — and a message to send them.

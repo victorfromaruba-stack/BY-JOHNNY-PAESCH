@@ -429,6 +429,43 @@ maps turn it — with the place as a dot where its site or VakayMood published a
 ring at its beach where nothing did (and a sentence saying so), the other places we stay as
 faint dots, and the address with *Open in Maps*.
 
+## Postcards
+
+The feed. A postcard is a photograph an Insider sends from the island — or from the roll — to
+the whole Circle or to one crew, and the one thing anyone can say back is *Cheers*. It is the
+club's own social page, and it is deliberately not Instagram: no comments under a picture
+(a picture worth talking about goes into a crew's thread with *Talk about it in …*), no
+counts, nobody's misses shown, nothing printed on the photograph, and nothing the app cannot
+vouch for.
+
+**The moment.** BeReal's shared moment is re-anchored from a notification the app cannot send
+to a fact it already holds: your own approved booking. On a day that booking covers, Home and
+the feed ask for one from the island — *DAY 2 OF 4 · MANCHEBO BEACH RESORT & SPA · Take one
+now* — and once sent, show it. The place line is written by the database's `moments_place()`
+trigger from the booking you name, never typed; a postcard with no booking behind it carries
+no place at all. Lateness prints the BeReal way but only from the phone's own word: *On the
+spot*, *Taken 2:11 PM · sent 40 min later*, *Taken 12 Aug* (a day with no zone), or *From the
+roll* when the phone said nothing. Sent times are always clock times under a TODAY / YESTERDAY
+/ dated rule, never "3 min ago".
+
+**The picture.** Re-encoded on the phone to JPEG at 2048px before upload, always — that is what
+makes an iPhone HEIC visible on Android, keeps a season of postcards inside the club's 1 GB, and
+strips every EXIF field including the GPS position. The taken date is read off the original
+first and kept only on the row. The bucket is private; pictures are read through signed URLs
+that live an hour, never cached, never shared — the only shareable thing is `#/postcards/<id>`,
+behind sign-in.
+
+**Rules, both backends.** Sent as yourself only; photographs only (the video door is shut in the
+policy, not the type); 140 characters on the back; 8 MB; twenty a day; a crew card only from
+inside the crew, and it may go out to the whole Circle but never back in; *Take it back* deletes
+row and file, and Victor can take any picture down. The switch is in Settings → Money →
+Postcards (admin); while it is off there is no tab, no Home block and the database refuses every
+insert. When it is on, *Postcards* takes the third slot in the thumb bar from Cruises, which keeps
+its route, its top-bar tab and a link at the foot of the board.
+
+**In the preview** three example postcards sit on the openly licensed beach photographs the app
+already carries, tagged EXAMPLE with their credit; the real Circle seeds nothing.
+
 ## Money that never went through the queue
 
 Someone hands Vishnu $300 in cash. **The Banker's inbox → Money came in** records it: pick the
