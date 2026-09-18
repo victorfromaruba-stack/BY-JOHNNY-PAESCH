@@ -1115,6 +1115,9 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .index-row .name .house { color: var(--good-text); font-family: var(--font-body); font-weight: 600; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; }
 .index-row .name .beach { color: var(--ink-2); font-family: var(--font-body); font-weight: 400; font-size: .82rem; }
 .index-row .from { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .84rem; color: var(--ink-2); white-space: nowrap; }
+/* The drop, on the home screen: the names land now, the price waits for the hour. */
+.board-tease .big-line { font-family: var(--font-display); font-size: 1.32rem; letter-spacing: -.02em; margin-top: 8px; }
+.board-tease .eyebrow { color: var(--good-text); }
 .index-row .from b { color: var(--ink); font-weight: 500; }
 /* A place with no week open carries no number — only the verb. It should read as a quieter row
    than one with a real price, without looking broken or disabled. */

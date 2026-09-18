@@ -6,6 +6,7 @@ import { splitContribution, tierFor, fromPoints, seatPoints, pointsPerMonth } fr
 import { memberCard, poolGauge, rankCrest, ring, tierLadder, badgeMark, badgeRow } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel, avatar } from '../ui/components.js';
+import { dropWhen } from './deals.js';
 import { sparkline, columns, tableFor } from '../ui/charts.js';
 import { waLink, TEMPLATES, copyText, shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
@@ -95,6 +96,28 @@ export function home({ store, go }) {
       </div>
       <div class="split-legend"><span><i style="background:var(--good)"></i>Available <b>${escapeHtml(fmtPoints(lt.available))}</b></span>
       ${lt.committed ? `<span><i style="background:var(--flight)"></i>Committed <b>${escapeHtml(fmtPoints(lt.committed))}</b></span>` : ''}</div>`;
+  }
+
+  // 1 and a half — THE BOARD, if Victor has one lined up.
+  //
+  // The whole mechanic is anticipation, and anticipation does not survive being filed on another
+  // screen: a member who has to go looking for the drop is not spending Thursday evening guessing
+  // at it. So the names come to the home screen the moment they are posted, and the price stays
+  // behind until the hour. It says nothing it has not established — six places and a time — and
+  // it disappears by itself the moment the board opens, because the weeks stop being teased.
+  {
+    const teased = typeof store.teasedDeals === 'function' ? store.teasedDeals() : [];
+    if (teased.length) {
+      const when = dropWhen(teased[0].dropAt);
+      const names = [...new Set(teased.map(d => store.stay(d.stayId)?.name).filter(Boolean))];
+      left.appendChild(el(`<div class="panel board-tease">
+        <div class="row-between"><p class="eyebrow">${icon('zap')}The Board</p>
+          <a class="small" href="#/stays">See it</a></div>
+        <p class="big-line">${teased.length} week${teased.length === 1 ? '' : 's'}, priced ${escapeHtml(when)}</p>
+        <p class="small muted" style="margin-top:8px">${escapeHtml(names.join(' · '))}</p>
+        <p class="tiny muted" style="margin-top:10px">Victor looked at these himself. The prices go up ${escapeHtml(when)} and the board stays open all weekend — there is no race.</p>
+      </div>`));
+    }
   }
 
   // 1a — what being in the Circle has been worth, in dollars, from real bookings.

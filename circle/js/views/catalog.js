@@ -392,7 +392,29 @@ export function stayDetail({ store, params, go, query = {} }) {
   // a button to add photographs it holds the rights to.
   if (!isTrip) {
     const canEdit = store.hasRole('planner', 'comms', 'admin');
-    const rooms = roomsOf(stay, place);
+    // Interval, which is where the cheapest weeks here come from, sells a unit by its SIZE and
+    // never by its aspect: a Getaway row says "2 beds, 0 bedrooms, sleeps 4", not "oceanfront".
+    // Our catalog splits that one studio into four rows — Gardenview, Oceanfront, Oceanside,
+    // Oceanview — so the Surf Club lists thirteen rooms for what is really four units, and every
+    // one of those rows quietly promises a view the Desk cannot honour. Group by the unit, keep
+    // the aspects as a line, and say plainly whose gift the view is.
+    const splitName = (n) => String(n).split(/\s+[-–—]\s+|,\s+/)[0].trim();
+    const groupByUnit = (list) => {
+      const out = new Map();
+      for (const r of list) {
+        const base = splitName(r.name);
+        const view = String(r.name).slice(base.length).replace(/^[\s,–—-]+/, '').trim();
+        const k = `${base.toLowerCase()}|${r.bedrooms ?? ''}|${r.sleeps ?? ''}`;
+        const had = out.get(k);
+        if (!had) out.set(k, { ...r, name: base, views: view ? [view] : [], photos: [...(r.photos || [])] });
+        else {
+          if (view && !had.views.includes(view)) had.views.push(view);
+          had.photos.push(...(r.photos || []));
+        }
+      }
+      return [...out.values()];
+    };
+    const rooms = groupByUnit(roomsOf(stay, place));
     const pics = roomPhotosFor(stay, place);
     const property = pics.filter(ph => ph.kind === 'property');
     const plans = pics.filter(ph => ph.kind === 'plan').length;
@@ -412,6 +434,7 @@ export function stayDetail({ store, params, go, query = {} }) {
         ${r.photos.length ? galleryStrip(r.photos, { room: i }) : ''}
         <div class="room-head"><h3>${escapeHtml(r.name)}</h3>${r.bits.length ? `<span class="meta num">${escapeHtml(r.bits.join(' · '))}</span>` : ''}</div>
         ${r.description ? `<p class="small muted">${escapeHtml(r.description)}</p>` : ''}
+        ${r.views && r.views.length > 1 ? `<p class="tiny muted">${escapeHtml(r.views.join(' · '))} — whichever the Desk can get. Interval sells the size, not the view.</p>` : ''}
         ${r.unnamed ? '' : `<a class="btn ghost sm" href="#/book/${escapeHtml(stay.id)}?note=${encodeURIComponent(`The ${r.name}, if there is one.`)}">${icon('send', { size: 14 })}Ask for the ${escapeHtml(r.name)}</a>`}
       </article>`).join('')}
       ${property.length ? `<article class="room" data-room="property">${galleryStrip(property, { room: 'property' })}<div class="room-head"><h3>The property</h3><span class="meta">${property.length} photograph${property.length === 1 ? '' : 's'}</span></div></article>` : ''}
