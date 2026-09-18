@@ -401,14 +401,14 @@ export function pay({ store, go }) {
   const sp = splitContribution(me.monthlyUsd, s, tier);
   const reference = refFor(me, month);
   const pending = store.contributionsFor(me.id).find(c => c.forMonth === month && c.status === 'pending');
-  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:820px">
-      <p class="eyebrow">${escapeHtml(fmtMonth(month))}</p>
-      <h1>Send your contribution</h1>
-      <p class="lede" style="margin-top:12px">${escapeHtml(fmtUsd2(me.monthlyUsd))} — ${escapeHtml(fmtAfl2(me.monthlyUsd, s.awgPerUsd))} at the peg of ${s.awgPerUsd} — to the Circle’s Reserve account. Points appear when Vishnu confirms the money landed, not before.</p>
-
-      <div class="panel" style="margin-top:22px">
-        <h2>1 · Make the transfer</h2>
-        <div class="grid g2" style="margin-top:14px">
+  // A member who has already paid, and been confirmed, must never be told to pay again. This is
+  // the one screen where a misread costs real money: the likely outcome is a second $200 landing
+  // in the Reserve that Vishnu then has to spot and refund. So when the month is settled the page
+  // says THAT first and the instructions step aside — still reachable, behind a disclosure, for
+  // anyone deliberately sending something extra.
+  const settled = status === 'confirmed';
+  const landed = store.contributionsFor(me.id).find(c => c.forMonth === month && c.status === 'confirmed');
+  const bankDetails = `<div class="grid g2" style="margin-top:14px">
           <div class="stack">
             <div class="copyline"><code>${escapeHtml(s.reserveAccount.bank)}</code></div>
             <div class="copyline"><code>${escapeHtml(s.reserveAccount.holder)}</code></div>
@@ -416,10 +416,28 @@ export function pay({ store, go }) {
           </div>
           <div class="stack">
             <div><p class="eyebrow">${icon('tag')}Put this in the description</p>
-              <div class="copyline" style="margin-top:6px"><code class="num" style="font-size:1.05rem">${escapeHtml(reference)}</code><button class="btn quiet sm" data-copy="${escapeHtml(reference)}">Copy</button></div></div>
+              <div class="copyline" style="margin-top:6px"><code class="num">${escapeHtml(reference)}</code><button class="btn quiet sm" data-copy="${escapeHtml(reference)}">Copy</button></div></div>
             <p class="small muted">It is how Vishnu matches your transfer against the statement in seconds. Same reference every month, with the month on the end.</p>
           </div>
-        </div>
+        </div>`;
+  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:820px">
+      <p class="eyebrow">${escapeHtml(fmtMonth(month))}</p>
+      <h1>${settled ? `${escapeHtml(fmtMonth(month))} is settled` : 'Send your contribution'}</h1>
+      <p class="lede" style="margin-top:12px">${settled
+        ? `${landed ? `${escapeHtml(fmtUsd2(landed.amountUsd ?? landed.expectedUsd ?? me.monthlyUsd))} landed and Vishnu confirmed it` : 'Vishnu has confirmed this month'} — nothing more is due until the ${s.dueDay}th of next month. There is nothing for you to send.`
+        : `${escapeHtml(fmtUsd2(me.monthlyUsd))} — ${escapeHtml(fmtAfl2(me.monthlyUsd, s.awgPerUsd))} at the peg of ${s.awgPerUsd} — to the Circle’s Reserve account. Points appear when Vishnu confirms the money landed, not before.`}</p>
+
+      ${settled ? `<div class="notice good" style="margin-top:20px"><b><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.thanks[0])}</span> · ${escapeHtml(VOCAB.pap.thanks[1])}</b>
+        <p class="small">${escapeHtml(fmtMonth(month))} is confirmed${landed?.confirmedAt ? ` — ${escapeHtml(fmtDay(landed.confirmedAt))}` : ''}. Your next one is due on the ${s.dueDay}th of next month.</p></div>
+
+      <details class="fineprint" style="margin-top:16px">
+        <summary>Send something extra</summary>
+        <p class="small muted" style="margin-top:10px">Only if you mean to. This month is already paid, and a second transfer has to be spotted and returned by hand.</p>
+        ${bankDetails}
+      </details>` : `
+      <div class="panel" style="margin-top:22px">
+        <h2>1 · Make the transfer</h2>
+        ${bankDetails}
         <p class="small muted" style="margin-top:14px">Florins between local banks land in seconds through I-Pago. A US-dollar transfer can take a business day. Your points follow the amount that actually arrives — bank fees and exchange spread are yours, and the Circle never rounds in its own favour.</p>
       </div>
 
@@ -435,8 +453,6 @@ export function pay({ store, go }) {
         ${pending ? `<div class="notice" style="margin-top:12px"><b>Already sent</b>
             <p class="small">You marked ${escapeHtml(fmtUsd2(pending.expectedUsd))} as sent on ${escapeHtml(fmtDay(pending.submittedAt))}, reference <span class="num">${escapeHtml(pending.reference)}</span>. It is in the Banker’s queue.</p>
             <p style="margin-top:10px"><button class="btn ghost sm" id="withdraw">Withdraw it</button></p></div>`
-          : status === 'confirmed' ? `<div class="notice good" style="margin-top:12px"><b><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.thanks[0])}</span> · ${escapeHtml(VOCAB.pap.thanks[1])}</b>
-            <p class="small">${escapeHtml(fmtMonth(month))} is already confirmed. Your next one is due on the ${s.dueDay}th of next month.</p></div>`
           : `<form id="sent" style="margin-top:12px">
             <div class="grid g2">
               <label class="field"><span>Amount sent</span><input name="amountUsd" type="number" inputmode="decimal" step="0.01" min="1" value="${me.monthlyUsd}" required></label>
@@ -450,7 +466,7 @@ export function pay({ store, go }) {
             <div class="row"><button class="btn" type="submit">${icon('send', { size: 17 })}I sent it</button>
               <a class="btn ghost" id="wa" target="_blank" rel="noopener" href="${escapeHtml(waLink(store.member('mem_vishnu')?.phone || '', TEMPLATES.transferSent({ member: me, amountUsd: me.monthlyUsd, month, reference })))}">Message Vishnu</a></div>
           </form>`}
-      </div>
+      </div>`}
 
       <p class="small muted" style="margin-top:18px">Prefer not to think about it? Set a standing order for the ${s.dueDay}th — Aruba Bank and Banco di Caribe both do it free, online — and put the reference in the description once. <a href="#/profile">Mark yourself on autopilot</a>.</p>
     </div></section></div>`);

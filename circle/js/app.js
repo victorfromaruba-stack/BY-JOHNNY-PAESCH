@@ -301,6 +301,13 @@ const NAV = [
   { path: '/circle', label: 'Circle', icon: 'globe' },
 ];
 
+// A detail route belongs to the tab it was opened from: open a cruise and the bar should still
+// say Cruises. Comparing the whole path meant every /stays/:id, /cruises/:id and /trips/:id left
+// the bottom bar with nothing marked, which reads as the app losing its place. /trips has no
+// index of its own, so it answers to Cruises.
+const NAV_PARENT = { '/trips': '/cruises' };
+const navRoot = (path) => { const seg = '/' + String(path).split('/')[1]; return NAV_PARENT[seg] || seg; };
+
 function updateChrome(current) {
   const me = store.me;
   const tabs = document.getElementById('tabs');
@@ -317,7 +324,7 @@ function updateChrome(current) {
                      { path: '/pay', label: 'Send' },
                      { path: '/circle', label: 'Circle' }, { path: '/crews', label: 'Crews' }, { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }]
                   : [{ path: '/rules', label: 'How it works' }];
-  tabs.innerHTML = main.map(n => `<a href="#${n.path}"${path === n.path ? ' aria-current="page"' : ''}>${escapeHtml(n.label)}${
+  tabs.innerHTML = main.map(n => `<a href="#${n.path}"${navRoot(path) === n.path ? ' aria-current="page"' : ''}>${escapeHtml(n.label)}${
     n.badge ? `<span class="nav-badge">${n.badge > 9 ? '9+' : n.badge}</span>` : ''}</a>`).join('');
   // A job that needs doing shows on the name in the bar, so an officer sees it from any screen
   // without a tab sitting there all day saying nothing.
@@ -331,7 +338,7 @@ function updateChrome(current) {
   list.innerHTML = me ? NAV.map(n => {
     const count = n.badge === 'deals' ? unseen
       : n.badge === 'crews' ? (() => { try { return store.unreadCrews().length; } catch { return 0; } })() : 0;
-    return `<li><a href="#${n.path}"${path === n.path ? ' aria-current="page"' : ''}>
+    return `<li><a href="#${n.path}"${navRoot(path) === n.path ? ' aria-current="page"' : ''}>
       <span class="botnav-ico">${icon(n.icon, { size: 22, stroke: 1.6 })}${count ? `<span class="nav-dot" aria-hidden="true"></span>` : ''}</span>
       ${escapeHtml(n.label)}${count ? `<span class="sr-only">, ${count} new</span>` : ''}</a></li>`;
   }).join('') : '';

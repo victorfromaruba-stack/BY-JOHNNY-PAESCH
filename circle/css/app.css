@@ -110,9 +110,9 @@ main:focus { outline: none; }
 .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
 .btn svg { width: 17px; height: 17px; flex: none; }
 .btn.ghost { background: transparent; color: var(--ink); border-color: var(--hairline); }
-.btn.ghost:hover { background: var(--raised); }
+@media (hover: hover) { .btn.ghost:hover { background: var(--raised); } }
 .btn.quiet { background: transparent; color: var(--ink-2); border-color: transparent; padding-inline: 10px; }
-.btn.quiet:hover { color: var(--ink); background: var(--raised); }
+@media (hover: hover) { .btn.quiet:hover { color: var(--ink); background: var(--raised); } }
 .btn.good { background: var(--good); color: var(--on-good); }
 .btn.danger { background: transparent; color: var(--flag); border-color: var(--flag); }
 /* A small button is small in ink, not in target. 38px was under every thumb guideline and it
@@ -222,6 +222,7 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-
 
 .ledger { list-style: none; margin: 0; padding: 0; }
 .ledger li { display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; padding: 13px 0; border-bottom: 1px solid var(--hairline-soft); }
+.ledger li:last-child { border-bottom: 0; }
 .ledger .what { display: grid; gap: 3px; min-width: 0; }
 .ledger .what b { font-weight: 600; font-size: .95rem; }
 .ledger .meta { font-size: .8rem; color: var(--ink-2); }
@@ -380,6 +381,7 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .jobs { display: grid; gap: 0; border-top: 1px solid var(--hairline); }
 .job { padding: 22px 0; border-bottom: 1px solid var(--hairline-soft); display: grid; gap: 8px;
   grid-template-columns: minmax(0, 12ch) minmax(0, 18ch) minmax(0, 1fr); align-items: start; }
+.job:last-child { border-bottom: 0; }
 .job h3 { font-size: 1.05rem; }
 .job-who { display: flex; align-items: center; gap: 8px; font-size: .92rem; }
 .job-who .avatar { flex: none; }
@@ -888,11 +890,13 @@ button.badge-card:hover { border-color: var(--ink-3); }
    phone is indistinguishable from broken. 60ms down, the standard ease back up. */
 .chip[role=button]:active, button.chip:active, a.chip:active,
 .choice:active, .badge-card:not([disabled]):active, .icon-btn:active,
-.segmented > button:active, .stay-card a:active, .fineprint > summary:active {
+.segmented > button:active, a.stay-card:active, .stay-card a:active,
+.card-strip .mini:active, .fineprint > summary:active {
   transform: scale(.97);
   transition-duration: 60ms;
 }
-.choice, .badge-card, .icon-btn, button.chip, a.chip, .chip[role=button], .fineprint > summary {
+.choice, .badge-card, .icon-btn, button.chip, a.chip, .chip[role=button], .fineprint > summary,
+a.stay-card, .card-strip .mini {
   transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out),
               border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
@@ -901,7 +905,8 @@ button.badge-card:hover { border-color: var(--ink-3); }
 @media (prefers-reduced-motion: reduce) {
   .btn:active, .chip[role=button]:active, button.chip:active, a.chip:active, .choice:active,
   .badge-card:not([disabled]):active, .icon-btn:active, .segmented > button:active,
-  .stay-card a:active, .fineprint > summary:active { transform: none; }
+  a.stay-card:active, .stay-card a:active, .card-strip .mini:active,
+  .fineprint > summary:active { transform: none; }
 }
 
 /* The cross-fade between screens (js/app.js). Short enough not to be in anybody's way: at 180ms
@@ -1204,9 +1209,13 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 /* Rows on a phone: a smaller thumb, the dollars folded away, the sub on two lines. */
 .listing-row .sub .l2 { display: block; }
 @media (max-width: 560px) {
-  .listing-row { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; }
+  /* `auto` here sized this track to the widest thing in it — which is not the price but the
+     greyest line under it, "pts all in" at 141px of a 390px screen. The name was left less room
+     than its own price column, so every title wrapped and no two rows were the same height.
+     Cap the track; the points line wraps inside it instead. */
+  .listing-row { grid-template-columns: 44px minmax(0, 1fr) 92px; gap: 10px; }
   .listing-row .thumb { width: 44px; height: 44px; }
-  .listing-row .price-col { min-width: 88px; }
+  .listing-row .price-col { min-width: 0; }
   .listing-row .price-col .all .usd { display: none; }
 }
 

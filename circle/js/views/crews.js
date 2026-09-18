@@ -29,15 +29,15 @@ export function crews({ store, go }) {
   const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:820px">
       <div class="sec-head">
         <div>
-          <p class="eyebrow">${icon('users')}Your circles</p>
+          <p class="eyebrow">${icon('users')}Your crews</p>
           <h1>Who you are going with</h1>
-          <p>A circle is the people on one booking — the four who split a villa, the family
+          <p>A crew is the people on one booking — the four who split a villa, the family
              group, the ones who always go in October. It starts from a room the Desk has
              approved, it has a name you choose, and its thread is readable only by the people
              in it.</p>
         </div>
         ${store.approvedRoomsFor(me.id).length
-          ? `<button class="btn" id="new-crew">${icon('plus', { size: 17 })}Start a circle</button>`
+          ? `<button class="btn" id="new-crew">${icon('plus', { size: 17 })}Start a crew</button>`
           : `<a class="btn ghost" href="#/stays">${icon('bed', { size: 17 })}Find a room first</a>`}
       </div>
       <div class="stack" id="list" style="margin-top:22px"></div>
@@ -48,12 +48,12 @@ export function crews({ store, go }) {
     const rooms = store.approvedRoomsFor(me.id);
     list.appendChild(el(`<div class="panel empty">
       <span class="ico">${icon('users', { size: 30, cls: 'ico-muted' })}</span>
-      <h2 style="margin-top:10px;font-size:1.15rem">${rooms.length ? 'Start one around a room' : 'A circle starts with a room'}</h2>
+      <h2 style="margin-top:10px;font-size:1.15rem">${rooms.length ? 'Start one around a room' : 'A crew starts with a room'}</h2>
       <p class="small muted" style="margin-top:8px;max-width:54ch">${rooms.length
         ? `You have ${rooms.length} approved booking${rooms.length === 1 ? '' : 's'} to build one around. Name it whatever you already call yourselves, add the people coming with you, and the thread is yours — nobody else in the Circle can read it, not the Desk, not the Banker.`
-        : 'A circle is the people on a booking, so it needs a booking first. Ask for a room, and once the Desk quotes it and you accept, you can start the circle around it and bring the others in.'}</p>
+        : 'A crew is the people on a booking, so it needs a booking first. Ask for a room, and once the Desk quotes it and you accept, you can start the crew around it and bring the others in.'}</p>
       <p style="margin-top:14px">${rooms.length
-        ? `<button class="btn sm" id="new-crew-2">${icon('plus', { size: 16 })}Start a circle</button>`
+        ? `<button class="btn sm" id="new-crew-2">${icon('plus', { size: 16 })}Start a crew</button>`
         : `<a class="btn sm" href="#/stays">${icon('bed', { size: 16 })}Find a room</a>`}</p>
     </div>`));
   }
@@ -108,7 +108,7 @@ async function crewSheet({ store, crew = null }) {
       body.innerHTML = `
         <p class="sheet-text">${crew
           ? 'Call it whatever you already call yourselves.'
-          : 'A circle is the people on one booking. Pick the room, name yourselves, and only the people you add can see it or read what is said in it.'}</p>
+          : 'A crew is the people on one booking. Pick the room, name yourselves, and only the people you add can see it or read what is said in it.'}</p>
         ${crew ? '' : `<label class="field"><span>The room</span>
           <select name="redemptionId" required>
             ${rooms.map(r => {
@@ -116,7 +116,7 @@ async function crewSheet({ store, crew = null }) {
               return `<option value="${escapeHtml(r.id)}">${escapeHtml(st?.name || 'A stay')} · ${escapeHtml(fmtDay(r.checkIn))}${r.nights ? ` · ${r.nights} night${r.nights === 1 ? '' : 's'}` : ''}</option>`;
             }).join('')}
           </select>
-          <span class="hint">Only rooms the Desk has approved and that do not already have a circle.</span></label>`}
+          <span class="hint">Only rooms the Desk has approved and that do not already have a crew.</span></label>`}
         <label class="field"><span>Name</span>
           <input name="name" required maxlength="40" autofocus placeholder="The October Four"
                  value="${escapeHtml(crew?.name || '')}"></label>
