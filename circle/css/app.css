@@ -186,8 +186,8 @@ label:has(> input[type=checkbox]), label:has(> input[type=radio]) { min-height: 
 /* A link that sits beside a section heading ("All of it", "Your corner") is navigation, not
    prose, so it needs a thumb-sized target. Inline links inside a sentence are deliberately NOT
    included: padding those out would wreck the line rhythm, and the guidelines exempt them. */
-.row-between > a.small, .sec-head a.small { display: inline-flex; align-items: center;
-  min-height: 44px; }
+.row-between > a.small, .sec-head a.small { display: inline-flex; align-items: center; justify-content: flex-end;
+  min-height: 44px; min-width: 44px; }
 
 /* A chip that can be pressed gets a thumb-sized target; a chip that is only a label does not
    need one and would look bloated with it. */
