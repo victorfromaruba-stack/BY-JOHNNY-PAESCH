@@ -50,7 +50,9 @@ a.panel, .lad-v a, .faces a, .rank-crest a { text-decoration: none; }
 .stay-card .body span { text-decoration: none; }
 /* Headings never carry a rule, wherever they sit. */
 h1 a, h2 a, h3 a, h4 a { text-decoration: none; }
-button, input, select, textarea { font: inherit; color: inherit; }
+button { font: inherit; color: inherit; }
+/* Every typed control is 16px at least, so iOS never zooms the page when one takes focus. */
+input:not([type=checkbox]):not([type=radio]), select, textarea { font-family: inherit; font-size: var(--t-body); line-height: inherit; color: inherit; }
 img, svg { display: block; max-width: 100%; }
 ul, ol { margin: 0; padding-left: 1.15em; }
 :focus-visible { outline: 2px solid var(--good); outline-offset: 2px; border-radius: 4px; }
@@ -144,6 +146,8 @@ main:focus { outline: none; }
    hit, which feels identical on a phone. The visual size is held by the padding and font; the
    height is padded out to 44 so the finger has somewhere to land. */
 .btn.sm { min-height: 44px; min-width: 44px; padding: 7px var(--s-4); font-size: var(--t-fine); }
+/* A select drawn as a small button is still a typed control: it keeps the 16px floor. */
+select.btn.sm { font-size: var(--t-body); }
 .people-table .btn.sm { padding-inline: var(--s-3); }
 .btn.block { width: 100%; }
 .icon-btn { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: var(--r-chip); border: 0; background: transparent; color: var(--ink); cursor: pointer; }
@@ -160,6 +164,11 @@ main:focus { outline: none; }
 .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* The two phone grids: amount and currency, check-in and check-out, dollars and points;
+   nights, flexible and guests. Named for what they hold, never for a breakpoint. */
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+.trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3); }
+.stack.tight { gap: var(--s-1); }
 @media (max-width: 900px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .g2, .g3, .g4 { grid-template-columns: minmax(0, 1fr); } }
 .side { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: clamp(14px, 2.4vw, 24px); align-items: start; }
@@ -182,6 +191,7 @@ main:focus { outline: none; }
 input[type=checkbox], input[type=radio] { width: 22px; height: 22px; }
 label:has(> input[type=checkbox]), label:has(> input[type=radio]) { min-height: 44px;
   display: inline-flex; align-items: center; gap: 10px; }
+label.row:has(> input[type=checkbox]) { min-height: 44px; align-items: center; }
 
 /* A link that sits beside a section heading ("All of it", "Your corner") is navigation, not
    prose, so it needs a thumb-sized target. Inline links inside a sentence are deliberately NOT
@@ -265,7 +275,9 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-
 
 /* ---------- forms ---------- */
 .field { display: grid; gap: 6px; margin-bottom: 14px; }
-.field > span, .field > label { font-family: var(--font-mono); font-size: var(--t-folio); font-weight: 400; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+/* The label is the field's first span; the wrappers a field can also hold (.row, .pw-wrap) are not
+   labels. :where() keeps the exclusion weightless, so .hint and .err below still win as they did. */
+.field > span:where(:not(.row):not(.pw-wrap)), .field > label { font-family: var(--font-mono); font-size: var(--t-folio); font-weight: 400; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
 .field input, .field select, .field textarea {
   width: 100%; min-height: var(--h-input); padding: 12px 14px; border-radius: var(--r-input);
   border: 1px solid var(--hairline); background: var(--surface); color: var(--ink); }
@@ -275,7 +287,7 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-
 .field .err { font: 400 var(--t-fine)/1.4 var(--font-body); color: var(--flag); text-transform: none; letter-spacing: 0; }
 .field.invalid input, .field.invalid textarea, .invalid { border-color: var(--flag) !important; }
 .field input[inputmode="decimal"], .field input[type="date"], .field input.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.field textarea.mono { font-family: var(--font-mono); font-size: var(--t-small); }
+.field textarea.mono { font-family: var(--font-mono); }
 fieldset { border: 0; margin: 0; padding: 0; }
 .choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 /* Three columns all the way down. Stacking them made one choice a full-width card and cost
@@ -293,7 +305,7 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .choice .amt { font-family: var(--font-mono); font-size: var(--t-fig); font-weight: 500; font-variant-numeric: tabular-nums; }
 .choice .tier { font-size: var(--t-fine); color: var(--ink-2); }
 .copyline { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px dashed var(--hairline); border-radius: var(--r-input); background: var(--raised); }
-.copyline code { font-family: var(--font-mono); font-size: var(--t-small); letter-spacing: .02em; overflow-x: auto; }
+.copyline code { font-family: var(--font-mono); font-size: var(--t-small); letter-spacing: .02em; overflow-x: auto; overscroll-behavior-x: contain; }
 .copyline code.tiny { font-size: var(--t-fine); }
 
 /* ---------- rings, gauges, cards ---------- */
@@ -335,6 +347,10 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .card-flip.flipped > .front { visibility: hidden; transition: visibility 0s linear calc(var(--dur-flip) / 2); }
 .card-back-body { position: absolute; inset: 0; padding: 6cqw; display: grid; grid-template-rows: auto 1fr auto; gap: 3cqw; font-size: clamp(6px, 3.6cqw, 12px); }
 .card-back-body p { font-size: clamp(5px, 2.9cqw, 10px); }
+/* The card screen is a dark page of its own: it fills the screen and clears the tab bar itself,
+   so main's own padding steps aside. */
+.nocturne-page { min-height: 100dvh; padding-bottom: calc(var(--h-nav) + var(--inset-bottom) + var(--s-6)); }
+main:has(.nocturne-page), body:has(.botnav:not([hidden])) main:has(.nocturne-page) { padding-bottom: 0; }
 .card-strip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; }
 .card-strip .mini { display: block; width: 132px; }
 @media (max-width: 560px) { .card-strip { grid-template-columns: 1fr; } .card-strip .mini { width: 168px; } }
@@ -567,9 +583,9 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 
 /* Passwords: a peek toggle, a strength bar, and the one-time reveal. */
 .pw-wrap { position: relative; display: block; }
-.pw-wrap input { padding-right: 44px; width: 100%; }
+.pw-wrap input { padding-right: 48px; width: 100%; }
 .pw-peek { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none;
-  border: 0; color: var(--ink-3); padding: 8px; cursor: pointer; border-radius: var(--r-chip); line-height: 0; }
+  border: 0; color: var(--ink-3); width: 44px; height: 44px; padding: 0; display: grid; place-items: center; cursor: pointer; border-radius: var(--r-chip); line-height: 0; }
 .pw-peek:active { color: var(--ink); background: var(--raised); }
 .pw-meter { display: flex; align-items: center; gap: 10px; margin: -6px 0 12px; }
 .pw-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--raised); overflow: hidden; }
@@ -610,7 +626,7 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 /* The place: what a property publishes about itself, and the pictures it publishes. */
 .facts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: var(--t-small); }
 .facts li { display: inline-flex; align-items: center; gap: 6px; }
-.gallery { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+.gallery { display: flex; gap: 8px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
 .gallery-tile { flex: 0 0 auto; width: 176px; height: 118px; padding: 0; border: 0; border-radius: var(--r-card); overflow: hidden;
   background: var(--well); scroll-snap-align: start; cursor: pointer; }
 .gallery-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -742,7 +758,10 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 .msg .when { display: block; margin-top: 3px; font-size: var(--t-folio); color: var(--ink-3); text-align: right; }
 .msg.gone .bubble { background: transparent; border: 1px dashed var(--hairline);
   color: var(--ink-3); font-style: italic; font-size: var(--t-fine); }
-.unsay { background: none; border: 0; color: var(--ink-3); cursor: pointer; padding: 0 0 0 6px;
+/* The take-back is a 44px target; the negative margins hand the height back so the bubble does not
+   grow (measured: 16px each way and middle alignment keep the bubble at its old height; 12px added 3.5px). */
+.unsay { background: none; border: 0; color: var(--ink-3); cursor: pointer; padding: 0 8px;
+  min-width: 44px; min-height: 44px; display: inline-grid; place-items: center; margin: -16px -8px -16px 0; vertical-align: middle;
   font-size: var(--t-small); line-height: 1; }
 .unsay:active { color: var(--flag); }
 
@@ -877,7 +896,7 @@ button.badge-card { cursor: pointer; font: inherit; color: inherit; }
    to catch: a control with no edge is not read as a control. One track, one filled thumb, and
    it scrolls sideways rather than wrapping if a label ever grows. */
 .segmented { display: flex; gap: 2px; padding: 3px; margin-top: 16px; background: var(--raised);
-  border: 1px solid var(--hairline); border-radius: var(--r-input); overflow-x: auto;
+  border: 1px solid var(--hairline); border-radius: var(--r-input); overflow-x: auto; overscroll-behavior-x: contain;
   scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .segmented::-webkit-scrollbar { display: none; }
 .segmented > button { flex: 1 0 auto; min-height: 44px; padding: 0 14px; border: 0; cursor: pointer;
@@ -886,6 +905,8 @@ button.badge-card { cursor: pointer; font: inherit; color: inherit; }
   transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 /* The Desk's labels carry an icon, which the settings tabs did not. */
 .segmented > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+/* An even row: the segments share the width instead of hugging their labels (the Desk, the Circle). */
+.segmented.even > button { flex: 1 1 0; min-width: 0; padding: 0 var(--s-2); }
 .segmented > button svg { width: 15px; height: 15px; flex: none; }
 .segmented > button[aria-pressed="true"] { background: var(--surface); color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--hairline); }
@@ -994,6 +1015,9 @@ a.stay-card, .card-strip .mini {
 .stepper button[disabled] { color: var(--ink-3); cursor: default; transform: none; }
 .stepper output { min-width: 34px; text-align: center; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--t-lede); font-weight: 500; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Four chips as one row of four, each the same width. */
+.chips.four { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-2); }
+.chips.four .chip-btn { justify-content: center; padding-inline: var(--s-1); }
 .chip-btn { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 12px; border-radius: var(--r-input); border: 1px solid var(--hairline); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--t-fine); cursor: pointer; text-decoration: none; transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
 .chip-btn[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
 .chip-btn:active { transform: scale(.96); }
@@ -1203,6 +1227,10 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 @media (min-width: 780px) { .hero-place { aspect-ratio: 2 / 1; } .hero-place .on { padding: 48px 30px 26px; } }
 .hero-place .scene { position: absolute; inset: 0; }
 .hero-place + .credit { margin-top: 8px; }
+/* A link inside a credit line or the rules' prose keeps its line rhythm and still gets a 44px
+   tap: the padding is handed back by the margin. Scoped to these two, never to buttons, ruled
+   links, nav or row links. */
+.credit a, .rules-prose a { display: inline-block; padding-block: 12px; margin-block: -12px; }
 
 /* The rooms: one block per room, its photographs as a strip a thumb can swipe, the property's
    own figures set in the mono face, and the ask one tap away. */
@@ -1329,6 +1357,8 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 .postcard-shot { display: block; position: relative; overflow: hidden; aspect-ratio: var(--w, 4) / var(--h, 3); background: var(--well); color: inherit; }
 .postcard-shot.tall { aspect-ratio: 4 / 5; }
 .postcard-shot.wide { aspect-ratio: 2 / 1; }
+/* On Home a postcard is a compact 3:2 frame. */
+.postcard.compact .postcard-shot { aspect-ratio: 3 / 2; }
 .postcard-shot img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity var(--dur-water) var(--ease-out); }
 .postcard-shot img.in { opacity: 1; animation: settle 1400ms var(--ease-out) both; }
 .postcard.full .postcard-shot { aspect-ratio: var(--w, 4) / var(--h, 3); max-height: 80vh; }
