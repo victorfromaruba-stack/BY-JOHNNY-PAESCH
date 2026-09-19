@@ -47,13 +47,14 @@ function eyebrowText(count) {
   return noun;
 }
 
+/** One line, in the hand: how many there are, and when the last one landed. */
 function datelineHtml(store, count) {
   const latest = store.moments()[0];
   if (!latest || !count?.total) return 'Nothing sent yet';
   const one = count.total === 1;
-  const who = count.insiders === 1 ? VOCAB.member : VOCAB.members;
-  return `Latest <span class="stamp">${escapeHtml(fmtClock(latest.createdAt))}</span> · ${escapeHtml(dayShort(new Date(latest.createdAt)))} · ${
-    count.total} ${one ? VOCAB.postcard.toLowerCase() : VOCAB.postcards.toLowerCase()} from ${count.insiders} ${escapeHtml(who)}`;
+  const noun = one ? VOCAB.postcard.toLowerCase() : VOCAB.postcards.toLowerCase();
+  return `<b class="num">${count.total}</b> ${escapeHtml(noun)} · latest <span class="stamp">${
+    escapeHtml(fmtClock(latest.createdAt))}</span>, ${escapeHtml(dayShort(new Date(latest.createdAt)))}`;
 }
 
 /** The place line, only from what the server wrote on the row. */
@@ -67,11 +68,17 @@ function placeLine(moment, store) {
   return stay.name.toUpperCase();
 }
 
-/** The licence line under a preview stand-in. */
+/**
+ * The licence line under a preview stand-in, set as one stamp under the chips: the EXAMPLE chip
+ * already says it is a stand-in, so the line carries only what the licence asks for — who made the
+ * picture, under what licence, and where it came from — separated the way the apparatus is.
+ */
 function creditLine(credit) {
-  if (!credit) return "A preview stand-in, not a member's picture.";
-  const c = String(credit).trim().replace(/\.$/, '').replace(/^([A-Z])(?=[a-z])/, (ch) => ch.toLowerCase());
-  return `A preview stand-in, not a member's picture — ${c}.`;
+  if (!credit) return "A preview stand-in, not a member's picture";
+  return String(credit).trim().replace(/\.$/, '')
+    .replace(/^photograph(ed)? by /i, '')
+    .replace(/,? via /i, ' · ')
+    .replace(/, /g, ' · ');
 }
 
 /** The picture arrives after the text: set the src, and let it settle in once it has loaded. */
@@ -142,7 +149,7 @@ export function postCard(moment, { store, urls = null, compact = false, full = f
     <figcaption class="postcard-body">
       <div class="postcard-who">${avatar(who, 28)}<b>${escapeHtml(firstName(who))}</b><span class="stamp">${escapeHtml(fmtClock(moment.createdAt))}</span></div>
       ${facts.length ? `<p class="postcard-place">${facts.join('')}</p>` : ''}
-      ${moment.example ? `<p class="tiny muted">${escapeHtml(creditLine(moment.credit))}</p>` : ''}
+      ${moment.example ? `<p class="stamp">${escapeHtml(creditLine(moment.credit))}</p>` : ''}
       ${moment.caption ? `<p class="postcard-caption">${escapeHtml(moment.caption)}</p>` : ''}
       <p class="postmark">${escapeHtml(postmarkLabel(moment))}</p>
       <div class="postcard-acts">
@@ -263,7 +270,7 @@ export function postcardSheet({ store, prefill = {} }) {
           <div class="postcard-preview"><img alt="" src="${escapeHtml(previewUrl)}"></div>
           <p class="postmark">${escapeHtml(previewPostmark(shot))}</p>
           <label class="field"><span>A line for the back</span>
-            <input name="caption" maxlength="140" placeholder="A line for the back" autocomplete="off" value="${escapeHtml(keptCaption)}"></label>
+            <input name="caption" maxlength="140" placeholder="A line for the back" autocomplete="off" enterkeyhint="done" value="${escapeHtml(keptCaption)}"></label>
           <div class="field"><span>Where</span>${where}</div>
           ${crews.length ? `<div class="field"><span>Who sees it</span>
             <div class="segmented" id="who">
@@ -272,8 +279,7 @@ export function postcardSheet({ store, prefill = {} }) {
             </div></div>` : ''}
           <p class="tiny muted">Sent at postcard size, without the phone's location data. The original stays on your phone. Seen by Insiders only, never outside the club — and a screenshot is a screenshot, same as the group chat.</p>
           <div class="sheet-actions">
-            <button type="button" class="btn ghost" data-close>Cancel</button>
-            <button type="button" class="btn" data-ok>Send it</button>
+            <button type="button" class="btn block" data-ok>Send it</button>
           </div>`;
 
         form.querySelector('[data-unlock]')?.addEventListener('click', () => {
@@ -319,7 +325,9 @@ export function postcardSheet({ store, prefill = {} }) {
         previewUrl = URL.createObjectURL(shot.blob);
         buildForm();
         form.hidden = false;
-        form.querySelector('[name=caption]')?.focus({ preventScroll: true });
+        // The caption is not focused: the keyboard would rise over the picture and the postmark
+        // the member has just been handed, and the sheet's own focus (a button, never an input)
+        // is the house rule.
       }));
 
       body.closest('dialog')?.addEventListener('close', () => { if (previewUrl) URL.revokeObjectURL(previewUrl); });
@@ -353,7 +361,10 @@ export function feed({ store, go, query = {}, refresh }) {
         <p class="dateline">${datelineHtml(store, count)}</p>
         <div class="row no-print">
           <button type="button" class="btn" id="send">Send a postcard</button>
-          ${mine ? '<a class="link-rule" href="#/postcards">Everyone\'s</a>' : '<a class="link-rule" href="#/postcards?mine=1">Yours</a>'}
+        </div>
+        <div class="segmented even no-print" role="group" aria-label="Whose postcards" id="whose">
+          <button type="button" data-mine="" aria-pressed="${mine ? 'false' : 'true'}">Everyone</button>
+          <button type="button" data-mine="1" aria-pressed="${mine ? 'true' : 'false'}">Yours</button>
         </div>
       </header>
       ${island ? `<div class="island-strip">
@@ -412,6 +423,12 @@ export function feed({ store, go, query = {}, refresh }) {
     const made = await postcardSheet({ store, prefill });
     if (made && wrap.isConnected) refresh?.();
   };
+  // Everyone · Yours: the same ?mine query the ruled link used to carry.
+  wrap.querySelector('#whose').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-mine]'); if (!b || b.getAttribute('aria-pressed') === 'true') return;
+    const nav = go || ((p) => { location.hash = `#${p}`; });
+    nav(b.dataset.mine === '1' ? '/postcards?mine=1' : '/postcards');
+  });
   wrap.querySelector('#send').addEventListener('click', () => open({}));
   wrap.querySelector('#take')?.addEventListener('click', () => open({ capture: true, redemptionId: island.redemption?.id || null }));
   wrap.querySelector('#roll')?.addEventListener('click', () => open({ redemptionId: island.redemption?.id || null }));
@@ -421,14 +438,14 @@ export function feed({ store, go, query = {}, refresh }) {
 /** /postcards/:id — one postcard, the whole picture at its own ratio. */
 export function one({ store, params, go }) {
   const m = store.postcardsOn() ? store.moment(params.id) : null;
+  // No way-up band: the running head carries '‹ POSTCARDS' on this route.
   const wrap = el(`<div><section class="sec"><div class="wrap">
-      <p class="small"><a href="#/postcards" class="back">${icon('chevronRight', { size: 14 })}${escapeHtml(VOCAB.postcards)}</a></p>
-      <div id="card" style="margin-top:8px"></div>
+      <div id="card"></div>
     </div></section></div>`);
   const slot = wrap.querySelector('#card');
   if (!m) {
-    slot.innerHTML = `<h1 style="margin-top:40px">Nothing here</h1>
-      <p style="margin-top:12px"><a class="link-rule" href="#/postcards">${escapeHtml(VOCAB.postcards)}</a></p>`;
+    slot.innerHTML = `<h1>Nothing here</h1>
+      <p><a class="link-rule" href="#/postcards">${escapeHtml(VOCAB.postcards)}</a></p>`;
     return wrap;
   }
   const fig = postCard(m, { store, full: true, go });

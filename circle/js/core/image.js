@@ -102,6 +102,11 @@ function parseTiff(v, start, none) {
  * position. The only thing kept from the phone is the date, on the row, and only when the phone
  * actually said it: with a zone ('exif'), as a bare day ('exif_day'), or as a fresh capture whose
  * file was made within two minutes of now ('camera'). Otherwise the row says nothing ('none').
+ *
+ * The size is the backend's call, never the view's: every caller passes store.postcardEncoding()
+ * — 1200/0.8 on the preview, where the card lives in localStorage, and 2048/0.85 on Supabase,
+ * where the private bucket takes 8 MB and the re-encode at that size is what strips the EXIF.
+ * The defaults below are only what a caller that forgot would get.
  */
 export async function readPostcard(file, { max = 2048, quality = 0.85, captured = false } = {}) {
   const exif = await readExifDate(file);
