@@ -97,12 +97,23 @@ export function sheet({ title, render, tall = false }) {
 
     render(body, close);
     fixTypes();
-    // Focus goes to a button, never an input, so no keyboard rises over the sheet's text.
+    // No caller's autofocus: focus is chosen below, and never an input.
     body.querySelectorAll('[autofocus]').forEach((n) => n.removeAttribute('autofocus'));
     dlg.showModal();
     history.pushState({ huntoSheet: id }, '');
     openSheets.push(entry);
-    (body.querySelector('button:not([data-close]):not([disabled])') || dlg.querySelector('[data-close]'))?.focus();
+    /* Focus goes to the sheet's one action and to nothing else. Never an input, so no keyboard
+       rises over the sheet's text. Never the first button the body happens to hold: a form full
+       of helpers (Post a deal's 'Next Friday, 8pm') opened the sheet scrolled 369px past its own
+       first question, and a picker, where every name is a button, opened with a stranger one
+       keypress from being added. So: the primary, then whatever else the sticky actions carry,
+       then their labelled way out, and otherwise the X — and always with preventScroll, so the
+       body opens at its first line however far down the action sits. */
+    const action = body.querySelector('[data-ok]:not([disabled])')
+      || body.querySelector('.sheet-actions :is(button, a.btn):not([data-close]):not([disabled])')
+      || body.querySelector('.sheet-actions [data-close]')
+      || dlg.querySelector('[data-close]');
+    action?.focus({ preventScroll: true });
   });
 }
 
