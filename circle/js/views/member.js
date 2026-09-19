@@ -817,7 +817,10 @@ export function card({ store, go }) {
 // An Insider with no role never sees any of it.
 const JOBS = [
   { roles: ['planner', 'comms', 'admin'], label: 'The Desk', href: '#/desk' },
-  { roles: ['treasurer', 'deputy'], label: 'The Banker’s inbox', href: '#/bank' },
+  // 'admin' sits in this list because the router lets an administrator through every guarded
+  // route (app.js appends it to each roles list). Without it here Victor was admitted to the
+  // bank but offered no door to it.
+  { roles: ['treasurer', 'deputy', 'admin'], label: 'The Banker’s inbox', href: '#/bank' },
   { roles: ['admin', 'treasurer'], label: 'Settings', href: '#/settings' },
 ];
 // Every screen that has no tab, one visible row from the name in the bar.
