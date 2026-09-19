@@ -22,6 +22,9 @@ body {
   html { background: var(--well); }
   body { outline: 1px solid var(--hairline); }
 }
+/* No rubber band in the installed app, where realtime and the resume reloads keep it fresh; the
+   Safari tab and Chrome keep pull-to-refresh, which is their only refresh. */
+@media (display-mode: standalone) { html { overscroll-behavior-y: none; } }
 /* Two registers. What is SAID — a page title, a section head — is set in the serif, one weight,
    and never bold: the face ships one weight and a browser's faux bold is the cheapest thing a
    serif can do. What is READ and pressed — row titles, panel heads, controls — stays in the sans.
@@ -154,7 +157,14 @@ select.btn.sm { font-size: var(--t-body); }
 .icon-btn svg { width: 18px; height: 18px; }
 
 /* ---------- panels & cards ---------- */
-.panel { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--r-card); padding: var(--s-5); }
+/* A panel is not a card. Twenty white rounded boxes on a grey field is the one thing every
+   template does; a bulletin separates its blocks with rules. The exceptions are named: a boxed
+   panel and a panel inside a sheet keep the box, the quoted block is a tint, and the officer's
+   job list keeps its ink rule. */
+.panel { background: transparent; border: 0; border-top: 1px solid var(--hairline); border-radius: 0; padding: var(--s-4) 0; }
+.panel.boxed, dialog .panel { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--r-card); padding: var(--s-4); }
+/* The first panel under a section head or at the top of the left stack sits on the head's own rule. */
+.sec-head + .panel, .side > .stack:first-child > .panel:first-child { border-top: 0; padding-top: 0; }
 /* The quoted block: what somebody said or asked for, set in a tint. Boxed at every width. */
 .panel.flat { background: var(--raised); border: 1px solid var(--hairline-soft); border-radius: var(--r-card); padding: var(--s-4); }
 .panel h3 + p { margin-top: 6px; }
@@ -173,7 +183,9 @@ select.btn.sm { font-size: var(--t-body); }
 .side { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); align-items: start; }
 
 /* stat tiles */
-.stat { display: grid; gap: 4px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--r-card); }
+.stat { display: grid; gap: 4px; padding: var(--s-3) 0; background: transparent; border: 0; border-top: 1px solid var(--hairline); border-radius: 0; }
+dialog .stat { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--r-card); padding: 14px 16px; }
+.grid > .stat:first-child { border-top: 0; padding-top: 0; }
 .stat .k { font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
 .stat b { font-size: var(--t-fig); font-weight: 500; }
 .stat .sub { font-size: var(--t-fine); color: var(--ink-2); }
@@ -741,7 +753,7 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 
 /* An officer's work, inside the member's own screens. There is no separate admin app: this is
    a list on Home when something is waiting, and the same list under a profile, always. */
-.job-panel { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.panel.job-panel { background: var(--surface); border: 0; border-left: 2px solid var(--ink); border-radius: 0; box-shadow: none; padding: 0 0 0 var(--s-4); }
 .job-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
 .job-list li { border-top: 1px solid var(--hairline-soft); }
 .job-list li:first-child { border-top: 0; }
@@ -1060,7 +1072,7 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 /* The cover: one photograph, whole, and the story under it. Nothing is printed on the picture —
    a number stamped on a photograph is the grammar of a deal site, not of a club — so the folio,
    the title and the price all sit in the body, the price as a figure on a caption line. */
-.cover { display: block; border-radius: var(--r-card); overflow: hidden; background: var(--surface); border: 1px solid var(--hairline); color: inherit; text-decoration: none; }
+.cover { display: block; margin-inline: calc(-1 * var(--s-4)); background: transparent; color: inherit; text-decoration: none; }
 .cover .cover-shot { display: block; position: relative; aspect-ratio: 3 / 2; background: var(--well); overflow: hidden; }
 .cover .cover-shot img, .cover .cover-shot .scene, .cover .cover-shot .scene svg { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cover .cover-shot .strip-tag { top: 14px; right: 14px; left: auto; bottom: auto; }
@@ -1068,7 +1080,7 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .cover .cover-price { display: flex; align-items: baseline; gap: var(--s-2); margin-top: var(--s-2); color: var(--ink); font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero;
   font-size: var(--t-fig); font-weight: 500; letter-spacing: -.02em; line-height: 1; }
 .cover .cover-price small { font-family: var(--font-mono); font-size: var(--t-folio); font-weight: 400; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
-.cover .cover-body { padding: var(--s-4) var(--s-5) var(--s-5); }
+.cover .cover-body { padding: var(--s-4) var(--s-4) var(--s-5); }
 .cover .cover-body h2 { font-size: var(--t-head); }
 .cover .cover-body .mono { display: block; margin-top: 8px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--t-fine); color: var(--ink-2); white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
 .cover .cover-body .why { margin-top: 8px; font-size: var(--t-small); color: var(--ink-2); }
@@ -1080,9 +1092,12 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
    otherwise a --well square with the beach's two-letter mark — never a beach photo at 56px, where
    its tag would not fit. */
 .listing { display: block; border-top: 1px solid var(--hairline); }
-.listing-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: var(--s-3); align-items: center; min-height: 76px;
+/* The price track is capped: `auto` sized it to the widest thing in it, which is not the price
+   but the greyest line under it ("pts all in" at 141px of a 390px screen), so every title
+   wrapped and no two rows were the same height. The points line wraps inside 92px instead. */
+.listing-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 92px; gap: var(--s-2); align-items: center; min-height: 76px;
   padding: var(--s-3) 0; border-bottom: 1px solid var(--hairline-soft); color: inherit; text-decoration: none; position: relative; }
-.listing-row .thumb { width: 56px; height: 56px; border-radius: var(--r-chip); overflow: hidden; background: var(--well); display: grid; place-items: center; }
+.listing-row .thumb { width: 44px; height: 44px; border-radius: var(--r-chip); overflow: hidden; background: var(--well); display: grid; place-items: center; }
 .listing-row .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .listing-row .thumb b { font-family: var(--font-mono); font-size: var(--t-folio); font-weight: 500; letter-spacing: .06em; color: var(--ink-3); }
 .listing-row .folio { font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .06em; color: var(--ink-3); }
@@ -1090,7 +1105,7 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .listing-row h3, .listing-row h4 { font-size: var(--t-body); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; margin-top: 2px; }
 .listing-row .sub { margin-top: 4px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--t-fine); color: var(--ink-2); line-height: 1.4; }
 .listing-row .sub .soon { color: var(--ink); font-family: var(--font-body); font-weight: 600; }
-.listing-row .price-col { text-align: right; min-width: 104px; }
+.listing-row .price-col { text-align: right; min-width: 0; }
 .listing-row .price-col b { display: block; font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; font-size: var(--t-fig); font-weight: 500; letter-spacing: -.02em; line-height: 1.05; }
 .listing-row .price-col small { display: block; font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-top: 3px; }
 /* The unit is printed once, as a column head, not under every figure. */
@@ -1101,10 +1116,16 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .listing-row .price-col.teased b { color: var(--ink-3); font-weight: 400; }
 .listing-row .price-col.teased .all { color: var(--ink-2); font-family: var(--font-body); letter-spacing: 0; text-transform: none; }
 .listing-row .price-col .all { display: block; margin-top: 5px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--t-folio); color: var(--ink-3); }
-.listing-row.asked { background: var(--raised); margin-inline: -12px; padding-inline: 12px; }
+/* The week you asked for, or the one you tapped through on: a tint that reaches the column edge. */
+.listing-row.asked, .listing-row.picked { background: var(--raised); margin-inline: calc(-1 * var(--s-4)); padding-inline: var(--s-4); }
 /* A row in a printed list does not shrink when pressed; it dims. */
 .listing-row:active { opacity: .6; transition: opacity 60ms var(--ease-out); }
+/* Transitional: deals.js still nests the officer's buttons inside the row; this line and the
+   stretched link below go when the row becomes the anchor and the buttons its sibling. */
 .listing-row .row-acts { grid-column: 1 / -1; display: flex; gap: 8px; }
+/* The row is the anchor and the officer's buttons are its sibling, under it, on their own rule. */
+.listing li:has(> .row-acts) > .listing-row { border-bottom: 0; }
+.listing li > .row-acts { display: flex; gap: var(--s-2); padding: 0 0 var(--s-3); border-bottom: 1px solid var(--hairline-soft); }
 /* The index: one row per place, the name and the bare figure; the unit is in the running head. */
 .index-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s-4); align-items: baseline; min-height: 48px; padding: var(--s-3) 0;
   border-bottom: 1px solid var(--hairline-soft); color: inherit; text-decoration: none; }
@@ -1206,10 +1227,9 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 /* A button that reads as the link it is, inside a sentence. */
 .linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--ink); cursor: pointer;
   text-decoration: underline; text-underline-offset: 3px; }
-.listing-row.no-thumb { grid-template-columns: minmax(0, 1fr) auto auto; }
-
-/* The week the member tapped through on, at the top of the place's own list. */
-.listing-row.picked { background: var(--raised); margin-inline: -12px; padding-inline: 12px; }
+.listing-row.no-thumb { grid-template-columns: minmax(0, 1fr) 92px; }
+/* A member's in-place row still carries its chevron as a third child; it keeps a track. */
+.listing-row.no-thumb:has(> .go) { grid-template-columns: minmax(0, 1fr) 92px auto; }
 .cover .cover-link { color: inherit; text-decoration: none; }
 .cover:active { background: var(--raised); }
 
@@ -1222,58 +1242,27 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 .ask .ask-rooms { margin: 0 0 16px; }
 .ask .ask-rooms .gallery.big { margin-inline: 0; padding-inline: 0; margin-top: 8px; }
 .ask .ask-rooms .gallery.big .gallery-tile { width: min(62vw, 220px); }
-/* The whole row is the tap: the title's link stretches over the row with a pseudo-element, and
-   the officer's buttons sit above it so they are still their own targets. */
+/* Transitional, until the row is the anchor in the markup (deals.js): the title's link stretches
+   over the row with a pseudo-element, the officer's buttons sit above it, and the price stays
+   under the overlay so it is part of the row's own tap. These five lines go with the markup. */
 .listing-row .row-link { color: inherit; text-decoration: none; }
 .listing-row .row-link::after { content: ""; position: absolute; inset: 0; }
 .listing-row .row-acts { position: relative; z-index: 1; margin-top: 2px; }
-/* The price is the biggest thing on the row and must stay part of the row's own tap: keep it
-   below the link overlay (z-index 0 against the overlay's auto), while the officer's buttons
-   above it stay clickable at z-index 1. */
 .listing-row .price-col { position: relative; z-index: 0; pointer-events: none; }
 .listing-row .price-col a, .listing-row .price-col button { pointer-events: auto; }
 
-/* Rows on a phone: a smaller thumb, the dollars folded away, the sub on two lines. */
+/* The sub on two lines, the stamp on its own. */
 .listing-row .sub .l2 { display: block; }
-.listing-row .sub .sleeps + .stamp::before { content: " · "; }
-@media (max-width: 560px) { .listing-row .sub .l2 .stamp { display: block; } .listing-row .sub .sleeps + .stamp::before { content: none; } }
-/* The column head already says all in; a 92px column does not need to say it again. */
-@media (max-width: 560px) { .listing-row .price-col .all .unit { display: none; } }
-@media (max-width: 560px) {
-  /* `auto` here sized this track to the widest thing in it — which is not the price but the
-     greyest line under it, "pts all in" at 141px of a 390px screen. The name was left less room
-     than its own price column, so every title wrapped and no two rows were the same height.
-     Cap the track; the points line wraps inside it instead. */
-  .listing-row { grid-template-columns: 44px minmax(0, 1fr) 92px; gap: var(--s-2); }
-  .listing-row .thumb { width: 44px; height: 44px; }
-  .listing-row .price-col { min-width: 0; }
-  .listing-row .price-col .all .usd { display: none; }
-}
+.listing-row .sub .l2 .stamp { display: block; }
+/* Transitional: the column head already says all in and the dollars are folded away; deals.js
+   still writes the .unit and .usd spans. These two lines go with them. */
+.listing-row .price-col .all .unit { display: none; }
+.listing-row .price-col .all .usd { display: none; }
 
 /* A row that has not been looked at for a couple of days says so by going quiet. It is not an
    error and not a warning — the week may well still be there — so it recedes rather than shouts. */
 .stamp.aged { opacity: .72; font-style: italic; }
 
-/* ---------- the edition, on a phone ----------
-   Where the club actually reads the app, a panel is not a card. Twenty white rounded boxes on a
-   grey field is the one thing every template does; a bulletin separates its blocks with rules.
-   The exclusions are in the selector so the order of the file cannot undo them: a deal card
-   carries a photograph, the ask carries a form and a picture, the quoted block is a tint, and the
-   officer's job list keeps its ink rule. */
-@media (max-width: 779px) {
-  .panel:not(.deal):not(.ask):not(.flat):not(.job-panel):not(.boxed) {
-    background: transparent; border: 0; border-top: 1px solid var(--hairline); border-radius: 0; padding: var(--s-4) 0; }
-  .sec-head + .panel, .side > .stack:first-child > .panel:first-child { border-top: 0; padding-top: 0; }
-  .job-panel { border: 0; border-left: 2px solid var(--ink); border-radius: 0; box-shadow: none; padding: 0 0 0 var(--s-4); }
-  .tablewrap { border-inline: 0; border-radius: 0; background: transparent; }
-  .listing-row.asked, .listing-row.picked { margin-inline: calc(-1 * clamp(16px, 4vw, 28px)); padding-inline: clamp(16px, 4vw, 28px); }
-  .cover { border: 0; border-radius: 0; margin-inline: calc(-1 * clamp(16px, 4vw, 28px)); background: transparent; }
-  .cover .cover-body { padding: var(--s-4) clamp(16px, 4vw, 28px) var(--s-5); }
-}
-@media (max-width: 560px) {
-  .stat:not(dialog .stat) { background: transparent; border: 0; border-top: 1px solid var(--hairline); border-radius: 0; padding: var(--s-3) 0; }
-  .grid > .stat:first-child { border-top: 0; padding-top: 0; }
-}
 /* A photograph settles into its frame rather than appearing. */
 @keyframes settle { from { transform: scale(1.04); } to { transform: none; } }
 .hero-cover img, .hero-place img, .page-hero img, .cover-shot img { animation: settle 1400ms var(--ease-out) both; }
@@ -1296,6 +1285,8 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 .postcard-shot { display: block; position: relative; overflow: hidden; aspect-ratio: var(--w, 4) / var(--h, 3); background: var(--well); color: inherit; }
 .postcard-shot.tall { aspect-ratio: 4 / 5; }
 .postcard-shot.wide { aspect-ratio: 2 / 1; }
+/* The picture bleeds to the column's edges like the board's cover; the body keeps the text column. */
+.postcard-list .postcard-shot, .postcard.full .postcard-shot { margin-inline: calc(-1 * var(--s-4)); }
 /* On Home a postcard is a compact 3:2 frame. */
 .postcard.compact .postcard-shot { aspect-ratio: 3 / 2; }
 .postcard-shot img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity var(--dur-water) var(--ease-out); }
@@ -1340,21 +1331,6 @@ button.link-rule { background: none; border: 0; cursor: pointer; }
 .postcard-where { font-family: var(--font-mono); font-size: var(--t-fine); color: var(--ink); }
 @media (prefers-reduced-motion: reduce) {
   .postcard-shot img, .postcard-shot img.in, .postcard-preview img { animation: none; transition: none; }
-}
-/* On a phone the picture bleeds to the edges like the board's cover; zero scrolls to the first
-   one. The body keeps the text column. Corners only where there is a margin to round into. */
-@media (max-width: 779px) {
-  .postcard-list .postcard-shot, .postcard.full .postcard-shot { margin-inline: calc(-1 * clamp(16px, 4vw, 28px)); }
-}
-@media (min-width: 780px) {
-  .postcard-shot { border-radius: var(--r-card); }
-}
-/* From 900px a postcard is the board's No. 1: picture left, body right, top-aligned, one hairline
-   under the row, the day rules still spanning both columns so the order is never in doubt. */
-@media (min-width: 900px) {
-  .postcard-list .postcard, .postcard.full { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: var(--s-6); align-items: start; }
-  .postcard-list .postcard-shot { max-height: 640px; }
-  .postcard-list .postcard-body, .postcard.full .postcard-body { padding-top: 0; }
 }
 /* The word on a toast is a ruled link in the toast's own colour, not a grey box: on the ink toast
    the browser's default button face made "Tell the group" light-on-light. The padding gives the
