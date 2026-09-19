@@ -536,6 +536,15 @@ dialog.sheet[open] { display: flex; flex-direction: column; }
 /* The tall sheet is a screen of its own: a quote, the Desk's photographs, a picture viewer. */
 dialog.sheet.tall { height: 100dvh; max-height: none; border-radius: 0; border-top: 0; }
 dialog.sheet.tall .sheet-head { padding-top: calc(var(--s-4) + var(--inset-top)); }
+/* A tall sheet keeps its height whether or not the content fills it, and sticky cannot pull the
+   action bar down a body that is not overflowed — so a short one (a screenshot, the photographs
+   before any are on file) left the button stranded mid-screen above a blank slab. The body is a
+   column and the bar takes the slack; once the content is longer than the sheet the free space is
+   gone, the auto margin is nothing, and the long sheets stick as they did. Nothing in the column
+   may be squeezed to make room, or a tall picture would be flattened instead of scrolled. */
+dialog.sheet.tall .sheet-body { display: flex; flex-direction: column; }
+dialog.sheet.tall .sheet-body > * { flex: 0 0 auto; }
+dialog.sheet.tall .sheet-actions { margin-top: auto; }
 /* Toasts are fixed, so they carry the column's cap too, and sit above the tab bar when it is there. */
 .toasts { position: fixed; left: 0; right: 0; margin-inline: auto; width: min(var(--wrap), 100%); padding-inline: var(--s-3);
           bottom: calc(var(--s-5) + var(--inset-bottom)); z-index: 120; display: grid; gap: 8px; }
