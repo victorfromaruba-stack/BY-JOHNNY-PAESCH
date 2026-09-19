@@ -4,9 +4,8 @@ import { countdownTo, downloadText, escapeHtml, fmtAfl2, fmtDay, fmtDayTime, fmt
 import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, fromPoints, seatPoints, RATE_BAND_LIST } from '../core/money.js';
 import { poolGauge, rankCrest, ring } from '../ui/pieces.js';
-import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel, avatar } from '../ui/components.js';
-import { columns, tableFor, sparkline } from '../ui/charts.js';
+import { columns } from '../ui/charts.js';
 import { waLink, TEMPLATES, copyText, shareText } from '../core/share.js';
 import { quoteSheet, bookSheet } from './catalog.js';
 import { photoFor } from './public.js';
@@ -26,31 +25,35 @@ export function bank({ store, go }) {
   const pending = store.pendingContributions();
   const month = monthKey();
   const wrap = el(`<div><section class="sec"><div class="wrap">
-      <div class="row-between">
-        <div><p class="eyebrow">${icon('inbox')}${escapeHtml(VOCAB.treasurerTitle)}</p><h1>The inbox</h1></div>
-        <div class="row no-print">
-          <button class="btn sm" id="record">${icon('banknote', { size: 16 })}Money came in</button>
-          <a class="btn ghost sm" href="#/bank/close/${month}">${icon('lock', { size: 16 })}Close ${escapeHtml(fmtMonth(month))}</a></div>
-      </div>
-      <div class="grid g4" style="margin-top:20px">
-        <div class="stat"><span class="k">Waiting for you</span><b class="num">${pending.length}</b><span class="sub">${escapeHtml(fmtUsd2(t.pendingUsd))} marked as sent</span></div>
-        <div class="stat"><span class="k">Confirmed this month</span><b class="num">${t.confirmedThisMonth} / ${t.expectedThisMonth}</b><span class="sub">${escapeHtml(fmtMonth(month))}</span></div>
-        <div class="stat"><span class="k">Reserve</span><b class="num">${escapeHtml(fmtUsd2(t.reserveUsd))}</b><span class="sub">by the ledger · backs ${escapeHtml(fmtPoints(t.outstandingPoints))}</span></div>
-        <!-- "Verified" was doing a lot of work it had not earned: t.coverage is the ledger over its
-             own liability, so the word described arithmetic, not a bank statement. Say what the
-             bank actually said, and on what date — this now agrees with the gauge word for word. -->
-        <div class="stat"><span class="k">Coverage</span><b class="num">${escapeHtml(fmtPct(t.liabilityUsd && t.verified ? (t.reserveUsd + (t.verifiedVarianceUsd || 0)) / t.liabilityUsd : t.coverage))}</b><span class="sub">${t.verified
-          ? `bank said ${escapeHtml(fmtUsd2(t.verified.balanceUsd))} on ${escapeHtml(fmtDay(t.verified.at))}${Math.abs(t.verifiedVarianceUsd || 0) < 0.005 ? ' — the ledger agreed' : ` · ${escapeHtml(fmtUsd2(Math.abs(t.verifiedVarianceUsd)))} ${t.verifiedVarianceUsd > 0 ? 'more' : 'less'} than the ledger expected`}`
-          : 'from the ledger — never checked against the bank'}</span></div>
-      </div>
-      ${pending.length ? `<div class="row" style="margin-top:18px" id="bulk">
-        <button class="btn sm" id="confirm-all">Confirm all ${pending.length}</button>
-        <span class="small muted">Only confirm what you can see on the statement.</span></div>` : ''}
-      <div class="stack" id="queue" style="margin-top:18px"></div>
-      <div class="panel" style="margin-top:22px">
+      <p class="eyebrow">${icon('inbox')}${escapeHtml(VOCAB.treasurerTitle)}</p>
+      <h1>The inbox</h1>
+      <p class="dateline"><b class="num">${pending.length}</b> waiting · <b class="num">${escapeHtml(fmtUsd2(t.pendingUsd))}</b> marked as sent
+        · <b class="num">${t.confirmedThisMonth} / ${t.expectedThisMonth}</b> confirmed for ${escapeHtml(fmtMonth(month))}</p>
+      ${pending.length ? `
+      <button class="btn good block no-print" id="confirm-all" style="margin-top:var(--s-4)">Confirm all <b class="num">${pending.length}</b></button>
+      <p class="small muted" style="margin-top:var(--s-2)">Only confirm what you can see on the statement.</p>
+      <div class="row no-print" style="margin-top:var(--s-1)">
+        <button class="link-rule" id="record" type="button">Money came in</button>
+        <a class="link-rule" href="#/bank/close/${month}">Close ${escapeHtml(fmtMonth(month))}</a>
+      </div>` : `
+      <button class="btn block no-print" id="record" type="button" style="margin-top:var(--s-4)">${icon('banknote', { size: 16 })}Money came in</button>
+      <div class="row no-print" style="margin-top:var(--s-1)">
+        <a class="link-rule" href="#/bank/close/${month}">Close ${escapeHtml(fmtMonth(month))}</a>
+      </div>`}
+      <div class="stack" id="queue" style="margin-top:var(--s-5)"></div>
+      <div class="panel" style="margin-top:var(--s-5)">
         <h2>Not sent yet this month</h2>
         <p class="small muted" style="margin-top:6px">Only you and Ian see this. Nobody is ever shown a public late list.</p>
         <div class="row" style="margin-top:12px" id="missing"></div>
+      </div>
+      <!-- "Verified" was doing a lot of work it had not earned: t.coverage is the ledger over its
+           own liability, so the word described arithmetic, not a bank statement. Say what the
+           bank actually said, and on what date — this agrees with the gauge word for word. -->
+      <div class="rule-block small muted">
+        <p>Reserve <b class="num">${escapeHtml(fmtUsd2(t.reserveUsd))}</b> by the ledger, behind <b class="num">${escapeHtml(fmtPoints(t.outstandingPoints))}</b>.</p>
+        <p style="margin-top:6px">Coverage <b class="num">${escapeHtml(fmtPct(t.liabilityUsd && t.verified ? (t.reserveUsd + (t.verifiedVarianceUsd || 0)) / t.liabilityUsd : t.coverage))}</b> — ${t.verified
+          ? `the bank said <b class="num">${escapeHtml(fmtUsd2(t.verified.balanceUsd))}</b> on <b class="num">${escapeHtml(fmtDay(t.verified.at))}</b>${Math.abs(t.verifiedVarianceUsd || 0) < 0.005 ? ' and the ledger agreed' : `, <b class="num">${escapeHtml(fmtUsd2(Math.abs(t.verifiedVarianceUsd)))}</b> ${t.verifiedVarianceUsd > 0 ? 'more' : 'less'} than the ledger expected`}.`
+          : 'from the ledger, never checked against the bank.'}</p>
       </div>
     </div></section></div>`);
 
@@ -59,23 +62,21 @@ export function bank({ store, go }) {
   for (const c of pending) {
     const m = store.member(c.memberId);
     const row = el(`<div class="panel" data-id="${c.id}">
-        <div class="row-between">
-          <div class="row" style="gap:12px">
-            ${avatar(m, 40)}
-            <div><b>${escapeHtml(m.name)}</b> · ${escapeHtml(tierName(m.monthlyUsd))}
-              <br><span class="small muted">${c.extra ? 'Extra, not a monthly' : escapeHtml(fmtMonth(c.forMonth))} · sent ${escapeHtml(fmtDay(c.submittedAt))} · ${escapeHtml(c.bank || c.method || 'bank transfer')}${c.recordedBy ? ' · entered by the Banker' : ''}</span>
-              ${(c.proofName || c.proofPath || c.proofDataUrl) ? `<br><button class="btn ghost sm" data-proof="${escapeHtml(c.id)}" style="padding-inline:0">${icon('eye', { size: 14 })}See the screenshot</button>` : ''}</div>
-          </div>
-          <div style="text-align:right"><b class="num fig">${escapeHtml(fmtUsd2(c.expectedUsd))}</b>
+        <div class="row" style="gap:10px;flex-wrap:nowrap;align-items:flex-start">
+          ${avatar(m, 28)}
+          <div style="min-width:0"><b>${escapeHtml(m.name)}</b> · ${escapeHtml(tierName(m.monthlyUsd))}
+            <br><span class="small muted">${c.extra ? 'Extra, not a monthly' : escapeHtml(fmtMonth(c.forMonth))} · sent ${escapeHtml(fmtDay(c.submittedAt))} · ${escapeHtml(c.bank || c.method || 'bank transfer')}${c.recordedBy ? ' · entered by the Banker' : ''}</span></div>
+          <div style="margin-left:auto;text-align:right;flex:none"><b class="num fig">${escapeHtml(fmtUsd2(c.expectedUsd))}</b>
             <br><span class="small muted num">${escapeHtml(fmtAfl2(c.expectedUsd, s.awgPerUsd))}</span></div>
         </div>
         <div class="copyline" style="margin-top:12px"><code class="num">${escapeHtml(c.reference || 'no reference given')}</code>
           <button class="btn ghost sm" data-copy="${escapeHtml(c.reference || '')}">Copy</button></div>
         ${c.note ? `<p class="small muted" style="margin-top:10px">“${escapeHtml(c.note)}”</p>` : ''}
-        <div class="row" style="margin-top:14px">
-          <button class="btn good" data-act="confirm">${icon('check', { size: 16 })}Confirm ${escapeHtml(fmtUsd2(c.expectedUsd))}</button>
-          <button class="btn ghost" data-act="partial">${icon('scale', { size: 16 })}A different amount arrived</button>
-          <button class="btn danger" data-act="return">${icon('refresh', { size: 16 })}Return it</button>
+        ${(c.proofName || c.proofPath || c.proofDataUrl) ? `<div class="row"><button class="link-rule" type="button" data-proof="${escapeHtml(c.id)}">See the screenshot</button></div>` : ''}
+        <button class="btn good block" data-act="confirm" style="margin-top:var(--s-2)">Confirm <b class="num">${escapeHtml(fmtUsd2(c.expectedUsd))}</b></button>
+        <div class="row" style="margin-top:var(--s-1)">
+          <button class="link-rule" type="button" data-act="partial">A different amount arrived</button>
+          <button class="link-rule danger" type="button" data-act="return">Return it</button>
         </div>
       </div>`);
     row.addEventListener('click', async (e) => {
@@ -87,13 +88,13 @@ export function bank({ store, go }) {
         if (b.dataset.act === 'partial') {
           const out = await sheet({ title: `What actually arrived from ${m.name.split(' ')[0]}?`, render: (body, close) => {
             body.innerHTML = `<p class="sheet-text">Points follow the money that arrived, not what was expected. A short month does not earn the tier bonus and does not extend a streak.</p>
-              <div class="grid g2">
+              <div class="pair">
                 <label class="field"><span>Amount received</span><input name="amt" type="number" step="0.01" value="${c.expectedUsd}" inputmode="decimal"></label>
                 <label class="field"><span>Currency</span><select name="cur"><option value="USD">US dollars</option><option value="AWG">Aruban florin</option></select></label>
               </div>
               <label class="field"><span>Note for the ledger</span><input name="note" placeholder="Bank fee deducted at the sending side."></label>
               <div id="prev" class="notice"></div>
-              <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn good" data-ok>Confirm that amount</button></div>`;
+              <div class="sheet-actions"><button class="btn good block" data-ok>Confirm that amount</button></div>`;
             const prev = body.querySelector('#prev');
             const calc = () => {
               const cur = body.querySelector('[name=cur]').value;
@@ -132,12 +133,11 @@ export function bank({ store, go }) {
     try {
       const src = c.proofDataUrl || (c.proofPath ? await store.proofUrl(c.proofPath) : null);
       if (!src) throw new Error('That screenshot is no longer stored.');
-      await sheet({ title: c.proofName || 'The screenshot', render: (body, close) => {
-        body.innerHTML = `<img src="${escapeHtml(src)}" alt="The transfer screenshot as it was sent"
+      await sheet({ title: c.proofName || 'The screenshot', tall: true, render: (body) => {
+        body.innerHTML = `<img src="${escapeHtml(src)}" alt="The transfer screenshot as it was sent" loading="lazy" decoding="async"
             style="width:100%;border-radius:var(--r-input);border:1px solid var(--hairline)">
-          <div class="sheet-actions"><button class="btn ghost" data-close>Close</button>
-            <a class="btn" href="${escapeHtml(src)}" target="_blank" rel="noopener">${icon('external', { size: 16 })}Open it full size</a></div>`;
-        body.querySelector('[data-close]').addEventListener('click', () => close());
+          <div class="sheet-actions">
+            <a class="btn block" href="${escapeHtml(src)}" target="_blank" rel="noopener">${icon('external', { size: 16 })}Open it full size</a></div>`;
       } });
     } catch (err) { toast(err.message, { kind: 'bad', timeout: 6000 }); }
     finally { setBusy(btn, false); }
@@ -188,21 +188,20 @@ export async function recordMoneySheet({ store, go, memberId = null }) {
         <p class="sheet-text">Use this when the money reached you outside the app — cash in your hand, a transfer you spotted on the statement, or someone paying for a month they missed. It mints the points the same way a normal contribution does, and it shows up on their ledger with your name on it.</p>
         <label class="field"><span>From whom</span>
           <select name="memberId" required>${people.map(m => `<option value="${escapeHtml(m.id)}"${m.id === memberId ? ' selected' : ''}>${escapeHtml(m.name)} · ${escapeHtml(fmtUsd2(m.monthlyUsd))} a month</option>`).join('')}</select></label>
-        <div class="grid g3">
-          <label class="field"><span>Amount</span><input name="amount" type="number" step="0.01" min="0.01" inputmode="decimal" placeholder="300" required autofocus></label>
+        <div class="pair">
+          <label class="field"><span>Amount</span><input name="amount" type="number" step="0.01" min="0.01" inputmode="decimal" placeholder="300" required></label>
           <label class="field"><span>Currency</span><select name="currency"><option value="USD">US dollars</option><option value="AWG">Aruban florin</option></select></label>
-          <label class="field"><span>How it came</span><select name="method">
-            <option value="cash">Cash</option><option value="bank">Bank transfer</option>
-            <option value="card">Card</option><option value="other">Some other way</option></select></label>
         </div>
+        <label class="field"><span>How it came</span><select name="method">
+          <option value="cash">Cash</option><option value="bank">Bank transfer</option>
+          <option value="card">Card</option><option value="other">Some other way</option></select></label>
         <label class="field"><span>What is it for</span>
           <select name="forMonth"><option value="">Extra — on top of their monthly</option></select>
           <span class="hint" id="month-hint"></span></label>
         <label class="field"><span>Note for their ledger</span>
           <input name="note" placeholder="Cash at the shop, 6 September." required></label>
         <div id="prev" class="notice"></div>
-        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button>
-          <button class="btn good" data-ok>${icon('check', { size: 16 })}Record it</button></div>`;
+        <div class="sheet-actions"><button class="btn good block" data-ok>${icon('check', { size: 16 })}Record it</button></div>`;
 
       const v = (n) => body.querySelector(`[name=${n}]`);
       const fillMonths = () => {
@@ -278,47 +277,40 @@ export function monthClose({ store, params, go }) {
       <h1>${escapeHtml(fmtMonth(month))}</h1>
       ${p.alreadyClosed ? `<div class="notice good" style="margin-top:16px"><b>Already closed and sealed</b>
         <p class="small">Closed by ${escapeHtml(store.member(p.alreadyClosed.closedBy)?.name || '')} on ${escapeHtml(fmtDayTime(p.alreadyClosed.closedAt))}, co-signed by ${escapeHtml(store.member(p.alreadyClosed.cosignedBy)?.name || '')}. Reserve at close ${escapeHtml(fmtUsd2(p.alreadyClosed.bankBalanceUsd))}, coverage ${escapeHtml(fmtPct(p.alreadyClosed.coverage))}.</p></div>` : ''}
-      <div class="side" style="margin-top:20px">
-        <div>
-          <div class="panel">
-            <div class="row" style="gap:16px;align-items:center">
-              <span id="rollcall"></span>
-              <div><b>${p.confirmedCount} of ${p.rows.length} confirmed</b>
-                <br><span class="small muted">${p.pendingCount} still waiting for you · ${p.missingCount} never arrived</span></div>
-            </div>
-            <div class="tablewrap" style="margin-top:16px;border:0">
-              <table><thead><tr><th>Insider</th><th>Tier</th><th class="num">Expected</th><th class="num">Received</th><th>Reference</th><th>State</th></tr></thead>
-              <tbody>${p.rows.map(r => `<tr>
-                <td>${escapeHtml(r.member.name)}</td><td>${escapeHtml(tierName(r.member.monthlyUsd))}</td>
-                <td class="num">${escapeHtml(fmtUsd2(r.expectedUsd))}</td><td class="num">${r.receivedUsd == null ? '—' : escapeHtml(fmtUsd2(r.receivedUsd))}</td>
-                <td class="small num">${escapeHtml(r.reference || '—')}</td>
-                <td>${chip(r.status === 'missing' ? 'due' : r.status, r.status === 'missing' ? 'Not sent' : undefined)}${r.full === false ? ' <span class="small muted">short</span>' : ''}</td></tr>`).join('')}</tbody></table>
-            </div>
-          </div>
-        </div>
-        <div class="stack">
-          <div class="panel flat">
-            <p class="eyebrow">${icon('calendar')}The month</p>
-            <ul class="ledger" style="margin-top:10px">
-              <li><span class="what"><b>Collected</b></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.grossUsd))}</b></span></li>
-              <li><span class="what"><b>To the Reserve</b><span class="meta">all of it — a point per dollar</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.grossUsd))}</b></span></li>
-              <li><span class="what"><b>Coverage now</b><span class="meta">Reserve ÷ everything owed</span></span><span class="delta"><b>${escapeHtml(fmtPct(p.treasury.coverage))}</b></span></li>
-            </ul>
-          </div>
-          <form class="panel" id="close-form">
-            <h2>Seal the month</h2>
-            <label class="field" style="margin-top:12px"><span>Reserve balance on the bank statement</span>
-              <input name="balance" type="number" step="0.01" inputmode="decimal" value="${p.treasury.reserveExpectedUsd.toFixed(2)}" required>
-              <span class="hint">The ledger says it should be ${escapeHtml(fmtUsd2(p.treasury.reserveExpectedUsd))}. A gap of more than $${s.closeToleranceUsd} blocks the close.</span></label>
-            <label class="field"><span>Second officer</span><select name="cosigner" required>
-              <option value="">Choose who co-signs</option>
-              ${others.map(o => `<option value="${o.id}">${escapeHtml(o.name)}</option>`).join('')}</select></label>
-            <label class="field"><span>Note</span><input name="note" placeholder="All transfers matched."></label>
-            <button class="btn block" type="submit" ${p.alreadyClosed ? 'disabled' : ''}>Close ${escapeHtml(fmtMonth(month))}</button>
-            ${p.pendingCount ? `<p class="small" style="margin-top:10px;color:var(--flag)">${p.pendingCount} transfer${p.pendingCount > 1 ? 's are' : ' is'} still waiting. Confirm or return ${p.pendingCount > 1 ? 'them' : 'it'} first.</p>` : ''}
-          </form>
+      <div class="panel" style="margin-top:var(--s-4)">
+        <div class="row" style="gap:16px;align-items:center">
+          <span id="rollcall"></span>
+          <div><b><b class="num">${p.confirmedCount}</b> of <b class="num">${p.rows.length}</b> confirmed</b>
+            <br><span class="small muted"><b class="num">${p.pendingCount}</b> still waiting for you · <b class="num">${p.missingCount}</b> never arrived</span></div>
         </div>
       </div>
+      <div class="panel flat" style="margin-top:var(--s-4)">
+        <p class="eyebrow">${icon('calendar')}The month</p>
+        <ul class="ledger" style="margin-top:10px">
+          <li><span class="what"><b>Collected</b></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.grossUsd))}</b></span></li>
+          <li><span class="what"><b>To the Reserve</b><span class="meta">all of it — a point per dollar</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.grossUsd))}</b></span></li>
+          <li><span class="what"><b>Coverage now</b><span class="meta">Reserve ÷ everything owed</span></span><span class="delta"><b>${escapeHtml(fmtPct(p.treasury.coverage))}</b></span></li>
+        </ul>
+      </div>
+      <form class="panel" id="close-form">
+        <h2>Seal the month</h2>
+        <label class="field" style="margin-top:12px"><span>Reserve balance on the bank statement</span>
+          <input name="balance" type="number" step="0.01" inputmode="decimal" value="${p.treasury.reserveExpectedUsd.toFixed(2)}" required>
+          <span class="hint">The ledger says it should be ${escapeHtml(fmtUsd2(p.treasury.reserveExpectedUsd))}. A gap of more than $${s.closeToleranceUsd} blocks the close.</span></label>
+        <label class="field"><span>Second officer</span><select name="cosigner" required>
+          <option value="">Choose who co-signs</option>
+          ${others.map(o => `<option value="${o.id}">${escapeHtml(o.name)}</option>`).join('')}</select></label>
+        <label class="field"><span>Note</span><input name="note" placeholder="All transfers matched."></label>
+        ${p.pendingCount ? `<p class="small" style="color:var(--flag)"><b class="num">${p.pendingCount}</b> transfer${p.pendingCount > 1 ? 's are' : ' is'} still waiting. Confirm or return ${p.pendingCount > 1 ? 'them' : 'it'} first.</p>` : ''}
+        <div class="act-bar"><button class="btn block" type="submit" ${p.alreadyClosed ? 'disabled' : ''}>Close ${escapeHtml(fmtMonth(month))}</button></div>
+      </form>
+      <details class="fineprint"><summary>Everyone, this month</summary>
+        <ul class="ledger">${p.rows.map(r => `<li>
+          <span class="what"><b>${escapeHtml(r.member.name)}</b>
+            <span class="meta">${escapeHtml(tierName(r.member.monthlyUsd))} · <span class="num">${escapeHtml(r.reference || 'no reference')}</span></span>
+            <span class="meta">${chip(r.status === 'missing' ? 'due' : r.status, r.status === 'missing' ? 'Not sent' : undefined)}${r.full === false ? ' <span class="small muted">short</span>' : ''}</span></span>
+          <span class="delta"><b>${escapeHtml(fmtUsd2(r.expectedUsd))}</b><small>${r.receivedUsd == null ? 'nothing yet' : escapeHtml(fmtUsd2(r.receivedUsd))}</small></span></li>`).join('')}</ul>
+      </details>
     </div></section></div>`);
   wrap.querySelector('#rollcall').replaceChildren(ring({ total: Math.max(1, p.rows.length), filled: p.confirmedCount, size: 92, label: `${p.confirmedCount}`, sub: `of ${p.rows.length}` }));
   wrap.querySelector('#close-form').addEventListener('submit', async (e) => {
@@ -343,14 +335,14 @@ export function desk({ store, go }) {
       <h1>The Desk</h1>
       <!-- One control with a thumb, not five buttons that happen to sit in a row: the same
            segmented component /settings uses, so the Desk and Settings agree. -->
-      <div class="segmented no-print" role="group" aria-label="Desk sections" id="tabs">
-        <button type="button" data-tab="requests" aria-pressed="true">Requests${open.length ? ` · ${open.length}` : ''}</button>
-        <button type="button" data-tab="wanted" aria-pressed="false">${icon('bell', { size: 15 })}Wanted${store.watches().length ? ` · ${store.watches().length}` : ''}</button>
-        <button type="button" data-tab="deals" aria-pressed="false">${icon('zap', { size: 15 })}Deals${store.liveDeals().length ? ` · ${store.liveDeals().length}` : ''}</button>
-        <button type="button" data-tab="catalog" aria-pressed="false">Stays, cruises &amp; trips</button>
+      <div class="segmented even no-print" role="group" aria-label="Desk sections" id="tabs">
+        <button type="button" data-tab="requests" aria-pressed="true">Asks${open.length ? ` <span class="nav-badge">${open.length}</span>` : ''}</button>
+        <button type="button" data-tab="wanted" aria-pressed="false">Wanted</button>
+        <button type="button" data-tab="deals" aria-pressed="false">Deals</button>
+        <button type="button" data-tab="catalog" aria-pressed="false">Places</button>
         <button type="button" data-tab="notes" aria-pressed="false">Notes</button>
       </div>
-      <div id="panel" style="margin-top:18px"></div>
+      <div id="panel" style="margin-top:var(--s-4)"></div>
     </div></section></div>`);
   const panel = wrap.querySelector('#panel');
   let tab = DESK_TAB;
@@ -428,8 +420,8 @@ export function desk({ store, go }) {
   const drawDeals = () => {
     const live = store.liveDeals();
     panel.replaceChildren(el(`<div>
-      <div class="row" style="margin-bottom:16px"><button class="btn sm" id="post-deal">${icon('plus', { size: 16 })}Post a deal</button>
-        <a class="btn ghost sm" href="#/stays">${icon('eye', { size: 15 })}See it as a member does</a></div>
+      <button class="btn block" id="post-deal">${icon('plus', { size: 16 })}Post a deal</button>
+      <div class="row" style="margin-bottom:16px"><a class="link-rule" href="#/stays">See it as a member does</a></div>
       <details class="panel" style="margin-bottom:16px"${freshness().overdue ? ' open' : ''}>
         <summary style="cursor:pointer;font-weight:600">${icon('zap', { size: 16 })}Grab a whole Interval page at once${freshness().chip}</summary>
         ${freshness().line}
@@ -465,7 +457,7 @@ export function desk({ store, go }) {
                 ${hits.length ? `${hits.length} ${hits.length === 1 ? 'Insider was' : 'Insiders were'} waiting for this` : 'Nobody was watching for this one'}</p>
             </div>
             <div class="row" style="flex:none">
-              ${safeUrl(d.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(d.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}</a>` : ''}
+              ${safeUrl(d.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(d.sourceUrl))}" target="_blank" rel="noopener noreferrer" aria-label="Open the listing">${icon('external', { size: 15 })}</a>` : ''}
               <button class="btn ghost sm" data-retire="${escapeHtml(d.id)}">${icon('x', { size: 15 })}Gone</button>
             </div>
           </div></div>`;
@@ -481,11 +473,11 @@ export function desk({ store, go }) {
     // the three and hid the one that is Victor's own job — booking it — behind an "Open".
     const hoursLeft = (r) => (tierFor(s, store.member(r.memberId)?.monthlyUsd)?.slaHours ?? s.slaHours) - Math.round((Date.now() - new Date(r.requestedAt)) / 36e5);
     const lanes = [
-      { key: 'requested', title: 'To look and price', sub: 'Open it, look, price it. Nothing is promised to anyone until you do.',
+      { key: 'requested', title: 'To look and price',
         rows: open.filter(r => r.status === 'requested').sort((a, b) => hoursLeft(a) - hoursLeft(b)) },
-      { key: 'held', title: 'To book', sub: 'They said yes and their points are committed. Book it yourself, then write down the confirmation.',
+      { key: 'held', title: 'To book',
         rows: open.filter(r => r.status === 'held').sort((a, b) => (a.approvedAt ? 1 : 0) - (b.approvedAt ? 1 : 0) || String(a.heldAt).localeCompare(String(b.heldAt))) },
-      { key: 'quoted', title: 'Waiting on the member', sub: 'Priced. Nothing to do until they say yes, or the price lapses.',
+      { key: 'quoted', title: 'Waiting on the member',
         rows: open.filter(r => r.status === 'quoted').sort((a, b) => String(a.quoteExpiresAt).localeCompare(String(b.quoteExpiresAt))) },
     ];
     const row = (r) => {
@@ -496,26 +488,26 @@ export function desk({ store, go }) {
       const left = countdownTo(r.quoteExpiresAt);
       return `<div class="panel req ${r.status}">
         <div class="row-between" style="align-items:flex-start">
-          <div class="row" style="gap:12px;min-width:0">${avatar(m, 38)}
+          <div class="row" style="gap:10px;min-width:0;flex-wrap:nowrap;align-items:flex-start">${avatar(m, 38)}
             <div style="min-width:0"><b>${escapeHtml(m?.name || '')}</b> → ${escapeHtml(st?.name || '')}
-              <br><span class="small muted">${escapeHtml(fmtDay(r.checkIn))} – ${escapeHtml(fmtDay(r.checkOut))} · ${r.nights} night${r.nights > 1 ? 's' : ''} · ${r.guests} guest${r.guests > 1 ? 's' : ''}${r.flexDays ? ` · flexible ±${r.flexDays}d` : ''}</span></div>
+              <br><span class="small muted">${escapeHtml(fmtDay(r.checkIn))} – ${escapeHtml(fmtDay(r.checkOut))} · <b class="num">${r.nights}</b> night${r.nights > 1 ? 's' : ''} · <b class="num">${r.guests}</b> guest${r.guests > 1 ? 's' : ''}${r.flexDays ? ` · flexible <b class="num">±${r.flexDays}d</b>` : ''}</span></div>
           </div>
-          <div style="text-align:right;flex:none">${r.status === 'held' ? chip(r.approvedAt ? 'held' : 'requested', r.approvedAt ? 'Booking it' : 'To book') : r.status === 'quoted' ? chip('quoted', 'Priced') : chip(r.status)}<br><span class="small muted num">${escapeHtml(fmtPoints(r.quotedPoints || r.indicativePoints))}</span></div>
+          <span style="flex:none">${r.status === 'held' ? chip(r.approvedAt ? 'held' : 'requested', r.approvedAt ? 'Booking it' : 'To book') : r.status === 'quoted' ? chip('quoted', 'Priced') : chip(r.status)}</span>
         </div>
+        <p class="num" style="margin-top:var(--s-2)">${escapeHtml(fmtPoints(r.quotedPoints || r.indicativePoints))}</p>
         ${r.note ? `<p class="small muted" style="margin-top:10px">“${escapeHtml(r.note)}”</p>` : ''}
-        <div class="row" style="margin-top:12px;align-items:center">
+        <div class="stack tight" style="justify-items:start;margin-top:var(--s-3)">
           ${r.status === 'requested' && store.canQuote(r) ? `<button class="btn sm" data-quote="${r.id}">${icon('tag', { size: 15 })}Look and price</button>
-            <span class="small ${sla < 12 ? '' : 'muted'}" ${sla < 12 ? 'style="color:var(--flag)"' : ''}>${sla > 0 ? `${sla}h left of the ${promised}-hour promise` : `past the ${promised}-hour promise`}</span>` : ''}
+            <span class="small ${sla > 0 ? 'muted' : ''}">${sla > 0 ? `<b class="num">${sla}h</b> left of the <b class="num">${promised}-hour</b> promise` : `<span style="color:var(--flag)">past the <b class="num">${promised}-hour</b> promise</span>`}</span>` : ''}
           ${r.status === 'held' && store.hasRole('planner', 'admin', 'treasurer', 'deputy') ? `<button class="btn good sm" data-book="${r.id}">${icon('check', { size: 15 })}Book it</button>` : ''}
-          ${r.status === 'held' && store.canPlan() && !r.approvedAt ? `<button class="btn ghost sm" data-approve="${r.id}">I have it</button>` : ''}
-          ${r.status === 'held' ? `
-            ${topUpOwed ? `<span class="small" style="color:var(--flag)">${escapeHtml(fmtUsd2(r.topUpUsd))} top-up still to the Banker</span>` : ''}` : ''}
+          ${r.status === 'held' && store.canPlan() && !r.approvedAt ? `<button class="link-rule" type="button" data-approve="${r.id}">I have it</button>` : ''}
+          ${r.status === 'held' && topUpOwed ? `<span class="small" style="color:var(--flag)"><b class="num">${escapeHtml(fmtUsd2(r.topUpUsd))}</b> top-up still to the Banker</span>` : ''}
           ${r.status === 'quoted' ? `<span class="small muted">${left ? `the price holds another ${escapeHtml(left)}` : 'the price has lapsed'}</span>` : ''}
-          <a class="btn ghost sm" href="#/requests/${r.id}">Open</a>
+          <a class="link-rule" href="#/requests/${r.id}">Open</a>
         </div></div>`;
     };
     panel.replaceChildren(el(`<div class="stack lanes">${lanes.map(l => `<section class="lane lane-${l.key}">
-        <div class="lane-head"><div><p class="eyebrow">${escapeHtml(l.title)}</p><p class="small muted">${escapeHtml(l.sub)}</p></div><b class="num lane-count">${l.rows.length}</b></div>
+        <div class="lane-head"><p class="eyebrow">${escapeHtml(l.title)}</p><b class="num lane-count">${l.rows.length}</b></div>
         ${l.rows.length ? `<div class="stack">${l.rows.map(row).join('')}</div>` : '<p class="small muted lane-empty">Nothing here.</p>'}
       </section>`).join('')}</div>`));
   };
@@ -523,19 +515,16 @@ export function desk({ store, go }) {
   const drawCatalog = () => {
     const list = store.stays;
     panel.replaceChildren(el(`<div class="panel">
-      <div class="row-between"><h2>What the Circle offers</h2>
-        <button class="btn ghost sm" id="add">Add a stay, trip or cruise</button></div>
-      <div class="tablewrap" style="margin-top:14px;border:0"><table>
-        <thead><tr><th>Name</th><th>Area</th><th class="num">From, a night</th><th>State</th><th></th></tr></thead>
-        <tbody>${list.map(st => `<tr>
-          <td><b>${escapeHtml(st.name)}</b><br><span class="small muted">${st.kind === 'trip' ? `${st.cruise ? `cruise${st.cruise.ship ? ` · ${escapeHtml(st.cruise.ship)}` : ''} · ` : 'trip · '}${escapeHtml(fmtDay(st.dates.from))} · ${st.nights} nights` : `min ${st.minNights} nights`}</span></td>
-          <td class="small">${escapeHtml(st.area)}</td>
-          ${st.kind === 'trip'
-            ? `<td class="num">${escapeHtml(fmtPoints(seatPoints(st, s)))} a ${st.cruise ? 'cabin' : 'seat'}</td>`
-            : `<td class="num">${escapeHtml(fmtPoints(fromPoints(st, s)))}</td>`}
-          <td>${st.active ? chip('confirmed', 'Live') : chip('cancelled', 'Draft')}</td>
-          <td><button class="btn ghost sm" data-edit="${st.id}">Edit</button></td></tr>`).join('')}</tbody>
-      </table></div>
+      <h2>What the Circle offers</h2>
+      <button class="btn block" id="add" style="margin-top:var(--s-3)">Add a stay, trip or cruise</button>
+      <ul class="ledger" style="margin-top:var(--s-4)">${list.map(st => `<li>
+        <span class="what"><b>${escapeHtml(st.name)}</b>
+          <span class="meta">${escapeHtml(st.area)}${st.kind === 'trip'
+            ? ` · ${st.cruise ? `cruise${st.cruise.ship ? ` · ${escapeHtml(st.cruise.ship)}` : ''} · ` : 'trip · '}${escapeHtml(fmtDay(st.dates.from))} · <b class="num">${st.nights}</b> nights`
+            : ` · min <b class="num">${st.minNights}</b> nights`}</span></span>
+        <span class="delta"><b>${escapeHtml(fmtPoints(st.kind === 'trip' ? seatPoints(st, s) : fromPoints(st, s)))}</b>
+          ${st.active ? chip('confirmed', 'Live') : chip('cancelled', 'Draft')}
+          <button class="btn ghost sm" data-edit="${st.id}">Edit</button></span></li>`).join('')}</ul>
       <p class="small muted" style="margin-top:12px">The cheapest night of the year at each place — open one to set all three of its rates. Members see the points; you edit the dollars.</p>
     </div>`));
   };
@@ -548,8 +537,8 @@ export function desk({ store, go }) {
         <p class="small muted" style="margin-top:6px">Every note opens “Bon dia, Circle” and is signed by you. Nothing is ever sent without you tapping send.</p>
         <label class="field" style="margin-top:12px"><span>Title</span><input name="title" required placeholder="Samaná is open — fourteen seats"></label>
         <label class="field"><span>Note</span><textarea name="body" rows="5" required placeholder="Bon dia, Circle. …"></textarea></label>
-        <label class="row" style="gap:10px;margin-bottom:14px"><input type="checkbox" name="pinned" style="width:20px;height:20px"><span class="small">Pin it to the top</span></label>
-        <button class="btn" type="submit">Publish</button>
+        <label class="row" style="gap:10px;margin-bottom:14px;flex-wrap:nowrap"><input type="checkbox" name="pinned"><span class="small">Pin it to the top</span></label>
+        <button class="btn block" type="submit">Publish</button>
       </form>
       <div class="panel"><h2>Ready-made messages</h2>
         <p class="small muted" style="margin-top:6px">Open in WhatsApp with the details already filled in. You decide what to send and to whom.</p>
@@ -635,9 +624,9 @@ function moneyPair(key, label, valueUsd, s) {
   const usd = Number(valueUsd) || 0;
   return `<div class="field"><span>${escapeHtml(label)}</span>
     <div class="row" style="gap:8px;flex-wrap:nowrap">
-      <span class="row" style="gap:4px;flex:1;min-width:0"><span class="muted">$</span>
+      <span class="row" style="gap:4px;flex:1;min-width:0;flex-wrap:nowrap"><span class="muted">$</span>
         <input data-usd="${escapeHtml(key)}" type="number" step="1" min="0" inputmode="decimal" value="${usd.toFixed(0)}" aria-label="${escapeHtml(label)} in dollars" style="min-width:0"></span>
-      <span class="row" style="gap:4px;flex:1;min-width:0"><span class="muted">✦</span>
+      <span class="row" style="gap:4px;flex:1;min-width:0;flex-wrap:nowrap"><span class="muted">✦</span>
         <input data-pts="${escapeHtml(key)}" type="number" step="100" min="0" inputmode="numeric" value="${Math.round(usd * s.pointsPerDollar)}" aria-label="${escapeHtml(label)} in points" class="mono" style="min-width:0"></span>
     </div></div>`;
 }
@@ -648,7 +637,7 @@ async function editStay(store, stay) {
   // on a ship, from a port). A cruise is stored as a trip with a `cruise` record, so everything
   // that holds and books a seat holds and books a cabin unchanged.
   let kind = stay ? (stay.cruise ? 'cruise' : stay.kind) : 'aruba';
-  const out = await sheet({ title: stay ? `Edit ${stay.name}` : 'Add a stay, trip or cruise', wide: true, render: (body, close) => {
+  const out = await sheet({ title: stay ? `Edit ${stay.name}` : 'Add a stay, trip or cruise', tall: true, render: (body, close) => {
    const draw = () => {
     const isTrip = kind !== 'aruba', cruise = kind === 'cruise', unit = cruise ? 'cabin' : 'seat';
     const cr = stay?.cruise || {};
@@ -657,51 +646,48 @@ async function editStay(store, stay) {
         <option value="aruba"${kind === 'aruba' ? ' selected' : ''}>A stay on the island — priced a night</option>
         <option value="trip"${kind === 'trip' ? ' selected' : ''}>A trip — a seat each, fixed dates</option>
         <option value="cruise"${kind === 'cruise' ? ' selected' : ''}>A cruise — a cabin each, fixed dates</option></select></label>`}
-      <div class="grid g2">
-        <label class="field"><span>Name</span><input name="name" value="${escapeHtml(stay?.name || '')}" placeholder="${cruise ? '7 nights, Southern Caribbean' : ''}" required></label>
-        <label class="field"><span>${cruise ? 'Sails from' : 'Area'}</span><input name="area" value="${escapeHtml(stay?.area || '')}" placeholder="${cruise ? 'San Juan' : ''}"></label>
-      </div>
-      ${cruise ? `<div class="grid g3">
-        <label class="field"><span>Cruise line</span><input name="crLine" value="${escapeHtml(cr.line || '')}" placeholder="Celebrity"></label>
-        <label class="field"><span>Ship</span><input name="crShip" value="${escapeHtml(cr.ship || '')}" placeholder="Celebrity Beyond"></label>
-        <label class="field"><span>Cabin</span><input name="crCabin" value="${escapeHtml(cr.cabin || '')}" placeholder="Balcony, two people"></label>
-      </div>
+      <label class="field"><span>Name</span><input name="name" value="${escapeHtml(stay?.name || '')}" placeholder="${cruise ? '7 nights, Southern Caribbean' : ''}" required></label>
+      <label class="field"><span>${cruise ? 'Sails from' : 'Area'}</span><input name="area" value="${escapeHtml(stay?.area || '')}" placeholder="${cruise ? 'San Juan' : ''}"></label>
+      ${cruise ? `
+      <label class="field"><span>Cruise line</span><input name="crLine" value="${escapeHtml(cr.line || '')}" placeholder="Celebrity"></label>
+      <label class="field"><span>Ship</span><input name="crShip" value="${escapeHtml(cr.ship || '')}" placeholder="Celebrity Beyond"></label>
+      <label class="field"><span>Cabin</span><input name="crCabin" value="${escapeHtml(cr.cabin || '')}" placeholder="Balcony, two people"></label>
       <label class="field"><span>Ports, in order</span><input name="crPorts" value="${escapeHtml((cr.ports || []).join(', '))}" placeholder="Aruba, Curaçao, Bonaire">
         <span class="hint">Comma-separated. Members see them on the card and the page.</span></label>
       <label class="field"><span>Where you saw it</span><input name="crRef" type="url" value="${escapeHtml(stay?.sources?.interval?.url || '')}" placeholder="https://www.intervalworld.com/…" inputmode="url">
         <span class="hint">The Interval page for this sailing, so when someone asks you are one tap from it.</span></label>` : ''}
       <p class="eyebrow" style="margin-bottom:8px">${isTrip ? `What a ${unit} costs us` : 'What a night costs us'}</p>
       <p class="small muted" style="margin-bottom:12px">The room, taxes and levies included — what the Circle pays. The member is charged ${escapeHtml(fmtPct(s.serviceRate, 0))} on top of this when they spend points, and that is the number every screen shows them. Type dollars or points, whichever you have in your head; the other follows at ${s.pointsPerDollar} points to the dollar.</p>
-      ${isTrip ? `<div class="grid g2">${moneyPair('seat', `A ${unit}, before our share`, (stay?.pointsPerSeat || 0) / s.pointsPerDollar, s)}
-          <label class="field"><span>Guest price in cash US$</span><input name="guestCashUsd" type="number" step="1" value="${stay?.guestCashUsd || 0}" inputmode="decimal">
-            <span class="hint">What a non-member pays the Banker, at face value.</span></label></div>
-        <div class="grid g3">
+      ${isTrip ? `${moneyPair('seat', `A ${unit}, before our share`, (stay?.pointsPerSeat || 0) / s.pointsPerDollar, s)}
+        <label class="field"><span>Guest price in cash US$</span><input name="guestCashUsd" type="number" step="1" value="${stay?.guestCashUsd || 0}" inputmode="decimal">
+          <span class="hint">What a non-member pays the Banker, at face value.</span></label>
+        <div class="pair">
           <label class="field"><span>${cruise ? 'Sails on' : 'Starts on'}</span><input name="startsOn" type="date" value="${escapeHtml(stay?.dates?.from || '')}" required></label>
           <label class="field"><span>${cruise ? 'Back on' : 'Ends on'}</span><input name="endsOn" type="date" value="${escapeHtml(stay?.dates?.to || '')}" required></label>
+        </div>
+        <div class="pair">
           <label class="field"><span>${cruise ? 'Cabins' : 'Seats'} you can hold</span><input name="seats" type="number" min="1" value="${stay?.seats || (cruise ? 4 : 10)}" inputmode="numeric"></label>
           <label class="field"><span>Hold deadline</span><input name="holdDeadline" type="date" value="${escapeHtml(stay?.holdDeadline || '')}"><span class="hint">You release the block after this.</span></label>
-          <label class="field"><span>Public rate US$, a ${unit}</span><input name="retailUsd" type="number" value="${stay?.retailUsd || 0}" inputmode="decimal"><span class="hint">What the same ${unit} costs booked alone, for comparison.</span></label>
-        </div>`
-        : `<div class="grid g3">
-        ${RATE_BAND_LIST.map(b => moneyPair(b.id, `${b.from} – ${b.to}`,
+        </div>
+        <label class="field"><span>Public rate US$, a ${unit}</span><input name="retailUsd" type="number" value="${stay?.retailUsd || 0}" inputmode="decimal"><span class="hint">What the same ${unit} costs booked alone, for comparison.</span></label>`
+        : `${RATE_BAND_LIST.map(b => moneyPair(b.id, `${b.from} – ${b.to}`,
             stay?.rates?.[b.id] ?? ({ low: 250, high: 380, peak: 460 })[b.id], s)).join('')}
-      </div>
       <p class="small muted" style="margin-bottom:14px">Three dates, three rates — the way the hotels quote them. A member never sees these three or any name for them: they give their dates and the app prices those nights.</p>
-      <div class="grid g3">
+      <div class="pair">
         <label class="field"><span>Minimum nights</span><input name="minNights" type="number" value="${stay?.minNights || 2}" inputmode="numeric"></label>
         <label class="field"><span>Minimum, 20 Dec – 3 Jan</span><input name="peakMinNights" type="number" value="${stay?.peakMinNights || 7}" inputmode="numeric"></label>
-        <label class="field"><span>Public rate US$</span><input name="retailUsd" type="number" value="${stay?.retailUsd || 0}" inputmode="decimal"></label>
       </div>
+      <label class="field"><span>Public rate US$</span><input name="retailUsd" type="number" value="${stay?.retailUsd || 0}" inputmode="decimal"></label>
       <label class="field"><span>Booking page</span>
         <input name="site" type="url" value="${escapeHtml(stay?.site || '')}" placeholder="https://…" inputmode="url">
         <span class="hint">Where you actually go to book this place. It is the link on every request for it, so when a member asks you are one tap from the room instead of searching for it again.</span></label>
       <p class="eyebrow" style="margin:20px 0 8px">What the booking sites are asking</p>
       <p class="small muted" style="margin-bottom:12px">Type what you actually saw and the day you saw it. This is what a member is shown under the price — with the date, always, so nobody is comparing against something six months old. Leave it empty and the page says plainly that nobody has checked.</p>
-      <div class="grid g3">
+      <div class="pair">
         <label class="field"><span>Interval, a night US$</span><input name="srcIntervalUsd" type="number" step="0.01" value="${stay?.sources?.interval?.seenUsd || ''}" inputmode="decimal"></label>
         <label class="field"><span>RedWeek, from US$</span><input name="srcRedweekUsd" type="number" step="0.01" value="${stay?.sources?.redweek?.fromUsd || ''}" inputmode="decimal"></label>
-        <label class="field"><span>Seen on</span><input name="srcSeenOn" type="date" value="${escapeHtml(stay?.sources?.interval?.seenOn || stay?.sources?.redweek?.seenOn || '')}"></label>
-      </div>`}
+      </div>
+      <label class="field"><span>Seen on</span><input name="srcSeenOn" type="date" value="${escapeHtml(stay?.sources?.interval?.seenOn || stay?.sources?.redweek?.seenOn || '')}"></label>`}
       <label class="field"><span>What it is like</span><textarea name="vibe" rows="2">${escapeHtml(stay?.vibe || '')}</textarea></label>
       <label class="field"><span>Note from Victor</span><input name="dealNote" value="${escapeHtml(stay?.dealNote || '')}"></label>
       <div class="field" id="photo-block">
@@ -717,9 +703,9 @@ async function editStay(store, stay) {
           <input name="photoNote" value="${escapeHtml(stay?.photoNote || '')}" placeholder="Our own photo, March 2026 · the resort's media kit, with their OK">
           <span class="hint">Only a photograph the Circle may use: one you took, or one from the resort's media kit with their permission. Not a picture copied off their website — those are the hotel's copyright, and the Circle does not take what it has not been given. Members see this line under the picture.</span></label>
       </div>
-      <label class="row" style="gap:10px;margin-bottom:12px"><input type="checkbox" name="active" ${stay?.active !== false ? 'checked' : ''} style="width:20px;height:20px"><span class="small">Live for members</span></label>
-      ${isTrip ? '' : `<label class="row" style="gap:10px;margin-bottom:12px"><input type="checkbox" name="house" ${stay?.house ? 'checked' : ''} style="width:20px;height:20px"><span class="small">One of the places we actually use — shows first, with a badge</span></label>`}
-      <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Save</button></div>`;
+      <label class="row" style="gap:10px;margin-bottom:12px;flex-wrap:nowrap"><input type="checkbox" name="active" ${stay?.active !== false ? 'checked' : ''}><span class="small">Live for members</span></label>
+      ${isTrip ? '' : `<label class="row" style="gap:10px;margin-bottom:12px;flex-wrap:nowrap"><input type="checkbox" name="house" ${stay?.house ? 'checked' : ''}><span class="small">One of the places we actually use — shows first, with a badge</span></label>`}
+      <div class="sheet-actions"><button class="btn block" data-ok>Save</button></div>`;
     // Typing in either box updates the other, so the two never disagree.
     body.addEventListener('input', (e) => {
       const usd = e.target.closest('[data-usd]'); const pts = e.target.closest('[data-pts]');
@@ -830,22 +816,22 @@ async function editStay(store, stay) {
  */
 export async function roomPhotosSheet(store, stay, { rooms = [] } = {}) {
   let changed = false;
-  await sheet({ title: `Room photographs · ${stay.name}`, wide: true, render: (body, close) => {
+  await sheet({ title: `Room photographs · ${stay.name}`, tall: true, render: (body, close) => {
     const draw = () => {
       const current = store.stay(stay.id) || stay;
       const own = roomPhotosFor(current, null);
       body.innerHTML = `
         <p class="small muted">Only photographs the Circle may use: ones you took, or the resort's media kit with their OK. Not pictures copied off their website — those are the hotel's copyright, and the Circle does not take what it has not been given. Members see the note under each picture.</p>
-        ${own.length ? `<ul class="photo-rows" style="margin-top:14px">${own.map(ph => `<li><img src="${escapeHtml(ph.thumb)}" alt=""><span class="what"><b>${escapeHtml(ph.room || 'The property')}</b><span class="meta">${escapeHtml(ph.note)}${ph.seenOn ? ` · ${escapeHtml(fmtDay(ph.seenOn))}` : ''}</span></span><button type="button" class="btn ghost sm" data-remove="${escapeHtml(ph.id)}">${icon('x', { size: 14 })}Take off</button></li>`).join('')}</ul>`
+        ${own.length ? `<ul class="photo-rows" style="margin-top:14px">${own.map(ph => `<li><img src="${escapeHtml(ph.thumb)}" alt="" loading="lazy" decoding="async"><span class="what"><b>${escapeHtml(ph.room || 'The property')}</b><span class="meta">${escapeHtml(ph.note)}${ph.seenOn ? ` · ${escapeHtml(fmtDay(ph.seenOn))}` : ''}</span></span><button type="button" class="btn ghost sm" data-remove="${escapeHtml(ph.id)}">${icon('x', { size: 14 })}Take off</button></li>`).join('')}</ul>`
           : '<p class="small muted" style="margin-top:12px">Nothing of ours on file for this place yet.</p>'}
-        <div class="grid g2" style="margin-top:16px">
+        <div style="margin-top:16px">
           <label class="field"><span>Which room</span>
             <input name="room" list="room-names" placeholder="Studio · One-bedroom · leave empty for the property" autocomplete="off">
             <datalist id="room-names">${rooms.map(r => `<option value="${escapeHtml(r)}"></option>`).join('')}</datalist></label>
           <label class="field"><span>Where they came from</span><input name="note" placeholder="Our own photos, March 2026 · the resort's media kit, with their OK"></label>
         </div>
         <div class="row" style="margin-top:8px"><label class="btn ghost sm" style="cursor:pointer">${icon('camera', { size: 15 })}Choose photographs<input type="file" name="files" accept="image/jpeg,image/png,image/webp" multiple hidden></label><span class="small muted" id="picked"></span></div>
-        <div class="sheet-actions"><button class="btn ghost" data-close>${changed ? 'Done' : 'Cancel'}</button><button class="btn" data-ok>Add them</button></div>`;
+        <div class="sheet-actions"><button class="btn block" data-ok>Add them</button></div>`;
       body.querySelector('[name=files]').addEventListener('change', (e) => {
         const n = e.target.files?.length || 0;
         body.querySelector('#picked').textContent = n ? `${n} chosen` : '';
@@ -883,22 +869,18 @@ export function pool({ store }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <p class="eyebrow">${icon('shield')}Proof of reserves</p>
       <h1>The Pool</h1>
-      <p class="lede" style="margin-top:12px">Every point the Circle owes has a dollar sitting behind it in the Reserve. This page is the arithmetic, open to every Insider.</p>
-      <div id="gauge" style="margin-top:20px"></div>
-      <div class="grid g4" style="margin-top:20px">
-        <div class="stat"><span class="k">Reserve, by the ledger</span><b class="num">${escapeHtml(fmtUsd2(t.reserveUsd))}</b><span class="sub">every dollar in, minus what has been paid out</span></div>
-        <div class="stat"><span class="k">Owed in points</span><b class="num">${escapeHtml(fmtPoints(t.outstandingPoints))}</b><span class="sub">${escapeHtml(fmtUsd2(t.liabilityUsd))} of hotel</span></div>
-        <div class="stat"><span class="k">Coverage</span><b class="num">${escapeHtml(fmtPct(t.coverage))}</b><span class="sub">Reserve ÷ what is owed</span></div>
-        <div class="stat"><span class="k">Operating</span><b class="num">${escapeHtml(fmtUsd2(t.operatingUsd))}</b><span class="sub">15% earned on bookings, less the bonuses fronted — negative until the first one</span></div>
-      </div>
+      <div id="gauge" style="margin-top:var(--s-5)"></div>
+      <p class="dateline">Reserve <b class="num">${escapeHtml(fmtUsd2(t.reserveUsd))}</b> · owed <b class="num">${escapeHtml(fmtPoints(t.outstandingPoints))}</b> (<b class="num">${escapeHtml(fmtUsd2(t.liabilityUsd))}</b>)</p>
+      <p class="dateline">Coverage <b class="num">${escapeHtml(fmtPct(t.coverage))}</b> · Operating <b class="num">${escapeHtml(fmtUsd2(t.operatingUsd))}</b></p>
+      <p class="small muted" style="margin-top:var(--s-2)">Operating is the 15% earned on bookings, less the bonuses fronted — negative until the first one.</p>
 
-      <div class="notice ${t.verified && Math.abs(t.verifiedVarianceUsd || 0) < 0.005 ? 'good' : t.verified ? 'warn' : ''}" style="margin-top:18px">
+      <div class="panel flat" style="margin-top:var(--s-4)">
         <b>${t.verified ? `Checked against the bank on ${escapeHtml(fmtDay(t.verified.at))}` : 'Not yet checked against the bank'}</b>
         <p class="small">${t.verified
           ? `${escapeHtml(store.member(t.verified.byId)?.name || 'The Banker')} entered ${escapeHtml(fmtUsd2(t.verified.balanceUsd))} from the statement. The ledger said ${escapeHtml(fmtUsd2(t.reserveExpectedUsd))} at the time${Math.abs(t.verifiedVarianceUsd || 0) < 0.005 ? ' — matched to the cent' : ` — a difference of ${escapeHtml(fmtUsd2(Math.abs(t.verifiedVarianceUsd)))}`}. Money confirmed since then has not been checked yet; that happens at the next month close.`
           : 'Coverage is arithmetic until the Banker enters the bank balance at a month close. Until then, treat it as what the ledger says rather than what the bank holds.'}</p></div>
 
-      <div class="side" style="margin-top:24px">
+      <div class="stack" style="margin-top:var(--s-5)">
         <div class="panel">
           <h2>Where the money has gone</h2>
           <ul class="ledger" style="margin-top:12px">
@@ -920,22 +902,21 @@ export function pool({ store }) {
         </div>
       </div>
 
-      <div class="panel" style="margin-top:20px">
-        <div class="row-between"><h2>Confirmed each month</h2><button class="btn ghost sm" id="toggle-table">Show the numbers</button></div>
+      <div class="panel" style="margin-top:var(--s-5)">
+        <h2>Confirmed each month</h2>
         <div id="chart" style="margin-top:14px"></div>
-        <div id="table" hidden style="margin-top:14px"></div>
+        <div class="row"><button class="link-rule" type="button" id="toggle-table">Show the numbers</button></div>
+        <div id="table" hidden></div>
       </div>
     </div></section></div>`);
   wrap.querySelector('#gauge').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, liabilityUsd: t.liabilityUsd, configured: t.accountsConfigured, size: 'full' }));
   const data = series.map(m => ({ label: fmtMonth(m.month).slice(0, 3), values: [m.backing, m.share] }));
-  wrap.querySelector('#chart').appendChild(columns(data, { series: ['Into the Reserve', 'The Circle’s share'], height: 200, unit: '', ariaLabel: 'Money confirmed each month, split between the Reserve and the Circle’s share' }));
-  const table = tableFor(series, [
-    { label: 'Month', value: (r) => fmtMonth(r.month) }, { label: 'Confirmed', value: 'count', num: true },
-    { label: 'Collected', value: (r) => fmtUsd2(r.collected), num: true },
-    { label: 'To the Reserve', value: (r) => fmtUsd2(r.backing), num: true },
-    { label: 'The Circle’s share', value: (r) => fmtUsd2(r.share), num: true },
-  ]);
-  wrap.querySelector('#table').appendChild(table);
+  wrap.querySelector('#chart').appendChild(columns(data, { series: ['Into the Reserve', 'The Circle’s share'], height: 200, width: 340, unit: '', ariaLabel: 'Money confirmed each month, split between the Reserve and the Circle’s share' }));
+  // The months as ruled rows, not a table that scrolls sideways in a 358px column.
+  wrap.querySelector('#table').innerHTML = `<ul class="ledger">${series.map(r => `<li>
+      <span class="what"><b>${escapeHtml(fmtMonth(r.month))}</b>
+        <span class="meta"><b class="num">${r.count}</b> confirmed · collected <b class="num">${escapeHtml(fmtUsd2(r.collected))}</b></span></span>
+      <span class="delta"><b>${escapeHtml(fmtUsd2(r.backing))}</b><small>${escapeHtml(fmtUsd2(r.share))}</small></span></li>`).join('')}</ul>`;
   wrap.querySelector('#toggle-table').addEventListener('click', (e) => {
     const t2 = wrap.querySelector('#table'); t2.hidden = !t2.hidden;
     e.target.textContent = t2.hidden ? 'Show the numbers' : 'Hide the numbers';
@@ -952,13 +933,13 @@ export function circle({ store }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <p class="eyebrow">${roster.length} Insiders · capped at ${s.memberCap} · ${s.memberCap - roster.length} seats open</p>
       <h1>The Circle</h1>
-      <div class="segmented no-print" role="group" aria-label="Circle sections" id="tabs">
+      <div class="segmented even no-print" role="group" aria-label="Circle sections" id="tabs">
         <button type="button" data-tab="people" aria-pressed="true">Insiders</button>
-        <button type="button" data-tab="chipin" aria-pressed="false">Chip in${store.openToChipIn().length ? ` · ${store.openToChipIn().length}` : ''}</button>
-        <button type="button" data-tab="notes" aria-pressed="false">Notes from Ian</button>
+        <button type="button" data-tab="chipin" aria-pressed="false">Chip in${store.openToChipIn().length ? ` <span class="nav-badge">${store.openToChipIn().length}</span>` : ''}</button>
+        <button type="button" data-tab="notes" aria-pressed="false">Notes</button>
         <button type="button" data-tab="milestones" aria-pressed="false">Milestones</button>
       </div>
-      <div id="panel" style="margin-top:18px"></div>
+      <div id="panel" style="margin-top:var(--s-4)"></div>
     </div></section></div>`);
   const panel = wrap.querySelector('#panel');
   let tab = 'people';
@@ -968,23 +949,20 @@ export function circle({ store }) {
         // Standing beside the name, at the size it is actually read: a mark, not a picture.
         slot.replaceChildren(rankCrest(store.standingOf(slot.dataset.crest), { size: 30, withName: false }));
       });
-      panel.replaceChildren(el(`<div class="grid g3">${roster.map(m => {
+      panel.replaceChildren(el(`<ul class="roster">${roster.map(m => {
         const named = m.showOnRollcall || m.id === me.id || m.roles.some(r => r !== 'member');
         const streak = store.streak(m.id);
-        return `<div class="panel"><div class="row" style="gap:12px">
+        const tags = [m.founding ? 'Founding' : '', m.standingOrder ? 'Autopilot' : '', m.status === 'paused' ? 'Paused' : '',
+          streak >= 6 ? `${streak} in a row` : ''].filter(Boolean);
+        return `<li>
+          <div class="row" style="gap:12px;min-width:0;flex-wrap:nowrap">
             ${avatar(m, 40)}
             <div style="min-width:0"><b>${escapeHtml(named ? m.name : initials(m.name))}</b>
-              <br><span class="small muted">${escapeHtml(m.title || `${tierName(m.monthlyUsd)} · since ${fmtDay(m.joinedAt)}`)}</span></div>
-            <span style="margin-left:auto;flex:none" data-crest="${m.id}"></span>
+              <br><span class="small muted">${escapeHtml(m.title || `${tierName(m.monthlyUsd)} · since ${fmtDay(m.joinedAt)}`)}</span>
+              ${tags.length ? `<br>${tags.map(x => `<span class="tag">${escapeHtml(x)}</span>`).join(' ')}` : ''}</div>
           </div>
-          <div class="row" style="margin-top:12px;gap:8px">
-            ${treeSvg(VOCAB.tierLean[m.monthlyUsd], { size: 18 })}
-            ${m.founding ? '<span class="tag">Founding</span>' : ''}
-            ${m.standingOrder ? '<span class="tag">Autopilot</span>' : ''}
-            ${m.status === 'paused' ? '<span class="tag">Paused</span>' : ''}
-            ${streak >= 6 ? `<span class="tag">${streak} in a row</span>` : ''}
-          </div></div>`;
-      }).join('')}</div>`));
+          <span style="flex:none" data-crest="${m.id}"></span></li>`;
+      }).join('')}</ul>`));
       paintCrests(panel);
     } else if (tab === 'chipin') {
       const open = store.openToChipIn();
@@ -1014,8 +992,8 @@ export function circle({ store }) {
       panel.replaceChildren(el(`<div class="stack">${notes.map(n => `<div class="panel">
           <div class="row-between"><h2>${escapeHtml(n.title)}</h2>${n.pinned ? '<span class="tag">Pinned</span>' : ''}</div>
           <p class="small muted" style="margin-top:6px">${escapeHtml(store.member(n.authorId)?.name || '')} · ${escapeHtml(fmtDay(n.at))}</p>
-          <p style="margin-top:12px;max-width:70ch">${escapeHtml(n.body)}</p>
-          <div class="row" style="margin-top:12px"><button class="btn ghost sm" data-copy="${escapeHtml(n.body)}">Copy for WhatsApp</button></div>
+          <p style="margin-top:12px">${escapeHtml(n.body)}</p>
+          <div class="row"><button class="link-rule" type="button" data-copy="${escapeHtml(n.body)}">Copy for WhatsApp</button></div>
         </div>`).join('')}</div>`));
       panel.addEventListener('click', async (e) => {
         const c = e.target.closest('[data-copy]'); if (!c) return;
@@ -1059,7 +1037,7 @@ async function showLogin({ name, username, password }) {
       </div>
       <p class="small muted" style="margin-top:12px">This is the only time it is shown. The app makes them
         choose their own the first time they sign in, so it stops mattering straight away.</p>
-      <div class="sheet-actions"><button class="btn" data-close>Done</button></div>`;
+      <div class="sheet-actions"><button class="btn block" data-close>Done</button></div>`;
     body.querySelector('[data-close]').addEventListener('click', () => close());
   } });
 }
@@ -1067,7 +1045,7 @@ async function showLogin({ name, username, password }) {
 export function settings({ store, go }) {
   const me = store.me, s = store.settings;
   const isAdmin = store.hasRole('admin');
-  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:900px">
+  const wrap = el(`<div><section class="sec"><div class="wrap">
       <p class="eyebrow">${isAdmin ? 'Admin' : 'The Banker'}</p>
       <h1>Settings</h1>
 
@@ -1086,17 +1064,19 @@ export function settings({ store, go }) {
       <form class="panel" id="accounts" style="margin-top:20px">
         <h2>The two accounts</h2>
         <p class="small muted" style="margin-top:6px">Coverage can only be verified when the Reserve and Operating are two different accounts. Be honest about who holds them.</p>
-        <div class="grid g2" style="margin-top:12px">
-          <div><p class="eyebrow">${icon('vault')}Reserve · backs the points</p>
-            <label class="field"><span>Bank</span><input name="rBank" value="${escapeHtml(s.reserveAccount.bank || '')}"></label>
-            <label class="field"><span>Held by</span><input name="rHolder" value="${escapeHtml(s.reserveAccount.holder || '')}" placeholder="Held by Vishnu on behalf of the Circle"></label>
-            <label class="field"><span>Account number</span><input name="rNumber" class="mono" value="${escapeHtml(s.reserveAccount.number || '')}"></label></div>
-          <div><p class="eyebrow">${icon('scale')}Operating · the 15%</p>
-            <label class="field"><span>Bank</span><input name="oBank" value="${escapeHtml(s.operatingAccount.bank || '')}"></label>
-            <label class="field"><span>Held by</span><input name="oHolder" value="${escapeHtml(s.operatingAccount.holder || '')}"></label>
-            <label class="field"><span>Account number</span><input name="oNumber" class="mono" value="${escapeHtml(s.operatingAccount.number || '')}"></label></div>
+        <div class="rule-block">
+          <p class="eyebrow" style="margin-bottom:var(--s-2)">${icon('vault')}Reserve · backs the points</p>
+          <label class="field"><span>Bank</span><input name="rBank" value="${escapeHtml(s.reserveAccount.bank || '')}"></label>
+          <label class="field"><span>Held by</span><input name="rHolder" value="${escapeHtml(s.reserveAccount.holder || '')}" placeholder="Held by Vishnu on behalf of the Circle"></label>
+          <label class="field"><span>Account number</span><input name="rNumber" class="mono" inputmode="numeric" autocomplete="off" value="${escapeHtml(s.reserveAccount.number || '')}"></label>
         </div>
-        <button class="btn" type="submit">Save the accounts</button>
+        <div class="rule-block">
+          <p class="eyebrow" style="margin-bottom:var(--s-2)">${icon('scale')}Operating · the 15%</p>
+          <label class="field"><span>Bank</span><input name="oBank" value="${escapeHtml(s.operatingAccount.bank || '')}"></label>
+          <label class="field"><span>Held by</span><input name="oHolder" value="${escapeHtml(s.operatingAccount.holder || '')}"></label>
+          <label class="field"><span>Account number</span><input name="oNumber" class="mono" inputmode="numeric" autocomplete="off" value="${escapeHtml(s.operatingAccount.number || '')}"></label>
+        </div>
+        <button class="btn block" type="submit">Save the accounts</button>
       </form>
 
       <form class="panel" id="wallet-form" style="margin-top:16px">
@@ -1104,7 +1084,7 @@ export function settings({ store, go }) {
         <p class="small muted" style="margin-top:6px">A Wallet pass has to be signed with a certificate Apple issues to the club, so a browser cannot make one. Deploy the <code>issue-pass</code> function (it is in <code>supabase/functions/</code>, and the README walks through the certificate), then paste its URL here. Until then, members can still save the card as an image and add the app to their home screen.</p>
         <label class="field" style="margin-top:12px"><span>Pass service URL</span>
           <input name="walletUrl" value="${escapeHtml(s.wallet?.url || '')}" placeholder="https://xxxx.supabase.co/functions/v1/issue-pass" class="mono"></label>
-        <button class="btn" type="submit">Save</button>
+        <button class="btn block" type="submit">Save</button>
         <p class="small muted" style="margin-top:10px">${s.wallet?.url ? 'Members see “Add to Apple Wallet” on their card screen.' : 'Members are told plainly that this is not set up yet.'}</p>
       </form>
       </div>
@@ -1113,7 +1093,7 @@ export function settings({ store, go }) {
       <div class="panel" style="margin-top:20px">
         <h2>Dollars and points</h2>
         <p class="small muted" style="margin-top:6px">${s.pointsPerDollar} points = $1.00. Type either side to check a price before you put it in the catalog.</p>
-        <div class="grid g2" style="margin-top:14px">
+        <div class="pair" style="margin-top:14px">
           <label class="field" style="margin:0"><span>Dollars</span>
             <input id="conv-usd" type="number" step="1" min="0" value="450" inputmode="decimal" class="mono"></label>
           <label class="field" style="margin:0"><span>Points</span>
@@ -1125,21 +1105,25 @@ export function settings({ store, go }) {
       ${isAdmin ? `<form class="panel" id="rules-form" style="margin-top:16px">
         <h2>The rules of the club</h2>
         <p class="small muted" style="margin-top:6px">Changing the share or the value of a point affects everyone. Tell the Circle before you do, and never after someone has booked against it.</p>
-        <div class="grid g3" style="margin-top:12px">
+        <div class="pair" style="margin-top:12px">
           <label class="field"><span>The Circle’s share</span><input name="serviceRate" type="number" step="0.01" min="0" max="0.5" value="${s.serviceRate}" inputmode="decimal"><span class="hint">0.15 is 15%</span></label>
           <label class="field"><span>Points per dollar</span><input name="pointsPerDollar" type="number" value="${s.pointsPerDollar}" inputmode="numeric"><span class="hint">100 = a point is a cent</span></label>
+        </div>
+        <div class="pair">
           <label class="field"><span>Seats in the Circle</span><input name="memberCap" type="number" value="${s.memberCap}" inputmode="numeric"></label>
           <label class="field"><span>Quote locked for (hours)</span><input name="quoteHours" type="number" value="${s.quoteHours}" inputmode="numeric"></label>
+        </div>
+        <div class="pair">
           <label class="field"><span>Banker answers within (hours)</span><input name="bankerSlaHours" type="number" value="${s.bankerSlaHours}" inputmode="numeric"></label>
           <label class="field"><span>Leaving fee US$</span><input name="exitFeeUsd" type="number" value="${s.exitFeeUsd}" inputmode="decimal"></label>
         </div>
-        <button class="btn" type="submit">Save the rules</button>
+        <button class="btn block" type="submit">Save the rules</button>
       </form>` : ''}
-      </div>
 
       <!-- Postcards: the switch is back because the screen now exists (js/views/postcards.js,
            the /postcards route, the tab). While it is off nothing claims otherwise: no tab, no
-           Home block, and the database refuses every insert. -->
+           Home block, and the database refuses every insert. The figures are mono and the words
+           are not, so the line wraps in the column instead of running into the gutter. -->
       ${isAdmin ? `<div class="panel" style="margin-top:16px">
         <h2>${escapeHtml(VOCAB.postcards)}</h2>
         <label class="row-between ask-switch" style="margin-top:12px">
@@ -1147,27 +1131,24 @@ export function settings({ store, go }) {
             <span class="small muted">Photographs sent from the island, to the whole Circle or to a crew. Seen by Insiders only.</span></span>
           <input class="switch" type="checkbox" id="moments-on"${s.momentsOn ? ' checked' : ''}>
         </label>
-        <p class="tiny muted mono" style="margin-top:10px">Album: ${(store.albumBytes() / 1048576).toFixed(0)} MB of 1 GB, of what this app uploaded</p>
+        <p class="tiny muted" style="margin-top:10px">Album: <b class="num">${(store.albumBytes() / 1048576).toFixed(0)} MB</b> of <b class="num">1 GB</b>, of what this app uploaded</p>
       </div>` : ''}
+      </div>
 
       ${isAdmin ? `<div data-pane="people">
       <div class="panel" style="margin-top:20px">
-        <div class="row-between"><h2>Insiders · ${store.members.length}</h2>
-          <div class="row">${isAdmin ? `<button class="btn sm" id="add-member">${icon('plus', { size: 16 })}Add an Insider</button>` : ''}
-            </div></div>
-        <p class="small muted" style="margin-top:6px">Adding someone puts them on the list. Then <b>Give a login</b> makes them a username
-          and a password, shown once, which you pass on however you like — a message, a phone call, in person. Nothing is emailed
-          to anybody, and the first thing the app makes them do is choose their own.</p>
-        <div class="tablewrap" style="margin-top:14px;border:0"><table class="people-table">
-          <thead><tr><th>Who</th><th>State</th><th class="num">Points</th><th></th></tr></thead>
+        <h2>Insiders · <b class="num">${store.members.length}</b></h2>
+        <p class="small muted" style="margin-top:6px">Add someone, then Give a login. Nothing is emailed to anybody.</p>
+        ${isAdmin ? `<button class="btn block" id="add-member" style="margin-top:var(--s-3)">${icon('plus', { size: 16 })}Add an Insider</button>` : ''}
+        <table class="people-table" style="margin-top:var(--s-4)">
           <tbody>${store.members.map(m => `<tr>
             <td><b>${escapeHtml(m.name)}</b>${m.bot ? ' <span class="chip chip-muted">robot</span>' : ''}<br><span class="small ${m.username ? 'muted mono' : ''}" ${m.username ? '' : 'style="color:var(--flag)"'}>${escapeHtml(m.username ? `@${m.username}${m.mustChangePassword ? ' · has not changed their password yet' : ''}` : 'no login yet — they cannot sign in')}</span><br><span class="small muted">${m.bot ? 'no seat, pays nothing' : escapeHtml([tierName(m.monthlyUsd), m.roles.join(', ')].filter(Boolean).join(' · '))}</span></td>
-            <td data-k="State">${chip(m.status === 'active' ? 'active' : m.status)}</td>
+            <td data-k="State"><span class="tag">● ${escapeHtml(statusLabel(m.status === 'active' ? 'active' : m.status))}</span></td>
             <td class="num" data-k="Points">${escapeHtml(fmtPoints(store.availablePoints(m.id)))}</td>
-            <td><div class="row" style="gap:6px;justify-content:flex-end">
+            <td><div class="row" style="gap:6px">
               ${isAdmin ? `<button class="btn ghost sm" data-login="${m.id}">${icon('key', { size: 15 })}${m.username ? 'New password' : 'Give a login'}</button>` : ''}
               ${isAdmin ? `<button class="btn ghost sm" data-edit="${m.id}">${icon('edit', { size: 15 })}Edit</button>` : ''}
-              ${isAdmin ? `<button class="btn ghost sm" data-adjust="${m.id}">Adjust</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>
+              ${isAdmin ? `<button class="btn ghost sm" data-adjust="${m.id}">Adjust</button>` : ''}</div></td></tr>`).join('')}</tbody></table>
       </div>
       </div>
 
@@ -1261,33 +1242,28 @@ export function settings({ store, go }) {
       body.innerHTML = `
         <p class="sheet-text">They sign in with these two. Nothing is emailed to anybody — you pass them on
           yourself, and the app makes them choose their own password the first time.</p>
-        <div class="grid g2">
-          <label class="field"><span>Their name</span><input name="name" required autofocus placeholder="Ian Hekman"></label>
-          <label class="field"><span>Username</span>
-            <input name="username" required autocapitalize="none" spellcheck="false" placeholder="ian"
-                   pattern="[a-z0-9][a-z0-9._\-]{1,28}[a-z0-9]"></label>
-        </div>
+        <label class="field"><span>Their name</span><input name="name" required placeholder="Ian Hekman"></label>
+        <label class="field"><span>Username</span>
+          <input name="username" required autocapitalize="none" spellcheck="false" autocomplete="off" placeholder="ian"
+                 pattern="[a-z0-9][a-z0-9._\-]{1,28}[a-z0-9]"></label>
         <label class="field"><span>First password</span>
           <span class="row" style="gap:8px;flex-wrap:nowrap">
-            <input name="password" class="mono grow" required value="${escapeHtml(generatePassword())}">
+            <input name="password" class="mono grow" required autocomplete="off" value="${escapeHtml(generatePassword())}">
             <button class="btn ghost sm" type="button" data-again style="flex:none">${icon('refresh', { size: 15 })}</button></span></label>
-        <div class="grid g2">
-          <label class="field"><span>Level</span><select name="monthlyUsd">${s.tiers.map(t => `<option value="${t.monthlyUsd}"${t.monthlyUsd === 150 ? ' selected' : ''}>${escapeHtml(fmtUsd2(t.monthlyUsd))} · ${escapeHtml(tierName(t.monthlyUsd))}</option>`).join('')}</select></label>
-          <label class="field"><span>What they are called</span><input name="title" placeholder="Voice of the Circle"></label>
-        </div>
+        <label class="field"><span>Level</span><select name="monthlyUsd">${s.tiers.map(t => `<option value="${t.monthlyUsd}"${t.monthlyUsd === 150 ? ' selected' : ''}>${escapeHtml(fmtUsd2(t.monthlyUsd))} · ${escapeHtml(tierName(t.monthlyUsd))}</option>`).join('')}</select></label>
+        <label class="field"><span>What they are called</span><input name="title" placeholder="Voice of the Circle"></label>
         <p class="eyebrow" style="margin-top:6px">What they can do</p>
         <div class="stack" style="gap:8px;margin-top:8px">
-          ${ROLES.map(r => `<label class="row" style="gap:10px;align-items:flex-start">
-            <input type="checkbox" name="role" value="${r.id}"${r.id === 'member' ? ' checked' : ''} style="width:19px;height:19px;margin-top:2px">
+          ${ROLES.map(r => `<label class="row" style="gap:10px;align-items:flex-start;flex-wrap:nowrap">
+            <input type="checkbox" name="role" value="${r.id}"${r.id === 'member' ? ' checked' : ''} style="margin-top:2px">
             <span><b class="small">${escapeHtml(r.label)}</b><br><span class="small muted">${escapeHtml(r.note)}</span></span></label>`).join('')}
         </div>
-        <label class="row" style="gap:10px;align-items:flex-start;margin-top:14px">
-          <input type="checkbox" name="bot" style="width:19px;height:19px;margin-top:2px">
+        <label class="row" style="gap:10px;align-items:flex-start;flex-wrap:nowrap;margin-top:14px">
+          <input type="checkbox" name="bot" style="margin-top:2px">
           <span><b class="small">This is a robot, not a person</b><br><span class="small muted">For the watcher on the VPS.
             It takes no seat, owes nothing, is never counted or chased, and may post what it finds to the board.
             Leave every box above unticked — it needs nothing else.</span></span></label>
-        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button>
-          <button class="btn" data-ok>${icon('plus', { size: 16 })}Add them</button></div>`;
+        <div class="sheet-actions"><button class="btn block" data-ok>${icon('plus', { size: 16 })}Add them</button></div>`;
       const nameEl = body.querySelector('[name=name]'), userEl = body.querySelector('[name=username]');
       // Suggest a username from the first name until they type their own.
       nameEl.addEventListener('input', () => {
@@ -1333,14 +1309,13 @@ export function settings({ store, go }) {
         <p class="sheet-text">They sign in with this username and this password. Nothing is emailed —
           you hand it over yourself, and the first thing the app makes them do is change it.</p>
         <label class="field"><span>Username</span>
-          <input name="username" value="${escapeHtml(suggested)}" autocapitalize="none" spellcheck="false"
+          <input name="username" value="${escapeHtml(suggested)}" autocapitalize="none" spellcheck="false" autocomplete="off"
                  pattern="[a-z0-9][a-z0-9._\-]{1,28}[a-z0-9]" required${m.username ? ' readonly' : ''}>
           <span class="hint">${m.username ? 'Their username stays the same.' : 'Lower case. Letters, numbers, and . _ - in the middle.'}</span></label>
         <label class="field"><span>Password</span>
-          <input name="password" class="mono" value="${escapeHtml(generatePassword())}" required></label>
+          <input name="password" class="mono" autocomplete="off" value="${escapeHtml(generatePassword())}" required></label>
         <div class="row"><button class="btn ghost sm" type="button" data-again>${icon('refresh', { size: 15 })}Another one</button></div>
-        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button>
-          <button class="btn" data-ok>${icon('key', { size: 16 })}Set it</button></div>`;
+        <div class="sheet-actions"><button class="btn block" data-ok>${icon('key', { size: 16 })}Set it</button></div>`;
       body.querySelector('[data-again]').addEventListener('click', () => { body.querySelector('[name=password]').value = generatePassword(); });
       body.querySelector('[data-ok]').addEventListener('click', () => close({
         username: body.querySelector('[name=username]').value.trim().toLowerCase(),
@@ -1370,21 +1345,16 @@ export function settings({ store, go }) {
       body.innerHTML = `
         ${m.username ? '' : `<div class="notice warn"><b>${icon('alert', { size: 16 })} No login yet</b>
           <p class="small">They cannot sign in until you give them one. Close this and tap <b>Give a login</b>.</p></div>`}
-        <div class="grid g2">
-          <label class="field"><span>Name</span><input name="name" value="${escapeHtml(m.name)}" required></label>
-          <label class="field"><span>Username</span><input class="mono" value="${escapeHtml(m.username || 'no login yet')}" readonly>
-            <span class="hint">${m.username ? 'Set with "New password".' : 'Give them a login to set one.'}</span></label>
-        </div>
-        <div class="grid g2">
-          <label class="field"><span>Level</span><select name="monthlyUsd">${s.tiers.map(t => `<option value="${t.monthlyUsd}"${t.monthlyUsd === m.monthlyUsd ? ' selected' : ''}>${escapeHtml(fmtUsd2(t.monthlyUsd))} · ${escapeHtml(tierName(t.monthlyUsd))}</option>`).join('')}</select></label>
-          <label class="field"><span>What they are called</span><input name="title" value="${escapeHtml(m.title || '')}"></label>
-        </div>
+        <label class="field"><span>Name</span><input name="name" value="${escapeHtml(m.name)}" required></label>
+        <label class="field"><span>Username</span><input class="mono" value="${escapeHtml(m.username || 'no login yet')}" readonly>
+          <span class="hint">${m.username ? 'Set with "New password".' : 'Give them a login to set one.'}</span></label>
+        <label class="field"><span>Level</span><select name="monthlyUsd">${s.tiers.map(t => `<option value="${t.monthlyUsd}"${t.monthlyUsd === m.monthlyUsd ? ' selected' : ''}>${escapeHtml(fmtUsd2(t.monthlyUsd))} · ${escapeHtml(tierName(t.monthlyUsd))}</option>`).join('')}</select></label>
+        <label class="field"><span>What they are called</span><input name="title" value="${escapeHtml(m.title || '')}"></label>
         <p class="eyebrow" style="margin-top:6px">What they can do</p>
-        <div class="row" style="flex-wrap:wrap;gap:12px;margin-top:8px">
-          ${ROLES.map(r => `<label class="row" style="gap:7px"><input type="checkbox" name="role" value="${r.id}"${(m.roles || []).includes(r.id) ? ' checked' : ''} style="width:18px;height:18px"><span class="small">${escapeHtml(r.label)}</span></label>`).join('')}
+        <div class="stack tight" style="justify-items:start;margin-top:8px">
+          ${ROLES.map(r => `<label class="row" style="gap:10px;flex-wrap:nowrap"><input type="checkbox" name="role" value="${r.id}"${(m.roles || []).includes(r.id) ? ' checked' : ''}><span class="small">${escapeHtml(r.label)}</span></label>`).join('')}
         </div>
-        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button>
-          <button class="btn" data-ok>${icon('check', { size: 16 })}Save</button></div>`;
+        <div class="sheet-actions"><button class="btn block" data-ok>${icon('check', { size: 16 })}Save</button></div>`;
       body.querySelector('[data-ok]').addEventListener('click', () => {
         const roles = [...body.querySelectorAll('[name=role]:checked')].map(x => x.value);
         close({
@@ -1414,10 +1384,24 @@ export function settings({ store, go }) {
       const m = store.member(adj.dataset.adjust);
       const out = await sheet({ title: `Adjust ${m.name}’s points`, render: (body, close) => {
         body.innerHTML = `<p class="sheet-text">This writes a new line in the ledger; nothing is ever edited. Say why — everyone can see it, including ${escapeHtml(m.name.split(' ')[0])}.</p>
-          <label class="field"><span>Points (negative to take away)</span><input name="pts" type="number" inputmode="numeric" required></label>
+          <div class="segmented even" role="group" aria-label="Give or take away" id="give-take">
+            <button type="button" data-dir="give" aria-pressed="true">Give</button>
+            <button type="button" data-dir="take" aria-pressed="false">Take away</button>
+          </div>
+          <label class="field" style="margin-top:14px"><span>Points</span><input name="pts" type="number" min="1" inputmode="numeric" required></label>
           <label class="field"><span>Reason</span><input name="note" required placeholder="Hotel refunded a night after the storm"></label>
-          <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Write the line</button></div>`;
-        body.querySelector('[data-ok]').addEventListener('click', () => close({ pts: Number(body.querySelector('[name=pts]').value), note: body.querySelector('[name=note]').value }));
+          <div class="sheet-actions"><button class="btn block" data-ok>Write the line</button></div>`;
+        // The iOS numeric pad has no minus, so the direction is a control and the sign is applied here.
+        const dirs = body.querySelector('#give-take');
+        dirs.addEventListener('click', (ev) => {
+          const b = ev.target.closest('[data-dir]'); if (!b) return;
+          dirs.querySelectorAll('[data-dir]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+        });
+        body.querySelector('[data-ok]').addEventListener('click', () => {
+          const take = dirs.querySelector('[data-dir="take"]').getAttribute('aria-pressed') === 'true';
+          const n = Math.abs(Number(body.querySelector('[name=pts]').value) || 0);
+          close({ pts: take ? -n : n, note: body.querySelector('[name=note]').value });
+        });
       } });
       if (out?.note) { try { await store.adjustPoints(m.id, out.pts, out.note, me.id); toast('Written to the ledger.'); } catch (err) { toast(err.message, { kind: 'bad' }); } }
     }

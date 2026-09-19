@@ -123,7 +123,7 @@ export function galleryStrip(photos, { room = '' } = {}) {
 
 /** Every picture of a room, full size, each with where it came from. */
 export function roomPhotoSheet(title, photos) {
-  return sheet({ title, wide: true, render: (body) => {
+  return sheet({ title, tall: true, render: (body) => {
     body.innerHTML = `<div class="stack">${photos.map(ph => `
       <figure class="place-photo${ph.kind === 'plan' ? ' plan' : ''}"><img src="${escapeHtml(ph.src)}" alt="${escapeHtml(ph.caption || ph.alt || title)}" loading="lazy" decoding="async">
         <figcaption class="tiny muted">${ph.own
