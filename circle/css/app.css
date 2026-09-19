@@ -95,12 +95,12 @@ main:focus { outline: none; }
 /* Sections are separated by a rule, not by air. */
 .sec { padding-block: var(--s-6); }
 .sec + .sec { border-top: 1px solid var(--hairline); }
-/* A section head is a stack: eyebrow, title, sentence. An action that sat beside the title goes
-   under the sentence as a ruled link (the markup pass); nothing shares a line with a heading. */
+/* A section head is a stack: eyebrow, title, sentence. An action that sat beside the title sits
+   under the sentence as a ruled link; nothing shares a line with a heading. */
 .sec-head { display: block; margin-bottom: var(--s-5); }
-/* Transitional: public.js and crews.js still put a button beside the head; it stands off the
-   sentence until it becomes a ruled link. Delete with that markup. */
-.sec-head > .btn { margin-top: var(--s-4); }
+/* The head's action is a ruled link, and it leans on its own 44px min-height for the tap. This
+   is the air between it and the sentence above. */
+.sec-head > .link-rule { margin-top: var(--s-2); }
 .sec-head p { color: var(--ink-2); font-size: var(--t-small); max-width: 62ch; margin-top: 10px; }
 /* Apparatus — eyebrows, stamps, folios, table heads — is set in the mono face, small and spaced,
    so it reads as the printed furniture of the page and never competes with a title. */
@@ -165,8 +165,8 @@ select.btn.sm { font-size: var(--t-body); }
    job list keeps its ink rule. */
 .panel { background: transparent; border: 0; border-top: 1px solid var(--hairline); border-radius: 0; padding: var(--s-4) 0; }
 .panel.boxed, dialog .panel { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--r-card); padding: var(--s-4); }
-/* The first panel under a section head or at the top of the left stack sits on the head's own rule. */
-.sec-head + .panel, .side > .stack:first-child > .panel:first-child { border-top: 0; padding-top: 0; }
+/* The first panel under a section head, or the first in a stack, sits on the head's own rule. */
+.sec-head + .panel, .stack > .panel:first-child { border-top: 0; padding-top: 0; }
 /* The quoted block: what somebody said or asked for, set in a tint. Boxed at every width. */
 .panel.flat { background: var(--raised); border: 1px solid var(--hairline-soft); border-radius: var(--r-card); padding: var(--s-4); }
 .panel h3 + p { margin-top: 6px; }
@@ -174,15 +174,14 @@ select.btn.sm { font-size: var(--t-body); }
 .panel h2, dialog h2, .sheet-title { font-family: var(--font-body); font-size: var(--t-body); font-weight: 600; letter-spacing: -.012em; line-height: 1.25; }
 /* A grid is one column, and the column is clamped: an implicit auto track would size itself to
    the widest thing in it (a table that scrolls) and carry the page past the column's edge.
-   .g2, .g3 and .g4 are inert; the class names leave the templates with the markup pass. */
+   There are no .g2/.g3/.g4 here any more: the templates that wrote them are gone, and the two
+   phone grids below are named for what they hold. */
 .grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
 /* The two phone grids: amount and currency, check-in and check-out, dollars and points;
    nights, flexible and guests. Named for what they hold, never for a breakpoint. */
 .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
 .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3); }
 .stack.tight { gap: var(--s-1); }
-/* One column; the two stacks follow each other. The wrapper leaves the five templates in the markup pass. */
-.side { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); align-items: start; }
 
 /* stat tiles */
 .stat { display: grid; gap: 4px; padding: var(--s-3) 0; background: transparent; border: 0; border-top: 1px solid var(--hairline); border-radius: 0; }
@@ -204,6 +203,11 @@ input[type=checkbox], input[type=radio] { width: 22px; height: 22px; }
 label:has(> input[type=checkbox]), label:has(> input[type=radio]) { min-height: 44px;
   display: inline-flex; align-items: center; gap: 10px; }
 label.row:has(> input[type=checkbox]) { min-height: 44px; align-items: center; }
+/* Inside a flex label the box is a flex item and would shrink; it keeps its own size. */
+label.row:has(> input[type=checkbox]) > input[type=checkbox],
+label.row:has(> input[type=radio]) > input[type=radio] { flex: none; }
+/* So a long consent sentence sits BESIDE the box instead of wrapping under it. */
+label.row:has(> input[type=checkbox]) > span { flex: 1 1 0; min-width: 0; }
 
 /* A link that sits beside a section heading ("All of it", "Your corner") is navigation, not
    prose, so it needs a thumb-sized target. Inline links inside a sentence are deliberately NOT
@@ -232,6 +236,8 @@ button.chip, a.chip, .chip[role=button] { min-height: 44px; padding-inline: 12px
 .ico-muted { color: var(--ink-3); }
 .tag { display: inline-block; padding: 3px 8px; border-radius: var(--r-chip); background: transparent; border: 1px solid var(--hairline); font-family: var(--font-mono); font-size: var(--t-folio); line-height: 1.5; letter-spacing: .02em; color: var(--ink-2); white-space: nowrap; }
 .tag.house { background: var(--good-soft); border-color: transparent; color: var(--good-text); font-weight: 600; }
+/* A tag for something that went back the way it came — RETURNED on the ledger. */
+.tag.flag { color: var(--flag); border-color: var(--flag); }
 
 /* ---------- the split bar: 85 backing | 15 the Circle's share ---------- */
 .split { position: relative; height: 6px; border-radius: 3px; background: var(--share); overflow: hidden; }
@@ -305,9 +311,9 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .choice[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .choice .amt { font-family: var(--font-mono); font-size: var(--t-fig); font-weight: 500; font-variant-numeric: tabular-nums; }
 .choice .tier { font-size: var(--t-fine); color: var(--ink-2); }
-/* Transitional: the three tier templates (public.js, member.js) still write the tree svg and the
-   .tiny line. Delete this line when they stop. */
-.choice .tier svg, .choice .tiny { display: none; }
+/* A person is picked by reading a name along a line, not by a face stacked over it: centred and
+   stacked, a forty-name sheet is twice as long as it needs to be. */
+.choice.pick { display: flex; align-items: center; gap: 11px; text-align: left; }
 .copyline { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px dashed var(--hairline); border-radius: var(--r-input); background: var(--raised); }
 .copyline code { font-family: var(--font-mono); font-size: var(--t-small); letter-spacing: .02em; overflow-x: auto; overscroll-behavior-x: contain; }
 .copyline code.tiny { font-size: var(--t-fine); }
@@ -355,10 +361,6 @@ fieldset { border: 0; margin: 0; padding: 0; }
    so main's own padding steps aside. */
 .nocturne-page { min-height: 100dvh; padding-bottom: calc(var(--h-nav) + var(--inset-bottom) + var(--s-6)); }
 main:has(.nocturne-page), body:has(.botnav:not([hidden])) main:has(.nocturne-page) { padding-bottom: 0; }
-/* Transitional: .card-strip and .mini leave Home's markup (member.js) in the markup pass; these
-   two lines and the .card-strip .mini entries in the press lists go with them. */
-.card-strip { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: center; }
-.card-strip .mini { display: block; width: 168px; }
 @media (prefers-reduced-motion: reduce) { .card-tilt .card-obj { transform: none; } }
 
 /* ---------- stay / trip cards ---------- */
@@ -451,10 +453,11 @@ tr.best td:last-child { border-radius: 0 var(--r-chip) var(--r-chip) 0; }
   background: var(--well); min-height: calc(100svh - var(--h-bar) - var(--inset-top)); }
 /* A signed-in member has the tab bar over the foot of the screen; the hero ends above it. */
 body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-bar) - var(--h-nav) - var(--inset-top) - var(--inset-bottom)); }
-/* A grid item will not shrink below its content's intrinsic width unless told to, and the
-   portrait file is 880px wide — which pushed the whole section past a 768px viewport. */
-.hero-cover picture { grid-area: 1 / 1; display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; }
-.hero-cover img { width: 100%; height: 100%; object-fit: cover; object-position: center 46%; display: block; }
+/* The photograph and the copy share one grid cell, so the promise sits IN the picture. A grid
+   item will not shrink below its content's intrinsic width unless told to, and the portrait file
+   is 880px wide — which without the two minimums pushes the whole section past the column. */
+.hero-cover img { grid-area: 1 / 1; width: 100%; height: 100%; object-fit: cover; object-position: center 46%;
+  display: block; min-width: 0; min-height: 0; }
 /* The copy rides the bottom of the frame on its own scrim, and keeps the page's measure by
    carrying a .wrap inside it rather than being padded by hand. */
 .hero-cover .on { grid-area: 1 / 1; align-self: end; position: relative; z-index: 1; width: 100%; margin: 0; color: var(--on-photo);
@@ -469,7 +472,14 @@ body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-
 /* One filled action and one ruled link, never two boxes of equal weight. */
 .link-rule { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 2px; font-size: var(--t-small); font-weight: 500;
   color: inherit; text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 1px; text-decoration-color: currentColor; }
+/* The negative on a money row or at the foot of a fold — Decline, Return it, Cancel the booking,
+   Leave the crew, Leave the Circle. A ruled link, never a second box beside the filled action. */
+.link-rule.danger { color: var(--flag); }
+/* A ruled link that is only an escape ("Not now"), so it does not weigh as much as the offer. */
+.link-rule.quiet { color: var(--ink-2); text-decoration-color: var(--hairline); }
 .hero-cover .link-rule { color: var(--on-photo); }
+/* The landing's signature pairing: the invitation and the explanation, with room between them. */
+.hero-cover .on .row { gap: var(--s-4); margin-top: var(--s-5); }
 /* A ghost button on a photograph has to be drawn in the photo tokens, or it disappears into
    the scrim in light mode and into the sky in dark. */
 .hero-cover .btn.ghost { color: var(--on-photo); border-color: rgba(255, 255, 255, .52); background: rgba(255, 255, 255, .10); }
@@ -482,8 +492,7 @@ body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-
 .hero-facts .eyebrow svg { width: 14px; height: 14px; }
 
 /* The places, as a strip a thumb swipes: it bleeds to the column's edge and pads itself back by
-   the gutter, so the first card sits on the measure and the last one shows it is not the last.
-   The .horizon-wrap div (public.js) has no rules left and leaves with the markup pass. */
+   the gutter, so the first card sits on the measure and the last one shows it is not the last. */
 .horizon { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(252px, 1fr); gap: var(--s-4); overflow-x: auto; overscroll-behavior-x: contain;
   scroll-snap-type: x proximity; margin-inline: calc(-1 * var(--s-4)); padding: 2px var(--s-4) 10px; scroll-padding-inline: var(--s-4); }
 .horizon::after { content: ""; width: 1px; }
@@ -556,8 +565,9 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 .notice.warn { background: var(--flight-soft); border-color: transparent; }
 .notice.bad { background: var(--flag-soft); border-color: transparent; }
 .notice.good { background: var(--good-soft); border-color: transparent; }
-/* Someone asking the Circle for help should not look like a status line. */
-.notice.ask { background: var(--surface); border-color: var(--hairline); border-left: 2px solid var(--ink); }
+/* Someone asking the Circle for help should not look like a status line. Named for the thing it
+   is — a chip-in — and not `.ask`, which belongs to the ask form and whose grid would take it apart. */
+.notice.chip-in { border-left: 2px solid var(--ink); }
 .qr-holder { display: inline-grid; place-items: center; min-width: 164px; min-height: 164px; padding: 8px; background: #fff; border-radius: var(--r-card); }
 .qr-fallback { font-family: var(--font-mono); font-size: var(--t-folio); word-break: break-all; color: #111; max-width: 148px; text-align: center; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -686,8 +696,6 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
   border-bottom: 1px solid var(--hairline); }
 .lad-cap { font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 .lad-k b { display: block; font-weight: 600; font-size: var(--t-fine); line-height: 1.25; }
-/* Transitional: the label carries it; pieces.js still writes the gloss span. Delete with the span. */
-.lad-why { display: none; }
 .lad-v { text-align: center; min-width: 0; }
 .lad-v b { display: block; font-weight: 600; font-size: var(--t-small); line-height: 1.15;
   font-variant-numeric: tabular-nums slashed-zero; overflow-wrap: anywhere; }
@@ -749,8 +757,8 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 .unsay:active { color: var(--flag); }
 
 .say-row { display: flex; gap: 8px; margin-top: 10px; }
-/* Docked in the act-bar (crews.js, the markup pass) the composer needs no margin of its own; the
-   10px above stays until it is docked. */
+/* Docked in the act-bar (crews.js) the composer needs no margin of its own; the 10px above is
+   for the one place a say-row still sits in the flow. */
 .act-bar .say-row { margin: 0; }
 .say-row input { flex: 1; min-width: 0; padding: 11px 14px; border-radius: var(--r-input);
   border: 1px solid var(--hairline); background: var(--surface); color: inherit; font: inherit; }
@@ -784,8 +792,7 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
    a picture of a room the Circle books, and none is captioned as though it were. Every one
    carries its aspect ratio so the page does not jump while they load. */
 /* A strip is a strip: 5/2, so it reads as a breath between sections without costing a quarter
-   of a screen three times over (16/9 at 390px was 219px each). The --ratio option and its
-   inline style in public.js are dead and leave with the markup pass. */
+   of a screen three times over (16/9 at 390px was 219px each). */
 .band { position: relative; margin: 0 auto; width: 100%; max-width: var(--wrap); aspect-ratio: 5 / 2;
   overflow: hidden; background: var(--raised); }
 .band img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -818,13 +825,6 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 .season-card img { width: 100%; aspect-ratio: 3/2; object-fit: cover; display: block; }
 .season-card figcaption { display: grid; gap: 3px; padding: 12px 14px 14px; }
 .season-card figcaption b { font-family: var(--font-display); font-weight: 400; font-size: var(--t-lede); letter-spacing: -.01em; }
-
-/* Transitional: the sign-in art and its wrap leave public.js in the markup pass, and these
-   four lines with them. Until then the strip keeps its phone shape above the form. */
-.signin-art { aspect-ratio: 16 / 9; border-radius: var(--r-card); overflow: hidden; background: var(--raised); }
-.signin-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.signin-wrap { display: grid; gap: 20px; align-items: center; }
-.signin-form { min-width: 0; }
 
 /* ---------- badges ----------
    One stroke weight, one size, three tones. Founder marks are the only ones with a filled
@@ -899,10 +899,9 @@ button.badge-card { cursor: pointer; font: inherit; color: inherit; }
 /* The Insiders table. Even at four columns, name + state + points + three buttons in a 358px
    column puts the actions off the right edge, behind a sideways scroll you have to discover.
    Each Insider is a block instead: who they are, then state and points on one line, then the
-   three buttons where a thumb finds them. Rows start at the gutter like the heads.
-   The <thead> is hidden here until officer.js stops writing it. */
+   three buttons where a thumb finds them. Rows start at the gutter like the heads, and there is
+   no <thead> left to hide: the label is printed on each cell by data-k below. */
 .people-table, .people-table tbody, .people-table tr { display: block; }
-.people-table thead { display: none; }
 .people-table tr { padding: var(--s-3) 0; border-bottom: 1px solid var(--hairline-soft); }
 .people-table tr:last-child { border-bottom: 0; }
 .people-table td { display: block; padding: 0; border: 0; }
@@ -915,9 +914,6 @@ button.badge-card { cursor: pointer; font: inherit; color: inherit; }
   font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
   margin-right: 3px; }
 .people-table td:last-child { margin-top: 8px; }
-/* Transitional: officer.js still writes justify-content:flex-end inline on this row; the
-   !important goes when that inline style does. */
-.people-table td:last-child .row { justify-content: flex-start !important; }
 
 
 /* Press feedback for everything else that is tappable. Same reasoning as .btn:active above:
@@ -926,12 +922,12 @@ button.badge-card { cursor: pointer; font: inherit; color: inherit; }
 .chip[role=button]:active, button.chip:active, a.chip:active,
 .choice:active, .badge-card:not([disabled]):active, .icon-btn:active,
 .segmented > button:active, a.stay-card:active, .stay-card a:active,
-.card-strip .mini:active, .fineprint > summary:active {
+.fineprint > summary:active {
   transform: scale(.97);
   transition-duration: 60ms;
 }
 .choice, .badge-card, .icon-btn, button.chip, a.chip, .chip[role=button], .fineprint > summary,
-a.stay-card, .card-strip .mini {
+a.stay-card {
   transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out),
               border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
@@ -940,7 +936,7 @@ a.stay-card, .card-strip .mini {
 @media (prefers-reduced-motion: reduce) {
   .btn:active, .chip[role=button]:active, button.chip:active, a.chip:active, .choice:active,
   .badge-card:not([disabled]):active, .icon-btn:active, .segmented > button:active,
-  a.stay-card:active, .stay-card a:active, .card-strip .mini:active,
+  a.stay-card:active, .stay-card a:active,
   .fineprint > summary:active { transform: none; }
 }
 
@@ -959,21 +955,9 @@ a.stay-card, .card-strip .mini {
    no min-width widened the whole form past the screen, and overflow: hidden only disguised it. */
 .ask { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); padding: 0 0 var(--s-5); overflow: visible; }
 .ask > * { margin-inline: 0; min-width: 0; }
-/* Transitional: catalog.js still writes the picture above the form; these five lines go with it. */
-.ask .ask-shot { margin: 0; aspect-ratio: 3 / 1; max-height: 200px; background: var(--well); position: relative; overflow: hidden; }
-.ask .ask-shot .scene, .ask .ask-shot img { width: 100%; height: 100%; display: block; object-fit: cover; }
-.ask .ask-shot .scene.photo { position: absolute; inset: 0; }
-.ask .ask-shot .scene svg { width: 100%; height: 100%; }
-.ask .ask-shot .plate-area { font-size: var(--t-body); }
-/* Transitional: the ask's steps become the landing's ol.steps when catalog.js renders it; these
-   seven lines go then. Two tiles across until they do. */
-.ask-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; counter-reset: step; }
-.ask-steps li { counter-increment: step; display: grid; gap: 2px; padding: 10px 10px 10px 12px; border-radius: var(--r-input); background: var(--raised); border: 1px solid transparent; position: relative; }
-.ask-steps li::before { content: counter(step); font-family: var(--font-mono); font-size: var(--t-folio); color: var(--ink-2); letter-spacing: .06em; }
-.ask-steps li b { font-size: var(--t-small); line-height: 1.25; }
-.ask-steps li span { font-size: var(--t-fine); color: var(--ink-2); line-height: 1.35; }
-.ask-steps li.now { border-color: var(--ink); background: var(--surface); }
-.ask-steps li.now::before { color: var(--ink); }
+/* The docked submit is inside the form, so it keeps the form's box: the act-bar's negative
+   margins would carry it past the form's own edge and the form would measure wider than it is. */
+.ask > .act-bar { margin-inline: 0; padding-inline: 0; }
 .ask-dates { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: stretch; }
 .ask-tile { position: relative; display: grid; gap: 2px; padding: 12px 14px; min-height: var(--h-input); border: 1px solid var(--hairline); border-radius: var(--r-input); background: var(--surface); cursor: pointer; }
 .ask-tile .k, .ask-row > .k, .ask-quote .k { font-family: var(--font-mono); font-size: var(--t-folio); font-weight: 400; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
@@ -1035,26 +1019,13 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .strip-tag { position: absolute; left: 10px; bottom: 10px; z-index: 2; padding: 4px 8px; border-radius: var(--r-chip);
   font-family: var(--font-mono); font-size: var(--t-folio); font-weight: 400; letter-spacing: .08em; text-transform: uppercase; color: #fff;
   background: rgba(8, 20, 30, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); pointer-events: none; }
-.place-thumb .strip-tag, .ask-shot .strip-tag { padding: 3px 7px; left: 6px; bottom: 6px; }
+.place-thumb .strip-tag { padding: 3px 7px; left: 6px; bottom: 6px; }
 .place-thumb .strip-tag { display: none; }
 .deal.in-place .deal-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 8px; }
 .deal.in-place .deal-price > b { font-size: var(--t-fig); font-weight: 500; }
 .deal.in-place .deal-price .mono { white-space: normal; }
 .deal.in-place .deal-body .row { margin-top: 12px; }
 
-/* ---------- a page hero: one photograph, the title set on it ---------- */
-/* The Cruises tab opens on the sea from a ship's rail at dusk. The picture is the mood, not a
-   place, so it is allowed to be generated; the title sits on a scrim at its foot in the photo
-   tokens, which do not change with the theme because the photograph does not. On a phone the
-   picture runs edge to edge and the tall crop is used, so the deck corner is not cut off. */
-/* Transitional: the Cruises hero is deleted with its markup in the markup pass, and this block
-   (and .page-hero img in the settle lists) with it. The bleed is folded in; every user has it. */
-.page-hero { position: relative; margin: calc(-1 * var(--s-6)) calc(-1 * var(--s-4)) 22px; border-radius: 0; overflow: hidden; aspect-ratio: 4 / 3; background: var(--well); }
-.page-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.page-hero .copy { position: absolute; z-index: 1; inset: auto 0 0 0; margin: 0; padding: 28px 20px 20px;
-  background: linear-gradient(to top, var(--scrim) 0%, var(--scrim-soft) 60%, transparent 100%); color: var(--on-photo); }
-.page-hero .copy .eyebrow { color: var(--on-photo); opacity: .82; }
-.page-hero .copy h1 { color: var(--on-photo); margin-top: 6px; font-size: var(--t-masthead); }
 /* The route of a cruise: ink on the panel, so it draws itself in both themes. */
 .route svg { margin-top: 10px; color: var(--ink); }
 /* A week that checks in within days: the one line on a card that changes what you do now. */
@@ -1075,6 +1046,9 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .masthead .row.no-print { margin-top: 12px; }
 /* A provenance mark: who or what saw it, and when. The same mono as the ledger's "by Vishnu". */
 .stamp { font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .04em; color: var(--ink-2); white-space: nowrap; }
+/* A stamp that is a paragraph of its own — a colophon at the foot of the board — is a sentence
+   and wraps. The stamps welded to a row or a clock stay on one line. */
+p.stamp { white-space: normal; }
 
 /* The cover: one photograph, whole, and the story under it. Nothing is printed on the picture —
    a number stamped on a photograph is the grammar of a deal site, not of a club — so the folio,
@@ -1098,7 +1072,7 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
    right, the all-in under it, and the stamp. A thumb only where a photograph of the place exists;
    otherwise a --well square with the beach's two-letter mark — never a beach photo at 56px, where
    its tag would not fit. */
-.listing { display: block; border-top: 1px solid var(--hairline); }
+.listing { display: block; list-style: none; border-top: 1px solid var(--hairline); }
 /* The price track is capped: `auto` sized it to the widest thing in it, which is not the price
    but the greyest line under it ("pts all in" at 141px of a 390px screen), so every title
    wrapped and no two rows were the same height. The points line wraps inside 92px instead. */
@@ -1127,9 +1101,6 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .listing-row.asked, .listing-row.picked { background: var(--raised); margin-inline: calc(-1 * var(--s-4)); padding-inline: var(--s-4); }
 /* A row in a printed list does not shrink when pressed; it dims. */
 .listing-row:active { opacity: .6; transition: opacity 60ms var(--ease-out); }
-/* Transitional: deals.js still nests the officer's buttons inside the row; this line and the
-   stretched link below go when the row becomes the anchor and the buttons its sibling. */
-.listing-row .row-acts { grid-column: 1 / -1; display: flex; gap: 8px; }
 /* The row is the anchor and the officer's buttons are its sibling, under it, on their own rule. */
 .listing li:has(> .row-acts) > .listing-row { border-bottom: 0; }
 .listing li > .row-acts { display: flex; gap: var(--s-2); padding: 0 0 var(--s-3); border-bottom: 1px solid var(--hairline-soft); }
@@ -1166,6 +1137,10 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
            background: var(--ground); border-top: 1px solid var(--hairline); display: grid; gap: var(--s-2); }
 body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom) + var(--kb)); }
 .act-bar .btn { width: 100%; }
+/* …except the composer's send, which is a 44px circle. It is written here because .act-bar .btn
+   is 400 lines below .say-row .btn and would otherwise stretch the send across the column and
+   squash the input; and .btn's 48px min-height would draw the circle as an ellipse. */
+.act-bar .say-row .btn { width: 44px; min-height: 44px; }
 .act-bar .btn .num { font-size: var(--t-small); font-weight: 500; }
 .act-bar .link-rule { justify-self: start; }
 /* Home's masthead carries the balance in the dateline and its action under the lede. The
@@ -1182,7 +1157,7 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 @media (prefers-reduced-motion: reduce) { .listing-row:active { opacity: 1; } }
 
 /* A page hero with the place set on it: the picture edge to edge on a phone, the name at its
-   foot on a scrim in the photo tokens. Used by the stay page; the Cruises tab uses .page-hero. */
+   foot on a scrim in the photo tokens. The stay page is the one screen that opens this way. */
 .hero-place { position: relative; margin: calc(-1 * var(--s-6)) calc(-1 * var(--s-4)) 0; background: var(--well); overflow: hidden; border-radius: 0; aspect-ratio: 5 / 6; }
 .hero-place img, .hero-place .scene, .hero-place .scene svg { width: 100%; height: 100%; object-fit: cover; display: block; }
 .hero-place .strip-tag { top: 14px; left: 14px; right: auto; bottom: auto; }
@@ -1196,9 +1171,10 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 .hero-place .scene { position: absolute; inset: 0; }
 .hero-place + .credit { margin-top: 8px; }
 /* A link inside a credit line or the rules' prose keeps its line rhythm and still gets a 44px
-   tap: the padding is handed back by the margin. Scoped to these two, never to buttons, ruled
-   links, nav or row links. */
-.credit a, .rules-prose a { display: inline-block; padding-block: 12px; margin-block: -12px; }
+   tap: the padding is handed back by the margin. The half pixel is not a flourish — the credit
+   is set at 13px, so 12px each way lands on 43.5 and misses the floor. Scoped to these two,
+   never to buttons, ruled links, nav or row links. */
+.credit a, .rules-prose a { display: inline-block; padding-block: 12.5px; margin-block: -12.5px; }
 
 /* The rooms: one block per room, its photographs as a strip a thumb can swipe, the property's
    own figures set in the mono face, and the ask one tap away. */
@@ -1251,22 +1227,9 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 .ask .ask-rooms { margin: 0 0 16px; }
 .ask .ask-rooms .gallery.big { margin-inline: 0; padding-inline: 0; margin-top: 8px; }
 .ask .ask-rooms .gallery.big .gallery-tile { width: min(62vw, 220px); }
-/* Transitional, until the row is the anchor in the markup (deals.js): the title's link stretches
-   over the row with a pseudo-element, the officer's buttons sit above it, and the price stays
-   under the overlay so it is part of the row's own tap. These five lines go with the markup. */
-.listing-row .row-link { color: inherit; text-decoration: none; }
-.listing-row .row-link::after { content: ""; position: absolute; inset: 0; }
-.listing-row .row-acts { position: relative; z-index: 1; margin-top: 2px; }
-.listing-row .price-col { position: relative; z-index: 0; pointer-events: none; }
-.listing-row .price-col a, .listing-row .price-col button { pointer-events: auto; }
-
 /* The sub on two lines, the stamp on its own. */
 .listing-row .sub .l2 { display: block; }
 .listing-row .sub .l2 .stamp { display: block; }
-/* Transitional: the column head already says all in and the dollars are folded away; deals.js
-   still writes the .unit and .usd spans. These two lines go with them. */
-.listing-row .price-col .all .unit { display: none; }
-.listing-row .price-col .all .usd { display: none; }
 
 /* A row that has not been looked at for a couple of days says so by going quiet. It is not an
    error and not a warning — the week may well still be there — so it recedes rather than shouts. */
@@ -1274,8 +1237,8 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 
 /* A photograph settles into its frame rather than appearing. */
 @keyframes settle { from { transform: scale(1.04); } to { transform: none; } }
-.hero-cover img, .hero-place img, .page-hero img, .cover-shot img { animation: settle 1400ms var(--ease-out) both; }
-@media (prefers-reduced-motion: reduce) { .hero-cover img, .hero-place img, .page-hero img, .cover-shot img { animation: none; } }
+.hero-cover img, .hero-place img, .cover-shot img { animation: settle 1400ms var(--ease-out) both; }
+@media (prefers-reduced-motion: reduce) { .hero-cover img, .hero-place img, .cover-shot img { animation: none; } }
 /* The rank crest is drawn inline in the text colour, so it survives both themes. */
 .rank-crest svg { display: block; flex: none; }
 
@@ -1306,6 +1269,10 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 .postcard-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .postcard-who b { font-weight: 600; font-size: var(--t-body); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .postcard-who .stamp { margin-left: auto; }
+/* The attribution under a picture is a sentence, not a clock: it wraps rather than running off
+   the page. The child combinator is deliberate — the clock stamp lives one level down inside
+   .postcard-who, and it, like the board's row stamps, stays on one line. */
+.postcard-body > .stamp { white-space: normal; overflow-wrap: anywhere; }
 /* Every fact line is mono; the caption is the member's words in the sans. The two registers say
    which is which. */
 .postcard-place { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); overflow-wrap: anywhere; }
