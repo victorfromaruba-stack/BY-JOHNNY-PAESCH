@@ -189,6 +189,23 @@ export function dealRow(deal, { store, folio = null, match = null, canEdit = fal
 }
 
 /**
+ * A photograph's credit keeps exactly one link — the first, the photographer's page — and says
+ * the rest (the licence, the archive) in words. Two links on one 13px line would ask the phone
+ * for two overlapping 44px hit boxes and neither would get one; with a single link the whole
+ * line is the target, via app.css `.credit a`. The same treatment the place's own page uses.
+ * photoCredit's html is already escaped, so the plain text lifted out of it stays escaped.
+ */
+function creditLine(credit) {
+  if (!credit) return '';
+  const plain = (h) => h.replace(/<a [^>]*>([\s\S]*?)<\/a>/g, '$1');
+  const m = credit.html.match(/^([\s\S]*?)<a href="([^"]*)"[^>]*>([\s\S]*?)<\/a>([\s\S]*)$/);
+  const one = m
+    ? `${plain(m[1])}<a href="${m[2]}" target="_blank" rel="noopener noreferrer">${plain(m[3])} &#8599;</a>${plain(m[4])}`
+    : escapeHtml(credit.text);
+  return `<p class="tiny muted credit" style="margin-top:8px">${one}</p>`;
+}
+
+/**
  * The cover: the cheapest week on the market, its photograph — of this place, or the beach it is
  * on, tagged — with the price set on it, and the story under it. Where there is no photograph
  * at all the plate stands in and the price moves into the body.
@@ -217,7 +234,7 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
         ${soon ? `<p class="soon">${icon('zap', { size: 15 })}${escapeHtml(soon)}</p>` : ''}
         <p class="why">${escapeHtml(why)} · <span class="stamp${stamp.feed ? ' feed' : ''}">${escapeHtml(stamp.text)}</span></p>
         ${ageLine(stamp)}
-        ${credit ? `<p class="tiny muted" style="margin-top:8px">${credit.html}</p>` : ''}
+        ${creditLine(credit)}
         <!-- The cover story's one decision, and it gets the column. A content-width button on the
              lead item read as an afterthought beside 209px of empty gutter; the same decision on a
              place's own page is a full-width block with the figure inside it, and the board's
