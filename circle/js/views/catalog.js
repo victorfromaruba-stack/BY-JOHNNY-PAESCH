@@ -1025,8 +1025,10 @@ export function requestDetail({ store, params, go, refresh }) {
   const doneUpTo = closed ? steps.reduce((n, st, i) => (st.at ? i : n), 0)
     : r.status === 'completed' ? 5 : r.status === 'confirmed' ? 4 : r.status === 'held' ? (r.approvedAt ? 3 : 2) : r.status === 'quoted' ? 1 : 0;
 
-  // One column, in the order a decision is made: the money, the decision (docked), who is
-  // chipping in, the word, the Desk's look, what anyone has seen, the note, the record.
+  // One column, in the order a decision is made: the money, what it means, who is chipping in,
+  // the word, the Desk's look, what anyone has seen, the note, the record — and the decision
+  // itself docked at the very end, the last child of the section, so it rides above the tab bar
+  // the whole way down and is still under the thumb when the reader reaches the timeline.
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <p class="eyebrow">${escapeHtml(stay?.area || '')} · ${escapeHtml(requestLabel(r))}</p>
       <h1>${escapeHtml(stay?.name || 'Stay')}</h1>
@@ -1035,7 +1037,6 @@ export function requestDetail({ store, params, go, refresh }) {
       <div class="stack" style="margin-top:22px">
           <div class="panel" id="money"></div>
           <div id="actions-note" class="small muted" hidden></div>
-          <div class="act-bar" id="actions"></div>
           <div id="chipin"></div>
           ${r.note ? `<div class="panel flat"><p class="eyebrow">${icon('user')}What they asked for</p><p class="small" style="margin-top:8px">${escapeHtml(r.note)}</p></div>` : ''}
           ${(() => {
@@ -1110,17 +1111,22 @@ export function requestDetail({ store, params, go, refresh }) {
           </ul>
           ${r.hotelDeadline ? `<p class="small muted" style="margin-top:14px">Free cancellation with the hotel until <b class="num">${escapeHtml(fmtDay(r.hotelDeadline))}</b>. ${escapeHtml(r.hotelTerms || '')}</p>` : ''}
         </div>
+          <div class="act-bar" id="actions"></div>
       </div>
     </div></section></div>`);
 
   const money = wrap.querySelector('#money');
   const pts = r.quotedPoints || r.indicativePoints || r.points;
+  // Every figure in the breakdown is in the apparatus face, one at a time, with the labels left in
+  // the sans — it sat directly above two mono totals and was the only sans money on the screen.
+  // `span.num` and not `b.num` because `.ledger .what b` sets the body size and 600 on anything
+  // bold inside the row, which blew the five figures up past their own labels.
   money.innerHTML = `
     <div class="row-between"><h2>${r.quotedPoints ? 'The quote' : 'Indicative price'}</h2>
       ${left && r.status === 'quoted' ? `<span class="chip chip-warn"><i></i>expires in <span class="num">${escapeHtml(left)}</span></span>` : ''}</div>
     <ul class="ledger" style="margin-top:10px">
       <li><span class="what"><b>${r.nights} night${r.nights > 1 ? 's' : ''} all-in</b>
-        <span class="meta">${r.quoteStack ? Object.entries(r.quoteStack).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${STACK_LABEL[k] || k} ${fmtUsd2(v)}`).join(' · ') : 'Room, levies, service and resort fees included'}</span></span>
+        <span class="meta">${r.quoteStack ? Object.entries(r.quoteStack).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${escapeHtml(STACK_LABEL[k] || k)} <span class="num">${escapeHtml(fmtUsd2(v))}</span>`).join(' · ') : 'Room, levies, service and resort fees included'}</span></span>
         <span class="delta"><b>${escapeHtml(fmtPoints(pts))}</b><small>${escapeHtml(pointsUsd(pts, s.pointsPerDollar))}</small></span></li>
       ${(r.topUpUsd || r.topUpReceivedUsd) ? (() => {
         // Owed and received are two numbers, and the line has to say both when they differ:
