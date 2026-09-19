@@ -633,6 +633,11 @@ export function ledger({ store, params }) {
         <ul class="ledger" style="margin-top:10px" id="contrib-rows"></ul>
       </div>
 
+      ${!month && months.length ? `<div class="panel no-print">
+        <h2>Statements, month by month</h2>
+        <ul class="job-list" style="margin-top:12px" id="month-list"></ul>
+      </div>` : ''}
+
       <div class="stack tight no-print">
         <p><button type="button" class="link-rule" id="csv">Download as CSV</button></p>
         <p><button type="button" class="link-rule" id="print">Print</button></p>
@@ -681,6 +686,22 @@ export function ledger({ store, params }) {
     moreBtn.addEventListener('click', () => { allRows = true; drawRows(); });
   }
   drawRows();
+
+  // Every month's statement is a real screen, so it gets a real door. The picker above is a
+  // shortcut for a member who already knows the month they want; a <select> is not a link, and
+  // a screen whose only way in is a change handler cannot be found by anything that reads the
+  // page — not the browser's own history, not a shared link, not the crawl that proves the app
+  // has no stranded routes. The rows are whole-row anchors, as every listing here is.
+  const monthList = wrap.querySelector('#month-list');
+  if (monthList) monthList.innerHTML = months.map(m => {
+    const lines = all.filter(l => l.at.slice(0, 7) === m);
+    const pts = lines.reduce((n, l) => n + l.points, 0);
+    const sealed = store.state.monthCloses.some(c => c.month === m);
+    return `<li><a href="#/ledger/${escapeHtml(m)}">
+      <span class="job-what"><b>${escapeHtml(fmtMonth(m))}</b>
+        <span class="small muted">${num(`${pts > 0 ? '+' : ''}${Math.round(pts).toLocaleString('en-US')}`)} points · ${num(lines.length)} ${lines.length === 1 ? 'line' : 'lines'}${sealed ? ' · sealed' : ''}</span></span>
+      ${chevron()}</a></li>`;
+  }).join('');
 
   wrap.querySelector('#month-pick').addEventListener('change', (e) => { location.hash = e.target.value ? `#/ledger/${e.target.value}` : '#/ledger'; });
   wrap.querySelector('#print').addEventListener('click', () => window.print());
