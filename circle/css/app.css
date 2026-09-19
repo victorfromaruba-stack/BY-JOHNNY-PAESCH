@@ -161,18 +161,15 @@ select.btn.sm { font-size: var(--t-body); }
 /* A panel head is a label over its rows — a UI title in the sans, never the serif. */
 .panel h2, dialog h2, .sheet-title { font-family: var(--font-body); font-size: var(--t-body); font-weight: 600; letter-spacing: -.012em; line-height: 1.25; }
 .grid { display: grid; gap: var(--s-4); }
-.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* .g2, .g3 and .g4 are inert: a grid is one column. The class names leave the templates with the
+   markup pass; until then they are a plain .grid. */
 /* The two phone grids: amount and currency, check-in and check-out, dollars and points;
    nights, flexible and guests. Named for what they hold, never for a breakpoint. */
 .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
 .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3); }
 .stack.tight { gap: var(--s-1); }
-@media (max-width: 900px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .g2, .g3, .g4 { grid-template-columns: minmax(0, 1fr); } }
-.side { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: clamp(14px, 2.4vw, 24px); align-items: start; }
-@media (max-width: 900px) { .side { grid-template-columns: minmax(0, 1fr); } }
+/* One column; the two stacks follow each other. The wrapper leaves the five templates in the markup pass. */
+.side { display: grid; gap: var(--s-4); align-items: start; }
 
 /* stat tiles */
 .stat { display: grid; gap: 4px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--r-card); }
@@ -254,24 +251,17 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-
 .data-table { width: 100%; }
 
 .ledger { list-style: none; margin: 0; padding: 0; }
-.ledger li { display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; padding: var(--s-3) 0; border-bottom: 1px solid var(--hairline-soft); }
+/* Stacked: the description gets the full width and the figures sit under it on one line. A
+   balance column beside it was 122px of nowrap mono, which left the description 188px and
+   wrapped every line over three or four rows. */
+.ledger li { display: grid; gap: var(--s-1); padding: var(--s-3) 0; border-bottom: 1px solid var(--hairline-soft); }
 .ledger li:last-child { border-bottom: 0; }
 .ledger .what { display: grid; gap: 3px; min-width: 0; }
 .ledger .what b { font-weight: 600; font-size: var(--t-body); }
 .ledger .meta { font-size: var(--t-fine); color: var(--ink-2); }
-.ledger .delta { font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; text-align: right; white-space: nowrap; }
-.ledger .delta b { display: block; font-weight: 500; }
+.ledger .delta { font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+.ledger .delta b { font-weight: 500; }
 .ledger .delta small { color: var(--ink-2); }
-
-/* On a phone the balance column is 122px of nowrap mono, which left the description 188px of a
-   390px screen — so every line wrapped over three or four rows and one ledger entry cost 125px.
-   Stacked, the description gets the full width and the figures sit under it on one line: the
-   same information in two rows instead of four. */
-@media (max-width: 620px) {
-  .ledger li { grid-template-columns: minmax(0, 1fr); gap: 5px; }
-  .ledger .delta { text-align: left; display: flex; align-items: baseline; gap: 10px; }
-  .ledger .delta b { display: inline; }
-}
 
 /* ---------- forms ---------- */
 .field { display: grid; gap: 6px; margin-bottom: 14px; }
@@ -289,21 +279,17 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-
 .field input[inputmode="decimal"], .field input[type="date"], .field input.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .field textarea.mono { font-family: var(--font-mono); }
 fieldset { border: 0; margin: 0; padding: 0; }
-.choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-/* Three columns all the way down. Stacking them made one choice a full-width card and cost
-   260px on a phone to present three options that are $100, $150 and $200 — and a chooser you
-   have to scroll is not a chooser. The Papiamento tree name goes; it is on the ladder below. */
-@media (max-width: 520px) {
-  .choices { gap: 7px; }
-  .choice { padding: 11px 9px; text-align: center; justify-items: center; }
-  .choice .amt { font-size: var(--t-lede); }
-  .choice .tier { font-size: var(--t-folio); }
-  .choice .tier svg, .choice .tiny { display: none; }
-}
-.choice { position: relative; display: grid; gap: 3px; padding: 14px; border: 1px solid var(--hairline); border-radius: var(--r-card); background: var(--surface); cursor: pointer; text-align: left; }
+/* Three columns. Stacking them made one choice a full-width card and cost 260px to present
+   three options that are $100, $150 and $200 — and a chooser you have to scroll is not a
+   chooser. The Papiamento tree name is on the ladder below, not here. */
+.choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); }
+.choice { position: relative; display: grid; gap: 3px; padding: 14px; border: 1px solid var(--hairline); border-radius: var(--r-card); background: var(--surface); cursor: pointer; text-align: center; justify-items: center; }
 .choice[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .choice .amt { font-family: var(--font-mono); font-size: var(--t-fig); font-weight: 500; font-variant-numeric: tabular-nums; }
 .choice .tier { font-size: var(--t-fine); color: var(--ink-2); }
+/* Transitional: the three tier templates (public.js, member.js) still write the tree svg and the
+   .tiny line. Delete this line when they stop. */
+.choice .tier svg, .choice .tiny { display: none; }
 .copyline { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px dashed var(--hairline); border-radius: var(--r-input); background: var(--raised); }
 .copyline code { font-family: var(--font-mono); font-size: var(--t-small); letter-spacing: .02em; overflow-x: auto; overscroll-behavior-x: contain; }
 .copyline code.tiny { font-size: var(--t-fine); }
@@ -351,9 +337,10 @@ fieldset { border: 0; margin: 0; padding: 0; }
    so main's own padding steps aside. */
 .nocturne-page { min-height: 100dvh; padding-bottom: calc(var(--h-nav) + var(--inset-bottom) + var(--s-6)); }
 main:has(.nocturne-page), body:has(.botnav:not([hidden])) main:has(.nocturne-page) { padding-bottom: 0; }
-.card-strip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; }
-.card-strip .mini { display: block; width: 132px; }
-@media (max-width: 560px) { .card-strip { grid-template-columns: 1fr; } .card-strip .mini { width: 168px; } }
+/* Transitional: .card-strip and .mini leave Home's markup (member.js) in the markup pass; these
+   two lines and the .card-strip .mini entries in the press lists go with them. */
+.card-strip { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: center; }
+.card-strip .mini { display: block; width: 168px; }
 @media (prefers-reduced-motion: reduce) { .card-tilt .card-obj { transform: none; } }
 
 /* ---------- stay / trip cards ---------- */
@@ -417,13 +404,11 @@ main:has(.nocturne-page), body:has(.botnav:not([hidden])) main:has(.nocturne-pag
 /* Who runs it: three jobs separated by rules rather than boxed. Nothing here is elevated
    above anything else, so nothing here is a card. */
 .jobs { display: grid; gap: 0; border-top: 1px solid var(--hairline); }
-.job { padding: var(--s-5) 0; border-bottom: 1px solid var(--hairline-soft); display: grid; gap: 8px;
-  grid-template-columns: minmax(0, 12ch) minmax(0, 18ch) minmax(0, 1fr); align-items: start; }
+.job { padding: var(--s-4) 0; border-bottom: 1px solid var(--hairline-soft); display: grid; gap: var(--s-1); }
 .job:last-child { border-bottom: 0; }
 .job-who { display: flex; align-items: center; gap: 8px; font-size: var(--t-small); }
 .job-who .avatar { flex: none; }
-.job .small { margin: 0; max-width: 52ch; }
-@media (max-width: 760px) { .job { grid-template-columns: 1fr; gap: 6px; padding: 18px 0; } }
+.job .small { margin: 0; }
 
 /* Where a week here actually comes from. Quiet — it is provenance, not a headline. */
 .sourced { display: flex; gap: 5px; align-items: flex-start; margin-top: 8px; padding-top: 8px;
@@ -445,10 +430,9 @@ tr.best td:last-child { border-radius: 0 var(--r-chip) var(--r-chip) 0; }
 /* On a phone the photograph is the first screen, whole: the promise sits at its foot and the
    figures come after, the way every luxury frame the team looked at opens. */
 .hero-cover { position: relative; display: grid; margin: 0; overflow: hidden;
-  background: var(--well); min-height: calc(100vh - 60px); min-height: calc(100svh - 60px); }
-/* A signed-in member has the bottom nav over the last 60px of the screen; the hero ends above it. */
-@media (max-width: 860px) { body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100vh - 120px); min-height: calc(100svh - 120px); } }
-@media (min-width: 780px) { .hero-cover { min-height: min(68vh, 600px); } }
+  background: var(--well); min-height: calc(100svh - var(--h-bar) - var(--inset-top)); }
+/* A signed-in member has the tab bar over the foot of the screen; the hero ends above it. */
+body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-bar) - var(--h-nav) - var(--inset-top) - var(--inset-bottom)); }
 /* A grid item will not shrink below its content's intrinsic width unless told to, and the
    portrait file is 880px wide — which pushed the whole section past a 768px viewport. */
 .hero-cover picture { grid-area: 1 / 1; display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; }
@@ -472,21 +456,19 @@ tr.best td:last-child { border-radius: 0 var(--r-chip) var(--r-chip) 0; }
    the scrim in light mode and into the sky in dark. */
 .hero-cover .btn.ghost { color: var(--on-photo); border-color: rgba(255, 255, 255, .52); background: rgba(255, 255, 255, .10); }
 .hero-cover .btn.ghost:active { background: rgba(255, 255, 255, .24); }
-.hero-gauge { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: clamp(20px, 4vw, 48px);
-  align-items: center; margin-top: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--hairline); }
-.hero-facts { display: flex; gap: clamp(20px, 3vw, 40px); flex-wrap: wrap; }
+.hero-gauge { display: grid; gap: var(--s-4); margin-top: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--hairline); }
+.hero-facts { display: flex; gap: var(--s-5); flex-wrap: wrap; }
 .hero-facts p:not(.eyebrow) { font-size: var(--t-small); color: var(--ink-2); margin-top: 3px; }
 .hero-facts b { color: var(--ink); font-size: var(--t-body); }
 .hero-facts .eyebrow { display: inline-flex; align-items: center; gap: 5px; }
 .hero-facts .eyebrow svg { width: 14px; height: 14px; }
-@media (max-width: 780px) { .hero-gauge { grid-template-columns: 1fr; gap: 18px; } }
 
+/* The places, as a strip a thumb swipes: it bleeds to the column's edge and pads itself back by
+   the gutter, so the first card sits on the measure and the last one shows it is not the last.
+   The .horizon-wrap div (public.js) has no rules left and leaves with the markup pass. */
 .horizon { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(252px, 1fr); gap: var(--s-4); overflow-x: auto; overscroll-behavior-x: contain;
-  padding: 2px 2px 10px; scroll-snap-type: x proximity; scrollbar-width: thin; }
+  scroll-snap-type: x proximity; margin-inline: calc(-1 * var(--s-4)); padding: 2px var(--s-4) 10px; scroll-padding-inline: var(--s-4); }
 .horizon::after { content: ""; width: 1px; }
-.horizon-wrap { position: relative; }
-.horizon-wrap::after { content: ""; position: absolute; inset: 0 -1px 0 auto; width: 56px; pointer-events: none;
-  background: linear-gradient(90deg, transparent, var(--ground)); }
 .horizon > * { scroll-snap-align: start; }
 
 /* ---------- charts ---------- */
