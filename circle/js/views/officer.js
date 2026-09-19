@@ -276,7 +276,7 @@ export function monthClose({ store, params, go }) {
       <p class="eyebrow">${icon('lock')}Month close</p>
       <h1>${escapeHtml(fmtMonth(month))}</h1>
       ${p.alreadyClosed ? `<div class="notice good" style="margin-top:16px"><b>Already closed and sealed</b>
-        <p class="small">Closed by ${escapeHtml(store.member(p.alreadyClosed.closedBy)?.name || '')} on ${escapeHtml(fmtDayTime(p.alreadyClosed.closedAt))}, co-signed by ${escapeHtml(store.member(p.alreadyClosed.cosignedBy)?.name || '')}. Reserve at close ${escapeHtml(fmtUsd2(p.alreadyClosed.bankBalanceUsd))}, coverage ${escapeHtml(fmtPct(p.alreadyClosed.coverage))}.</p></div>` : ''}
+        <p class="small">Closed by ${escapeHtml(store.member(p.alreadyClosed.closedBy)?.name || '')} on ${escapeHtml(fmtDayTime(p.alreadyClosed.closedAt))}, co-signed by ${escapeHtml(store.member(p.alreadyClosed.cosignedBy)?.name || '')}. Reserve at close <b class="num">${escapeHtml(fmtUsd2(p.alreadyClosed.bankBalanceUsd))}</b>, coverage <b class="num">${escapeHtml(fmtPct(p.alreadyClosed.coverage))}</b>.</p></div>` : ''}
       <div class="panel" style="margin-top:var(--s-4)">
         <div class="row" style="gap:16px;align-items:center">
           <span id="rollcall"></span>
@@ -284,19 +284,19 @@ export function monthClose({ store, params, go }) {
             <br><span class="small muted"><b class="num">${p.pendingCount}</b> still waiting for you · <b class="num">${p.missingCount}</b> never arrived</span></div>
         </div>
       </div>
-      <div class="panel flat" style="margin-top:var(--s-4)">
-        <p class="eyebrow">${icon('calendar')}The month</p>
-        <ul class="ledger" style="margin-top:10px">
-          <li><span class="what"><b>Collected</b></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.grossUsd))}</b></span></li>
-          <li><span class="what"><b>To the Reserve</b><span class="meta">all of it — a point per dollar</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.grossUsd))}</b></span></li>
-          <li><span class="what"><b>Coverage now</b><span class="meta">Reserve ÷ everything owed</span></span><span class="delta"><b>${escapeHtml(fmtPct(p.treasury.coverage))}</b></span></li>
-        </ul>
-      </div>
+      <!-- The month is ruled rows, not a tinted card. It was the one box on a page that is
+           otherwise ruled from the ring down, and a box here reads as a thing you can open. -->
+      <p class="eyebrow" style="margin-top:var(--s-4)">${icon('calendar')}The month</p>
+      <ul class="ledger" style="margin-top:10px">
+        <li><span class="what"><b>Collected</b></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.grossUsd))}</b></span></li>
+        <li><span class="what"><b>To the Reserve</b><span class="meta">all of it — a point per dollar</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(p.grossUsd))}</b></span></li>
+        <li><span class="what"><b>Coverage now</b><span class="meta">Reserve ÷ everything owed</span></span><span class="delta"><b>${escapeHtml(fmtPct(p.treasury.coverage))}</b></span></li>
+      </ul>
       <form class="panel" id="close-form">
         <h2>Seal the month</h2>
         <label class="field" style="margin-top:12px"><span>Reserve balance on the bank statement</span>
           <input name="balance" type="number" step="0.01" inputmode="decimal" value="${p.treasury.reserveExpectedUsd.toFixed(2)}" required>
-          <span class="hint">The ledger says it should be ${escapeHtml(fmtUsd2(p.treasury.reserveExpectedUsd))}. A gap of more than $${s.closeToleranceUsd} blocks the close.</span></label>
+          <span class="hint">The ledger says it should be <b class="num">${escapeHtml(fmtUsd2(p.treasury.reserveExpectedUsd))}</b>. A gap of more than <b class="num">$${escapeHtml(String(s.closeToleranceUsd))}</b> blocks the close.</span></label>
         <label class="field"><span>Second officer</span><select name="cosigner" required>
           <option value="">Choose who co-signs</option>
           ${others.map(o => `<option value="${o.id}">${escapeHtml(o.name)}</option>`).join('')}</select></label>
@@ -351,11 +351,9 @@ export function desk({ store, go }) {
   /** What the Circle has asked to be told about — this is the shopping list. */
   const drawWanted = () => {
     const rows = store.demand();
+    // No boxed explainer over the lane: four lines of grey telling Victor what his own Desk is
+    // for, above a lane that is often one line long. The rows say it themselves.
     panel.replaceChildren(el(`<div>
-      <div class="notice" style="margin-bottom:16px">
-        <b>${icon('compass', { size: 16 })} This is what to go and look for</b>
-        <p class="small">Every line is an Insider who said they would take it if it appeared. Find one, post it, and they hear in the same minute you do — no group chat, no chasing.</p>
-      </div>
       ${rows.length ? `<div class="stack">${rows.map(r => {
         const stay = r.stay;
         const names = [...r.members].map(id => store.member(id)?.name.split(' ')[0]).filter(Boolean);
@@ -365,7 +363,7 @@ export function desk({ store, go }) {
             <div>
               <h3>${escapeHtml(stay?.name || 'Anywhere on the island')}</h3>
               <p class="small muted" style="margin-top:6px">${icon('users', { size: 14, cls: 'ico-muted' })}
-                ${r.count} ${r.count === 1 ? 'Insider' : 'Insiders'}: ${escapeHtml(names.join(', '))}</p>
+                <b class="num">${r.count}</b> ${r.count === 1 ? 'Insider' : 'Insiders'}: ${escapeHtml(names.join(', '))}</p>
               <p class="small muted" style="margin-top:4px">${icon('calendar', { size: 14, cls: 'ico-muted' })} ${escapeHtml(windows.join(' · '))}</p>
             </div>
             <div class="row" style="flex:none">
@@ -870,17 +868,23 @@ export function pool({ store }) {
       <p class="eyebrow">${icon('shield')}Proof of reserves</p>
       <h1>The Pool</h1>
       <div id="gauge" style="margin-top:var(--s-5)"></div>
-      <!-- The gauge above is the bank-checked coverage and carries its own date. These two lines are
-           the ledger's arithmetic today, and the figures differ; both said 'Coverage' with nothing
-           between them, so each line now names whose count it is. -->
+      <!-- ONE coverage figure on this page, and it is the gauge's — the bank-checked per cent with
+           the date it was checked on. Naming the ledger's own ratio 'Coverage by the ledger' here
+           was not enough: an officer met 100.0% and 101.0% one under the other and could not say
+           which one the Pool runs on. The two figures the ledger's ratio is made of are still
+           printed below, so nothing is hidden; what is gone is the second per cent.
+           Operating is not coverage and now stands on its own line. -->
       <p class="dateline">By the ledger today · Reserve <b class="num">${escapeHtml(fmtUsd2(t.reserveUsd))}</b> against <b class="num">${escapeHtml(fmtPoints(t.outstandingPoints))}</b> owed (<b class="num">${escapeHtml(fmtUsd2(t.liabilityUsd))}</b>)</p>
-      <p class="dateline">Coverage by the ledger <b class="num">${escapeHtml(fmtPct(t.coverage))}</b> · Operating <b class="num">${escapeHtml(fmtUsd2(t.operatingUsd))}</b></p>
-      <p class="small muted" style="margin-top:var(--s-2)">Operating is the 15% earned on bookings, less the bonuses fronted — negative until the first one.</p>
+      <p class="dateline">Operating <b class="num">${escapeHtml(fmtUsd2(t.operatingUsd))}</b></p>
+      <p class="small muted" style="margin-top:var(--s-2)">Operating is the <b class="num">15%</b> earned on bookings, less the bonuses fronted — negative until the first one.</p>
 
+      <!-- This block said the gauge's three figures over again, word for word, four inches under
+           it. It now carries only what the gauge cannot: whose hand entered the balance, and that
+           the money confirmed since has not been looked at. -->
       <div class="panel flat" style="margin-top:var(--s-4)">
-        <b>${t.verified ? `Checked against the bank on ${escapeHtml(fmtDay(t.verified.at))}` : 'Not yet checked against the bank'}</b>
+        <b>${t.verified ? `Checked against the bank on <b class="num">${escapeHtml(fmtDay(t.verified.at))}</b>` : 'Not yet checked against the bank'}</b>
         <p class="small">${t.verified
-          ? `${escapeHtml(store.member(t.verified.byId)?.name || 'The Banker')} entered ${escapeHtml(fmtUsd2(t.verified.balanceUsd))} from the statement. The ledger said ${escapeHtml(fmtUsd2(t.reserveExpectedUsd))} at the time${Math.abs(t.verifiedVarianceUsd || 0) < 0.005 ? ' — matched to the cent' : ` — a difference of ${escapeHtml(fmtUsd2(Math.abs(t.verifiedVarianceUsd)))}`}. Money confirmed since then has not been checked yet; that happens at the next month close.`
+          ? `${escapeHtml(store.member(t.verified.byId)?.name || 'The Banker')} entered that balance from the statement. Money confirmed since then has not been checked yet; that happens at the next month close.`
           : 'Coverage is arithmetic until the Banker enters the bank balance at a month close. Until then, treat it as what the ledger says rather than what the bank holds.'}</p></div>
 
       <div class="stack" style="margin-top:var(--s-5)">
@@ -888,9 +892,9 @@ export function pool({ store }) {
           <h2>Where the money has gone</h2>
           <ul class="ledger" style="margin-top:12px">
             <li><span class="what"><b>Collected from Insiders</b><span class="meta">every confirmed contribution</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.collected))}</b></span></li>
-            <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta">15%, earned when points are spent on a room</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.serviceEarnedUsd))}</b></span></li>
+            <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta"><b class="num">15%</b>, earned when points are spent on a room</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.serviceEarnedUsd))}</b></span></li>
             <li><span class="what"><b>Into the Reserve</b><span class="meta">all of it — nothing is taken when points are bought</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.backing))}</b></span></li>
-            <li><span class="what"><b>Bonuses funded by the Circle</b><span class="meta">tier, streak and founding — fronted against the 15% still to be earned on bookings</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.promoUsd))}</b></span></li>
+            <li><span class="what"><b>Bonuses funded by the Circle</b><span class="meta">tier, streak and founding — fronted against the <b class="num">15%</b> still to be earned on bookings</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.promoUsd))}</b></span></li>
             ${t.topUpsUsd ? `<li><span class="what"><b>Cash top-ups received</b><span class="meta">paid straight on to the hotel; no 15% is taken</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.topUpsUsd))}</b></span></li>` : ''}
             <li><span class="what"><b>Paid to hotels</b><span class="meta">confirmed bookings, at the invoiced amount</span></span><span class="delta"><b>−${escapeHtml(fmtUsd2(t.paidOutUsd))}</b></span></li>
             <li><span class="what"><b>Reserve today</b></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.reserveExpectedUsd))}</b></span></li>
@@ -1095,7 +1099,7 @@ export function settings({ store, go }) {
       <div data-pane="money" hidden>
       <div class="panel" style="margin-top:20px">
         <h2>Dollars and points</h2>
-        <p class="small muted" style="margin-top:6px">${s.pointsPerDollar} points = $1.00. Type either side to check a price before you put it in the catalog.</p>
+        <p class="small muted" style="margin-top:6px"><b class="num">${s.pointsPerDollar}</b> points = <b class="num">$1.00</b>. Type either side to check a price before you put it in the catalog.</p>
         <div class="pair" style="margin-top:14px">
           <label class="field" style="margin:0"><span>Dollars</span>
             <input id="conv-usd" type="number" step="1" min="0" value="450" inputmode="decimal" class="mono"></label>
@@ -1109,8 +1113,8 @@ export function settings({ store, go }) {
         <h2>The rules of the club</h2>
         <p class="small muted" style="margin-top:6px">Changing the share or the value of a point affects everyone. Tell the Circle before you do, and never after someone has booked against it.</p>
         <div class="pair" style="margin-top:12px">
-          <label class="field"><span>The Circle’s share</span><input name="serviceRate" type="number" step="0.01" min="0" max="0.5" value="${s.serviceRate}" inputmode="decimal"><span class="hint">0.15 is 15%</span></label>
-          <label class="field"><span>Points per dollar</span><input name="pointsPerDollar" type="number" value="${s.pointsPerDollar}" inputmode="numeric"><span class="hint">100 = a point is a cent</span></label>
+          <label class="field"><span>The Circle’s share</span><input name="serviceRate" type="number" step="0.01" min="0" max="0.5" value="${s.serviceRate}" inputmode="decimal"><span class="hint"><b class="num">0.15</b> is <b class="num">15%</b></span></label>
+          <label class="field"><span>Points per dollar</span><input name="pointsPerDollar" type="number" value="${s.pointsPerDollar}" inputmode="numeric"><span class="hint"><b class="num">100</b> = a point is a cent</span></label>
         </div>
         <div class="pair">
           <label class="field"><span>Seats in the Circle</span><input name="memberCap" type="number" value="${s.memberCap}" inputmode="numeric"></label>
@@ -1190,9 +1194,11 @@ export function settings({ store, go }) {
       const dollars = Number(u.value) || 0;
       const months = s.tiers.map(t => {
         const perMonth = Math.round(t.monthlyUsd * (1 - s.serviceRate) * s.pointsPerDollar) + Math.round(t.monthlyUsd * t.bonusRate * s.pointsPerDollar);
-        return `${tierName(t.monthlyUsd)} ${(dollars * s.pointsPerDollar / perMonth).toFixed(1)}`;
+        return `${escapeHtml(tierName(t.monthlyUsd))} <b class="num">${(dollars * s.pointsPerDollar / perMonth).toFixed(1)}</b>`;
       }).join(' · ');
-      note.textContent = `${fmtAfl2(dollars, s.awgPerUsd)} at the peg. Months of contributions to earn it: ${months}.`;
+      // innerHTML, not textContent: every figure in this line goes in the apparatus face one at a
+      // time, and the words between it stay in the reading face.
+      note.innerHTML = `<b class="num">${escapeHtml(fmtAfl2(dollars, s.awgPerUsd))}</b> at the peg. Months of contributions to earn it: ${months}.`;
     };
     u.addEventListener('input', () => { pt.value = Math.round((Number(u.value) || 0) * s.pointsPerDollar); say(); });
     pt.addEventListener('input', () => { u.value = ((Number(pt.value) || 0) / s.pointsPerDollar).toFixed(2); say(); });
@@ -1250,9 +1256,11 @@ export function settings({ store, go }) {
           <input name="username" required autocapitalize="none" spellcheck="false" autocomplete="off" placeholder="ian"
                  pattern="[a-z0-9][a-z0-9._\-]{1,28}[a-z0-9]"></label>
         <label class="field"><span>First password</span>
-          <span class="row" style="gap:8px;flex-wrap:nowrap">
-            <input name="password" class="mono grow" required autocomplete="off" value="${escapeHtml(generatePassword())}">
-            <button class="btn ghost sm" type="button" data-again style="flex:none">${icon('refresh', { size: 15 })}</button></span></label>
+          <input name="password" class="mono" required autocomplete="off" value="${escapeHtml(generatePassword())}"></label>
+        <!-- This is the first button in the sheet, so it takes the opening focus and is the first
+             thing read aloud. Icon-only it announced nothing at all; it says what it does now,
+             in the same words as the New-password sheet. -->
+        <div class="row" style="margin-bottom:var(--s-3)"><button class="btn ghost sm" type="button" data-again>${icon('refresh', { size: 15 })}Another one</button></div>
         <label class="field"><span>Level</span><select name="monthlyUsd">${s.tiers.map(t => `<option value="${t.monthlyUsd}"${t.monthlyUsd === 150 ? ' selected' : ''}>${escapeHtml(fmtUsd2(t.monthlyUsd))} · ${escapeHtml(tierName(t.monthlyUsd))}</option>`).join('')}</select></label>
         <label class="field"><span>What they are called</span><input name="title" placeholder="Voice of the Circle"></label>
         <p class="eyebrow" style="margin-top:6px">What they can do</p>
