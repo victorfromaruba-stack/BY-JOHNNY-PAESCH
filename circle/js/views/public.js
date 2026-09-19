@@ -3,7 +3,7 @@ import { escapeHtml, html, raw, fmtUsd, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUs
 import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, projectPoints, fromPoints, seatPoints, unitPoints, pointsPerMonth, monthsToAfford } from '../core/money.js';
 import { poolGauge, memberCard, ring, tierLadder } from '../ui/pieces.js';
-import { sceneSvg, plateHtml, treeSvg, starSvg } from '../ui/art.js';
+import { sceneSvg, plateHtml, starSvg } from '../ui/art.js';
 import { toast, setBusy, sheet, avatar } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { copyText } from '../core/share.js';
@@ -238,11 +238,12 @@ export function stayCard(stay, { store, href = null, footer = '' } = {}) {
  * A full-bleed photograph between two sections, with a line of type on it.
  *
  * These are atmosphere, not evidence: none of them is a picture of a room the Circle books, and
- * none is captioned as though it were. Lazy below the fold, and every one carries an aspect
- * ratio so the page does not jump when it loads.
+ * none is captioned as though it were. Lazy below the fold, and the ratio is the one the
+ * stylesheet gives every band, so the page does not jump when it loads and no caller can pick
+ * a shape of its own.
  */
-function band(src, alt, line, { ratio = '21/9' } = {}) {
-  return `<figure class="band" style="--ratio:${ratio}">
+function band(src, alt, line) {
+  return `<figure class="band">
       <img src="assets/${escapeHtml(src)}.jpg" alt="${escapeHtml(alt)}" loading="lazy" decoding="async">
       ${line ? `<figcaption>${escapeHtml(line)}</figcaption>` : ''}
     </figure>`;
@@ -260,21 +261,18 @@ export function landing({ store, go }) {
 
   wrap.appendChild(el(`<section class="sec hero-sec">
       <figure class="hero-cover enter">
-        <!-- The frame is 4:5 above 900px and 16:10 below it, so the tall file belongs to the
-             WIDE viewport, not the narrow one. Serving these the other way round crops the
-             sea out of both. -->
-        <!-- One tall still, on every width: 4:5 beside the copy on a desktop, 4:5 above it on a
-             phone. A photograph of the mood, not of a room — the rooms are on the stay pages. -->
-        <!-- The wide file belongs to the wide viewport. Cover-fitting the 4:5 portrait into a
-             1440px frame crops it to empty sky, which is what the front page used to do. -->
-        <picture>
-          <source media="(min-width: 780px)" srcset="assets/hero.jpg">
-          <img src="assets/hero-tall.jpg" alt="A windswept fofoti tree leaning over calm water at first light" fetchpriority="high" decoding="async">
-        </picture>
+        <!-- One tall still, and only one: the page is a phone column at every width, so there is
+             no wide viewport left for a wide file to belong to. A photograph of the mood, not of
+             a room — the rooms are on the stay pages.
+             The inline placement is transitional: app.css still carries the placement on the
+             .hero-cover picture selector, and the picture element it named is gone. It comes
+             off the moment that selector becomes .hero-cover img. Without it the photograph
+             takes a second grid row and the promise sits above the picture, not in it. -->
+        <img src="assets/hero-tall.jpg" width="880" height="1100" style="grid-area:1/1;min-width:0;min-height:0" alt="A windswept fofoti tree leaning over calm water at first light" fetchpriority="high" decoding="async">
         <figcaption class="on"><div class="wrap">
           <h1 style="max-width:16ch">A private travel circle <em class="ac">in Aruba</em>.</h1>
           <p class="lede" style="margin-top:14px">Put in a hundred dollars a month. Take it out as hotel, at cost, with people you know.</p>
-          <div class="row" style="margin-top:22px;gap:20px">
+          <div class="row" style="margin-top:22px">
             <a class="btn" href="#/sign-in">${icon('key', { size: 17 })}I have an invitation</a>
             <a class="link-rule" href="#/rules">How the Circle works</a>
           </div>
@@ -283,11 +281,11 @@ export function landing({ store, go }) {
       <div class="wrap"><p class="hero-credit enter" style="--d:120ms">${icon('mapPin', { size: 14 })}The west coast — every place on the list is on this water or ten minutes from it.</p>
       <div class="hero-gauge enter" style="--d:180ms">
         <div id="gauge-slot">${blind ? `<p class="eyebrow">${icon('shield', { size: 14 })}Proof of reserves</p>
-          <p class="small muted" style="margin-top:4px;max-width:46ch">Every point is backed by money in a Reserve account that is checked against the bank
+          <p class="small muted" style="margin-top:4px">Every point is backed by money in a Reserve account that is checked against the bank
           and published inside the Circle. Sign in to see the current figure.</p>` : ''}</div>
         <div class="hero-facts">
           <div><p class="eyebrow">${icon('users', { size: 14 })}Seats</p>
-            <p>${blind ? `<b class="num">${s.memberCap}</b> in all · by invitation only` : `<b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of ${s.memberCap} taken · by invitation only`}</p></div>
+            <p>${blind ? `<b class="num">${s.memberCap}</b> in all · by invitation only` : `<b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of <b class="num">${s.memberCap}</b> taken · by invitation only`}</p></div>
           <div><p class="eyebrow">${icon('bed', { size: 14 })}On the list</p>
             <p>${(() => {
               const places = store.stays.filter(x => x.kind !== 'trip' && x.active !== false).length;
@@ -308,11 +306,11 @@ export function landing({ store, go }) {
 
   // Horizon — the dream, before the ledger
   const horizon = el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><h2>Where the points go</h2>
+      <div class="sec-head"><h2>Where the points go</h2>
       <p>The best deals on the market at the places on the island the Circle can get, and the cruises and trips Victor and Ian put together. Every price is the Circle’s all-in rate — taxes, levies and resort fees included.</p>
-      <p class="small muted" style="margin-top:8px">These are where we actually end up. See a deal, ask Victor, he books it in your name — nobody books anything themselves.</p></div>
-      <a class="btn ghost sm" href="${blind ? '#/sign-in' : '#/stays'}">${icon('chevronRight', { size: 15 })}${blind ? 'Sign in to see them all' : 'See what is open'}</a></div>
-      <div class="horizon-wrap"><div class="horizon" id="horizon"></div></div></div></section>`);
+      <p class="small muted" style="margin-top:8px">These are where we actually end up. See a deal, ask Victor, he books it in your name — nobody books anything themselves.</p>
+      <a class="link-rule" href="${blind ? '#/sign-in' : '#/stays'}">${blind ? 'Sign in to see them all' : 'See what is open'}</a></div>
+      <div class="horizon" id="horizon"></div></div></section>`);
   const hz = horizon.querySelector('#horizon');
   // Signed out, every one of these opened a password form with no explanation — someone was
   // browsing hotels and got a login screen. Send them somewhere deliberate instead.
@@ -326,8 +324,8 @@ export function landing({ store, go }) {
   // which reads like a scam even though it is true. 1,386px of phone for one number.
   // One figure, one sentence under it, one line about the year. The bar went with the 15%.
   const split = el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><h2>Every dollar backs a point</h2>
-      <p>Nothing is taken when you put money in. The Circle is paid 15% when you spend points on a room — for the thing it actually does, which is find the room and book it.</p></div></div>
+      <div class="sec-head"><h2>Every dollar backs a point</h2>
+      <p>Nothing is taken when you put money in. The Circle is paid <b class="num">15%</b> when you spend points on a room — for the thing it actually does, which is find the room and book it.</p></div>
       <div class="panel">
         <div class="choices" id="tier-choices" role="group" aria-label="Choose a monthly contribution"></div>
         <div id="split-figures" style="margin-top:20px"></div>
@@ -337,8 +335,7 @@ export function landing({ store, go }) {
   const choices = split.querySelector('#tier-choices');
   const draw = () => {
     choices.innerHTML = s.tiers.map(t2 => `<button type="button" class="choice" aria-pressed="${t2.monthlyUsd === chosen}" data-amt="${t2.monthlyUsd}">
-        <span class="amt">$${t2.monthlyUsd}</span><span class="tier">${escapeHtml(tierName(t2.monthlyUsd))} ${treeSvg(VOCAB.tierLean[t2.monthlyUsd], { size: 14 })}</span>
-        <span class="tiny muted">${escapeHtml(fmtAfl2(t2.monthlyUsd, s.awgPerUsd))}</span></button>`).join('');
+        <span class="amt">$${t2.monthlyUsd}</span><span class="tier">${escapeHtml(tierName(t2.monthlyUsd))}</span></button>`).join('');
     const tier = tierFor(s, chosen);
     const sp = splitContribution(chosen, s, tier);
     const p12 = projectPoints(chosen, 12, s);
@@ -347,15 +344,15 @@ export function landing({ store, go }) {
     const nights = (id) => { const st = store.stayLike(id); if (!st) return null;
       const per = fromPoints(st, s); return per > 0 ? { n: Math.floor(p12.points / per), name: st.name } : null; };
     const villa = nights('stay_surfclub'), ai = nights('stay_divi');
-    const both = [villa && `about ${villa.n} nights in a villa at ${escapeHtml(villa.name)}`,
-                  ai && `${ai.n} all-inclusive at ${escapeHtml(ai.name)}`].filter(Boolean);
+    const both = [villa && `about <b class="num">${villa.n}</b> nights in a villa at ${escapeHtml(villa.name)}`,
+                  ai && `<b class="num">${ai.n}</b> all-inclusive at ${escapeHtml(ai.name)}`].filter(Boolean);
     split.querySelector('#split-figures').innerHTML = `
       <p class="eyebrow">${escapeHtml(fmtUsd2(chosen))} a month becomes</p>
       <p class="big-figure num">${escapeHtml(fmtPoints(sp.points))}</p>
-      <p class="lede" style="margin-top:4px">${escapeHtml(fmtUsd2(sp.points / s.pointsPerDollar))} of hotel, every month.</p>
-      <p class="small muted" style="margin-top:14px;max-width:58ch">All ${escapeHtml(fmtUsd2(sp.backingUsd))} of it sits in the Reserve, in a named account, until you spend it on a room${sp.bonusPoints ? ` — and the ${escapeHtml(fmtPoints(sp.bonusPoints))} on top is the ${Math.round(tier.bonusRate * 100)}% ${escapeHtml(tierName(chosen))} bonus, which the Circle funds out of its own share` : ''}.</p>
-      <p class="small" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--hairline-soft);max-width:58ch">
-        <b>After a year, ${escapeHtml(fmtPoints(p12.points))}</b> — ${escapeHtml(fmtUsd2(p12.points / s.pointsPerDollar))} of hotel for the ${escapeHtml(fmtUsd2(p12.paidUsd))} you sent, the 6- and 12-month streak bonuses included.${both.length ? ` That is ${both.join(', or ')}.` : ''}</p>`;
+      <p class="lede" style="margin-top:4px"><b class="num">${escapeHtml(fmtUsd2(sp.points / s.pointsPerDollar))}</b> of hotel, every month.</p>
+      <p class="small muted" style="margin-top:14px">All <b class="num">${escapeHtml(fmtUsd2(sp.backingUsd))}</b> of it sits in the Reserve, in a named account, until you spend it on a room${sp.bonusPoints ? ` — and the <b class="num">${escapeHtml(fmtPoints(sp.bonusPoints))}</b> on top is the <b class="num">${Math.round(tier.bonusRate * 100)}%</b> ${escapeHtml(tierName(chosen))} bonus, which the Circle funds out of its own share` : ''}.</p>
+      <p class="small" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--hairline-soft)">
+        <b>After a year,</b> <b class="num">${escapeHtml(fmtPoints(p12.points))}</b> &mdash; <b class="num">${escapeHtml(fmtUsd2(p12.points / s.pointsPerDollar))}</b> of hotel for the <b class="num">${escapeHtml(fmtUsd2(p12.paidUsd))}</b> you sent, the 6- and 12-month streak bonuses included.${both.length ? ` That is ${both.join(', or ')}.` : ''}</p>`;
   };
   draw();
   choices.addEventListener('click', (e) => { const b = e.target.closest('[data-amt]'); if (!b) return; chosen = Number(b.dataset.amt); draw(); });
@@ -381,8 +378,8 @@ export function landing({ store, go }) {
     ...waitRow('A seat on the Samaná week', 'flights not included', trip ? seatPoints(trip, s) : 0),
   ];
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><h2>Everyone comes on everything</h2>
-      <p>No level shuts anyone out of a stay or a trip. A level changes how fast the points build and how far in front of everyone else you stand — that is the whole of it.</p></div></div>
+      <div class="sec-head"><h2>Everyone comes on everything</h2>
+      <p>No level shuts anyone out of a stay or a trip. A level changes how fast the points build and how far in front of everyone else you stand — that is the whole of it.</p></div>
       ${tierLadder(s, { rows: waitRows })}
       <p class="small muted" style="margin-top:16px">Move between levels any month; it starts on your next contribution and nothing you already hold changes. Short of a trip you want? Ask for it anyway — Victor quotes it and you accept when the points are there, or you close the gap with a cash top-up.</p>
       </div></section>`));
@@ -393,7 +390,7 @@ export function landing({ store, go }) {
   // Four panels of forty words each, side by side on a desktop and stacked into 688px of
   // phone, to say four things that are one sentence each. They are four lines now.
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><h2>How a contribution becomes a stay</h2></div></div>
+      <div class="sec-head"><h2>How a contribution becomes a stay</h2></div>
       <ol class="steps">
         <li><b>You send the transfer</b><span>To the Reserve account with your reference, then tap “I sent it”. No points yet.</span></li>
         <li><b>Vishnu confirms it landed</b><span>He matches the reference on the bank statement, and your points are minted and dated the moment he does.</span></li>
@@ -422,17 +419,17 @@ export function landing({ store, go }) {
       : priced;
     // The eight rows stack into cards on a phone and cost 1,527px — two full screens — to say
     // something the sentence under them already said: prices run from here to here. So the
-    // range leads, with the figures in it, and the table sits behind a disclosure that is open
-    // from the start on a wide screen, where eight rows cost nothing.
+    // range leads, with the figures in it, and the table sits behind a disclosure. Each row
+    // carries its own labels in the cells (data-k), so the head row is furniture the phone
+    // never draws — it is not rendered at all.
     const costs = el(`<section class="sec"><div class="wrap">
-      <div class="sec-head tight"><div><h2>What a night costs</h2>
-      <p>From <b class="num">${escapeHtml(fmtUsd2(cheapest.from / s.pointsPerDollar))}</b> a night at ${escapeHtml(cheapest.st.name)} to <b class="num">${escapeHtml(fmtUsd2(dearest.from / s.pointsPerDollar))}</b> at ${escapeHtml(dearest.st.name)} — the Circle&rsquo;s all-in rate, with the room, taxes, the service charge and the resort fee already in it. Nothing is added later.</p></div>
-      <a class="btn ghost sm" href="${blind ? '#/sign-in' : '#/stays'}">${icon('chevronRight', { size: 15 })}${blind ? 'Sign in for all ' + priced.length : 'All ' + priced.length}</a></div>
+      <div class="sec-head tight"><h2>What a night costs</h2>
+      <p>From <b class="num">${escapeHtml(fmtUsd2(cheapest.from / s.pointsPerDollar))}</b> a night at ${escapeHtml(cheapest.st.name)} to <b class="num">${escapeHtml(fmtUsd2(dearest.from / s.pointsPerDollar))}</b> at ${escapeHtml(dearest.st.name)} — the Circle&rsquo;s all-in rate, with the room, taxes, the service charge and the resort fee already in it. Nothing is added later.</p>
+      <a class="link-rule" href="${blind ? '#/sign-in' : '#/stays'}"><span>${blind ? 'Sign in to see all' : 'See all'} <b class="num">${priced.length}</b></span></a></div>
 
-      <details class="fineprint" id="cost-table"><summary>${priced.length > 8 ? `The four cheapest and the four dearest of ${priced.length}` : `All ${priced.length}, cheapest first`}</summary>
+      <details class="fineprint" id="cost-table"><summary><span>${priced.length > 8 ? `The four cheapest and the four dearest of <b class="num">${priced.length}</b>` : `All <b class="num">${priced.length}</b>, cheapest first`}</span></summary>
         <div class="tablewrap" style="margin-top:10px"><table class="bands">
           <caption class="sr-only">The cheapest and dearest places on the list, from-price per night</caption>
-          <thead><tr><th>Place</th><th class="num">From, a night</th><th class="num">In dollars</th></tr></thead>
           <tbody>${show.map(({ st, from }) => `<tr>
             <td><b>${escapeHtml(st.name)}</b><br><span class="small muted">${escapeHtml(st.area)}${st.onSand ? ' · on the sand' : ''}</span></td>
             <td class="num" data-k="From">${escapeHtml(fmtPoints(from))}</td>
@@ -442,7 +439,6 @@ export function landing({ store, go }) {
 
       <p class="small muted" style="margin-top:12px">A night costs more at Christmas and in the busy months, the way it does on every booking site — you never have to work out which is which. Give Victor your dates and he prices those exact nights, and that quote is what you accept.</p>
       </div></section>`);
-    if (window.matchMedia?.('(min-width: 780px)').matches) costs.querySelector('#cost-table').open = true;
     wrap.appendChild(costs);
   }
 
@@ -458,7 +454,7 @@ export function landing({ store, go }) {
   wrap.appendChild(el(band('band-pool', 'Salt pans from above, pale shapes divided by thin channels',
     'The Reserve, checked against the bank every month.')));
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><h2>Three people, three jobs</h2></div></div>
+      <div class="sec-head"><h2>Three people, three jobs</h2></div>
       <div class="jobs">${JOBS.map(({ role, job, what, name }) => {
         // A signed-out browser is handed no members at all by row-level security, so looking
         // the officer up returned nothing and the section that exists to prove real people
@@ -476,16 +472,17 @@ export function landing({ store, go }) {
 
   // Rules in six sentences
   wrap.appendChild(el(`<section class="sec"><div class="wrap">
-      <div class="sec-head"><div><h2>What you are agreeing to</h2></div></div>
-      <ol class="stack" style="padding-left:1.2em;max-width:64ch">
-        <li>100 points = $1.00 of hotel. That never changes, in either direction.</li>
-        <li>The only fee is 15%, charged when you spend points on a room and never when you put money in. It is on the quote before you accept it, and there are no special assessments.</li>
+      <div class="sec-head"><h2>What you are agreeing to</h2></div>
+      <ol class="stack" style="padding-left:1.2em">
+        <li><b class="num">100</b> points = <b class="num">$1.00</b> of hotel. That never changes, in either direction.</li>
+        <li>The only fee is <b class="num">15%</b>, charged when you spend points on a room and never when you put money in. It is on the quote before you accept it, and there are no special assessments.</li>
         <li>Points appear only when Vishnu confirms the money arrived, and they never expire while you are active.</li>
         <li>Every Insider can ask for every stay and every trip. Pause for up to three months a year with one tap.</li>
-        <li>Leave whenever you like: unused base points come back at face value, minus ${escapeHtml(fmtUsd2(s.exitFeeUsd))}, after a 12-month window.</li>
+        <li>Leave whenever you like: unused base points come back at face value, minus <b class="num">${escapeHtml(fmtUsd2(s.exitFeeUsd))}</b>, after a 12-month window.</li>
       </ol>
-      <p class="small muted" style="margin-top:18px">That is five of twelve. Version ${escapeHtml(s.rulesVersion)}, ${escapeHtml(fmtDay(s.rulesDate))} — <a href="#/rules">read all of them</a> before you decide anything.</p>
-      <p class="small muted" style="margin-top:10px;max-width:70ch">${escapeHtml(VOCAB.legal)}</p>
+      <p class="small muted" style="margin-top:18px">That is five of twelve. Version <b class="num">${escapeHtml(s.rulesVersion)}</b>, ${escapeHtml(fmtDay(s.rulesDate))}.</p>
+      <a class="link-rule" href="#/rules">Read all of them</a>
+      <p class="small muted" style="margin-top:10px">${escapeHtml(VOCAB.legal)}</p>
       </div></section>`));
   return wrap;
 }
@@ -509,45 +506,43 @@ export function rules({ store }) {
     ['You can chip in to each other’s bookings.', 'Open a booking to the Circle and anyone can add their own points to it — for a room you are sharing, or as a gift. Their points are committed the moment they chip in and released if it falls through; when the hotel is paid, each person’s share burns from their own ledger. Nobody can chip in more than the booking still needs, and points never change hands as points.'],
     [`${VOCAB.clubName} is a private members’ club for prepaid, club-arranged travel.`, 'Points are not deposits and not an investment. There is no interest, no return, and no payout that depends on new members joining: your points are backed by your own money, held in the Reserve.'],
   ];
-  const wrap = el(`<div>${band('band-rules', 'Still water at dawn, fine ripples catching cool light', '', { ratio: '32/9' })}
+  // No band over the version line: the rules are read, not looked at, and a photograph above the
+  // first sentence costs a phone half a screen before the page says anything.
+  const wrap = el(`<div>
     <section class="sec"><div class="wrap">
       <p class="eyebrow">Version ${escapeHtml(s.rulesVersion)} · ${escapeHtml(fmtDay(s.rulesDate))}</p>
       <h1>How the Circle works</h1>
-      <p class="lede" style="margin-top:12px">In plain words. Everything the app does follows from these, and nothing here changes without telling you first.</p>
+      <p class="lede" style="margin-top:12px">In plain words, and nothing here changes without telling you first.</p>
       <ol class="stack" style="margin-top:26px;padding-left:1.2em">
-        ${clauses.map(([t, b]) => `<li style="margin-bottom:16px"><b>${escapeHtml(t)}</b><p class="small muted" style="margin-top:5px;max-width:72ch">${escapeHtml(b)}</p></li>`).join('')}
+        ${clauses.map(([t, b]) => `<li style="margin-bottom:16px"><b>${escapeHtml(t)}</b><p class="small muted" style="margin-top:5px">${escapeHtml(b)}</p></li>`).join('')}
       </ol>
       <div class="notice" style="margin-top:24px"><b>The two accounts</b>
-        <p class="small">The <b>Reserve</b> holds every dollar contributed, so a point is backed by a full dollar from the day it is minted; nothing leaves it except to pay a hotel for a confirmed booking or to refund someone who leaves. <b>Operating</b> is paid its 15% out of each booking and funds the bonuses. Coverage is the Reserve divided by everything the Circle owes in points, and it is on <a href="#/pool">the Pool page</a> for everyone to see.</p></div>
+        <p class="small rules-prose">The <b>Reserve</b> holds every dollar contributed, so a point is backed by a full dollar from the day it is minted; nothing leaves it except to pay a hotel for a confirmed booking or to refund someone who leaves. <b>Operating</b> is paid its <b class="num">15%</b> out of each booking and funds the bonuses. Coverage is the Reserve divided by everything the Circle owes in points, and it is on <a href="#/pool">the Pool page</a> for everyone to see.</p></div>
       <p class="small muted" style="margin-top:20px">${escapeHtml(VOCAB.legal)} An Aruban accountant should review these rules before the first real contribution.</p>
     </div></section></div>`);
   return wrap;
 }
 
 export function signIn({ store, go, refresh }) {
-  const live = store.mode === 'supabase';
-  const wrap = el(`<div><section class="sec"><div class="wrap signin-wrap">
-      <figure class="signin-art"><img src="assets/signin.jpg"
-        alt="Dark water at dusk with the last of the light along the horizon" decoding="async"></figure>
-      <div class="signin-form">
+  // The form is the page: no picture above it, no column beside it. A phone opens this screen to
+  // type two things, and the keyboard takes the bottom half the moment it does.
+  const wrap = el(`<div><section class="sec"><div class="wrap">
       <h1>Sign in</h1>
-      <p class="lede" style="margin-top:10px">Victor or Ian gives you a username and a password. Nothing is emailed to you.</p>
+      <p class="lede" style="margin-top:10px">Victor or Ian gives you a username and a password.</p>
 
       <form id="pw" class="panel" style="margin-top:20px" autocomplete="on">
         <label class="field"><span>Username</span>
           <input type="text" name="username" autocomplete="username" autocapitalize="none"
-                 spellcheck="false" placeholder="victor" required autofocus></label>
+                 autocorrect="off" enterkeyhint="next" spellcheck="false" placeholder="victor" required autofocus></label>
         <label class="field"><span>Password</span>
-          <span class="pw-wrap"><input type="password" name="password" autocomplete="current-password" required>
+          <span class="pw-wrap"><input type="password" name="password" autocomplete="current-password" enterkeyhint="go" required>
           <button type="button" class="pw-peek" id="peek" aria-label="Show the password">${icon('eye', { size: 18 })}</button></span></label>
         <button class="btn block" type="submit" style="margin-top:4px">${icon('unlock', { size: 18 })}Sign in</button>
       </form>
 
-      <p class="small muted" style="margin-top:16px">${icon('shield', { size: 15, cls: 'ico-muted' })}
-        Forgotten it? Ask Victor or Ian — they set you a new one and tell you what it is. Nobody,
-        them included, can read the one you are using now.</p>
-      <p class="small muted" style="margin-top:10px">Not an Insider yet? The Circle is capped at ${store.settings.memberCap} seats and everyone in it was asked personally. <a href="#/">What it is</a>.</p>
-      </div>
+      <p class="small muted" style="margin-top:16px">Forgotten it? Ask Victor or Ian — nobody, them
+        included, can read the one you have now.</p>
+      <a class="link-rule" href="#/rules">How the Circle works</a>
     </div></section></div>`);
 
   const form = wrap.querySelector('#pw');
@@ -581,21 +576,19 @@ export function signIn({ store, go, refresh }) {
 export function setPassword({ store, go }) {
   const live = store.mode === 'supabase';
   const forced = !!store.me?.mustChangePassword;
-  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:480px">
+  const wrap = el(`<div><section class="sec"><div class="wrap">
       <h1>${forced ? 'Choose your own password' : 'Choose a password'}</h1>
       <p class="lede" style="margin-top:10px">${forced
         ? 'The one you just used was handed to you. Pick your own now — it is the last thing between your points and anyone else.'
         : 'Twelve characters at least. Longer beats complicated — three unrelated words will outlast anything with a $ in it.'}</p>
       <form id="set" class="panel" style="margin-top:20px">
         <label class="field"><span>New password</span>
-          <input type="password" name="password" autocomplete="new-password" minlength="12" required autofocus></label>
+          <input type="password" name="password" autocomplete="new-password" enterkeyhint="next" minlength="12" required autofocus></label>
         <div id="meter" class="pw-meter" aria-live="polite"></div>
         <label class="field"><span>And again</span>
-          <input type="password" name="again" autocomplete="new-password" minlength="12" required></label>
-        <div class="row">
-          <button class="btn" type="submit">${icon('check', { size: 18 })}Set it</button>
-          <button class="btn ghost sm" type="button" id="gen">${icon('sparkles', { size: 16 })}Make one up for me</button>
-        </div>
+          <input type="password" name="again" autocomplete="new-password" enterkeyhint="done" minlength="12" required></label>
+        <button class="btn block" type="submit">Set it</button>
+        <button type="button" class="link-rule" id="gen">Make one up for me</button>
       </form>
       ${live ? '' : '<p class="small muted" style="margin-top:14px">Preview mode: this locks this browser only.</p>'}
     </div></section></div>`);
@@ -641,7 +634,7 @@ export function join({ store, params, go }) {
   // invitations table is admin-only, deliberately — so the code in the link tells us
   // nothing. Rather than "that invitation is not valid", say what actually happens next.
   if (store.mode === 'supabase') {
-    return el(`<div class="wrap sec" style="max-width:620px">
+    return el(`<div class="wrap sec">
       <p class="eyebrow">${icon('key', { size: 14 })}You were invited</p>
       <h1>One step to get in</h1>
       <p class="lede" style="margin-top:14px">Victor or Ian has put you on the list. There is no code in this link to type
@@ -653,7 +646,7 @@ export function join({ store, params, go }) {
       </ol>
       <p class="row" style="margin-top:22px">
         <a class="btn" href="#/sign-in">${icon('key', { size: 17 })}Go to sign in</a>
-        <a class="btn ghost" href="#/rules">How the Circle works</a></p>
+        <a class="link-rule" href="#/rules">How the Circle works</a></p>
       <p class="small muted" style="margin-top:18px">Nothing is emailed to you at any point. If the username and password
         do not work, ask them to set you a new one — it takes them ten seconds.</p></div>`);
   }
@@ -666,7 +659,7 @@ export function join({ store, params, go }) {
   }
   const sponsor = store.member(inv?.sponsorId || 'mem_victor');
   const state = { step: 1, monthlyUsd: inv?.monthlyUsd || 150, name: inv?.name || '', email: inv?.email || '', phone: '', standingOrder: false, accepted: false };
-  const wrap = el('<div><section class="sec"><div class="wrap" style="max-width:760px" id="join-body"></div></section></div>');
+  const wrap = el('<div><section class="sec"><div class="wrap" id="join-body"></div></section></div>');
   const body = wrap.querySelector('#join-body');
 
   const draw = () => {
@@ -675,42 +668,40 @@ export function join({ store, params, go }) {
     body.innerHTML = `
       <p class="eyebrow">Invitation from ${escapeHtml(sponsor?.name || 'the Circle')}</p>
       <h1>Join the ${escapeHtml(VOCAB.clubName)}</h1>
-      <p class="lede" style="margin-top:12px">${escapeHtml(store.activeMembers().length)} of ${s.memberCap} seats are taken. ${store.activeMembers().length < s.foundingSeats ? 'You would be a Founding Insider — it stays on your card for good.' : ''}</p>
-      <div class="side" style="margin-top:24px">
-        <div>
-          <div class="panel">
-            <h2>Choose your monthly contribution</h2>
-            <p class="small muted" style="margin-top:6px">You can change it any month; it takes effect on your next contribution.</p>
-            <div class="choices" id="tiers" style="margin-top:14px"></div>
-            <p class="big-figure num" style="margin-top:18px">${escapeHtml(fmtPoints(sp.points))}</p>
-            <p class="small muted" style="margin-top:4px">${escapeHtml(fmtUsd2(sp.points / s.pointsPerDollar))} of hotel a month${sp.bonusPoints ? `, including the ${Math.round(tier.bonusRate * 100)}% ${escapeHtml(tierName(state.monthlyUsd))} bonus the Circle funds out of its own share` : ''}. ${escapeHtml(fmtAfl2(state.monthlyUsd, s.awgPerUsd))} at the peg, and every dollar of it backs a point.</p>
-          </div>
-          <form class="panel" id="details" style="margin-top:16px">
-            <h2>Your details</h2>
-            <label class="field"><span>Name as it should be etched on the card</span><input name="name" required value="${escapeHtml(state.name)}" autocomplete="name"></label>
-            <label class="field"><span>Email</span><input name="email" type="email" required value="${escapeHtml(state.email)}" autocomplete="email"></label>
-            <label class="field"><span>Phone (for Ian)</span><input name="phone" type="tel" placeholder="+297 000 0000" value="${escapeHtml(state.phone)}" autocomplete="tel"></label>
-            <label class="row" style="gap:10px;align-items:flex-start;margin-bottom:14px">
-              <input type="checkbox" name="standingOrder" ${state.standingOrder ? 'checked' : ''} style="width:20px;height:20px;margin-top:2px">
-              <span class="small">I will set a standing order for the 5th of the month. <span class="muted">Aruba Bank and Banco di Caribe both do this free, online.</span></span></label>
-            <div class="notice"><b>Where the money goes</b>
-              <p class="small">${escapeHtml(s.reserveAccount.bank)} · ${escapeHtml(s.reserveAccount.holder)}<br>
-              <span class="num">${escapeHtml(s.reserveAccount.number)}</span></p>
-              <p class="small muted">Your reference will be <span class="num">${escapeHtml(VOCAB.refPrefix)}-${escapeHtml((state.name || 'XX').split(/\\s+/).map(x => x[0] || '').join('').slice(0, 2).toUpperCase() || 'XX')}-YYYY-MM</span>. Put it in the description field so Vishnu can match it in seconds.</p></div>
-            <label class="row" style="gap:10px;align-items:flex-start;margin:16px 0">
-              <input type="checkbox" name="accepted" required style="width:20px;height:20px;margin-top:2px">
-              <span class="small">I have read <a href="#/rules">the rules</a> (version ${escapeHtml(s.rulesVersion)}) and I understand that points are prepaid travel credit with the Circle — not a deposit, not an investment.</span></label>
-            <button class="btn block" type="submit">Mint my card</button>
-          </form>
-        </div>
+      <p class="lede" style="margin-top:12px"><b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of <b class="num">${s.memberCap}</b> seats are taken. ${store.activeMembers().length < s.foundingSeats ? 'You would be a Founding Insider — it stays on your card for good.' : ''}</p>
+      <div class="stack" style="margin-top:24px">
         <div>
           <div id="card-preview"></div>
-          <p class="small muted" style="margin-top:10px">Your tier is a finish, not a different card: ${s.tiers.map(t => `${escapeHtml(tierName(t.monthlyUsd))} $${t.monthlyUsd}`).join(' · ')}.</p>
+          <p class="small muted" style="margin-top:10px">Your tier is a finish, not a different card: ${s.tiers.map(t => `${escapeHtml(tierName(t.monthlyUsd))} <b class="num">$${t.monthlyUsd}</b>`).join(' · ')}.</p>
         </div>
+        <div class="panel">
+          <h2>Choose your monthly contribution</h2>
+          <p class="small muted" style="margin-top:6px">You can change it any month; it takes effect on your next contribution.</p>
+          <div class="choices" id="tiers" style="margin-top:14px"></div>
+          <p class="big-figure num" style="margin-top:18px">${escapeHtml(fmtPoints(sp.points))}</p>
+          <p class="small muted" style="margin-top:4px"><b class="num">${escapeHtml(fmtUsd2(sp.points / s.pointsPerDollar))}</b> of hotel a month${sp.bonusPoints ? `, including the <b class="num">${Math.round(tier.bonusRate * 100)}%</b> ${escapeHtml(tierName(state.monthlyUsd))} bonus the Circle funds out of its own share` : ''}. <b class="num">${escapeHtml(fmtAfl2(state.monthlyUsd, s.awgPerUsd))}</b> at the peg, and every dollar of it backs a point.</p>
+        </div>
+        <form class="panel" id="details">
+          <h2>Your details</h2>
+          <label class="field"><span>Name as it should be etched on the card</span><input name="name" required value="${escapeHtml(state.name)}" enterkeyhint="next" autocomplete="name"></label>
+          <label class="field"><span>Email</span><input name="email" type="email" required value="${escapeHtml(state.email)}" inputmode="email" enterkeyhint="next" autocomplete="email"></label>
+          <label class="field"><span>Phone (for Ian)</span><input name="phone" type="tel" placeholder="+297 000 0000" value="${escapeHtml(state.phone)}" inputmode="tel" enterkeyhint="next" autocomplete="tel"></label>
+          <label class="row">
+            <input type="checkbox" name="standingOrder" ${state.standingOrder ? 'checked' : ''}>
+            <span class="small">I will set a standing order for the 5th of the month. <span class="muted">Aruba Bank and Banco di Caribe both do this free, online.</span></span></label>
+          <div class="notice"><b>Where the money goes</b>
+            <p class="small">${escapeHtml(s.reserveAccount.bank)} · ${escapeHtml(s.reserveAccount.holder)}<br>
+            <span class="num">${escapeHtml(s.reserveAccount.number)}</span></p>
+            <p class="small muted">Your reference will be <span class="num">${escapeHtml(VOCAB.refPrefix)}-${escapeHtml((state.name || 'XX').split(/\\s+/).map(x => x[0] || '').join('').slice(0, 2).toUpperCase() || 'XX')}-YYYY-MM</span>. Put it in the description field so Vishnu can match it in seconds.</p></div>
+          <label class="row">
+            <input type="checkbox" name="accepted" required>
+            <span class="small">I have read the rules (version <b class="num">${escapeHtml(s.rulesVersion)}</b>) and I understand that points are prepaid travel credit with the Circle — not a deposit, not an investment.</span></label>
+          <a class="link-rule" href="#/rules">Read the rules</a>
+          <button class="btn block" type="submit">Mint my card</button>
+        </form>
       </div>`;
     body.querySelector('#tiers').innerHTML = s.tiers.map(t => `<button type="button" class="choice" aria-pressed="${t.monthlyUsd === state.monthlyUsd}" data-amt="${t.monthlyUsd}">
-        <span class="amt">$${t.monthlyUsd}</span><span class="tier">${escapeHtml(tierName(t.monthlyUsd))} ${treeSvg(VOCAB.tierLean[t.monthlyUsd], { size: 14 })}</span>
-        <span class="tiny muted">${t.holds} open request${t.holds > 1 ? 's' : ''} · ${t.guestCerts} guest passes</span></button>`).join('');
+        <span class="amt">$${t.monthlyUsd}</span><span class="tier">${escapeHtml(tierName(t.monthlyUsd))}</span></button>`).join('');
     body.querySelector('#card-preview').replaceChildren(memberCard(
       { id: 'preview', name: state.name || 'Your name', monthlyUsd: state.monthlyUsd, joinedAt: new Date().toISOString(), founding: store.activeMembers().length < s.foundingSeats, cardCode: '' },
       { store, flippable: false, compact: true }));
