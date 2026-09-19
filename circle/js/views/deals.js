@@ -207,8 +207,9 @@ function creditLine(credit) {
 
 /**
  * The cover: the cheapest week on the market, its photograph — of this place, or the beach it is
- * on, tagged — with the price set on it, and the story under it. Where there is no photograph
- * at all the plate stands in and the price moves into the body.
+ * on — and the story under it. Nothing is printed on the picture: the folio, the title, the price
+ * and what the picture is all sit in the body, in type, on the page's own rules. Where there is no
+ * photograph at all the plate stands in.
  */
 export function dealCover(deal, { store, canEdit = false, match = null, folio = 1 } = {}) {
   const s = store.settings;
@@ -247,7 +248,16 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
       </div>
     </article>`);
   const shot = node.querySelector('.cover-shot');
-  shot.prepend(stayStrip(stay));
+  // The picture, and only the picture. stayStrip composites a dark "Palm Beach · the beach" chip
+  // over the corner of an area photograph; on the board's cover that chip is a caption set in ink
+  // on a picture, which the Edition does not do, and it says nothing the credit line three
+  // centimetres below it does not already say in words ("Palapas on Palm Beach, the beach at the
+  // door — not a photograph of the hotel"). The chip comes off here rather than in stayStrip,
+  // because the catalog's own hero and the card strip still want it where the body has no room
+  // for the sentence.
+  const art = stayStrip(stay);
+  art.querySelector('.strip-tag')?.remove();
+  shot.prepend(art);
   return node;
 }
 
