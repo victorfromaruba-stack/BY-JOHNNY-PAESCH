@@ -231,7 +231,7 @@ export function home({ store, go, refresh }) {
         <h2 style="margin-top:8px">Pick something and watch it come closer</h2>
         <p class="small muted" style="margin-top:8px">Every contribution moves a bar instead of a number. Choose a place and how many nights, and the app works out how many months it takes at your level — and what would get you there sooner.</p>
         <div class="stack tight" style="margin-top:14px">
-          <button class="btn block" id="set-goal">${icon('target', { size: 16 })}Choose one</button>
+          <p><button type="button" class="link-rule" id="set-goal">Choose one</button></p>
           <p><a class="link-rule" href="#/stays">Look at the places</a></p>
         </div>`;
       return;
