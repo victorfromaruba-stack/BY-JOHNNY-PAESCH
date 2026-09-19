@@ -4,8 +4,7 @@
    is not on the scale was not chosen, and forty people can tell when nothing was chosen. */
 :root {
   color-scheme: light;
-  /* ground & surfaces — the ground sits close to paper; on a phone the panels are rules, not
-     boxes, and on a desktop the visible hairline separates a white panel from the page */
+  /* ground & surfaces — a panel is a ruled, transparent block on the ground; the white surface is for the sheet, the tab bar and a boxed form */
   --ground: #F2F5F4;          /* Salt: cool blue-grey, never bone; close to paper, so the rules carry the structure */
   --surface: #FFFFFF;
   --raised: #E9EEED;          /* a tint below the ground: hover, the quoted block, a pressed row */
@@ -49,7 +48,7 @@
   --font-display: "Instrument Serif", "Instrument Serif Fallback", Georgia, "Times New Roman", serif;
   --font-body: "Instrument Sans", "Instrument Sans Fallback", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  /* the scale: nine steps; two of them change once at 780px, nothing is fluid */
+  /* the scale: nine steps, nothing changes with the viewport, nothing is fluid; the column is the measure */
   --t-folio: .6875rem;   /* 11px  mono apparatus                                  */
   --t-fine: .8125rem;    /* 13px  meta, sub-lines, captions                        */
   --t-small: .875rem;    /* 14px  secondary text, buttons                          */
@@ -62,17 +61,14 @@
   --t-fig-lg: 2.75rem;   /* 44px  the cover price, the balance                     */
   /* space: eight steps */
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 72px;
-  --measure: 64ch;
   /* shape & motion. Corners are nearly square: a rounded pill is a consumer-app tell, and the
      one place a pill is the object itself (a switch, a bar) keeps --r-pill. */
   --r-card: 4px; --r-input: 4px; --r-btn: 4px; --r-chip: 3px; --r-pill: 9999px;
   --h-touch: 48px; --h-input: 52px;
+  --h-bar: 48px; --h-nav: 52px; --inset-top: env(safe-area-inset-top, 0px); --inset-bottom: env(safe-area-inset-bottom, 0px); --kb: 0px;
   --dur-fast: 200ms; --dur-split: 500ms; --dur-water: 700ms; --dur-odo: 900ms; --dur-flip: 600ms;
   --ease-out: cubic-bezier(.2,.8,.2,1);
-  --wrap: 1080px;
-}
-@media (min-width: 780px) {
-  :root { --t-head: 1.75rem; --t-title: 3rem; --t-masthead: 3.75rem; --t-fig-lg: 3.25rem; }
+  --wrap: 430px;
 }
 /* The dark set. These two blocks must stay character-for-character identical: the media
    query covers the viewer's system setting, the selector list covers an explicit choice
