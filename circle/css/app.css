@@ -101,6 +101,9 @@ main:focus { outline: none; }
 /* A section head is a stack: eyebrow, title, sentence. An action that sat beside the title goes
    under the sentence as a ruled link (the markup pass); nothing shares a line with a heading. */
 .sec-head { display: block; margin-bottom: var(--s-5); }
+/* Transitional: public.js and crews.js still put a button beside the head; it stands off the
+   sentence until it becomes a ruled link. Delete with that markup. */
+.sec-head > .btn { margin-top: var(--s-4); }
 .sec-head p { color: var(--ink-2); font-size: var(--t-small); max-width: 62ch; margin-top: 10px; }
 /* Apparatus — eyebrows, stamps, folios, table heads — is set in the mono face, small and spaced,
    so it reads as the printed furniture of the page and never competes with a title. */
