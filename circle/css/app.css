@@ -42,7 +42,7 @@ p { margin: 0; text-wrap: pretty; }
    carried a rule under them read as an unstyled document rather than a product. */
 a { color: inherit; text-decoration-color: var(--hairline); text-underline-offset: 3px;
     text-decoration-thickness: 1px; }
-a:hover { text-decoration-color: currentColor; }
+a:active { text-decoration-color: currentColor; }
 /* A card is a link in its entirety; nothing inside it needs to advertise that separately. */
 .stay-card, .stay-card a, .crew-card, .deal a, .job-list a,
 a.panel, .lad-v a, .faces a, .rank-crest a { text-decoration: none; }
@@ -50,8 +50,6 @@ a.panel, .lad-v a, .faces a, .rank-crest a { text-decoration: none; }
 .stay-card .body span { text-decoration: none; }
 /* Headings never carry a rule, wherever they sit. */
 h1 a, h2 a, h3 a, h4 a { text-decoration: none; }
-h1 a:hover, h2 a:hover, h3 a:hover, h4 a:hover { text-decoration: underline;
-  text-decoration-color: var(--hairline); }
 button, input, select, textarea { font: inherit; color: inherit; }
 img, svg { display: block; max-width: 100%; }
 ul, ol { margin: 0; padding-left: 1.15em; }
@@ -129,22 +127,16 @@ main:focus { outline: none; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--h-touch);
   padding: 10px var(--s-5); border-radius: var(--r-btn); border: 1px solid transparent; background: var(--ink); color: var(--on-ink);
   font-size: var(--t-small); font-weight: 500; letter-spacing: .01em; cursor: pointer; transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast); text-decoration: none; }
-/* A phone has no hover, so `:active { transform: translateY(0) }` — which only cancelled the
-   hover lift — meant pressing a button produced no visual change whatsoever on the device most
-   of the club uses. That is the first thing on this project's own list of what makes an app
-   feel cheap: a control that does not answer when you press it. The lift is now guarded to
-   pointers that can actually hover, and the press is a real state everywhere. */
-@media (hover: hover) { .btn:hover { transform: translateY(-1px); } }
+/* There is no hover in this file: the phone has none, and a control that does not answer when
+   pressed is the first thing that makes an app feel cheap. The press is the one state, everywhere. */
 .btn:active { transform: scale(.97); transition-duration: 60ms; }
 .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
 .btn svg { width: 17px; height: 17px; flex: none; }
 .btn.ghost { background: transparent; color: var(--ink); border-color: var(--ink); }
-@media (hover: hover) { .btn.ghost:hover { background: var(--raised); } }
 .btn.ghost:active, .btn.quiet:active { background: var(--well); }
 /* A quiet button is text that can be pressed, so it reads as a link: underlined on a hairline. */
 .btn.quiet { background: transparent; color: var(--ink-2); border-color: transparent; border-radius: 0; padding-inline: 10px;
   text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--hairline); }
-@media (hover: hover) { .btn.quiet:hover { color: var(--ink); background: var(--raised); } }
 .btn.good { background: var(--good); color: var(--on-good); }
 .btn.danger { background: transparent; color: var(--flag); border-color: var(--flag); }
 /* A small button is small in ink, not in target. 38px was under every thumb guideline and it
@@ -155,7 +147,6 @@ main:focus { outline: none; }
 .people-table .btn.sm { padding-inline: var(--s-3); }
 .btn.block { width: 100%; }
 .icon-btn { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: var(--r-chip); border: 0; background: transparent; color: var(--ink); cursor: pointer; }
-.icon-btn:hover { background: var(--raised); }
 .icon-btn svg { width: 18px; height: 18px; }
 
 /* ---------- panels & cards ---------- */
@@ -298,7 +289,6 @@ fieldset { border: 0; margin: 0; padding: 0; }
   .choice .tier svg, .choice .tiny { display: none; }
 }
 .choice { position: relative; display: grid; gap: 3px; padding: 14px; border: 1px solid var(--hairline); border-radius: var(--r-card); background: var(--surface); cursor: pointer; text-align: left; }
-.choice:hover { background: var(--raised); }
 .choice[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .choice .amt { font-family: var(--font-mono); font-size: var(--t-fig); font-weight: 500; font-variant-numeric: tabular-nums; }
 .choice .tier { font-size: var(--t-fine); color: var(--ink-2); }
@@ -356,15 +346,13 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .stay-card .strip .scene, .stay-card .strip img { display: block; width: 100%; height: 100%; }
 .stay-card .strip .scene svg { width: 100%; height: 100%; object-fit: cover; }
 /* A real photograph of the property, where we hold one. Same box as the drawing it replaces so
-   nothing reflows, and the same slow lift on hover so the two kinds of card feel like one set. */
+   nothing reflows. */
 .stay-card .strip .scene.photo { position: absolute; inset: 0; }
-.stay-card .strip .scene.photo img { width: 100%; height: 100%; object-fit: cover; display: block;
-  transition: transform 700ms var(--ease-out); }
-.stay-card:hover .strip .scene.photo img { transform: scale(1.04); }
+.stay-card .strip .scene.photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 /* A whisper of a vignette so the caption stays readable; the picture is the point, so it
-   lifts entirely on hover rather than sitting under a slab of navy. */
+   lifts entirely when the card has focus rather than sitting under a slab of navy. */
 .stay-card .strip .duo { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(12,26,38,0) 55%, rgba(12,26,38,.28)); transition: opacity 600ms var(--ease-out); }
-.stay-card:hover .strip .duo, .stay-card:focus-within .strip .duo, .stay-card.daylight .strip .duo { opacity: 0; }
+.stay-card:focus-within .strip .duo, .stay-card.daylight .strip .duo { opacity: 0; }
 /* A card with no photograph says so, once, quietly. The old version of this was an
    "ILLUSTRATION" chip in capitals in the corner of all twenty-three cards — the loudest thing
    on the card, and it made the whole board look like a placeholder. This is the opposite: the
@@ -372,11 +360,9 @@ fieldset { border: 0; margin: 0; padding: 0; }
    where nothing else is. Without it a blank plate reads as an image that failed to load. */
 .stay-card .strip .ph-note { position: absolute; left: 14px; bottom: 10px; z-index: 1;
   font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .02em; color: var(--ink-2); }
-.stay-card:hover .strip .scene svg { transform: scale(1.04); }
-.stay-card .strip .scene svg { transition: transform 700ms var(--ease-out); }
-/* The blank plate is not a picture, so it gets neither of the treatments a picture gets: no
+/* The blank plate is not a picture, so it does not get the treatment a picture gets: no
    vignette (a dark wash over an empty field is just a smudge, and it dirties the note sitting
-   on it) and no slow zoom (there is nothing to move closer to). */
+   on it). */
 .stay-card .strip .scene.plate + .duo { display: none; }
 /* Unscoped on purpose: the same plate is used by the stay page's hero and by a deal card, and
    scoping it to .stay-card left it with no ground and no layout in both. */
@@ -469,7 +455,6 @@ tr.best td:last-child { border-radius: 0 var(--r-chip) var(--r-chip) 0; }
 /* A ghost button on a photograph has to be drawn in the photo tokens, or it disappears into
    the scrim in light mode and into the sky in dark. */
 .hero-cover .btn.ghost { color: var(--on-photo); border-color: rgba(255, 255, 255, .52); background: rgba(255, 255, 255, .10); }
-@media (hover: hover) { .hero-cover .btn.ghost:hover { background: rgba(255, 255, 255, .18); border-color: rgba(255, 255, 255, .7); } }
 .hero-cover .btn.ghost:active { background: rgba(255, 255, 255, .24); }
 .hero-gauge { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: clamp(20px, 4vw, 48px);
   align-items: center; margin-top: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--hairline); }
@@ -486,7 +471,6 @@ tr.best td:last-child { border-radius: 0 var(--r-chip) var(--r-chip) 0; }
 .horizon-wrap { position: relative; }
 .horizon-wrap::after { content: ""; position: absolute; inset: 0 -1px 0 auto; width: 56px; pointer-events: none;
   background: linear-gradient(90deg, transparent, var(--ground)); }
-@media (hover: none) { .horizon-wrap::after { display: none; } }
 .horizon > * { scroll-snap-align: start; }
 
 /* ---------- charts ---------- */
@@ -586,7 +570,7 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 .pw-wrap input { padding-right: 44px; width: 100%; }
 .pw-peek { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none;
   border: 0; color: var(--ink-3); padding: 8px; cursor: pointer; border-radius: var(--r-chip); line-height: 0; }
-.pw-peek:hover { color: var(--ink); background: var(--raised); }
+.pw-peek:active { color: var(--ink); background: var(--raised); }
 .pw-meter { display: flex; align-items: center; gap: 10px; margin: -6px 0 12px; }
 .pw-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--raised); overflow: hidden; }
 .pw-bar span { display: block; height: 100%; border-radius: 3px; transition: width .25s ease; }
@@ -728,7 +712,6 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 /* Crews: who you travel with, and their thread. A conversation, not a feed — so the bubbles
    are close together, the day rules are quiet, and your own words sit on the right. */
 .crew-card { display: block; color: inherit; text-decoration: none; }
-.crew-card:hover { border-color: var(--ink-3); }
 .crew-card:active { background: var(--raised); }
 .faces { display: inline-flex; align-items: center; }
 .faces > * { margin-left: -8px; border: 2px solid var(--surface); border-radius: 50%; }
@@ -761,7 +744,7 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
   color: var(--ink-3); font-style: italic; font-size: var(--t-fine); }
 .unsay { background: none; border: 0; color: var(--ink-3); cursor: pointer; padding: 0 0 0 6px;
   font-size: var(--t-small); line-height: 1; }
-.unsay:hover { color: var(--flag); }
+.unsay:active { color: var(--flag); }
 
 .say-row { display: flex; gap: 8px; margin-top: 10px; }
 .say-row input { flex: 1; min-width: 0; padding: 11px 14px; border-radius: var(--r-input);
@@ -778,7 +761,7 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 .job-list li:first-child { border-top: 0; }
 .job-list a { display: flex; align-items: flex-start; gap: 12px; padding: 12px 2px;
   color: inherit; text-decoration: none; border-radius: var(--r-input); }
-.job-list a:hover { background: var(--raised); }
+.job-list a:active { background: var(--raised); }
 .job-ico { flex: none; display: grid; place-items: center; width: 34px; height: 34px;
   border-radius: var(--r-card); background: var(--raised); color: var(--ink-2); }
 .job-list .urgent .job-ico { background: var(--ink); color: var(--on-ink); }
@@ -864,7 +847,6 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 .badge-card .why { display: block; font-size: var(--t-fine); color: var(--ink-2); margin-top: 2px; }
 .badge-card .cost { display: block; font-size: var(--t-fine); margin-top: 6px; font-family: var(--font-mono); }
 button.badge-card { cursor: pointer; font: inherit; color: inherit; }
-button.badge-card:hover { border-color: var(--ink-3); }
 .badge-card[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 
 /* A page title block that does not push the content it is titling off the screen. */
@@ -881,7 +863,6 @@ button.badge-card:hover { border-color: var(--ink-3); }
 .fineprint > summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform var(--dur-fast) var(--ease-out); }
 .fineprint[open] > summary::before { transform: rotate(45deg); }
-.fineprint > summary:hover { color: var(--ink); }
 .fineprint > p { max-width: 62ch; margin-bottom: 6px; }
 
 
@@ -903,7 +884,6 @@ button.badge-card:hover { border-color: var(--ink-3); }
   background: transparent; color: var(--ink-2); border-radius: var(--r-input); white-space: nowrap;
   font: 500 var(--t-fine)/1 var(--font-body); letter-spacing: -.005em;
   transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
-@media (hover: hover) { .segmented > button:hover { color: var(--ink); } }
 /* The Desk's labels carry an icon, which the settings tabs did not. */
 .segmented > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .segmented > button svg { width: 15px; height: 15px; flex: none; }
@@ -1018,7 +998,6 @@ a.stay-card, .card-strip .mini {
 .chip-btn[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
 .chip-btn:active { transform: scale(.96); }
 .chip-btn.quiet { border-color: transparent; color: var(--ink-2); }
-@media (hover: hover) { .chip-btn:hover:not([aria-pressed="true"]) { background: var(--raised); } }
 .ask-note { margin-bottom: 0; }
 .ask-switch { align-items: center; flex-wrap: nowrap; }
 .ask-switch > span { display: grid; gap: 3px; min-width: 0; }
@@ -1175,6 +1154,7 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .index-row .from.ask { display: inline-flex; align-items: center; justify-content: flex-end; gap: 2px; color: var(--ink-3); font-family: var(--font-body); }
 .index-row .from.ask svg { width: 15px; height: 15px; }
 .quiet-index .index-row .name { font-weight: 400; }
+.index-row:active { background: var(--raised); }
 @media (min-width: 900px) { .index { display: grid; grid-template-columns: 1fr 1fr 1fr; column-gap: 40px; } }
 .running-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin-top: var(--s-6); padding-bottom: var(--s-2); border-bottom: 1px solid var(--hairline); }
 /* The heading keeps its line; the eyebrow gives way and drops under it when the row is short. */
@@ -1264,7 +1244,7 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 /* The week the member tapped through on, at the top of the place's own list. */
 .listing-row.picked { background: var(--raised); margin-inline: -12px; padding-inline: 12px; }
 .cover .cover-link { color: inherit; text-decoration: none; }
-.cover .cover-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.cover:active { background: var(--raised); }
 
 /* The Desk's room photographs sheet: what is on file, and what is being added. */
 .photo-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
@@ -1279,7 +1259,6 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
    the officer's buttons sit above it so they are still their own targets. */
 .listing-row .row-link { color: inherit; text-decoration: none; }
 .listing-row .row-link::after { content: ""; position: absolute; inset: 0; }
-.listing-row .row-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 .listing-row .row-acts { position: relative; z-index: 1; margin-top: 2px; }
 /* The price is the biggest thing on the row and must stay part of the row's own tap: keep it
    below the link overlay (z-index 0 against the overlay's auto), while the officer's buttons
@@ -1367,15 +1346,10 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 .postcard-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); margin-top: var(--s-1); }
 .postcard-cheers { font-family: var(--font-mono); font-size: var(--t-fine); color: var(--ink-2); overflow-wrap: anywhere; }
 .postcard-cheers:empty { display: none; }
-/* Cheers, pressed, takes the ink fill; the word does not change. A press dims; hover only where
-   there is a pointer to hover with. */
+/* Cheers, pressed, takes the ink fill; the word does not change. A press dims. */
 .cheer[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
 .cheer:active { opacity: .6; }
 .btn.ghost.cheer[aria-pressed="true"]:active { background: var(--ink); }
-@media (hover: hover) {
-  .btn.ghost.cheer:hover { background: var(--raised); }
-  .btn.ghost.cheer[aria-pressed="true"]:hover { background: var(--ink); color: var(--on-ink); }
-}
 .postcard-links { display: flex; flex-wrap: wrap; gap: 0 var(--s-4); }
 /* A ruled link that acts rather than navigates is a button drawn as the link. */
 button.link-rule { background: none; border: 0; cursor: pointer; }
