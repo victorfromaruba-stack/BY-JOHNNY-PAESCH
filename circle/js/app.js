@@ -5,8 +5,10 @@ import { Router } from './core/router.js';
 import { seed } from './data/seed.js';
 import { VOCAB } from './core/vocab.js';
 import { escapeHtml } from './core/util.js';
+import { isCruise } from './core/money.js';
 import { toast } from './ui/components.js';
 import { starSvg } from './ui/art.js';
+import { applyTheme } from './ui/theme.js';
 import * as pub from './views/public.js';
 import * as member from './views/member.js';
 import * as catalog from './views/catalog.js';
@@ -36,6 +38,8 @@ const ROUTES = [
   { path: '/trips', redirect: '/cruises', title: 'Cruises' },
   { path: '/trips/:id', view: catalog.stayDetail, title: 'Trip', auth: true },
   { path: '/book/:id', view: catalog.book, title: 'Request', auth: true },
+  // "Ask for these dates" is what the button says, so a link that says ask works too.
+  { path: '/ask/:id', redirect: (p) => `/book/${p.id}`, title: 'Request' },
   { path: '/requests', view: catalog.requests, title: 'Your requests', auth: true },
   { path: '/requests/:id', view: catalog.requestDetail, title: 'Request', auth: true },
   // Deals ARE the Stays tab now — every live one, cheapest first. Old links still land somewhere.
@@ -63,6 +67,9 @@ const liveRegion = document.getElementById('route-live');
 // Move focus and go no further.
 document.querySelector('a.skip')?.addEventListener('click', (e) => { e.preventDefault(); app.focus(); });
 let store, router, disposer;
+// A new release arrived while a sheet was open or a field had the cursor. The reload waits for
+// the next route change, when nothing half-typed can be lost.
+let pendingReload = false;
 
 // Preview data is for a developer's machine and for anyone who deliberately asks for it.
 // On the real address the club is the club: if its server cannot be reached we say so,
@@ -95,6 +102,9 @@ window.__huntoInstall = async () => {
 window.__huntoCanInstall = () => !!installPrompt;
 
 async function boot() {
+  // The kept appearance, before anything is drawn, so a member who chose dark never sees a
+  // light flash while the data loads.
+  applyTheme();
   // Shared to the app from the phone's share sheet (manifest share_target): the listing text
   // arrives as ?text=…&url=… on the start URL. Keep it for the paste sheet, then drop it from the
   // address so a reload does not post it twice, and land on Stays with the sheet asked for.
@@ -129,9 +139,43 @@ async function boot() {
     }
     if (reason !== 'render') render();
   });
-  router = new Router({ routes: ROUTES, notFound: NOT_FOUND, onChange: render });
+  const refetch = () => store?.reload?.().catch?.(() => { /* offline: what is shown stays */ });
+  // The installed app has no pull-to-refresh, so the moments a phone comes back are the moments
+  // the data is asked for again: the connection returning, a page restored from the back-forward
+  // cache, and the app coming to the front.
+  window.addEventListener('online', refetch);
+  window.addEventListener('pageshow', (e) => { if (e.persisted) refetch(); });
+  // iOS lays the keyboard over the page rather than shrinking it. The visual viewport says how
+  // much is covered; --kb carries that to the sheet actions and the docked bar so a Save is never
+  // under the keys while Victor types.
+  const vv = window.visualViewport;
+  if (vv) {
+    const kb = () => document.documentElement.style.setProperty('--kb',
+      `${Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))}px`);
+    vv.addEventListener('resize', kb); vv.addEventListener('scroll', kb); kb();
+  }
+  router = new Router({ routes: ROUTES, notFound: NOT_FOUND, onChange: (current) => {
+    if (pendingReload) { pendingReload = false; location.reload(); return; }
+    render(current);
+  } });
   mountChrome();
   router.start();
+  // A tab left open does not ask again. The browser only re-checks sw.js on a navigation or
+  // roughly once a day, so an app opened yesterday and switched back to this morning is
+  // yesterday's app — Victor was reading a board from the night before and taking it for the
+  // current one. Coming back to the front asks for a new worker after an hour away (which
+  // reloads through the handler below if there is one) and, every time, refetches the data
+  // behind the screen.
+  let reg = null;
+  let away = 0;
+  const AWAY_ENOUGH = 60e3;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { away = Date.now(); return; }
+    const gone = away ? Date.now() - away : 0;
+    away = 0;
+    if (gone >= AWAY_ENOUGH) reg?.update().catch(() => { /* offline: the old app is the right thing to keep showing */ });
+    refetch();
+  });
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     // Was there already a worker in charge when this page loaded? If so, the page we are looking
     // at was served from its cache, and a NEW worker taking over means what we are looking at is
@@ -139,47 +183,34 @@ async function boot() {
     //
     // Guarded on the existing controller because controllerchange also fires the very first time
     // a worker installs, and reloading a first visit for no reason would be worse than the bug.
-    // `reloaded` stops the loop if anything ever makes the new worker hand over twice.
+    // `reloaded` stops the loop if anything ever makes the new worker hand over twice. And never
+    // while a sheet is open or a field has the cursor: the reload then waits for the next route.
     const hadController = !!navigator.serviceWorker.controller;
     let reloaded = false;
+    const typing = () => !!document.querySelector('dialog[open]')
+      || !!document.activeElement?.matches?.('input, textarea, select');
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!hadController || reloaded) return;
+      if (typing()) { pendingReload = true; return; }
       reloaded = true;
       location.reload();
     });
-    navigator.serviceWorker.register('./sw.js', { scope: './' }).then((reg) => {
-      // A tab left open does not ask again. The browser only re-checks sw.js on a navigation or
-      // roughly once a day, so an app opened yesterday and switched back to this morning is
-      // yesterday's app — Victor was reading a board from the night before and taking it for the
-      // current one. Coming back to the tab now asks for a new worker (which reloads through the
-      // handler above if there is one) and, either way, refetches the data behind the screen.
-      let away = 0;
-      const AWAY_ENOUGH = 60e3;
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) { away = Date.now(); return; }
-        if (!away || Date.now() - away < AWAY_ENOUGH) return;
-        away = 0;
-        reg.update().catch(() => { /* offline: the old app is the right thing to keep showing */ });
-        // Never yank a sheet or a half-typed ask out from under someone.
-        if (document.querySelector('dialog[open]')) return;
-        store?.reload?.().catch?.(() => {});
-      });
-    }).catch(() => { /* offline extras are optional */ });
+    navigator.serviceWorker.register('./sw.js', { scope: './' })
+      .then((r) => { reg = r; })
+      .catch(() => { /* offline extras are optional */ });
   }
 }
 
 /** The club's server is unreachable. Say so plainly; never fall back to invented numbers. */
 function offline(err) {
   document.documentElement.dataset.mode = 'offline';
-  app.innerHTML = `<section class="sec"><div class="wrap" style="max-width:540px;text-align:center">
-      <h1 style="margin-top:40px">The Circle is not answering</h1>
-      <p class="lede" style="margin-top:14px">Your points, the Reserve and every booking live on the club's own server, and this device cannot reach it right now. Nothing is lost — it is almost always the connection.</p>
-      <div class="row" style="justify-content:center;margin-top:24px">
-        <button class="btn" id="again">Try again</button>
-        <a class="btn ghost" href="?preview=1#/">Look around the preview instead</a>
-      </div>
-      <p class="small muted" style="margin-top:22px">The preview is invented data in this browser. Nothing in it is real, and nothing you do there touches the Circle.</p>
-      <p class="small muted" style="margin-top:10px">${String(err?.message || err || '').slice(0, 140)}</p>
+  app.innerHTML = `<section class="sec"><div class="wrap stack">
+      <h1>The Circle is not answering</h1>
+      <p class="lede">Your points, the Reserve and every booking live on the club's own server, and this device cannot reach it right now. Nothing is lost — it is almost always the connection.</p>
+      <button class="btn block" id="again">Try again</button>
+      <a class="link-rule" href="?preview=1#/">Look around the preview instead</a>
+      <p class="small muted">The preview is invented data in this browser. Nothing in it is real, and nothing you do there touches the Circle.</p>
+      <p class="small muted">${escapeHtml(String(err?.message || err || '').slice(0, 140))}</p>
     </div></section>`;
   app.querySelector('#again')?.addEventListener('click', () => location.reload());
 }
@@ -202,10 +233,17 @@ function ctx(current) {
 
 function render(current = router?.current) {
   if (!current) return;
-  const { route } = current;
+  const { route, params } = current;
+  // A member never sees the brochure or the sign-in form: those two are for a stranger, and
+  // Home is where a member's own day starts. `replace`, so Back does not bounce off them.
+  if (store.me && (route.path === '/' || route.path === '/sign-in')) { router.go('/home', { replace: true }); return; }
   // A route that only exists to send people on. `replace` so Back does not bounce off it; one
-  // hop, because the destination has no redirect of its own.
-  if (route.redirect) { router.go(route.redirect, { replace: true }); return; }
+  // hop, because the destination has no redirect of its own. A redirect may be a function of
+  // the matched params, so /ask/:id can land on /book/:id with the same id.
+  if (route.redirect) {
+    const to = typeof route.redirect === 'function' ? route.redirect(params) : route.redirect;
+    router.go(to, { replace: true }); return;
+  }
   if (route.auth && !store.session) { router.go('/sign-in', { replace: true }); return; }
   // A password somebody else chose is a password somebody else knows. No screen opens until it
   // has been replaced — including by the back button.
@@ -231,12 +269,14 @@ function render(current = router?.current) {
       // inside a view transition the rejection was swallowed entirely. Say so instead, and keep
       // the way home open. It is this screen that failed, not the member's money.
       console.error(err);
-      const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-      app.innerHTML = `<section class="sec"><div class="wrap" style="max-width:540px">
+      app.innerHTML = `<section class="sec"><div class="wrap stack">
         <h1>That screen could not be drawn</h1>
-        <p class="lede" style="margin-top:12px">Nothing is lost — your points and bookings are untouched. <a href="#/home">Go to your home screen</a>, or reload.</p>
-        <p class="small muted" style="margin-top:14px">${esc(String(err?.message || err).slice(0, 140))}</p>
+        <p class="lede">Nothing is lost — your points and bookings are untouched.</p>
+        <a class="btn block" href="#/home">Go to your home screen</a>
+        <button class="link-rule" type="button" id="again">Reload this screen</button>
+        <p class="small muted">${escapeHtml(String(err?.message || err).slice(0, 140))}</p>
       </div></section>`;
+      app.querySelector('#again')?.addEventListener('click', () => location.reload());
       document.title = `${route.title} · ${VOCAB.clubName}`;
       updateChrome(current);
       return;
@@ -269,37 +309,29 @@ function mountChrome() {
   const bar = document.getElementById('topbar');
   bar.innerHTML = `
     <div class="wrap">
-      <a class="brand" href="#/" aria-label="${escapeHtml(VOCAB.clubName)} home">
-        <span class="mark">${starSvg({ size: 22, fill: 'currentColor' })}</span>
-        <span><b>${escapeHtml(VOCAB.wordmark)}</b><br><small>${escapeHtml(VOCAB.subtitle)}</small></span>
-      </a>
-      <nav class="tabs" id="tabs" aria-label="Sections"></nav>
-      <div class="bar-actions">
-        <button class="icon-btn" id="theme-toggle" aria-label="Switch between light and dark" title="Light or dark">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v2m0 14v2m9-9h-2M5 12H3m14.5-6.5-1.4 1.4M7.9 16.1l-1.4 1.4m0-11.9 1.4 1.4m8.2 8.2 1.4 1.4"/><circle cx="12" cy="12" r="3.6"/></svg>
-        </button>
-        <span id="who"></span>
-      </div>
+      <span id="bar-left"></span>
+      <div class="bar-actions"><span id="who"></span></div>
     </div>`;
-  document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
-  const saved = localStorage.getItem('hunto.theme');
-  if (saved) document.documentElement.dataset.theme = saved;
 
-  document.getElementById('botnav').innerHTML = `<ul id="botnav-list"></ul>`;
+  const nav = document.getElementById('botnav');
+  nav.innerHTML = `<ul id="botnav-list"></ul>`;
+  // Tapping the tab you are already on takes you back to the top of it, as a phone's own tab
+  // bars do. The list is rewritten on every route; the handler sits on the list itself.
+  document.getElementById('botnav-list').addEventListener('click', (e) => {
+    const a = e.target.closest('a');
+    if (!a || a.getAttribute('aria-current') !== 'page') return;
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  });
 }
 
-function toggleTheme() {
-  const root = document.documentElement;
-  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-  root.dataset.theme = dark ? 'light' : 'dark';
-  localStorage.setItem('hunto.theme', root.dataset.theme);
-}
-
-// The five that live in the thumb bar. Everything else is in the top bar. While Postcards is
-// switched on it takes the third slot from Cruises — five tabs, not six: at 390px six labelled
-// tabs crowd the 44px targets, and a feed two taps deep is a dead feed. Cruises keeps its route,
-// its top-bar tab and a link at the foot of the board. While it is off the bar is exactly as it
-// was, so the switch in Settings never claims something a member cannot see.
+// The five in the thumb bar. Everything else is reached from Home (Send, Statement, your card,
+// the Pool, your requests), from the foot of the board (Cruises, Watching, the rules) and from
+// the door list at the top of Profile; the bar's left slot carries the way up on every deeper
+// page. While Postcards is switched on it takes the third slot from Cruises — five tabs, not
+// six: at 390px six labelled tabs crowd the 44px targets, and a feed two taps deep is a dead
+// feed. Cruises keeps its route and a link at the foot of the board. While it is off the bar is
+// exactly as it was, so the switch in Settings never claims something a member cannot see.
 const NAV_OFF = [
   { path: '/home', label: 'Home', icon: 'home' },
   { path: '/stays', label: 'Stays', icon: 'bed', badge: 'deals' },
@@ -316,45 +348,90 @@ const NAV_ON = [
 ];
 const postcardsOn = () => { try { return !!store?.postcardsOn?.(); } catch { return false; } };
 const NAV = () => (postcardsOn() ? NAV_ON : NAV_OFF);
+// The tab roots: the wordmark sits in the bar's left slot on these, the way up everywhere else.
+const TAB_ROOTS = ['/home', '/stays', '/cruises', '/postcards', '/crews', '/circle'];
+// The screens with no tab of their own go up to Home, and the Home tab lights under them: Home
+// is where the doors to Send, the statement, the card, the requests and the Pool live.
+const HOME_ROOTS = ['/pay', '/ledger', '/card', '/requests', '/watching', '/pool', '/rules', '/profile', '/desk', '/bank', '/settings'];
 
 // A detail route belongs to the tab it was opened from: open a cruise and the bar should still
 // say Cruises. Comparing the whole path meant every /stays/:id, /cruises/:id and /trips/:id left
 // the bottom bar with nothing marked, which reads as the app losing its place. /trips has no
 // index of its own, so it answers to Cruises — and when Cruises has left the bar, both answer
-// to Stays, where the link to them now lives.
+// to Stays, where the link to them now lives. The ask form belongs to Stays; the tab-less
+// screens belong to Home.
 const navRoot = (path) => {
   const seg = '/' + String(path).split('/')[1];
-  const parent = postcardsOn() ? { '/trips': '/stays', '/cruises': '/stays' } : { '/trips': '/cruises' };
+  const parent = {
+    ...Object.fromEntries(HOME_ROOTS.map(p => [p, '/home'])),
+    '/book': '/stays',
+    ...(postcardsOn() ? { '/trips': '/stays', '/cruises': '/stays' } : { '/trips': '/cruises' }),
+  };
   return parent[seg] || seg;
 };
 
+// A stay's name as the bar can carry it: the chain and the island dropped, the descriptors
+// after a comma or an ampersand dropped, and nothing over twenty characters — the bar is 358px
+// wide with a name on the right. When nothing short survives, the link says THE STAY.
+const stayShort = (stay) => {
+  if (!stay) return null;
+  let n = String(stay.short || stay.name || '').trim();
+  if (!stay.short) {
+    n = n.replace(/^(marriott[’']s|the|hotel)\s+/i, '').replace(/^aruba\s+/i, '');
+    n = n.replace(/\s*(,|\s&\s|\sby\s).*$/i, '');
+    n = n.replace(/(\s+(resort|spa|casino|hotel|aruba|all inclusive|beach resort|boutique hotel))+$/i, '');
+  }
+  return n && n.length <= 20 ? n : null;
+};
+
+// The way up: a deterministic link to the parent route, never history.back(). Null means the
+// wordmark takes the slot.
+function wayUp(current, me) {
+  if (!me) return null;
+  const parts = String(current.path).split('/').filter(Boolean);
+  const seg = '/' + (parts[0] || '');
+  if (parts.length <= 1) return HOME_ROOTS.includes(seg) ? { label: 'Home', href: '#/home' } : null;
+  switch (seg) {
+    case '/stays': return { label: 'The board', href: '#/stays' };
+    case '/cruises':
+    case '/trips': return postcardsOn() ? { label: 'The board', href: '#/stays' } : { label: 'Cruises', href: '#/cruises' };
+    case '/book': {
+      const stay = store.stay(current.params.id);
+      const list = isCruise(stay) ? 'cruises' : stay?.kind === 'trip' ? 'trips' : 'stays';
+      return { label: stayShort(stay) || 'The stay', href: stay ? `#/${list}/${encodeURIComponent(stay.id)}` : '#/stays' };
+    }
+    case '/postcards': return { label: 'Postcards', href: '#/postcards' };
+    case '/crews': return { label: 'Crews', href: '#/crews' };
+    case '/requests': return { label: 'Your requests', href: '#/requests' };
+    case '/ledger': return { label: 'Your ledger', href: '#/ledger' };
+    case '/bank': return { label: 'The bank', href: '#/bank' };
+    default: return null;
+  }
+}
+
 function updateChrome(current) {
   const me = store.me;
-  const tabs = document.getElementById('tabs');
+  const left = document.getElementById('bar-left');
   const who = document.getElementById('who');
   const list = document.getElementById('botnav-list');
   const path = current.path;
+  const seg = '/' + String(path).split('/')[1];
   // How many deals answer something this member asked for and has not looked at yet.
   const unseen = me ? (() => { try { return store.unseenMatches(me.id).length; } catch { return 0; } })() : 0;
-  // One set of tabs, the same for everybody. Victor, Ian and Vishnu hold seats like everyone
-  // else and happen to have jobs on top, so their jobs live inside the member's own screens —
-  // on Home when something is waiting, and always under their profile — rather than as three
-  // extra tabs that only three people can open.
-  const main = me ? [{ path: '/home', label: 'Home' }, { path: '/stays', label: 'Stays', badge: unseen }, { path: '/cruises', label: 'Cruises' },
-                     ...(postcardsOn() ? [{ path: '/postcards', label: 'Postcards' }] : []),
-                     { path: '/pay', label: 'Send' },
-                     { path: '/circle', label: 'Circle' }, { path: '/crews', label: 'Crews' }, { path: '/ledger', label: 'Ledger' }, { path: '/pool', label: 'Pool' }]
-                  : [{ path: '/rules', label: 'How it works' }];
-  tabs.innerHTML = main.map(n => `<a href="#${n.path}"${navRoot(path) === n.path ? ' aria-current="page"' : ''}>${escapeHtml(n.label)}${
-    n.badge ? `<span class="nav-badge">${n.badge > 9 ? '9+' : n.badge}</span>` : ''}</a>`).join('');
+  const up = wayUp(current, me);
+  left.innerHTML = up
+    ? `<a class="back" href="${escapeHtml(up.href)}">${icon('chevronRight', { size: 16, stroke: 1.75 })}${escapeHtml(up.label)}</a>`
+    : `<a class="brand" href="${me ? '#/home' : '#/'}" aria-label="${escapeHtml(VOCAB.clubName)} home">
+        <span class="mark">${starSvg({ size: 22, fill: 'currentColor' })}</span><b>${escapeHtml(VOCAB.wordmark)}</b></a>`;
   // A job that needs doing shows on the name in the bar, so an officer sees it from any screen
-  // without a tab sitting there all day saying nothing.
+  // without a tab sitting there all day saying nothing. Signed out, the right slot offers the
+  // door in — except on the three screens that are the door.
   const jobs = me ? (() => { try { return store.officerWork(); } catch { return []; } })() : [];
   const urgent = jobs.filter(j => j.urgent).length;
   who.innerHTML = me
     ? `<a class="btn quiet sm" href="#/profile">${escapeHtml(me.name.split(' ')[0])}${
         urgent ? `<span class="nav-badge">${urgent > 9 ? '9+' : urgent}</span><span class="sr-only">, ${urgent} thing${urgent === 1 ? '' : 's'} waiting for you</span>` : ''}</a>`
-    : `<a class="btn sm" href="#/sign-in">Sign in</a>`;
+    : ['/sign-in', '/join', '/set-password'].includes(seg) ? '' : `<a class="btn sm" href="#/sign-in">Sign in</a>`;
   document.getElementById('botnav').hidden = !me;
   list.innerHTML = me ? NAV().map(n => {
     const count = n.badge === 'deals' ? unseen
