@@ -160,16 +160,17 @@ select.btn.sm { font-size: var(--t-body); }
 .panel h3 + p { margin-top: 6px; }
 /* A panel head is a label over its rows — a UI title in the sans, never the serif. */
 .panel h2, dialog h2, .sheet-title { font-family: var(--font-body); font-size: var(--t-body); font-weight: 600; letter-spacing: -.012em; line-height: 1.25; }
-.grid { display: grid; gap: var(--s-4); }
-/* .g2, .g3 and .g4 are inert: a grid is one column. The class names leave the templates with the
-   markup pass; until then they are a plain .grid. */
+/* A grid is one column, and the column is clamped: an implicit auto track would size itself to
+   the widest thing in it (a table that scrolls) and carry the page past the column's edge.
+   .g2, .g3 and .g4 are inert; the class names leave the templates with the markup pass. */
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
 /* The two phone grids: amount and currency, check-in and check-out, dollars and points;
    nights, flexible and guests. Named for what they hold, never for a breakpoint. */
 .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
 .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3); }
 .stack.tight { gap: var(--s-1); }
 /* One column; the two stacks follow each other. The wrapper leaves the five templates in the markup pass. */
-.side { display: grid; gap: var(--s-4); align-items: start; }
+.side { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); align-items: start; }
 
 /* stat tiles */
 .stat { display: grid; gap: 4px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--r-card); }
@@ -239,12 +240,15 @@ button.chip, a.chip, .chip[role=button] { min-height: 44px; padding-inline: 12px
 .balbar .b-gap { background: transparent; }
 
 /* ---------- tables & ledger ---------- */
-.tablewrap { overflow-x: auto; border: 1px solid var(--hairline); border-radius: var(--r-card); background: var(--surface); }
-table { width: 100%; border-collapse: collapse; font-size: var(--t-small); }
+/* A table sits between two rules, not in a box. Tight padding, the fine face and heads allowed
+   to wrap bring four columns inside the column: at 14px with 14px padding the season table
+   needed 449px and its Value column sat off the edge behind a scrollbar. */
+.tablewrap { overflow-x: auto; overscroll-behavior-x: contain; border: 0; border-block: 1px solid var(--hairline); border-radius: 0; background: transparent; }
+table { width: 100%; border-collapse: collapse; font-size: var(--t-fine); }
 /* A table head is a rule, not a grey band. */
 thead th { text-align: left; font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); font-weight: 400;
-  padding: var(--s-3) var(--s-4); background: transparent; border-bottom: 1px solid var(--ink); white-space: nowrap; }
-tbody td { padding: 12px 14px; border-bottom: 1px solid var(--hairline-soft); vertical-align: top; }
+  padding: 9px 8px; background: transparent; border-bottom: 1px solid var(--ink); white-space: normal; }
+tbody td { padding: 10px 8px; border-bottom: 1px solid var(--hairline-soft); vertical-align: top; }
 tbody tr:last-child td { border-bottom: 0; }
 td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; }
 .pos { color: var(--good-text); } .neg { color: var(--ink); }
@@ -254,7 +258,7 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-
 /* Stacked: the description gets the full width and the figures sit under it on one line. A
    balance column beside it was 122px of nowrap mono, which left the description 188px and
    wrapped every line over three or four rows. */
-.ledger li { display: grid; gap: var(--s-1); padding: var(--s-3) 0; border-bottom: 1px solid var(--hairline-soft); }
+.ledger li { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-1); padding: var(--s-3) 0; border-bottom: 1px solid var(--hairline-soft); }
 .ledger li:last-child { border-bottom: 0; }
 .ledger .what { display: grid; gap: 3px; min-width: 0; }
 .ledger .what b { font-weight: 600; font-size: var(--t-body); }
@@ -623,32 +627,20 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 .photo-preview { margin-top: 6px; }
 .photo-preview img { display: block; max-width: 100%; max-height: 200px; border-radius: var(--r-card); object-fit: cover; }
 
-/* The band table on a phone. Two mono ranges take 190px of a 358px card, which leaves the
-   category — the half a reader is actually scanning — squeezed into 130px: "Boutique and
-   low-rise" over three lines, its examples over five. Each band becomes a block instead, with
-   the two seasons on one row beneath the name. */
-@media (max-width: 620px) {
-  .bands, .bands tbody, .bands tr { display: block; }
-  .bands thead { display: none; }
-  .bands tr { padding: 13px 14px; border-bottom: 1px solid var(--hairline-soft); }
-  .bands tr:last-child { border-bottom: 0; }
-  .bands td { display: block; padding: 0; border: 0; }
-  .bands td:first-child { margin-bottom: 9px; }
-  .bands td.num { display: inline-block; width: 48%; text-align: left; font-size: var(--t-fine); }
-  .bands td.num::before { content: attr(data-k); display: block; font-family: var(--font-mono);
-    font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
-    margin-bottom: 1px; }
-}
-
-/* Tables on a phone. The season table is Season / When / Points / Value, and at the default
-   14px with 14px padding it needed 449px inside a 358px column — so the Value column, the one
-   thing a member came for, sat off the right edge behind a scrollbar they had to find. Tighter
-   padding, a smaller face and headers allowed to wrap bring it inside the column. */
-@media (max-width: 560px) {
-  .tablewrap table { font-size: var(--t-fine); }
-  .tablewrap thead th { padding: 9px 8px; white-space: normal; }
-  .tablewrap tbody td { padding: 10px 8px; }
-}
+/* The band table. Two mono ranges take 190px of a 358px card, which leaves the category — the
+   half a reader is actually scanning — squeezed into 130px: "Boutique and low-rise" over three
+   lines, its examples over five. Each band is a block instead, with the two seasons on one row
+   beneath the name. The <thead> is hidden here until the two templates stop writing it. */
+.bands, .bands tbody, .bands tr { display: block; }
+.bands thead { display: none; }
+.bands tr { padding: 13px 14px; border-bottom: 1px solid var(--hairline-soft); }
+.bands tr:last-child { border-bottom: 0; }
+.bands td { display: block; padding: 0; border: 0; }
+.bands td:first-child { margin-bottom: 9px; }
+.bands td.num { display: inline-block; width: 48%; text-align: left; font-size: var(--t-fine); }
+.bands td.num::before { content: attr(data-k); display: block; font-family: var(--font-mono);
+  font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+  margin-bottom: 1px; }
 
 
 
@@ -671,24 +663,26 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
    why every value is written short ("9" over "months", not "9 months ahead"). */
 .ladder { margin: 0; border: 1px solid var(--hairline); border-radius: var(--r-card);
   background: var(--surface); overflow: hidden; }
-.lad-r { display: grid; grid-template-columns: minmax(0, 1.15fr) repeat(3, minmax(0, 1fr));
-  gap: 0 8px; align-items: center; padding: 11px 14px; border-top: 1px solid var(--hairline-soft); }
+.lad-r { display: grid; grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr));
+  gap: 0 var(--s-1); align-items: center; padding: 10px 11px; border-top: 1px solid var(--hairline-soft); }
 .lad-r:nth-child(even) { background: var(--raised); }
-.lad-head { position: sticky; top: 0; z-index: 1; align-items: end; border-top: 0;
+.lad-head { z-index: 1; align-items: end; border-top: 0;
   padding-top: 14px; padding-bottom: 12px; background: var(--surface);
   border-bottom: 1px solid var(--hairline); }
 .lad-cap { font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
-.lad-k b { display: block; font-weight: 600; font-size: var(--t-small); line-height: 1.25; }
-.lad-why { display: block; margin-top: 2px; font-size: var(--t-fine); line-height: 1.35; color: var(--ink-3); }
+.lad-k b { display: block; font-weight: 600; font-size: var(--t-fine); line-height: 1.25; }
+/* Transitional: the label carries it; pieces.js still writes the gloss span. Delete with the span. */
+.lad-why { display: none; }
 .lad-v { text-align: center; min-width: 0; }
-.lad-v b { display: block; font-weight: 600; font-size: var(--t-lede); line-height: 1.15;
+.lad-v b { display: block; font-weight: 600; font-size: var(--t-small); line-height: 1.15;
   font-variant-numeric: tabular-nums slashed-zero; overflow-wrap: anywhere; }
-.lad-v b.num { font-family: var(--font-mono); font-size: var(--t-small); }
+.lad-v b.num { font-family: var(--font-mono); font-size: var(--t-fine); }
 .lad-v b.good { color: var(--good-text); }
 .lad-sub { display: block; margin-top: 1px; font-size: var(--t-folio); color: var(--ink-3); }
 .lad-no { color: var(--ink-3); }
 .lad-amt { display: block; font-size: var(--t-lede); font-weight: 600; }
 .lad-name { display: block; margin-top: 2px; font-size: var(--t-folio); color: var(--ink-2); white-space: nowrap; }
+.lad-name svg { display: none; }
 .lad-you { display: inline-block; margin-bottom: 3px; padding: 1px 7px; border-radius: var(--r-chip);
   background: var(--ink); color: var(--ground); font-family: var(--font-mono); font-size: var(--t-folio); font-weight: 500;
   letter-spacing: .08em; text-transform: uppercase; }
@@ -697,15 +691,6 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 .lad-v.mine { background: var(--well); border-radius: var(--r-input); }
 .lad-head .lad-v.mine { background: none; }
 .lad-head .lad-v.mine .lad-amt { color: var(--ink); }
-@media (max-width: 560px) {
-  .lad-r { grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr)); gap: 0 5px; padding: 10px 11px; }
-  .lad-k b { font-size: var(--t-fine); }
-  .lad-why { display: none; }             /* the label carries it; the gloss is desktop-only */
-  .lad-v b { font-size: var(--t-small); }
-  .lad-v b.num { font-size: var(--t-fine); }
-  .lad-name { font-size: var(--t-folio); }
-  .lad-name svg { display: none; }
-}
 
 /* Crews: who you travel with, and their thread. A conversation, not a feed — so the bubbles
    are close together, the day rules are quiet, and your own words sit on the right. */
@@ -779,28 +764,22 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
    Full-bleed bands between sections, and the season row. These are atmosphere: none of them is
    a picture of a room the Circle books, and none is captioned as though it were. Every one
    carries its aspect ratio so the page does not jump while they load. */
-.band { position: relative; margin: 0; width: 100%; aspect-ratio: var(--ratio, 21/9);
+/* A strip is a strip: 5/2, so it reads as a breath between sections without costing a quarter
+   of a screen three times over (16/9 at 390px was 219px each). The --ratio option and its
+   inline style in public.js are dead and leave with the markup pass. */
+.band { position: relative; margin: 0 auto; width: 100%; max-width: var(--wrap); aspect-ratio: 5 / 2;
   overflow: hidden; background: var(--raised); }
 .band img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.band figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px clamp(16px, 4vw, 40px) 18px;
+.band figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px var(--s-4) 18px;
   color: #fff; font-size: var(--t-body); letter-spacing: -.01em;
   background: linear-gradient(to top, rgba(9,14,22,.72), rgba(9,14,22,0)); }
-/* These used to get TALLER on a phone — 21/9 on a desktop, 16/9 below 620px, which at 390px
-   wide is 219px each and 657px of atmosphere on a page the owner already said was too long.
-   A strip is a strip: keep it wide, so it still reads as a breath between sections without
-   costing a quarter of a screen three times over. */
-@media (max-width: 620px) { .band { aspect-ratio: 5/2; } }
 
-.seasons-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
-@media (max-width: 900px) { .seasons-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-/* On a phone four stacked cards is 420px of scroll to say there are four seasons. Same swipe
-   as the places above it, so the page has one gesture rather than two. */
-@media (max-width: 620px) {
-  .seasons-row { grid-auto-flow: column; grid-auto-columns: 62%; grid-template-columns: none;
-    overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity;
-    padding-bottom: 8px; scrollbar-width: thin; }
-  .seasons-row > * { scroll-snap-align: start; }
-}
+/* Four seasons as one swipe — the same gesture as the places above, bled to the column edge.
+   (No template renders it today.) */
+.seasons-row { display: grid; grid-auto-flow: column; grid-auto-columns: 62%; gap: var(--s-3); margin-top: var(--s-4);
+  overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity;
+  margin-inline: calc(-1 * var(--s-4)); padding: 0 var(--s-4) var(--s-2); scroll-padding-inline: var(--s-4); }
+.seasons-row > * { scroll-snap-align: start; }
 
 /* Four steps, as four lines. The number is the marker, and the rule between them does the
    work four bordered panels were doing at four times the height. */
@@ -818,14 +797,11 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 .season-card figcaption { display: grid; gap: 3px; padding: 12px 14px 14px; }
 .season-card figcaption b { font-family: var(--font-display); font-weight: 400; font-size: var(--t-lede); letter-spacing: -.01em; }
 
-/* The sign-in page gets one, as a side panel on a wide screen and a strip on a phone. */
-.signin-art { border-radius: var(--r-card); overflow: hidden; background: var(--raised); }
+/* Transitional: the sign-in art and its wrap leave public.js in the markup pass, and these
+   four lines with them. Until then the strip keeps its phone shape above the form. */
+.signin-art { aspect-ratio: 16 / 9; border-radius: var(--r-card); overflow: hidden; background: var(--raised); }
 .signin-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
-@media (max-width: 860px) { .signin-art { aspect-ratio: 16/9; } }
-/* Sign in: the picture beside the form on a wide screen, above it on a phone. */
-.signin-wrap { max-width: 900px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-  gap: clamp(20px, 4vw, 40px); align-items: center; }
-@media (max-width: 860px) { .signin-wrap { grid-template-columns: minmax(0, 1fr); max-width: 480px; } }
+.signin-wrap { display: grid; gap: 20px; align-items: center; }
 .signin-form { min-width: 0; }
 
 /* ---------- badges ----------
@@ -893,36 +869,33 @@ button.badge-card { cursor: pointer; font: inherit; color: inherit; }
 .segmented > button[aria-pressed="true"] { background: var(--surface); color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--hairline); }
 .segmented > button:focus-visible { outline: 2px solid var(--good); outline-offset: 1px; }
-/* Full width on a phone, where an even row of four reads as one control and there is no room
-   to spare. On a desktop it hugs its labels instead: stretched across 1,060px the four tabs
-   read as four separate links with a stray border around them. */
-@media (min-width: 700px) { .segmented { width: max-content; max-width: 100%; } }
 
 /* There is room for the three actions on one line now that tier and roles live with the name,
    so the labels should not wrap inside their own buttons. */
 .people-table .btn { white-space: nowrap; }
 
-/* The Insiders table on a phone. Even at four columns, name + state + points + three buttons
-   in a 358px column puts the actions off the right edge, behind a sideways scroll you have to
-   discover. Each Insider becomes a block instead: who they are, then state and points on one
-   line, then the three buttons where a thumb finds them. */
-@media (max-width: 620px) {
-  .people-table, .people-table tbody, .people-table tr { display: block; }
-  .people-table thead { display: none; }
-  .people-table tr { padding: 12px 14px; border-bottom: 1px solid var(--hairline-soft); }
-  .people-table tr:last-child { border-bottom: 0; }
-  .people-table td { display: block; padding: 0; border: 0; }
-  /* State and points share a line rather than taking one each. Giving every fact its own row
-     turned fourteen Insiders into six screens — longer than the table it replaced, which is
-     not a fix. inline-block keeps each label welded to its value across a wrap. */
-  .people-table td[data-k] { display: inline-block; margin-right: 9px; font-size: var(--t-fine);
-    line-height: 2; text-align: left; }
-  .people-table td[data-k]::before { content: attr(data-k); font-family: var(--font-mono);
-    font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
-    margin-right: 3px; }
-  .people-table td:last-child { margin-top: 8px; }
-  .people-table td:last-child .row { justify-content: flex-start !important; }
-}
+/* The Insiders table. Even at four columns, name + state + points + three buttons in a 358px
+   column puts the actions off the right edge, behind a sideways scroll you have to discover.
+   Each Insider is a block instead: who they are, then state and points on one line, then the
+   three buttons where a thumb finds them. Rows start at the gutter like the heads.
+   The <thead> is hidden here until officer.js stops writing it. */
+.people-table, .people-table tbody, .people-table tr { display: block; }
+.people-table thead { display: none; }
+.people-table tr { padding: var(--s-3) 0; border-bottom: 1px solid var(--hairline-soft); }
+.people-table tr:last-child { border-bottom: 0; }
+.people-table td { display: block; padding: 0; border: 0; }
+/* State and points share a line rather than taking one each. Giving every fact its own row
+   turned fourteen Insiders into six screens — longer than the table it replaced, which is
+   not a fix. inline-block keeps each label welded to its value across a wrap. */
+.people-table td[data-k] { display: inline-block; margin-right: 9px; font-size: var(--t-fine);
+  line-height: 2; text-align: left; }
+.people-table td[data-k]::before { content: attr(data-k); font-family: var(--font-mono);
+  font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+  margin-right: 3px; }
+.people-table td:last-child { margin-top: 8px; }
+/* Transitional: officer.js still writes justify-content:flex-end inline on this row; the
+   !important goes when that inline style does. */
+.people-table td:last-child .row { justify-content: flex-start !important; }
 
 
 /* Press feedback for everything else that is tappable. Same reasoning as .btn:active above:
