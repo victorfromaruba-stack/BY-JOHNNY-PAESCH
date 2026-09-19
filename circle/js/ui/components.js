@@ -3,6 +3,20 @@
 import { escapeHtml, initials as initialsOf, prefersReducedMotion } from '../core/util.js';
 
 let toastHost;
+/* A toast belongs to the screen that raised it, and on a phone it sits over that screen's work,
+   so two rules hold it in its place. It does not follow you: when the hash changes, every toast
+   already on the screen is dismissed. The one exception is the message said in the same breath as
+   the leaving (`toast('You left the crew.'); go('/crews')`) — that one is meant for the screen you
+   are landing on, so a toast younger than a blink travels with you. And it does not pile up: two
+   at a time at most — a message and its answer, as the Banker's 'minted' and its 'Undo?' — with
+   the oldest making way for anything after that. */
+const liveToasts = [];   // oldest first
+const SAME_BREATH_MS = 400;
+window.addEventListener('hashchange', () => {
+  const now = performance.now();
+  for (const t of [...liveToasts]) if (now - t.born > SAME_BREATH_MS) t.close();
+});
+
 export function toast(message, { kind = 'info', timeout = 3600, action = null } = {}) {
   if (!toastHost) {
     toastHost = document.createElement('div');
@@ -20,9 +34,20 @@ export function toast(message, { kind = 'info', timeout = 3600, action = null } 
   }
   toastHost.appendChild(t);
   requestAnimationFrame(() => t.classList.add('in'));
-  const close = () => { t.classList.remove('in'); setTimeout(() => t.remove(), prefersReducedMotion() ? 0 : 260); };
-  const timer = setTimeout(close, timeout);
-  return { close: () => { clearTimeout(timer); close(); } };
+  let timer;
+  const close = () => {
+    clearTimeout(timer);
+    const at = liveToasts.indexOf(entry);
+    if (at < 0) return;
+    liveToasts.splice(at, 1);
+    t.classList.remove('in');
+    setTimeout(() => t.remove(), prefersReducedMotion() ? 0 : 260);
+  };
+  const entry = { born: performance.now(), close };
+  liveToasts.push(entry);
+  while (liveToasts.length > 2) liveToasts[0].close();
+  timer = setTimeout(close, timeout);
+  return { close };
 }
 
 /* The sheet and the back gesture.
