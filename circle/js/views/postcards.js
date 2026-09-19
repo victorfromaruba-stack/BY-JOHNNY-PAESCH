@@ -359,12 +359,12 @@ export function feed({ store, go, query = {}, refresh }) {
         <p class="eyebrow">${icon('camera')}${escapeHtml(eyebrowText(count))}</p>
         <h1>Wish you were <em class="ac">here</em>.</h1>
         <p class="dateline">${datelineHtml(store, count)}</p>
-        <div class="row no-print">
-          <button type="button" class="btn" id="send">Send a postcard</button>
-        </div>
         <div class="segmented even no-print" role="group" aria-label="Whose postcards" id="whose">
           <button type="button" data-mine="" aria-pressed="${mine ? 'false' : 'true'}">Everyone</button>
           <button type="button" data-mine="1" aria-pressed="${mine ? 'true' : 'false'}">Yours</button>
+        </div>
+        <div class="row no-print">
+          <button type="button" class="btn block" id="send">Send a postcard</button>
         </div>
       </header>
       ${island ? `<div class="island-strip">
