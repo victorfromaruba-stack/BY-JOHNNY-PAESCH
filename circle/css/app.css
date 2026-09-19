@@ -791,6 +791,9 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
   font-family: var(--font-mono); font-size: var(--t-fine); color: var(--ink-3); padding-top: 2px; }
 .steps li b { font-weight: 600; }
 .steps li span { font-size: var(--t-small); color: var(--ink-2); line-height: 1.5; }
+/* The step you are on, when the list is the ask's "what happens next". */
+.steps li.now b { color: var(--ink); }
+.steps li.now::before { color: var(--ink); }
 .season-card { margin: 0; border: 1px solid var(--hairline); border-radius: var(--r-card);
   overflow: hidden; background: var(--surface); }
 .season-card img { width: 100%; aspect-ratio: 3/2; object-fit: cover; display: block; }
@@ -933,21 +936,25 @@ a.stay-card, .card-strip .mini {
 }
 
 /* ---------- the ask: a brief to Victor, not a form ---------- */
-.ask { display: grid; gap: var(--s-4); padding: 0 0 var(--s-5); overflow: hidden; }
-.ask > * { margin-inline: var(--s-5); }
+/* One clamped column and nothing hidden: a strip that scrolls sideways inside a grid item with
+   no min-width widened the whole form past the screen, and overflow: hidden only disguised it. */
+.ask { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); padding: 0 0 var(--s-5); overflow: visible; }
+.ask > * { margin-inline: 0; min-width: 0; }
+/* Transitional: catalog.js still writes the picture above the form; these five lines go with it. */
 .ask .ask-shot { margin: 0; aspect-ratio: 3 / 1; max-height: 200px; background: var(--well); position: relative; overflow: hidden; }
 .ask .ask-shot .scene, .ask .ask-shot img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .ask .ask-shot .scene.photo { position: absolute; inset: 0; }
 .ask .ask-shot .scene svg { width: 100%; height: 100%; }
 .ask .ask-shot .plate-area { font-size: var(--t-body); }
-.ask-steps { list-style: none; margin: 0 18px; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; counter-reset: step; }
+/* Transitional: the ask's steps become the landing's ol.steps when catalog.js renders it; these
+   seven lines go then. Two tiles across until they do. */
+.ask-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; counter-reset: step; }
 .ask-steps li { counter-increment: step; display: grid; gap: 2px; padding: 10px 10px 10px 12px; border-radius: var(--r-input); background: var(--raised); border: 1px solid transparent; position: relative; }
 .ask-steps li::before { content: counter(step); font-family: var(--font-mono); font-size: var(--t-folio); color: var(--ink-2); letter-spacing: .06em; }
 .ask-steps li b { font-size: var(--t-small); line-height: 1.25; }
 .ask-steps li span { font-size: var(--t-fine); color: var(--ink-2); line-height: 1.35; }
 .ask-steps li.now { border-color: var(--ink); background: var(--surface); }
 .ask-steps li.now::before { color: var(--ink); }
-@media (max-width: 560px) { .ask-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .ask-dates { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: stretch; }
 .ask-tile { position: relative; display: grid; gap: 2px; padding: 12px 14px; min-height: var(--h-input); border: 1px solid var(--hairline); border-radius: var(--r-input); background: var(--surface); cursor: pointer; }
 .ask-tile .k, .ask-row > .k, .ask-quote .k { font-family: var(--font-mono); font-size: var(--t-folio); font-weight: 400; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
@@ -1021,19 +1028,14 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
    place, so it is allowed to be generated; the title sits on a scrim at its foot in the photo
    tokens, which do not change with the theme because the photograph does not. On a phone the
    picture runs edge to edge and the tall crop is used, so the deck corner is not cut off. */
-.page-hero { position: relative; margin: 0 0 18px; border-radius: var(--r-card); overflow: hidden; aspect-ratio: 4 / 3; background: var(--well); }
+/* Transitional: the Cruises hero is deleted with its markup in the markup pass, and this block
+   (and .page-hero img in the settle lists) with it. The bleed is folded in; every user has it. */
+.page-hero { position: relative; margin: calc(-1 * var(--s-6)) calc(-1 * var(--s-4)) 22px; border-radius: 0; overflow: hidden; aspect-ratio: 4 / 3; background: var(--well); }
 .page-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .page-hero .copy { position: absolute; z-index: 1; inset: auto 0 0 0; margin: 0; padding: 28px 20px 20px;
   background: linear-gradient(to top, var(--scrim) 0%, var(--scrim-soft) 60%, transparent 100%); color: var(--on-photo); }
 .page-hero .copy .eyebrow { color: var(--on-photo); opacity: .82; }
 .page-hero .copy h1 { color: var(--on-photo); margin-top: 6px; font-size: var(--t-masthead); }
-@media (max-width: 779px) {
-  .page-hero.bleed { margin-inline: calc(-1 * clamp(16px, 4vw, 28px)); margin-top: calc(-1 * var(--s-6)); border-radius: 0; margin-bottom: 22px; }
-}
-@media (min-width: 780px) {
-  .page-hero { aspect-ratio: 21 / 8; }
-  .page-hero .copy { padding: 36px 32px 30px; }
-}
 /* The route of a cruise: ink on the panel, so it draws itself in both themes. */
 .route svg { margin-top: 10px; color: var(--ink); }
 /* A week that checks in within days: the one line on a card that changes what you do now. */
@@ -1052,11 +1054,6 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .dateline { margin-top: var(--s-3); padding-top: var(--s-2); border-top: 1px solid var(--hairline); font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--t-fine); color: var(--ink-2); line-height: 1.4; }
 .dateline .stamp { color: var(--ink); }
 .masthead .row.no-print { margin-top: 12px; }
-@media (min-width: 900px) {
-  .masthead { display: grid; grid-template-columns: 1fr auto; align-items: end; column-gap: 24px; }
-  .masthead > .eyebrow, .masthead > h1, .masthead > .dateline, .masthead > .lede { grid-column: 1; }
-  .masthead > .row.no-print { grid-column: 2; grid-row: 1 / span 3; align-self: end; margin-top: 0; }
-}
 /* A provenance mark: who or what saw it, and when. The same mono as the ledger's "by Vishnu". */
 .stamp { font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .04em; color: var(--ink-2); white-space: nowrap; }
 
@@ -1077,11 +1074,6 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .cover .cover-body .why { margin-top: 8px; font-size: var(--t-small); color: var(--ink-2); }
 .cover .cover-body .soon { margin-top: 8px; font-size: var(--t-small); }
 .cover .cover-body .btn { margin-top: 14px; }
-@media (min-width: 900px) {
-  .cover { display: grid; grid-template-columns: 1.5fr 1fr; align-items: stretch; }
-  .cover .cover-shot { aspect-ratio: auto; min-height: 380px; }
-  .cover .cover-body { display: flex; flex-direction: column; justify-content: center; padding: var(--s-6) var(--s-6); }
-}
 
 /* Listing rows. The row is the ask: one link, place and unit, dates, the price a night on the
    right, the all-in under it, and the stamp. A thumb only where a photograph of the place exists;
@@ -1113,10 +1105,6 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 /* A row in a printed list does not shrink when pressed; it dims. */
 .listing-row:active { opacity: .6; transition: opacity 60ms var(--ease-out); }
 .listing-row .row-acts { grid-column: 1 / -1; display: flex; gap: 8px; }
-@media (min-width: 900px) {
-  .listing.two { display: grid; grid-template-columns: 1fr 1fr; column-gap: 48px; position: relative; }
-  .listing.two::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--hairline); }
-}
 /* The index: one row per place, the name and the bare figure; the unit is in the running head. */
 .index-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s-4); align-items: baseline; min-height: 48px; padding: var(--s-3) 0;
   border-bottom: 1px solid var(--hairline-soft); color: inherit; text-decoration: none; }
@@ -1134,7 +1122,6 @@ input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex
 .index-row .from.ask svg { width: 15px; height: 15px; }
 .quiet-index .index-row .name { font-weight: 400; }
 .index-row:active { background: var(--raised); }
-@media (min-width: 900px) { .index { display: grid; grid-template-columns: 1fr 1fr 1fr; column-gap: 40px; } }
 .running-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin-top: var(--s-6); padding-bottom: var(--s-2); border-bottom: 1px solid var(--hairline); }
 /* The heading keeps its line; the eyebrow gives way and drops under it when the row is short. */
 .running-head h2 { font-size: var(--t-head); flex: 0 0 auto; }
@@ -1168,18 +1155,16 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 
 /* A page hero with the place set on it: the picture edge to edge on a phone, the name at its
    foot on a scrim in the photo tokens. Used by the stay page; the Cruises tab uses .page-hero. */
-.hero-place { position: relative; margin: 18px 0 0; background: var(--well); overflow: hidden; border-radius: var(--r-card); aspect-ratio: 4 / 3; }
+.hero-place { position: relative; margin: calc(-1 * var(--s-6)) calc(-1 * var(--s-4)) 0; background: var(--well); overflow: hidden; border-radius: 0; aspect-ratio: 5 / 6; }
 .hero-place img, .hero-place .scene, .hero-place .scene svg { width: 100%; height: 100%; object-fit: cover; display: block; }
 .hero-place .strip-tag { top: 14px; left: 14px; right: auto; bottom: auto; }
 /* Every line of copy sits under at least .6 of scrim, or a white facade eats the eyebrow. */
-.hero-place .on { position: absolute; z-index: 1; inset: auto 0 0 0; padding: 96px 18px 18px; margin: 0;
+.hero-place .on { position: absolute; z-index: 1; inset: auto 0 0 0; padding: 96px var(--s-4) 18px; margin: 0;
   background: linear-gradient(to top, var(--scrim) 0%, var(--scrim) 40%, var(--scrim-soft) 72%, transparent 100%); color: var(--on-photo); }
 .hero-place .on .eyebrow { color: var(--on-photo); opacity: 1; white-space: normal; overflow-wrap: anywhere; }
 .hero-place .on h1 { color: var(--on-photo); margin-top: 6px; font-size: var(--t-masthead); line-height: 1; text-wrap: balance; max-width: 12ch; }
 .hero-place .on .from { display: block; margin-top: 8px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--t-small); color: var(--on-photo); opacity: .92; }
 .hero-place .share { position: absolute; top: 12px; right: 12px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--scrim-soft); color: var(--on-photo); display: grid; place-items: center; cursor: pointer; }
-@media (max-width: 779px) { .hero-place.bleed { margin-inline: calc(-1 * clamp(16px, 4vw, 28px)); margin-top: calc(-1 * var(--s-6)); border-radius: 0; aspect-ratio: 5 / 6; } .hero-place.bleed .on { padding-inline: clamp(16px, 4vw, 28px); } }
-@media (min-width: 780px) { .hero-place { aspect-ratio: 2 / 1; } .hero-place .on { padding: 48px 30px 26px; } }
 .hero-place .scene { position: absolute; inset: 0; }
 .hero-place + .credit { margin-top: 8px; }
 /* A link inside a credit line or the rules' prose keeps its line rhythm and still gets a 44px
@@ -1196,15 +1181,14 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 .rooms .room-head .meta { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--t-fine); color: var(--ink-2); }
 .rooms .room .small { margin-top: 6px; max-width: 62ch; }
 .rooms .room .btn { margin-top: 10px; }
-.gallery.big { margin-inline: calc(-1 * clamp(16px, 4vw, 28px)); padding-inline: clamp(16px, 4vw, 28px); scroll-padding-inline: clamp(16px, 4vw, 28px); }
+.gallery.big { margin-inline: calc(-1 * var(--s-4)); padding-inline: var(--s-4); scroll-padding-inline: var(--s-4); }
 .gallery.big .gallery-tile { width: min(78vw, 300px); height: auto; aspect-ratio: 3 / 2; scroll-snap-align: start; position: relative; }
 .gallery.big .gallery-tile:only-child { width: min(100%, 520px); }
 .gallery .tile-tag { position: absolute; left: 10px; top: 10px; font-family: var(--font-mono); font-size: var(--t-folio); font-weight: 400; letter-spacing: .08em; text-transform: uppercase; color: var(--on-photo); background: var(--scrim); padding: 4px 8px; border-radius: var(--r-chip); }
 /* A plan is a drawing, not a photograph: it is shown whole, on paper, never cropped to fill. */
 .gallery-tile.plan { background: var(--paper); border: 1px solid var(--hairline); }
 .gallery-tile.plan img { object-fit: contain; }
-.place-photo.plan img { object-fit: contain; background: var(--paper); max-height: 70vh; }
-@media (min-width: 780px) { .gallery.big { margin-inline: 0; padding-inline: 0; } .gallery.big .gallery-tile { width: 300px; } }
+.place-photo.plan img { object-fit: contain; background: var(--paper); max-height: 70dvh; }
 
 /* The island: the coast as a hairline, the land in the well, this place in the accent. */
 .island-wrap { margin-top: 14px; max-width: 560px; }
