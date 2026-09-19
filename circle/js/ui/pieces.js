@@ -172,6 +172,10 @@ export function poolGauge({ coverage = 1, reserveUsd = 0, outstandingPoints = 0,
   // externally checked number in the object is the variance the Banker recorded against the bank
   // statement. So when a check exists, lead with what the BANK said and name the date; the
   // ledger's own figure drops to the line underneath, where it belongs.
+  // Every figure in these three lines sits in its own mono <b class="num"> — on the one screen
+  // whose whole job is to be believed, the numbers cannot be the only thing in the reading face.
+  // The separator before "owes"/"backs" is glued to the figure before it with a non-breaking
+  // space, so a narrow column never starts a line with a bare mid-dot.
   const bankUsd = verifiedAt && verifiedVarianceUsd !== null ? reserveUsd + verifiedVarianceUsd : null;
   const bankCoverage = bankUsd !== null && liabilityUsd ? bankUsd / liabilityUsd : null;
   const shown = bankCoverage === null ? coverage : bankCoverage;
@@ -190,15 +194,15 @@ export function poolGauge({ coverage = 1, reserveUsd = 0, outstandingPoints = 0,
     </svg>
     <div class="g-read">
       ${configured
-        ? `<b>Coverage ${escapeHtml(fmtPct(shown))}${bankCoverage === null ? '' : ''}</b>
+        ? `<b>Coverage <b class="num">${escapeHtml(fmtPct(shown))}</b></b>
            <span>${bankUsd === null
-             ? `Reserve ${escapeHtml(fmtUsd2(reserveUsd))} by the ledger · backs ${escapeHtml(fmtPoints(outstandingPoints))}`
-             : `${escapeHtml(fmtUsd2(bankUsd))} in the account on ${escapeHtml(new Date(verifiedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))} · owes ${escapeHtml(fmtPoints(outstandingPoints))}`}</span>
+             ? `Reserve <b class="num">${escapeHtml(fmtUsd2(reserveUsd))}</b> by the ledger&nbsp;· backs <b class="num">${escapeHtml(fmtPoints(outstandingPoints))}</b>`
+             : `<b class="num">${escapeHtml(fmtUsd2(bankUsd))}</b> in the account on <b class="num">${escapeHtml(new Date(verifiedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))}</b>&nbsp;· owes <b class="num">${escapeHtml(fmtPoints(outstandingPoints))}</b>`}</span>
            <span>${bankUsd === null
              ? 'from the ledger — not yet checked against the bank'
              : Math.abs(verifiedVarianceUsd) < 0.005
                ? `the ledger expected the same, to the cent`
-               : `the ledger expected ${escapeHtml(fmtUsd2(reserveUsd))} — ${escapeHtml(fmtUsd2(Math.abs(verifiedVarianceUsd)))} ${verifiedVarianceUsd > 0 ? 'more' : 'less'} was there`}</span>`
+               : `the ledger expected <b class="num">${escapeHtml(fmtUsd2(reserveUsd))}</b> — <b class="num">${escapeHtml(fmtUsd2(Math.abs(verifiedVarianceUsd)))}</b> ${verifiedVarianceUsd > 0 ? 'more' : 'less'} was there`}</span>`
         : `<b>Coverage: not yet verifiable</b><span>The Banker has not registered separate Reserve and Operating accounts.</span>`}
     </div>`;
   return el;
