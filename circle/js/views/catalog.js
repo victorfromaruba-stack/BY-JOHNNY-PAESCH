@@ -555,7 +555,8 @@ export function stayDetail({ store, params, go, query = {} }) {
       <div class="running-head"><h2>Where it is</h2><p class="eyebrow">${escapeHtml(stay.area)} · ${stay.onSand ? 'on the sand' : 'across the road'}</p></div>
       <div class="island-wrap">${islandSvg({ here: place?.geo || null, area: stay.area, label: stay.name, others })}</div>
       <p class="tiny muted credit" style="margin-top:10px">${place?.address ? `${escapeHtml(place.address)} · ` : ''}<a href="${escapeHtml(mapsHref)}" target="_blank" rel="noopener noreferrer">Open in Maps ↗</a>${place?.geo ? '' : ' · the mark is the beach, not the door: we have no position on file for this one'}.</p>
-      ${site ? `<p class="tiny muted credit"><a href="${escapeHtml(site)}" target="_blank" rel="noopener noreferrer">${escapeHtml(host)} ↗</a> has room plans and the resort map, where it publishes them.</p>` : ''}
+      ${site ? `<p class="tiny muted" style="margin-top:10px">Room plans and the resort map are on the property's own site, where it publishes them.</p>
+      <a class="link-rule" href="${escapeHtml(site)}" target="_blank" rel="noopener noreferrer">${escapeHtml(host)} ↗</a>` : ''}
     </section>`;
   } else { wrap.querySelector('#rooms').remove(); wrap.querySelector('#where').remove(); }
 
