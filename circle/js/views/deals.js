@@ -218,8 +218,13 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
         <p class="why">${escapeHtml(why)} · <span class="stamp${stamp.feed ? ' feed' : ''}">${escapeHtml(stamp.text)}</span></p>
         ${ageLine(stamp)}
         ${credit ? `<p class="tiny muted" style="margin-top:8px">${credit.html}</p>` : ''}
-        <div class="row" style="margin-top:14px">
-          <a class="btn" href="${askHrefFor(deal)}">${icon('send', { size: 16 })}Ask Victor</a>
+        <!-- The cover story's one decision, and it gets the column. A content-width button on the
+             lead item read as an afterthought beside 209px of empty gutter; the same decision on a
+             place's own page is a full-width block with the figure inside it, and the board's
+             cover is the louder of the two. Same grammar, same words, the all-in in the mono face
+             so nobody taps to find out what it costs. The Desk's own buttons sit under it. -->
+        <div class="row">
+          <a class="btn block" href="${askHrefFor(deal)}">${icon('send', { size: 16 })}<span>Ask Victor</span><span aria-hidden="true">·</span><b class="num">${escapeHtml(fmtPoints(deal.pointsTotal))}</b></a>
           ${canEdit ? deskActs(deal) : ''}
         </div>
       </div>
