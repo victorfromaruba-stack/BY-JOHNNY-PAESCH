@@ -5,20 +5,30 @@ import { VOCAB, tierName, refFor } from '../core/vocab.js';
 import { splitContribution, tierFor, fromPoints, seatPoints, pointsPerMonth } from '../core/money.js';
 import { memberCard, poolGauge, rankCrest, ring, tierLadder, badgeMark, badgeRow } from '../ui/pieces.js';
 import { treeSvg } from '../ui/art.js';
-import { toast, sheet, confirmDialog, setBusy, chip, countUp, statusLabel, avatar } from '../ui/components.js';
+import { toast, sheet, confirmDialog, setBusy, countUp, statusLabel, avatar } from '../ui/components.js';
 import { dropWhen } from './deals.js';
 import { postCard, postcardSheet, cheersLine } from './postcards.js';
 import { sparkline, columns, tableFor } from '../ui/charts.js';
 import { waLink, TEMPLATES, copyText, shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
 import { shiftMonth } from '../core/store.js';
+import { getTheme, setTheme } from '../ui/theme.js';
+import { showInstall, wantsInstallNudge, dismissInstallNudge, isStandalone } from '../ui/install.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 const KIND_LABEL = { earn: 'Contribution', bonus: 'Tier bonus', streak: 'Streak bonus', founding: 'Founding bonus', burn: 'Stay', refund: 'Refund', adjust: 'Adjustment', expire: 'Expired', reverse: 'Reversal' };
 // One glyph per kind of officer work, so the Home list reads at a glance.
 const WORK_ICON = { bank: 'vault', close: 'scale', quote: 'send', logins: 'key' };
+const chevron = () => icon('chevronRight', { size: 18, cls: 'ico-muted' });
 
-export function home({ store, go }) {
+/** Every figure in the mono, one at a time; the words between stay in the sans. Escapes first,
+ *  so it takes raw text — a points figure, a dollar amount, a percentage, a comma-grouped count.
+ *  Small counts and years are left alone: "7 nights" and "2026" are read, not tabulated. */
+const figs = (text) => escapeHtml(String(text ?? ''))
+  .replace(/✦\s?\d[\d,]*|\$\d[\d,]*(?:\.\d+)?|\d+(?:\.\d+)?%|\b\d{1,3}(?:,\d{3})+\b/g, (m) => `<b class="num">${m}</b>`);
+const num = (text) => `<b class="num">${escapeHtml(String(text ?? ''))}</b>`;
+
+export function home({ store, go, refresh }) {
   const me = store.me, s = store.settings;
   const lt = store.lifetime(me.id);
   const t = store.treasury();
@@ -34,13 +44,13 @@ export function home({ store, go }) {
   const streak = store.streak(me.id);
   const next = store.nextMilestone(me.id);
 
+  // One column, in the order a thumb meets it: what you can have, what you hold, what needs
+  // you, then the rest of the paper.
   const wrap = el(`<div><section class="sec"><div class="wrap">
     <div id="masthead"></div>
-    <div class="side">
-      <div class="stack" id="left"></div>
-      <div class="stack" id="right"></div>
-    </div></div></section></div>`);
-  const left = wrap.querySelector('#left'), right = wrap.querySelector('#right');
+    <div class="stack" id="body"></div>
+  </div></section></div>`);
+  const body = wrap.querySelector('#body');
 
   // 1 — what the points are actually worth, in nights, before anything else.
   //
@@ -49,45 +59,36 @@ export function home({ store, go }) {
   // the app knew the answer and never said it. The five-digit figure is still here — it is
   // just no longer the headline, because it is not the question.
   // The page opens the way the board does: a line of standing type saying what you can have,
-  // the figure it rests on in the mono face underneath, and the one button that acts on it. The
-  // membership card and the balance bar follow, under a hairline — they are the evidence, not
-  // the headline, and a rounded box around the first thing a member reads was the "card soup"
-  // Victor objected to.
+  // the figure it rests on in the mono face underneath, and the one button that acts on it,
+  // with the one ruled link beside it. The balance bar follows, under the masthead's rule — it
+  // is the evidence, not the headline.
   const book = store.canBookNow(me.id);
   const head = !book
-    ? { eyebrow: '', h1: 'Your corner of the Circle', lede: 'Your points, what the Desk has open, and what the Circle owes you — all on one page.', cta: `<a class="btn" href="#/stays">${icon('bed', { size: 17 })}See what is open</a>` }
+    ? { eyebrow: '', h1: 'Your corner of the Circle', cta: `<a class="btn" href="#/stays">${icon('bed', { size: 17 })}See what is open</a>` }
     : book.can
-      ? { eyebrow: 'What you can book today', h1: `${book.nights}${book.capped ? '+' : ''} night${book.nights === 1 ? '' : 's'} at ${book.stay.name}`,
+      ? { eyebrow: 'What you can book today',
           h1Html: `${book.nights}${book.capped ? '+' : ''} night${book.nights === 1 ? '' : 's'} at <em class="ac">${escapeHtml(book.stay.name)}</em>`,
-          lede: 'At its cheapest, all in. Pick your dates and the Desk prices those nights exactly.',
           cta: `<a class="btn" href="#/book/${escapeHtml(book.stay.id)}">${icon('send', { size: 17 })}Ask for these dates</a>
                 <a class="link-rule" href="#/stays">Other places</a>` }
-      : { eyebrow: 'The first thing within reach', h1: `${book.nights} night${book.nights === 1 ? '' : 's'} at ${book.stay.name}`,
+      : { eyebrow: 'The first thing within reach',
           h1Html: `${book.nights} night${book.nights === 1 ? '' : 's'} at <em class="ac">${escapeHtml(book.stay.name)}</em>`,
-          lede: `${fmtPoints(book.short)} to go — about ${book.months} more month${book.months === 1 ? '' : 's'} at ${fmtUsd2(me.monthlyUsd)}. You can ask for it before then and close the gap in cash.`,
           cta: `<a class="btn" href="#/pay">${icon('arrowUp', { size: 17 })}Send a contribution</a>
                 <a class="link-rule" href="#/stays">Other places</a>` };
   wrap.querySelector('#masthead').innerHTML = `<div class="masthead">
       <p class="eyebrow"><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span>, ${escapeHtml(me.name.split(' ')[0])}${head.eyebrow ? ` · ${escapeHtml(head.eyebrow)}` : ''}</p>
       <h1>${head.h1Html || escapeHtml(head.h1)}</h1>
       <p class="dateline"><b class="num" id="avail">0</b> <span id="avail-usd"></span></p>
-      <p class="lede" style="margin-top:10px">${escapeHtml(head.lede)}</p>
       <div class="row no-print">${head.cta}</div>
     </div>`;
   const top = el(`<div class="rule-block">
-      <div class="card-strip">
-        <div style="min-width:0">
-          <div id="balbar"></div>
-          <div class="row" style="margin-top:12px">
-            ${book?.can === false ? '' : `<a class="btn ghost sm" href="#/pay">${icon('arrowUp', { size: 16 })}Send a contribution</a>`}
-            <a class="btn ghost sm" href="#/ledger">${icon('receipt', { size: 16 })}Statement</a>
-          </div>
-        </div>
-        <a class="mini" href="#/card" aria-label="Open your card"><span id="mini-card"></span></a>
+      <div id="balbar"></div>
+      <div class="row no-print">
+        <a class="link-rule" href="#/pay">Send a contribution</a>
+        <a class="link-rule" href="#/ledger">Statement</a>
+        <a class="link-rule" href="#/card">Your card</a>
       </div>
     </div>`);
-  left.appendChild(top);
-  top.querySelector('#mini-card').replaceChildren(memberCard(me, { store, flippable: false, compact: true }));
+  body.appendChild(top);
   countUp(wrap.querySelector('#avail'), lt.available, { format: (n) => `✦ ${Math.round(n).toLocaleString('en-US')}` });
   wrap.querySelector('#avail-usd').textContent = `· ${pointsUsd(lt.available, s.pointsPerDollar)} of hotel${lt.committed ? ` · ${fmtPoints(lt.committed)} committed` : ''}`;
   {
@@ -101,7 +102,103 @@ export function home({ store, go }) {
       ${lt.committed ? `<span><i style="background:var(--flight)"></i>Committed <b>${escapeHtml(fmtPoints(lt.committed))}</b></span>` : ''}</div>`;
   }
 
-  // 1 and a half — THE BOARD, if Victor has one lined up.
+  // 1b — anything the Circle is waiting on you for, if you hold a job
+  const jobs = store.officerWork();
+  if (jobs.length) {
+    body.appendChild(el(`<div class="panel job-panel">
+      <p class="eyebrow">${icon('crown')}Waiting on you</p>
+      <ul class="job-list" style="margin-top:12px">${jobs.map(j => `
+        <li${j.urgent ? ' class="urgent"' : ''}>
+          <a href="${escapeHtml(j.href)}">
+            <span class="job-ico">${icon(WORK_ICON[j.id] || 'clipboard', { size: 19 })}</span>
+            <span class="job-what"><b>${escapeHtml(j.what)}</b><span class="small muted">${escapeHtml(j.why)}</span></span>
+            ${chevron()}
+          </a>
+        </li>`).join('')}</ul>
+      <a class="link-rule" href="#/profile">Your jobs</a>
+    </div>`));
+  }
+
+  // 2 — what needs you, in the order it needs you
+  const blocks = [];
+  // A deal that answers something you asked for goes above everything else: these go fast.
+  for (const m of store.matchesForMember(me.id).slice(0, 3)) {
+    const st = store.stay(m.deal.stayId);
+    blocks.push(`<div class="notice good"><b>${icon('bellRing', { size: 16 })} ${escapeHtml(st?.name || 'A place you asked for')} came free</b>
+      <p class="small">${m.deal.nights} nights from ${escapeHtml(fmtDay(m.deal.from))} · ${figs(fmtPoints(m.deal.pointsTotal))}.
+      ${m.affordable ? 'You have the points.' : `You are ${figs(fmtPoints(m.short))} short — ask anyway and close it with a top-up.`}</p>
+      <p style="margin-top:8px"><a class="btn sm" href="#/stays">${icon('eye', { size: 15 })}Look at it</a></p></div>`);
+  }
+  if (status === 'due') blocks.push(`<div class="notice warn"><b>Your ${escapeHtml(fmtMonth(month))} contribution is due</b>
+      <p class="small">${figs(fmtUsd2(me.monthlyUsd))} to the Reserve with reference ${num(refFor(me, month))}, then tap “I sent it”.</p>
+      <p style="margin-top:8px"><a class="btn sm" href="#/pay">Send it</a></p></div>`);
+  if (status === 'pending') {
+    const c = store.contributionsFor(me.id).find(x => x.forMonth === month && x.status === 'pending');
+    blocks.push(`<div class="notice"><b>Sent · awaiting the Banker</b>
+      <p class="small">${figs(fmtUsd2(c.expectedUsd))} marked as sent on ${escapeHtml(fmtDay(c.submittedAt))}. Vishnu confirms within ${num(s.bankerSlaHours)} hours of the money arriving; your points appear the moment he does.</p></div>`);
+  }
+  if (status === 'paused') blocks.push(`<div class="notice"><b>You are paused until ${escapeHtml(fmtMonth(me.pausedUntil))}</b>
+      <p class="small">Your streak is frozen at ${num(streak)}, not reset, and your points stay fully usable.</p>
+      <p><a class="link-rule" href="#/profile">Resume any time</a></p></div>`);
+  for (const q of quoted) {
+    const st = store.stay(q.stayId); const left2 = countdownTo(q.quoteExpiresAt);
+    blocks.push(`<div class="notice warn"><b>A quote is waiting for you</b>
+      <p class="small">${escapeHtml(st?.name || 'a stay')} · ${q.nights} nights from ${escapeHtml(fmtDay(q.checkIn))} · ${figs(fmtPoints(q.quotedPoints))}${q.topUpUsd ? ` plus ${figs(fmtUsd2(q.topUpUsd))} top-up` : ''}.
+      ${left2 ? `Expires in ${num(left2)}.` : 'It has expired.'}</p>
+      <p style="margin-top:8px"><a class="btn sm" href="#/requests/${q.id}">Look at it</a></p></div>`);
+  }
+  // A freshly sent ask used to be invisible here — the member had nowhere that said Victor had it.
+  for (const a of asked) {
+    const st = store.stay(a.stayId);
+    blocks.push(`<div class="notice"><b>Victor has your ask for ${escapeHtml(st?.name || 'a stay')}</b>
+      <p class="small">${a.nights} nights from ${escapeHtml(fmtDay(a.checkIn))}. He prices it within ${num(tier.slaHours ?? s.slaHours)} hours; nothing is committed until you say yes.</p>
+      <p><a class="link-rule" href="#/requests/${a.id}">Details</a></p></div>`);
+  }
+  for (const h of held) {
+    const st = store.stay(h.stayId);
+    blocks.push(`<div class="notice"><b>${figs(fmtPoints(h.points))} committed to ${escapeHtml(st?.name || 'a stay')}</b>
+      <p class="small">${h.nights} nights from ${escapeHtml(fmtDay(h.checkIn))}. ${h.approvedAt ? 'Victor has it and is booking it himself, in your name; your points burn when the room is yours.' : 'Victor picks it up next; you hear the moment he has it.'}</p>
+      <p><a class="link-rule" href="#/requests/${h.id}">Details</a></p></div>`);
+  }
+  for (const u of upcoming) {
+    const st = store.stay(u.stayId);
+    blocks.push(`<div class="notice good"><b>Booked: ${escapeHtml(st?.name || 'a stay')}</b>
+      <p class="small">${u.nights} nights from ${escapeHtml(fmtDay(u.checkIn))} · confirmation ${num(u.confirmationRef)}${u.hotelDeadline ? ` · free cancellation until ${escapeHtml(fmtDay(u.hotelDeadline))}` : ''}.</p></div>`);
+  }
+  const chipIn = store.openToChipIn().filter(r => r.memberId !== me.id);
+  for (const r of chipIn.slice(0, 2)) {
+    const st = store.stay(r.stayId); const owner = store.member(r.memberId);
+    const target = r.quotedPoints || r.indicativePoints || 0;
+    const gap = Math.max(0, target - store.coveredPoints(r));
+    const pct = target ? Math.min(1, store.coveredPoints(r) / target) : 0;
+    // Not `.notice.ask`: the ask form owns the `ask` class, and its grid rules would take this box apart.
+    blocks.push(`<div class="notice" style="border-left:2px solid var(--ink)">
+      <div class="row" style="gap:11px;align-items:flex-start;flex-wrap:nowrap">
+        ${avatar(owner, 40)}
+        <div style="min-width:0;flex:1">
+          <b>${escapeHtml(owner?.name.split(' ')[0] || 'An Insider')} is ${figs(fmtPoints(gap))} short for ${escapeHtml(st?.name || 'a stay')}</b>
+          <p class="small muted" style="margin-top:3px">${r.nights} nights from ${escapeHtml(fmtDay(r.checkIn))}. Anyone can put their own points in — yours are committed only until it is booked or falls through.</p>
+          <div class="goal-bar" style="margin-top:10px" role="img"
+            aria-label="${escapeHtml(fmtPct(pct))} of the way there"><span style="width:${(pct * 100).toFixed(1)}%"></span></div>
+          <p class="tiny muted" style="margin-top:6px">${figs(fmtPoints(store.coveredPoints(r)))} of ${figs(fmtPoints(target))} together — ${figs(fmtPct(pct))} there</p>
+          <p style="margin-top:10px"><a class="btn sm" href="#/requests/${r.id}">${icon('chipIn', { size: 15 })}Chip in</a></p>
+        </div>
+      </div></div>`);
+  }
+  if (blocks.length) body.appendChild(el(`<div class="stack">${blocks.join('')}</div>`));
+  // The list of everything asked, which had no way in from the chrome at all.
+  if (store.state.redemptions.some(r => r.memberId === me.id)) body.appendChild(el(`<p><a class="link-rule" href="#/requests">Everything you have asked for</a></p>`));
+
+  // 2b — the one-line nudge to put Hunto on the home screen, on a phone that has not, until
+  // the member says not now. It never says the app is installed: the display mode does.
+  if (wantsInstallNudge()) {
+    const nudge = el(`<p class="rule-block small">Hunto works best from your home screen<span class="row" style="gap:20px"><button type="button" class="link-rule" id="install-how">Show me</button><button type="button" class="link-rule quiet muted" id="install-no">Not now</button></span></p>`);
+    nudge.querySelector('#install-how').addEventListener('click', () => showInstall());
+    nudge.querySelector('#install-no').addEventListener('click', () => { dismissInstallNudge(); nudge.remove(); });
+    body.appendChild(nudge);
+  }
+
+  // 3 — THE BOARD, if Victor has one lined up.
   //
   // The whole mechanic is anticipation, and anticipation does not survive being filed on another
   // screen: a member who has to go looking for the drop is not spending Thursday evening guessing
@@ -113,103 +210,19 @@ export function home({ store, go }) {
     if (teased.length) {
       const when = dropWhen(teased[0].dropAt);
       const names = [...new Set(teased.map(d => store.stay(d.stayId)?.name).filter(Boolean))];
-      left.appendChild(el(`<div class="panel board-tease">
-        <div class="row-between"><p class="eyebrow">${icon('zap')}The Board</p>
-          <a class="small" href="#/stays">See it</a></div>
+      body.appendChild(el(`<div class="panel board-tease">
+        <p class="eyebrow">${icon('zap')}The Board</p>
         <p class="big-line">${teased.length} week${teased.length === 1 ? '' : 's'}, priced ${escapeHtml(when)}</p>
         <p class="small muted" style="margin-top:8px">${escapeHtml(names.join(' · '))}</p>
         <p class="tiny muted" style="margin-top:10px">Victor looked at these himself. The prices go up ${escapeHtml(when)} and the board stays open all weekend — there is no race.</p>
+        <a class="link-rule" href="#/stays">See it</a>
       </div>`));
     }
   }
 
-  // 1 and three quarters — a postcard, when there is one to show.
-  //
-  // On a day this member is on the island (their own approved booking covers today in Aruba) the
-  // panel asks for one, and once one is sent it shows it. On any other day it shows the newest
-  // postcard from the last fortnight. When neither applies nothing is drawn: Home never gains an
-  // empty box, and booking stays the headline — the postcard is the second thing, like the board.
-  if (typeof store.postcardsOn === 'function' && store.postcardsOn()) {
-    const day = store.islandDay(me.id);
-    const today = arubaDate(new Date());
-    const sentToday = store.moments({ mine: true }).find(m => arubaDate(m.createdAt) === today);
-    const latest = store.moments().find(m => Date.now() - new Date(m.createdAt) < 14 * 86400000);
-    const send = (capture) => postcardSheet({ store, prefill: { capture, redemptionId: day?.redemption?.id || null } }).then(m => { if (m) refresh(); });
-    if (day) {
-      const box = el(`<div class="panel" id="postcard-day">
-        <p class="eyebrow">${icon('camera')}Today’s postcard</p>
-        <p class="mono tiny muted place-line" style="margin-top:6px">DAY ${day.day} OF ${day.days} · ${escapeHtml(String(day.stay?.name || '').toUpperCase())}</p>
-        ${sentToday ? '<div id="today-card" style="margin-top:12px"></div>' : '<p class="big-line">Send one from the island.</p>'}
-        <div class="row" style="margin-top:14px;gap:20px">
-          ${sentToday
-            ? `<button type="button" class="link-rule" data-postcard="capture">Another one</button><a class="link-rule" href="#/postcards">All of them</a>`
-            : `<button type="button" class="btn" data-postcard="capture">Take one now</button><button type="button" class="link-rule" data-postcard="roll">From your roll</button>`}
-        </div>
-      </div>`);
-      if (sentToday) {
-        store.momentUrls([sentToday.path]).then(urls => { box.querySelector('#today-card')?.replaceChildren(postCard(sentToday, { store, urls, compact: true })); });
-      }
-      box.addEventListener('click', (e) => { const b = e.target.closest('[data-postcard]'); if (b) send(b.dataset.postcard === 'capture'); });
-      left.appendChild(box);
-    } else if (latest) {
-      const block = el(`<div class="rule-block">
-        <div class="row-between"><p class="eyebrow">${icon('camera')}The latest postcard</p><a class="small" href="#/postcards">All of them</a></div>
-        <div id="latest-card" style="margin-top:12px"></div>
-      </div>`);
-      store.momentUrls([latest.path]).then(urls => { block.querySelector('#latest-card')?.replaceChildren(postCard(latest, { store, urls, compact: true })); });
-      left.appendChild(block);
-    }
-  }
-
-  // 1a — what being in the Circle has been worth, in dollars, from real bookings.
-  //
-  // "I want people to see their savings real price vs what on the page so they appreciate being
-  // a member." It only appears once there is a paid booking to build it from: a savings panel
-  // reading $0.00 on somebody's first week is the opposite of the intended feeling, and an
-  // estimate would make the number worthless on the day it finally matters.
-  {
-    const sv = store.savingsFor(me.id);
-    if (sv.trips) {
-      const good = sv.savedUsd > 0;
-      left.appendChild(el(`<div class="panel">
-        <div class="row-between"><p class="eyebrow">${icon('trend')}What the Circle has saved you</p>
-          <a class="small" href="#/ledger">Every line</a></div>
-        <p class="big-figure num" style="color:${good ? 'var(--good-text)' : 'var(--ink)'}">${escapeHtml(fmtUsd2(Math.abs(sv.savedUsd)))}</p>
-        <p class="small muted" style="margin-top:4px">${good
-          ? `across ${sv.trips} booking${sv.trips === 1 ? '' : 's'} — ${escapeHtml(fmtUsd2(sv.publicUsd))} of hotel for ${escapeHtml(fmtUsd2(sv.oursUsd))}, ${sv.pct}% off the public rate`
-          : `${escapeHtml(fmtUsd2(sv.oursUsd))} against a public ${escapeHtml(fmtUsd2(sv.publicUsd))} — the Circle has cost you more so far, and it says so`}</p>
-        <ul class="ledger" style="margin-top:14px">
-          ${sv.lines.slice(0, 3).map(l => `<li>
-            <span class="what"><b>${escapeHtml(l.stayName)}</b><span class="meta">${l.nights} night${l.nights === 1 ? '' : 's'} · booked alone ${escapeHtml(fmtUsd2(l.publicUsd))}</span></span>
-            <span class="delta"><b class="${l.savedUsd > 0 ? 'pos' : ''}">${l.savedUsd >= 0 ? '' : '+'}${escapeHtml(fmtUsd2(Math.abs(l.savedUsd)))}</b><small>${l.savedUsd >= 0 ? 'saved' : 'more than direct'} · paid ${escapeHtml(fmtUsd2(l.oursUsd))}</small></span></li>`).join('')}
-        </ul>
-        <p class="small muted" style="margin-top:10px">Against the public rate for the same nights, taken when you asked for them. ${sv.paidIn ? `You have put in ${escapeHtml(fmtUsd2(sv.paidIn))} altogether.` : ''}</p>
-      </div>`));
-    }
-  }
-
-  // 1b — anything the Circle is waiting on you for, if you hold a job
-  const jobs = store.officerWork();
-  if (jobs.length) {
-    left.appendChild(el(`<div class="panel job-panel">
-      <div class="row-between">
-        <p class="eyebrow">${icon('crown')}Waiting on you</p>
-        <a class="small" href="#/profile">Your jobs</a>
-      </div>
-      <ul class="job-list" style="margin-top:12px">${jobs.map(j => `
-        <li${j.urgent ? ' class="urgent"' : ''}>
-          <a href="${escapeHtml(j.href)}">
-            <span class="job-ico">${icon(WORK_ICON[j.id] || 'clipboard', { size: 19 })}</span>
-            <span class="job-what"><b>${escapeHtml(j.what)}</b><span class="small muted">${escapeHtml(j.why)}</span></span>
-            ${icon('chevronRight', { size: 18, cls: 'ico-muted' })}
-          </a>
-        </li>`).join('')}</ul>
-    </div>`));
-  }
-
-  // 2 — what you are saving for, and exactly how far off it is
+  // 4 — what you are saving for, and exactly how far off it is
   const goalPanel = el(`<div class="panel" id="goal-panel"></div>`);
-  left.appendChild(goalPanel);
+  body.appendChild(goalPanel);
   const drawGoal = () => {
     const g = store.goalFor(me.id);
     if (!g) {
@@ -217,21 +230,20 @@ export function home({ store, go }) {
         <p class="eyebrow">${icon('target')}What you are saving for</p>
         <h2 style="margin-top:8px">Pick something and watch it come closer</h2>
         <p class="small muted" style="margin-top:8px">Every contribution moves a bar instead of a number. Choose a place and how many nights, and the app works out how many months it takes at your level — and what would get you there sooner.</p>
-        <div class="row" style="margin-top:14px">
-          <button class="btn sm" id="set-goal">${icon('target', { size: 16 })}Choose one</button>
-          <a class="btn ghost sm" href="#/stays">Look at the places</a>
+        <div class="stack tight" style="margin-top:14px">
+          <button class="btn block" id="set-goal">${icon('target', { size: 16 })}Choose one</button>
+          <p><a class="link-rule" href="#/stays">Look at the places</a></p>
         </div>`;
       return;
     }
     const pct = Math.round(g.pct * 100);
     const others = g.ways.filter(w => !w.mine && w.months < g.months);
     goalPanel.innerHTML = `
-      <div class="row-between"><p class="eyebrow">${icon('target')}What you are saving for</p>
-        <button class="btn ghost sm" id="set-goal">${icon('edit', { size: 15 })}Change</button></div>
+      <p class="eyebrow">${icon('target')}What you are saving for</p>
       <h2 style="margin-top:10px">${escapeHtml(g.stay.name)}</h2>
       <p class="small muted" style="margin-top:4px">${g.isTrip
         ? `A seat · ${g.nights} nights · ${escapeHtml(fmtDay(g.stay.dates.from))}`
-        : `${g.nights} night${g.nights === 1 ? '' : 's'} · from ${escapeHtml(fmtPointsUsd(g.target, s.pointsPerDollar))}`}</p>
+        : `${g.nights} night${g.nights === 1 ? '' : 's'} · from ${figs(fmtPointsUsd(g.target, s.pointsPerDollar))}`}</p>
 
       <div class="goal-bar" style="margin-top:16px" role="img"
            aria-label="${fmtPoints(g.have)} of ${fmtPoints(g.target)}, ${pct} per cent of the way">
@@ -239,8 +251,8 @@ export function home({ store, go }) {
         <b class="goal-pct">${pct}%</b>
       </div>
       <div class="row-between small" style="margin-top:8px">
-        <span><b class="num">${escapeHtml(fmtPoints(g.have))}</b> <span class="muted">you hold</span></span>
-        <span class="muted">of ${escapeHtml(fmtPoints(g.target))} · ${escapeHtml(pointsUsd(g.target, s.pointsPerDollar))}</span>
+        <span>${num(fmtPoints(g.have))} <span class="muted">you hold</span></span>
+        <span class="muted">of ${num(fmtPoints(g.target))} · ${num(pointsUsd(g.target, s.pointsPerDollar))}</span>
       </div>
 
       ${g.short === 0
@@ -248,17 +260,21 @@ export function home({ store, go }) {
              <p class="small">The points are there. Victor quotes it, and it is held the moment you accept.</p>
              <p style="margin-top:10px"><a class="btn sm" href="#/book/${escapeHtml(g.stay.id)}">${icon('send', { size: 15 })}Ask for it</a></p></div>`
         : `<div class="notice" style="margin-top:14px">
-             <b>${escapeHtml(fmtPoints(g.short))} to go</b>
-             <p class="small" style="margin-top:6px">At ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month you earn ${escapeHtml(fmtPoints(g.perMonth))}, so that is
-               <b>${g.months} more month${g.months === 1 ? '' : 's'}</b> — around ${escapeHtml(fmtMonth(shiftMonth(monthKey(), g.months)))}.</p>
-             <ul class="stack" style="margin-top:10px;padding-left:1.1em;gap:6px">
-               <li class="small muted">${escapeHtml(fmtUsd2(g.topUpUsd))} as a cash top-up closes it today — at face value, the Circle's share is already in the quote</li>
-               ${others.length ? `<li class="small muted">At ${escapeHtml(fmtUsd2(others[0].monthlyUsd))} a month it would be ${others[0].months} months instead of ${g.months} · <a href="#/profile">change your level</a></li>` : ''}
+             <b>${figs(fmtPoints(g.short))} to go</b>
+             <p class="small" style="margin-top:6px">At ${figs(fmtUsd2(me.monthlyUsd))} a month you earn ${figs(fmtPoints(g.perMonth))}, so that is
+               <b>${num(g.months)} more month${g.months === 1 ? '' : 's'}</b> — around ${escapeHtml(fmtMonth(shiftMonth(monthKey(), g.months)))}.</p>
+             <ul class="stack tight" style="margin-top:10px;padding-left:1.1em">
+               <li class="small muted">${figs(fmtUsd2(g.topUpUsd))} as a cash top-up closes it today — at face value, the Circle's share is already in the quote</li>
+               ${others.length ? `<li class="small muted">At ${figs(fmtUsd2(others[0].monthlyUsd))} a month it would be ${num(others[0].months)} months instead of ${num(g.months)}</li>` : ''}
                <li class="small muted">Or ask for it anyway and open it to the Circle — others put their own points in</li>
              </ul>
+             ${others.length ? '<p><a class="link-rule" href="#/profile">Change your level</a></p>' : ''}
            </div>`}
-      <p class="small muted" style="margin-top:12px">${icon('bell', { size: 14, cls: 'ico-muted' })}
-        <a href="#/watching">Tell the Desk you want it</a> and you hear the moment one comes free.</p>`;
+      <p class="small muted" style="margin-top:12px">${icon('bell', { size: 14, cls: 'ico-muted' })} You hear the moment one comes free, once the Desk knows you want it.</p>
+      <div class="stack tight">
+        <p><a class="link-rule" href="#/watching">Tell the Desk you want it</a></p>
+        <p><button type="button" class="link-rule" id="set-goal">Change what you are saving for</button></p>
+      </div>`;
   };
   drawGoal();
   goalPanel.addEventListener('click', async (e) => {
@@ -270,124 +286,124 @@ export function home({ store, go }) {
     } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
   });
 
-  // 3 — what needs you, in the order it needs you
-  const blocks = [];
-  // A deal that answers something you asked for goes above everything else: these go fast.
-  for (const m of store.matchesForMember(me.id).slice(0, 3)) {
-    const st = store.stay(m.deal.stayId);
-    blocks.push(`<div class="notice good"><b>${icon('bellRing', { size: 16 })} ${escapeHtml(st?.name || 'A place you asked for')} came free</b>
-      <p class="small">${m.deal.nights} nights from ${escapeHtml(fmtDay(m.deal.from))} · ${escapeHtml(fmtPoints(m.deal.pointsTotal))}.
-      ${m.affordable ? 'You have the points.' : `You are ${escapeHtml(fmtPoints(m.short))} short — ask anyway and close it with a top-up.`}</p>
-      <p style="margin-top:8px"><a class="btn sm" href="#/stays">${icon('eye', { size: 15 })}Look at it</a></p></div>`);
-  }
-  if (status === 'due') blocks.push(`<div class="notice warn"><b>Your ${escapeHtml(fmtMonth(month))} contribution is due</b>
-      <p class="small">${escapeHtml(fmtUsd2(me.monthlyUsd))} to the Reserve with reference <span class="num">${escapeHtml(refFor(me, month))}</span>, then tap “I sent it”.</p>
-      <p style="margin-top:8px"><a class="btn sm" href="#/pay">Send it</a></p></div>`);
-  if (status === 'pending') {
-    const c = store.contributionsFor(me.id).find(x => x.forMonth === month && x.status === 'pending');
-    blocks.push(`<div class="notice"><b>Sent · awaiting the Banker</b>
-      <p class="small">${escapeHtml(fmtUsd2(c.expectedUsd))} marked as sent on ${escapeHtml(fmtDay(c.submittedAt))}. Vishnu confirms within ${s.bankerSlaHours} hours of the money arriving; your points appear the moment he does.</p></div>`);
-  }
-  if (status === 'paused') blocks.push(`<div class="notice"><b>You are paused until ${escapeHtml(fmtMonth(me.pausedUntil))}</b>
-      <p class="small">Your streak is frozen at ${streak}, not reset, and your points stay fully usable. <a href="#/profile">Resume any time</a>.</p></div>`);
-  for (const q of quoted) {
-    const st = store.stay(q.stayId); const left2 = countdownTo(q.quoteExpiresAt);
-    blocks.push(`<div class="notice warn"><b>A quote is waiting for you</b>
-      <p class="small">${escapeHtml(st?.name || 'a stay')} · ${q.nights} nights from ${escapeHtml(fmtDay(q.checkIn))} · ${escapeHtml(fmtPoints(q.quotedPoints))}${q.topUpUsd ? ` plus ${escapeHtml(fmtUsd2(q.topUpUsd))} top-up` : ''}.
-      ${left2 ? `Expires in <span class="num">${escapeHtml(left2)}</span>.` : 'It has expired.'}</p>
-      <p style="margin-top:8px"><a class="btn sm" href="#/requests/${q.id}">Look at it</a></p></div>`);
-  }
-  // A freshly sent ask used to be invisible here — the member had nowhere that said Victor had it.
-  for (const a of asked) {
-    const st = store.stay(a.stayId);
-    blocks.push(`<div class="notice"><b>Victor has your ask for ${escapeHtml(st?.name || 'a stay')}</b>
-      <p class="small">${a.nights} nights from ${escapeHtml(fmtDay(a.checkIn))}. He prices it within ${tier.slaHours ?? s.slaHours} hours; nothing is committed until you say yes.</p>
-      <p style="margin-top:8px"><a class="btn ghost sm" href="#/requests/${a.id}">Details</a></p></div>`);
-  }
-  for (const h of held) {
-    const st = store.stay(h.stayId);
-    blocks.push(`<div class="notice"><b>${escapeHtml(fmtPoints(h.points))} committed to ${escapeHtml(st?.name || 'a stay')}</b>
-      <p class="small">${h.nights} nights from ${escapeHtml(fmtDay(h.checkIn))}. ${h.approvedAt ? 'Victor has it and is booking it himself, in your name; your points burn when the room is yours.' : 'Victor picks it up next; you hear the moment he has it.'}</p>
-      <p style="margin-top:8px"><a class="btn ghost sm" href="#/requests/${h.id}">Details</a></p></div>`);
-  }
-  for (const u of upcoming) {
-    const st = store.stay(u.stayId);
-    blocks.push(`<div class="notice good"><b>Booked: ${escapeHtml(st?.name || 'a stay')}</b>
-      <p class="small">${u.nights} nights from ${escapeHtml(fmtDay(u.checkIn))} · confirmation <span class="num">${escapeHtml(u.confirmationRef)}</span>${u.hotelDeadline ? ` · free cancellation until ${escapeHtml(fmtDay(u.hotelDeadline))}` : ''}.</p></div>`);
-  }
-  const chipIn = store.openToChipIn().filter(r => r.memberId !== me.id);
-  for (const r of chipIn.slice(0, 2)) {
-    const st = store.stay(r.stayId); const owner = store.member(r.memberId);
-    const target = r.quotedPoints || r.indicativePoints || 0;
-    const gap = Math.max(0, target - store.coveredPoints(r));
-    const pct = target ? Math.min(1, store.coveredPoints(r) / target) : 0;
-    blocks.push(`<div class="notice ask">
-      <div class="row" style="gap:11px;align-items:flex-start;flex-wrap:nowrap">
-        ${avatar(owner, 40)}
-        <div style="min-width:0;flex:1">
-          <b>${escapeHtml(owner?.name.split(' ')[0] || 'An Insider')} is ${escapeHtml(fmtPoints(gap))} short for ${escapeHtml(st?.name || 'a stay')}</b>
-          <p class="small muted" style="margin-top:3px">${r.nights} nights from ${escapeHtml(fmtDay(r.checkIn))}. Anyone can put their own points in — yours are committed only until it is booked or falls through.</p>
-          <div class="goal-bar" style="margin-top:10px" role="img"
-            aria-label="${escapeHtml(fmtPct(pct))} of the way there"><span style="width:${(pct * 100).toFixed(1)}%"></span></div>
-          <p class="tiny muted" style="margin-top:6px">${escapeHtml(fmtPoints(store.coveredPoints(r)))} of ${escapeHtml(fmtPoints(target))} together — ${escapeHtml(fmtPct(pct))} there</p>
-          <p style="margin-top:10px"><a class="btn sm" href="#/requests/${r.id}">${icon('chipIn', { size: 15 })}Chip in</a></p>
+  // 5 — a postcard, when there is one to show.
+  //
+  // On a day this member is on the island (their own approved booking covers today in Aruba) the
+  // panel asks for one, and once one is sent it shows it. On any other day it shows the newest
+  // postcard from the last fortnight. When neither applies nothing is drawn: Home never gains an
+  // empty box, and booking stays the headline — the postcard is the second thing, like the board.
+  if (typeof store.postcardsOn === 'function' && store.postcardsOn()) {
+    const day = store.islandDay(me.id);
+    const today = arubaDate(new Date());
+    const sentToday = store.moments({ mine: true }).find(m => arubaDate(m.createdAt) === today);
+    const latest = store.moments().find(m => Date.now() - new Date(m.createdAt) < 14 * 86400000);
+    const send = (capture) => postcardSheet({ store, prefill: { capture, redemptionId: day?.redemption?.id || null } }).then(m => { if (m) refresh?.(); });
+    if (day) {
+      const box = el(`<div class="panel" id="postcard-day">
+        <p class="eyebrow">${icon('camera')}Today’s postcard</p>
+        <p class="mono tiny muted place-line" style="margin-top:6px">DAY ${day.day} OF ${day.days} · ${escapeHtml(String(day.stay?.name || '').toUpperCase())}</p>
+        ${sentToday ? '<div id="today-card" style="margin-top:12px"></div>' : '<p class="big-line">Send one from the island.</p>'}
+        <div class="stack tight" style="margin-top:14px">
+          ${sentToday
+            ? `<p><button type="button" class="link-rule" data-postcard="capture">Another one</button></p><p><a class="link-rule" href="#/postcards">All of them</a></p>`
+            : `<button type="button" class="btn block" data-postcard="capture">Take one now</button><p><button type="button" class="link-rule" data-postcard="roll">From your roll</button></p>`}
         </div>
-      </div></div>`);
+      </div>`);
+      if (sentToday) {
+        store.momentUrls([sentToday.path]).then(urls => { box.querySelector('#today-card')?.replaceChildren(postCard(sentToday, { store, urls, compact: true })); });
+      }
+      box.addEventListener('click', (e) => { const b = e.target.closest('[data-postcard]'); if (b) send(b.dataset.postcard === 'capture'); });
+      body.appendChild(box);
+    } else if (latest) {
+      const block = el(`<div class="rule-block">
+        <p class="eyebrow">${icon('camera')}The latest postcard</p>
+        <div id="latest-card" style="margin-top:12px"></div>
+        <a class="link-rule" href="#/postcards">All of them</a>
+      </div>`);
+      store.momentUrls([latest.path]).then(urls => { block.querySelector('#latest-card')?.replaceChildren(postCard(latest, { store, urls, compact: true })); });
+      body.appendChild(block);
+    }
   }
-  if (blocks.length) left.appendChild(el(`<div class="stack">${blocks.join('')}</div>`));
-  // The list of everything asked, which had no way in from the chrome at all.
-  if (store.state.redemptions.some(r => r.memberId === me.id)) left.appendChild(el(`<p class="small" style="margin-top:10px"><a href="#/requests">${icon('history', { size: 14, cls: 'ico-muted' })} Everything you have asked for</a></p>`));
 
-  // 4 — the ledger, last five lines
+  // 6 — what being in the Circle has been worth, in dollars, from real bookings.
+  //
+  // "I want people to see their savings real price vs what on the page so they appreciate being
+  // a member." It only appears once there is a paid booking to build it from: a savings panel
+  // reading $0.00 on somebody's first week is the opposite of the intended feeling, and an
+  // estimate would make the number worthless on the day it finally matters.
+  {
+    const sv = store.savingsFor(me.id);
+    if (sv.trips) {
+      const good = sv.savedUsd > 0;
+      body.appendChild(el(`<div class="panel">
+        <p class="eyebrow">${icon('trend')}What the Circle has saved you</p>
+        <p class="big-figure num" style="color:${good ? 'var(--good-text)' : 'var(--ink)'}">${escapeHtml(fmtUsd2(Math.abs(sv.savedUsd)))}</p>
+        <p class="small muted" style="margin-top:4px">${good
+          ? `across ${num(sv.trips)} booking${sv.trips === 1 ? '' : 's'} — ${figs(fmtUsd2(sv.publicUsd))} of hotel for ${figs(fmtUsd2(sv.oursUsd))}, ${num(`${sv.pct}%`)} off the public rate`
+          : `${figs(fmtUsd2(sv.oursUsd))} against a public ${figs(fmtUsd2(sv.publicUsd))} — the Circle has cost you more so far, and it says so`}</p>
+        <ul class="ledger" style="margin-top:14px">
+          ${sv.lines.slice(0, 3).map(l => `<li>
+            <span class="what"><b>${escapeHtml(l.stayName)}</b><span class="meta">${l.nights} night${l.nights === 1 ? '' : 's'} · booked alone ${figs(fmtUsd2(l.publicUsd))}</span></span>
+            <span class="delta"><b class="${l.savedUsd > 0 ? 'pos' : ''}">${l.savedUsd >= 0 ? '' : '+'}${escapeHtml(fmtUsd2(Math.abs(l.savedUsd)))}</b><small>${l.savedUsd >= 0 ? 'saved' : 'more than direct'} · paid ${escapeHtml(fmtUsd2(l.oursUsd))}</small></span></li>`).join('')}
+        </ul>
+        <p class="small muted" style="margin-top:10px">Against the public rate for the same nights, taken when you asked for them. ${sv.paidIn ? `You have put in ${figs(fmtUsd2(sv.paidIn))} altogether.` : ''}</p>
+        <a class="link-rule" href="#/ledger">Every line</a>
+      </div>`));
+    }
+  }
+
+  // 7 — the ledger, last five lines
   const recent = store.ledgerFor(me.id).slice(0, 5);
-  const ledgerPanel = el(`<div class="panel">
-      <div class="row-between"><h2>Your ledger</h2><a class="small" href="#/ledger">All of it</a></div>
+  body.appendChild(el(`<div class="panel">
+      <h2>Your ledger</h2>
       <ul class="ledger" style="margin-top:10px">${recent.map(l => ledgerRow(l, s)).join('') || '<li><span class="what"><b>No lines yet</b><span class="meta">Your first confirmed contribution will appear here with its split.</span></span></li>'}</ul>
-    </div>`);
-  left.appendChild(ledgerPanel);
+      <a class="link-rule" href="#/ledger">All of it</a>
+    </div>`));
 
-  // right column — streak, roll call, coverage, the note from Ian
+  // 8 — standing, roll call, coverage, the note from Ian
   const myStanding = store.standingOf(me.id);
   const nextUp = nextRank(myStanding?.monthsHeld ?? 0);
-  right.appendChild(el(`<div class="rule-block">
-      <div class="row-between"><p class="eyebrow">${icon('crown')}Your standing</p>
-        <a class="small" href="#/profile">Your corner</a></div>
+  const toGo = nextUp ? nextUp.months - (myStanding?.monthsHeld ?? 0) : 0;
+  const standing = el(`<div class="rule-block">
+      <p class="eyebrow">${icon('crown')}Your standing</p>
       <div id="crest-slot" style="margin-top:10px"></div>
-      <p class="small muted" style="margin-top:8px">${escapeHtml(
-        nextUp ? `${nextUp.months - (myStanding?.monthsHeld ?? 0)} more month${nextUp.months - (myStanding?.monthsHeld ?? 0) === 1 ? '' : 's'} to ${nextUp.name}.`
-               : 'Nothing above this one.')} ${escapeHtml(RANKS[myStanding?.rankIndex ?? 0].unlocks)}</p>
+      <p class="small muted" style="margin-top:8px">${nextUp ? `${num(toGo)} more month${toGo === 1 ? '' : 's'} to ${escapeHtml(nextUp.name)}.` : 'Nothing above this one.'} ${escapeHtml(RANKS[myStanding?.rankIndex ?? 0].unlocks)}</p>
       <hr class="rule" style="margin:14px 0">
       <div class="row" style="gap:11px;margin-top:10px;align-items:flex-start;flex-wrap:nowrap">
         <span style="flex:none;margin-top:-4px">${treeSvg(VOCAB.tierLean[me.monthlyUsd], { size: 30 })}</span>
-        <div style="min-width:0"><b>${escapeHtml(tierName(me.monthlyUsd))}</b> · ${escapeHtml(fmtUsd2(me.monthlyUsd))} a month
-        <br><span class="small muted">${escapeHtml(fmtPointsUsd(store.lifetime(me.id).balance, s.pointsPerDollar))} held${me.founding ? ` · ${escapeHtml(VOCAB.founding)}` : ''}</span></div>
+        <div style="min-width:0"><b>${escapeHtml(tierName(me.monthlyUsd))}</b> · ${num(fmtUsd2(me.monthlyUsd))} a month
+        <br><span class="small muted">${figs(fmtPointsUsd(store.lifetime(me.id).balance, s.pointsPerDollar))} held${me.founding ? ` · ${escapeHtml(VOCAB.founding)}` : ''}</span></div>
       </div>
-      <p class="small" style="margin-top:14px"><b class="num">${streak}</b> consecutive contribution${streak === 1 ? '' : 's'}${next ? ` · ${next - streak} more to the ${next}-month bonus of ${fmtPoints(s.streakBonuses[next])}` : ''}.</p>
+      <p class="small" style="margin-top:14px">${num(streak)} consecutive contribution${streak === 1 ? '' : 's'}${next ? ` · ${num(next - streak)} more to the ${num(next)}-month bonus of ${num(fmtPoints(s.streakBonuses[next]))}` : ''}.</p>
       <div style="margin-top:12px">${sparkSlot()}</div>
-    </div>`));
-  right.querySelector('#crest-slot')?.replaceChildren(
+      <a class="link-rule" href="#/profile">Your corner</a>
+    </div>`);
+  body.appendChild(standing);
+  standing.querySelector('#crest-slot')?.replaceChildren(
     rankCrest(myStanding, { size: 54, sub: `${myStanding?.monthsHeld ?? 0} month${(myStanding?.monthsHeld ?? 0) === 1 ? '' : 's'} in the Circle` }));
   {
     const series = store.balanceSeries(me.id).map(p => p.points);
-    right.querySelector('.spark-slot')?.replaceChildren(sparkline(series.length ? series : [0, 0], { height: 46 }));
+    standing.querySelector('.spark-slot')?.replaceChildren(sparkline(series.length ? series : [0, 0], { width: 340, height: 46 }));
   }
-  right.appendChild(el(`<div class="rule-block">
-      <div class="row-between"><p class="eyebrow">${icon('users')}This month in the Circle</p>
-        <a class="small" href="#/circle">Everyone</a></div>
+  const roll = el(`<div class="rule-block">
+      <p class="eyebrow">${icon('users')}This month in the Circle</p>
       <div class="row" style="gap:14px;margin-top:12px;align-items:center">
         <span id="rollcall"></span>
-        <div class="small"><b>${t.confirmedThisMonth} of ${t.expectedThisMonth}</b> contributions confirmed for ${escapeHtml(fmtMonth(month))}.
+        <div class="small"><b>${num(t.confirmedThisMonth)} of ${num(t.expectedThisMonth)}</b> contributions confirmed for ${escapeHtml(fmtMonth(month))}.
         <br><span class="muted">Names stay private unless an Insider opts in.</span></div>
-      </div></div>`));
-  right.querySelector('#rollcall').replaceChildren(ring({ total: t.expectedThisMonth, filled: t.confirmedThisMonth, size: 76 }));
+      </div>
+      <a class="link-rule" href="#/circle">Everyone</a></div>`);
+  body.appendChild(roll);
+  roll.querySelector('#rollcall').replaceChildren(ring({ total: t.expectedThisMonth, filled: t.confirmedThisMonth, size: 76 }));
   const cov = el(`<div class="rule-block"><p class="eyebrow">${icon('shield')}Proof of reserves</p><div id="cov" style="margin-top:12px"></div>
-      <p class="small muted" style="margin-top:10px"><a href="#/pool">The whole Pool</a></p></div>`);
+      <a class="link-rule" href="#/pool">The whole Pool</a></div>`);
   cov.querySelector('#cov').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, liabilityUsd: t.liabilityUsd, configured: t.accountsConfigured }));
-  right.appendChild(cov);
+  body.appendChild(cov);
   // The Voice's note reads as a note: set as a pull quote, in his words, signed.
-  if (note) right.appendChild(el(`<div class="rule-block"><p class="eyebrow">${icon('inbox')}From the Voice</p>
+  if (note) body.appendChild(el(`<div class="rule-block"><p class="eyebrow">${icon('inbox')}From the Voice</p>
       <blockquote class="pull"><b>${escapeHtml(note.title)}</b><br>${escapeHtml(note.body.slice(0, 180))}${note.body.length > 180 ? '…' : ''}
-        <cite>${escapeHtml(store.member(note.authorId)?.name || 'Ian')} · <a href="#/circle">all the notes</a></cite></blockquote></div>`));
+        <cite>${escapeHtml(store.member(note.authorId)?.name || 'Ian')}</cite></blockquote>
+      <a class="link-rule" href="#/circle">All the notes</a></div>`));
   return wrap;
 }
 
@@ -411,14 +427,11 @@ export async function goalSheet({ store }) {
             <optgroup label="On the island">${stays.map(x => `<option value="${escapeHtml(x.id)}"${x.id === current.stayId ? ' selected' : ''}>${escapeHtml(x.name)}${x.house ? ' · where we stay' : ''}</option>`).join('')}</optgroup>
             <optgroup label="Cruises and trips">${trips.map(x => `<option value="${escapeHtml(x.id)}"${x.id === current.stayId ? ' selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}</optgroup>
           </select></label>
-        <div class="grid g2" id="stay-only">
-          <label class="field"><span>Nights</span><input name="nights" type="number" min="1" max="30" value="${current.nights || 3}" inputmode="numeric"></label>
-
-        </div>
+        <label class="field" id="stay-only"><span>Nights</span><input name="nights" type="number" min="1" max="30" value="${current.nights || 3}" inputmode="numeric"></label>
         <div id="prev" class="notice"></div>
         <div class="sheet-actions">
-          ${me.goal ? '<button class="btn ghost" data-clear>Stop saving for it</button>' : ''}
-          <button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Set it</button></div>`;
+          ${me.goal ? '<button type="button" class="link-rule" data-clear>Stop saving for it</button>' : ''}
+          <button type="button" class="btn block" data-ok>Set it</button></div>`;
       const v = (n) => body.querySelector(`[name=${n}]`);
       const draw = () => {
         const stay = store.stay(v('stayId').value);
@@ -431,11 +444,11 @@ export async function goalSheet({ store }) {
         const perMonth = pointsPerMonth(s, me.monthlyUsd);
         const months = short ? Math.ceil(short / perMonth) : 0;
         body.querySelector('#prev').innerHTML = `
-          <b>${escapeHtml(fmtPoints(target))} · ${escapeHtml(pointsUsd(target, s.pointsPerDollar))}</b>
+          <b>${num(fmtPoints(target))} · ${num(pointsUsd(target, s.pointsPerDollar))}</b>
           <p class="small" style="margin-top:6px">${short
-            ? `You hold ${escapeHtml(fmtPoints(have))}, so ${escapeHtml(fmtPoints(short))} to go — about ${months} month${months === 1 ? '' : 's'} at ${escapeHtml(fmtUsd2(me.monthlyUsd))}.`
+            ? `You hold ${figs(fmtPoints(have))}, so ${figs(fmtPoints(short))} to go — about ${num(months)} month${months === 1 ? '' : 's'} at ${figs(fmtUsd2(me.monthlyUsd))}.`
             : 'You already hold enough for this. Ask for it whenever you like.'}</p>
-          ${stay?.minNights > 1 && !isTrip ? `<p class="small muted" style="margin-top:6px">${escapeHtml(stay.name)} takes a minimum of ${stay.minNights} nights.</p>` : ''}`;
+          ${stay?.minNights > 1 && !isTrip ? `<p class="small muted" style="margin-top:6px">${escapeHtml(stay.name)} takes a minimum of ${num(stay.minNights)} nights.</p>` : ''}`;
       };
       body.addEventListener('input', draw); body.addEventListener('change', draw); draw();
       body.querySelector('[data-clear]')?.addEventListener('click', () => close(CLEAR_GOAL));
@@ -451,11 +464,14 @@ const sparkSlot = () => '<div class="spark-slot"></div>';
 
 function ledgerRow(l, s) {
   const positive = l.points > 0;
-  return `<li><span class="what"><b>${escapeHtml(l.note)}</b>
+  return `<li><span class="what"><b>${figs(l.note)}</b>
       <span class="meta">${escapeHtml(KIND_LABEL[l.kind] || l.kind)} · ${escapeHtml(fmtDay(l.at))}</span></span>
     <span class="delta"><b class="${positive ? 'pos' : 'neg'}">${positive ? '+' : ''}${Math.round(l.points).toLocaleString('en-US')}</b>
       <small>${escapeHtml(pointsUsd(Math.abs(l.points), s.pointsPerDollar))}</small></span></li>`;
 }
+
+/** "5 Oct" — the day the next contribution is due, for a dateline. */
+const dueOn = (s, month) => `${s.dueDay} ${fmtMonth(shiftMonth(month, 1)).slice(0, 3)}`;
 
 export function pay({ store, go }) {
   const me = store.me, s = store.settings;
@@ -472,67 +488,65 @@ export function pay({ store, go }) {
   // anyone deliberately sending something extra.
   const settled = status === 'confirmed';
   const landed = store.contributionsFor(me.id).find(c => c.forMonth === month && c.status === 'confirmed');
-  const bankDetails = `<div class="grid g2" style="margin-top:14px">
-          <div class="stack">
-            <div class="copyline"><code>${escapeHtml(s.reserveAccount.bank)}</code></div>
-            <div class="copyline"><code>${escapeHtml(s.reserveAccount.holder)}</code></div>
-            <div class="copyline"><code class="num">${escapeHtml(s.reserveAccount.number)}</code><button class="btn ghost sm" data-copy="${escapeHtml(s.reserveAccount.number)}">Copy</button></div>
-          </div>
-          <div class="stack">
-            <div><p class="eyebrow">${icon('tag')}Put this in the description</p>
-              <div class="copyline" style="margin-top:6px"><code class="num">${escapeHtml(reference)}</code><button class="btn ghost sm" data-copy="${escapeHtml(reference)}">Copy</button></div></div>
-            <p class="small muted">It is how Vishnu matches your transfer against the statement in seconds. Same reference every month, with the month on the end.</p>
-          </div>
+  const banker = (id) => store.member(id)?.name.split(' ')[0] || 'the Banker';
+  // The reference first: it is the one thing Vishnu reads off the statement.
+  const bankDetails = `<div class="stack" style="margin-top:14px">
+          <div><p class="eyebrow">${icon('tag')}Put this in the description</p>
+            <div class="copyline" style="margin-top:6px"><code class="num">${escapeHtml(reference)}</code><button type="button" class="btn ghost sm" data-copy="${escapeHtml(reference)}">Copy</button></div>
+            <p class="small muted" style="margin-top:6px">It is how Vishnu matches your transfer against the statement in seconds. Same reference every month, with the month on the end.</p></div>
+          <div class="copyline"><code>${escapeHtml(s.reserveAccount.bank)}</code></div>
+          <div class="copyline"><code>${escapeHtml(s.reserveAccount.holder)}</code></div>
+          <div class="copyline"><code class="num">${escapeHtml(s.reserveAccount.number)}</code><button type="button" class="btn ghost sm" data-copy="${escapeHtml(s.reserveAccount.number)}">Copy</button></div>
         </div>`;
-  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:820px">
-      <p class="eyebrow">${escapeHtml(fmtMonth(month))}</p>
-      <h1>${settled ? `${escapeHtml(fmtMonth(month))} is settled` : 'Send your contribution'}</h1>
-      <p class="lede" style="margin-top:12px">${settled
-        ? `${landed ? `${escapeHtml(fmtUsd2(landed.amountUsd ?? landed.expectedUsd ?? me.monthlyUsd))} landed and Vishnu confirmed it` : 'Vishnu has confirmed this month'} — nothing more is due until the ${s.dueDay}th of next month. There is nothing for you to send.`
-        : `${escapeHtml(fmtUsd2(me.monthlyUsd))} — ${escapeHtml(fmtAfl2(me.monthlyUsd, s.awgPerUsd))} at the peg of ${s.awgPerUsd} — to the Circle’s Reserve account. Points appear when Vishnu confirms the money landed, not before.`}</p>
+  const h1 = settled ? `${escapeHtml(fmtMonth(month))} is settled` : pending ? `${escapeHtml(fmtMonth(month))} is marked as sent` : `${escapeHtml(fmtMonth(month))} is due`;
+  const dateline = settled
+    ? `${num(fmtUsd2(landed?.amountUsd ?? landed?.expectedUsd ?? me.monthlyUsd))} landed · confirmed by ${escapeHtml(landed?.reviewedBy ? banker(landed.reviewedBy) : 'the Banker')} · next due ${escapeHtml(dueOn(s, month))}`
+    : pending
+      ? `${num(fmtUsd2(pending.expectedUsd))} · marked as sent ${escapeHtml(fmtDay(pending.submittedAt))} · awaiting the Banker`
+      : `${num(fmtUsd2(me.monthlyUsd))} · ${escapeHtml(fmtAfl2(me.monthlyUsd, s.awgPerUsd))} · becomes ${num(fmtPoints(sp.points))} · all of it to the Reserve`;
+  const wrap = el(`<div><section class="sec"><div class="wrap">
+      <p class="eyebrow">${settled ? 'Your contribution' : 'Send a contribution'}</p>
+      <h1>${h1}</h1>
+      <p class="dateline">${dateline}</p>
 
-      ${settled ? `<div class="notice good" style="margin-top:20px"><b><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.thanks[0])}</span> · ${escapeHtml(VOCAB.pap.thanks[1])}</b>
-        <p class="small">${escapeHtml(fmtMonth(month))} is confirmed${landed?.confirmedAt ? ` — ${escapeHtml(fmtDay(landed.confirmedAt))}` : ''}. Your next one is due on the ${s.dueDay}th of next month.</p></div>
+      ${settled ? `<div class="panel flat" style="margin-top:20px"><b><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.thanks[0])}</span> · ${escapeHtml(VOCAB.pap.thanks[1])}</b>
+        <p class="small" style="margin-top:6px">${escapeHtml(fmtMonth(month))} is confirmed${landed?.confirmedAt ? ` — ${escapeHtml(fmtDay(landed.confirmedAt))}` : ''}. Your next one is due on the ${num(`${s.dueDay}th`)} of next month.</p></div>
 
       <details class="fineprint" style="margin-top:16px">
         <summary>Send something extra</summary>
         <p class="small muted" style="margin-top:10px">Only if you mean to. This month is already paid, and a second transfer has to be spotted and returned by hand.</p>
         ${bankDetails}
-      </details>` : `
+      </details>
+
+      <label class="row-between ask-switch" style="margin-top:20px">
+        <span><b>Autopilot</b><span class="small muted">A standing order for the ${num(`${s.dueDay}th`)} — Aruba Bank and Banco di Caribe both do it free, online — with the reference in the description, once.</span></span>
+        <input class="switch" type="checkbox" id="autopilot" name="standingOrder" ${me.standingOrder ? 'checked' : ''}>
+      </label>` : `
       <div class="panel" style="margin-top:22px">
         <h2>1 · Make the transfer</h2>
         ${bankDetails}
         <p class="small muted" style="margin-top:14px">Florins between local banks land in seconds through I-Pago. A US-dollar transfer can take a business day. Your points follow the amount that actually arrives — bank fees and exchange spread are yours, and the Circle never rounds in its own favour.</p>
       </div>
 
-      <div class="panel" style="margin-top:16px">
-        <h2>2 · What it becomes</h2>
-        <p class="big-figure num" style="margin-top:12px">${escapeHtml(fmtPoints(sp.points))}</p>
-        <p class="lede" style="margin-top:4px">${escapeHtml(fmtUsd2(sp.points / s.pointsPerDollar))} of hotel.</p>
-        <p class="small muted" style="margin-top:12px;max-width:56ch">All ${escapeHtml(fmtUsd2(sp.backingUsd))} of it goes into the Reserve and stays there until you spend it on a room${sp.bonusPoints ? ` — and the ${escapeHtml(fmtPoints(sp.bonusPoints))} on top is your ${escapeHtml(tierName(me.monthlyUsd))} bonus, which the Circle funds out of its own share` : ''}. Nothing is taken on the way in; the Circle is paid 15% when you book.</p>
-      </div>
-
-      <div class="panel" style="margin-top:16px">
-        <h2>3 · Tell Vishnu</h2>
+      <div class="panel">
+        <h2>2 · Tell Vishnu</h2>
         ${pending ? `<div class="notice" style="margin-top:12px"><b>Already sent</b>
-            <p class="small">You marked ${escapeHtml(fmtUsd2(pending.expectedUsd))} as sent on ${escapeHtml(fmtDay(pending.submittedAt))}, reference <span class="num">${escapeHtml(pending.reference)}</span>. It is in the Banker’s queue.</p>
-            <p style="margin-top:10px"><button class="btn ghost sm" id="withdraw">Withdraw it</button></p></div>`
+            <p class="small">You marked ${figs(fmtUsd2(pending.expectedUsd))} as sent on ${escapeHtml(fmtDay(pending.submittedAt))}, reference ${num(pending.reference)}. It is in the Banker’s queue.</p>
+            <button type="button" class="link-rule" id="withdraw">Withdraw it</button></div>`
           : `<form id="sent" style="margin-top:12px">
-            <div class="grid g2">
+            <div class="pair">
               <label class="field"><span>Amount sent</span><input name="amountUsd" type="number" inputmode="decimal" step="0.01" min="1" value="${me.monthlyUsd}" required></label>
               <label class="field"><span>Currency</span><select name="currency"><option value="USD">US dollars</option><option value="AWG">Aruban florin</option></select></label>
-              <label class="field"><span>Date sent</span><input name="sentOn" type="date" value="${new Date().toISOString().slice(0, 10)}" required></label>
-              <label class="field"><span>From which bank</span><select name="bank">${['Aruba Bank', 'Banco di Caribe', 'CMB', 'RBC Royal Bank', 'Other'].map(b => `<option>${b}</option>`).join('')}</select></label>
             </div>
+            <label class="field"><span>Date sent</span><input name="sentOn" type="date" value="${new Date().toISOString().slice(0, 10)}" required></label>
+            <label class="field"><span>From which bank</span><select name="bank">${['Aruba Bank', 'Banco di Caribe', 'CMB', 'RBC Royal Bank', 'Other'].map(b => `<option>${b}</option>`).join('')}</select></label>
             <label class="field"><span>Anything Vishnu should know</span><textarea name="note" rows="2" placeholder="Optional — for example, my wife sent it from her account."></textarea></label>
             <label class="field"><span>Screenshot of the transfer (optional)</span><input name="proof" type="file" accept="image/*" style="padding:10px">
               <span class="hint">Helpful, never required. The bank statement is what actually matches.</span></label>
-            <div class="row"><button class="btn" type="submit">${icon('send', { size: 17 })}I sent it</button>
-              <a class="btn ghost" id="wa" target="_blank" rel="noopener" href="${escapeHtml(waLink(store.member('mem_vishnu')?.phone || '', TEMPLATES.transferSent({ member: me, amountUsd: me.monthlyUsd, month, reference })))}">Message Vishnu</a></div>
           </form>`}
-      </div>`}
-
-      <p class="small muted" style="margin-top:18px">Prefer not to think about it? Set a standing order for the ${s.dueDay}th — Aruba Bank and Banco di Caribe both do it free, online — and put the reference in the description once. <a href="#/profile">Mark yourself on autopilot</a>.</p>
+      </div>
+      ${pending ? '' : `<div class="act-bar"><button class="btn block" type="submit" form="sent">${icon('send', { size: 17 })}I sent it</button>
+        <a class="link-rule" id="wa" target="_blank" rel="noopener" href="${escapeHtml(waLink(store.member('mem_vishnu')?.phone || '', TEMPLATES.transferSent({ member: me, amountUsd: me.monthlyUsd, month, reference })))}">Message Vishnu on WhatsApp</a></div>`}`}
     </div></section></div>`);
   wrap.addEventListener('click', async (e) => {
     const c = e.target.closest('[data-copy]');
@@ -542,10 +556,17 @@ export function pay({ store, go }) {
       if (yes) { await store.withdrawContribution(pending.id, store.me.id); toast('Withdrawn.'); }
     }
   });
+  // The same fact the Details pane keeps: a standing order is set, so nothing here needs doing.
+  wrap.querySelector('#autopilot')?.addEventListener('change', async (e) => {
+    const on = e.target.checked;
+    try { await store.updateMember(me.id, { standingOrder: on }, me.id); toast(on ? 'On autopilot. The reference still has to be in the description.' : 'Autopilot off.'); }
+    catch (err) { e.target.checked = !on; toast(err.message, { kind: 'bad', timeout: 7000 }); }
+  });
   wrap.querySelector('#sent')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
-    const btn = e.target.querySelector('button[type=submit]');
+    // The submit lives in the docked bar under the form, tied to it by its form attribute.
+    const btn = e.submitter || wrap.querySelector('button[type=submit][form="sent"]');
     setBusy(btn, true, 'Sending…');
     try {
       const currency = f.get('currency');
@@ -574,55 +595,56 @@ export function ledger({ store, params }) {
   const rows = month ? all.filter(l => l.at.slice(0, 7) === month) : all;
   const closed = month ? store.state.monthCloses.find(c => c.month === month) : null;
   const months = [...new Set(all.map(l => l.at.slice(0, 7)))].sort().reverse();
+  const confirmedN = store.contributionsFor(me.id).filter(c => c.status === 'confirmed').length;
+  const backing = lt.backingUsd ?? lt.paidUsd;
 
   const wrap = el(`<div><section class="sec"><div class="wrap">
-      <div class="row-between">
-        <div><p class="eyebrow">${month ? escapeHtml(fmtMonth(month)) + ' statement' : 'Every line, since you joined'}</p>
-          <h1>${month ? escapeHtml(fmtMonth(month)) : 'Your ledger'}</h1></div>
-        <div class="row no-print">
-          <select id="month-pick" class="btn ghost sm" aria-label="Choose a month" style="padding-inline:12px">
-            <option value="">Everything</option>
-            ${months.map(m => `<option value="${m}"${m === month ? ' selected' : ''}>${escapeHtml(fmtMonth(m))}</option>`).join('')}
-          </select>
-          <button class="btn ghost sm" id="print">Print</button>
-          <button class="btn ghost sm" id="csv">CSV</button>
-        </div>
-      </div>
-      ${closed ? `<div class="notice good" style="margin-top:16px"><b>Sealed</b>
-        <p class="small">${escapeHtml(fmtMonth(month))} was closed by ${escapeHtml(store.member(closed.closedBy)?.name || 'the Banker')} on ${escapeHtml(fmtDay(closed.closedAt))} and co-signed by ${escapeHtml(store.member(closed.cosignedBy)?.name || 'an officer')}. Coverage at close: ${escapeHtml(fmtPct(closed.coverage))}.</p></div>` : ''}
+      <p class="eyebrow">${month ? escapeHtml(fmtMonth(month)) + ' statement' : 'Every line, since you joined'}</p>
+      <h1>${month ? escapeHtml(fmtMonth(month)) : 'Your ledger'}</h1>
+      <label class="field no-print" style="margin-top:16px"><span>Month</span>
+        <select id="month-pick" aria-label="Choose a month">
+          <option value="">Everything</option>
+          ${months.map(m => `<option value="${m}"${m === month ? ' selected' : ''}>${escapeHtml(fmtMonth(m))}</option>`).join('')}
+        </select></label>
+      ${closed ? `<div class="notice good"><b>Sealed</b>
+        <p class="small">${escapeHtml(fmtMonth(month))} was closed by ${escapeHtml(store.member(closed.closedBy)?.name || 'the Banker')} on ${escapeHtml(fmtDay(closed.closedAt))} and co-signed by ${escapeHtml(store.member(closed.cosignedBy)?.name || 'an officer')}. Coverage at close: ${num(fmtPct(closed.coverage))}.</p></div>` : ''}
 
-      <div class="grid g4" style="margin-top:20px">
-        <div class="stat"><span class="k">Sent, lifetime</span><b class="num">${escapeHtml(fmtUsd2(lt.paidUsd))}</b><span class="sub">${escapeHtml(store.contributionsFor(me.id).filter(c => c.status === 'confirmed').length)} confirmed contributions</span></div>
-        <div class="stat"><span class="k">Into the Reserve</span><b class="num">${escapeHtml(fmtUsd2(lt.backingUsd ?? lt.paidUsd))}</b><span class="sub">Every dollar you have sent</span></div>
-        <div class="stat"><span class="k">Backing + bonuses</span><b class="num">${escapeHtml(fmtUsd2(lt.backingUsd + lt.promoPoints / s.pointsPerDollar))}</b><span class="sub">${escapeHtml(fmtPoints(lt.promoPoints))} of that is bonus points</span></div>
-        <div class="stat"><span class="k">Available now</span><b class="num">${escapeHtml(fmtPoints(lt.available))}</b><span class="sub">${escapeHtml(pointsUsd(lt.available, s.pointsPerDollar))}${lt.committed ? ` · ${fmtPoints(lt.committed)} committed` : ''}</span></div>
-      </div>
-      <p class="small muted" style="margin-top:12px">You have turned ${escapeHtml(fmtUsd2(lt.paidUsd))} into ${escapeHtml(fmtUsd2(lt.balance / s.pointsPerDollar + lt.burnedPoints / s.pointsPerDollar))} of hotel so far — every dollar backed a point, and the bonuses are on top. Committed points still count against the Circle’s coverage until they are burned.</p>
+      <p class="dateline">Sent ${num(fmtUsd2(lt.paidUsd))} · ${num(confirmedN)} confirmed · ${backing === lt.paidUsd ? 'all of it' : num(fmtUsd2(backing))} to the Reserve</p>
+      <p class="dateline">Available ${num(fmtPoints(lt.available))} (${num(pointsUsd(lt.available, s.pointsPerDollar))})${lt.committed ? ` · ${num(fmtPoints(lt.committed))} committed` : ''}</p>
+      ${lt.promoPoints ? `<p class="small muted" style="margin-top:8px">${num(fmtPoints(lt.promoPoints))} of that is bonus points</p>` : ''}
 
       <div class="panel" style="margin-top:20px">
-        <div class="row-between"><h2>Contributions</h2></div>
-        <div class="tablewrap" style="margin-top:12px">
-          <table class="bands"><thead><tr><th>Month</th><th>Sent</th><th>Received</th><th class="num">Points</th><th>State</th></tr></thead>
-          <tbody id="contrib-rows"></tbody></table>
-        </div>
-      </div>
-
-      <div class="panel" style="margin-top:16px">
         <h2>Points, line by line</h2>
         <ul class="ledger" style="margin-top:10px" id="rows"></ul>
-        <button class="btn ghost sm" id="rows-more" type="button" style="margin-top:12px" hidden></button>
+        <button class="btn ghost block" id="rows-more" type="button" style="margin-top:12px" hidden></button>
+      </div>
+
+      <div class="panel">
+        <h2>Contributions</h2>
+        <ul class="ledger" style="margin-top:10px" id="contrib-rows"></ul>
+      </div>
+
+      <div class="stack tight no-print">
+        <p><button type="button" class="link-rule" id="csv">Download as CSV</button></p>
+        <p><button type="button" class="link-rule" id="print">Print</button></p>
       </div>
     </div></section></div>`);
 
   const contribs = store.contributionsFor(me.id).filter(c => !month || c.forMonth === month || (c.extra && (c.reviewedAt || '').slice(0, 7) === month));
-  wrap.querySelector('#contrib-rows').innerHTML = contribs.map(c => `<tr>
-      <td>${c.extra ? 'Extra' : escapeHtml(fmtMonth(c.forMonth))}<br><span class="small muted num">${escapeHtml(c.reference || (c.extra ? c.note || 'handed over' : '—'))}</span>${c.status === 'confirmed' ? `<br><span class="small muted">${escapeHtml(fmtUsd2(c.backingUsd))} to the Reserve</span>` : ''}</td>
-      <td class="num" data-k="Sent">${escapeHtml(fmtUsd2(c.expectedUsd))}</td>
-      <td class="num" data-k="Received">${c.receivedUsd == null ? '—' : escapeHtml(fmtUsd2(c.receivedUsd))}</td>
-      <td class="num" data-k="Points">${c.points == null ? '—' : escapeHtml(fmtPoints(c.points))}</td>
-      <td>${chip(c.status === 'rejected' ? 'rejected' : c.status)}${c.reason ? `<br><span class="small muted">${escapeHtml(c.reason)}</span>` : ''}
-        ${c.reviewedAt && c.status === 'confirmed' ? `<br><span class="small muted">by ${escapeHtml(store.member(c.reviewedBy)?.name.split(' ')[0] || 'the Banker')} · ${escapeHtml(fmtDayTime(c.reviewedAt))}</span>` : ''}</td>
-    </tr>`).join('') || '<tr><td colspan="5" class="muted small">Nothing yet.</td></tr>';
+  // The state is an ink tag; a returned transfer is the one flagged, with the Banker's reason.
+  const stateTag = (c) => {
+    const st = c.status === 'rejected' ? 'rejected' : c.status;
+    const flagged = st === 'rejected';
+    return `<span class="tag"${flagged ? ' style="color:var(--flag);border-color:var(--flag)"' : ''}>${escapeHtml(statusLabel(st)).toUpperCase()}</span>`;
+  };
+  wrap.querySelector('#contrib-rows').innerHTML = contribs.map(c => `<li>
+      <span class="what"><b>${c.extra ? 'Extra' : escapeHtml(fmtMonth(c.forMonth))}</b>
+        <span class="meta">${num(c.reference || (c.extra ? c.note || 'handed over' : '—'))}${c.reviewedAt && c.status === 'confirmed' ? ` · by ${escapeHtml(store.member(c.reviewedBy)?.name.split(' ')[0] || 'the Banker')} · ${escapeHtml(fmtDayTime(c.reviewedAt))}` : ''}</span>
+        ${c.reason ? `<span class="meta">${escapeHtml(c.reason)}</span>` : ''}</span>
+      <span class="delta">${c.points == null ? '' : `<b class="${c.points > 0 ? 'pos' : ''}">${c.points > 0 ? '+' : ''}${Math.round(c.points).toLocaleString('en-US')}</b>`}
+        <small>${escapeHtml(fmtUsd2(c.expectedUsd))} sent${c.receivedUsd == null ? '' : ` · ${escapeHtml(fmtUsd2(c.receivedUsd))} received`}</small></span>
+      <span>${stateTag(c)}</span>
+    </li>`).join('') || '<li><span class="what"><b>Nothing yet</b></span></li>';
 
   let running = 0;
   const ordered = [...rows].reverse();
@@ -639,7 +661,7 @@ export function ledger({ store, params }) {
     const shown = allRows ? withRunning : withRunning.slice(0, FIRST);
     moreBtn.hidden = allRows;
     wrap.querySelector('#rows').innerHTML = shown.map(l => `<li>
-      <span class="what"><b>${escapeHtml(l.note)}</b>
+      <span class="what"><b>${figs(l.note)}</b>
         <span class="meta">${escapeHtml(KIND_LABEL[l.kind] || l.kind)} · ${escapeHtml(fmtDayTime(l.at))}${l.by ? ` · ${escapeHtml(store.member(l.by)?.name.split(' ')[0] || '')}` : ''}${l.expiresAt ? ` · expires ${escapeHtml(fmtDay(l.expiresAt))}` : ''}</span></span>
       <span class="delta"><b class="${l.points > 0 ? 'pos' : 'neg'}">${l.points > 0 ? '+' : ''}${Math.round(l.points).toLocaleString('en-US')}</b>
         <small>balance ${Math.round(l.running).toLocaleString('en-US')}</small></span></li>`).join('')
@@ -668,85 +690,64 @@ export function card({ store, go }) {
   const me = store.me, s = store.settings;
   const lt = store.lifetime(me.id);
   const tier = tierFor(s, me.monthlyUsd);
-  const wrap = el(`<div class="nocturne" style="background:var(--ground);color:var(--ink);min-height:100vh">
-    <section class="sec"><div class="wrap" style="max-width:560px">
+  const wrap = el(`<div class="nocturne nocturne-page" style="background:var(--ground);color:var(--ink)">
+    <section class="sec"><div class="wrap">
       <p class="eyebrow">${escapeHtml(tierName(me.monthlyUsd))} · ${escapeHtml(VOCAB.clubName)}</p>
       <h1 style="margin-top:6px">Your card</h1>
       <div id="card" style="margin-top:20px"></div>
-      <p class="small muted" style="margin-top:12px">Tap the card to turn it over. The face carries no numbers — a card someone can read your balance off is a card you cannot leave on a table.</p>
+      <p class="stamp" style="margin-top:12px">TAP TO TURN OVER</p>
 
       <div class="panel" style="margin-top:20px;display:grid;gap:14px;justify-items:center">
         <p class="eyebrow">${icon('idCard')}Scan to identify you</p>
         <div class="qr-holder" id="qr"></div>
-        <p class="tiny muted" style="text-align:center;max-width:34ch">Any phone camera reads it. It opens your entry in the Circle, so Victor or Ian can pull you up at a hotel desk without asking your surname twice.</p>
+        <p class="tiny muted" style="text-align:center">Any phone camera reads it. It opens your entry in the Circle, so Victor or Ian can pull you up at a hotel desk without asking your surname twice.</p>
       </div>
 
-      <div class="panel" style="margin-top:16px">
+      <div class="panel">
         <p class="eyebrow">${icon('idCard')}Keep it on your phone</p>
-        <div class="stack" style="margin-top:12px">
+        <p class="small muted" id="wallet-note" style="margin-top:8px"></p>
+        <div class="stack tight" style="margin-top:12px">
           <button class="btn block" id="install">Put Hunto on your home screen</button>
           <button class="btn ghost block" id="save">Save the card to your photos</button>
-          <button class="btn ghost block" id="print">Print it, card sized</button>
           <button class="btn ghost block" id="share">Send it to someone</button>
           <button class="btn ghost block" id="wallet" hidden>Add to Apple Wallet</button>
+          <p><button type="button" class="link-rule" id="print">Print it, card sized</button></p>
         </div>
-        <p class="small muted" id="wallet-note" style="margin-top:12px"></p>
       </div>
 
-      <div class="panel" style="margin-top:16px">
+      <div class="panel">
         <div class="row-between"><span class="small muted">Available</span><b class="num">${escapeHtml(fmtPoints(lt.available))}</b></div>
         <div class="row-between" style="margin-top:8px"><span class="small muted">Worth</span><b class="num">${escapeHtml(pointsUsd(lt.available, s.pointsPerDollar))}</b></div>
         <div class="row-between" style="margin-top:8px"><span class="small muted">Earning</span><b class="num">${escapeHtml(fmtPoints(pointsPerMonth(s, me.monthlyUsd)))} a month</b></div>
         <div class="row-between" style="margin-top:8px"><span class="small muted">Insider since</span><b class="num">${escapeHtml(fmtDay(me.joinedAt))}</b></div>
         <div class="row-between" style="margin-top:8px"><span class="small muted">Card code</span><b class="num">${escapeHtml(me.cardCode || '—')}</b></div>
       </div>
-      <p style="margin-top:18px"><a class="btn ghost" href="#/home">Back</a></p>
     </div></section></div>`);
   wrap.querySelector('#card').appendChild(memberCard(me, { store }));
+
+  const note = wrap.querySelector('#wallet-note');
+  const installBtn = wrap.querySelector('#install');
+  if (isStandalone()) {
+    installBtn.hidden = true;
+    note.textContent = 'Hunto is already on your home screen, so the card is one tap away — no pass needed.';
+  } else {
+    note.textContent = 'It opens like an app, works offline, and the card is one tap away — with the QR always current, which a saved picture is not.';
+  }
+  installBtn.addEventListener('click', async () => {
+    if (await showInstall() === 'accepted') installBtn.hidden = true;
+  });
 
   import('../ui/wallet.js').then(async (W) => {
     import('../ui/qr.js').then(({ renderQr }) => renderQr(wrap.querySelector('#qr'), W.cardUrl(me), { size: 224 }))
       .catch(() => { wrap.querySelector('#qr').textContent = me.cardCode || ''; });
 
-    const note = wrap.querySelector('#wallet-note');
     const walletBtn = wrap.querySelector('#wallet');
-    const installBtn = wrap.querySelector('#install');
     // Apple Wallet only appears once the club actually holds a signing certificate. A button
     // that cannot do the thing it says is worse than no button, and this one sat at the top of
     // the list telling everybody who pressed it to go and read a README.
     const configured = !!store.walletConfig?.()?.url;
     walletBtn.hidden = !configured;
-
-    const standalone = window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
-    if (standalone) {
-      installBtn.hidden = true;
-      note.textContent = 'Hunto is already on your home screen, so the card is one tap away — no pass needed.';
-    } else if (W.isIOS()) {
-      note.innerHTML = 'On an iPhone this is two taps and it is free: the <b>share</b> button at the bottom of Safari, then <b>Add to Home Screen</b>. Hunto then opens like an app and the card is one tap away, with the QR always current — which a printed pass never is.';
-    } else {
-      note.textContent = 'It opens like an app, works offline, and the card is one tap away — with the QR always current, which a saved picture is not.';
-    }
     if (configured) note.textContent += ' A Wallet pass is also available below.';
-
-    installBtn.addEventListener('click', async () => {
-      // Chrome and Edge can do this properly. Everyone else gets told exactly which taps.
-      const outcome = await (window.__huntoInstall?.() ?? null);
-      if (outcome === 'accepted') { toast('Added. Hunto is on your home screen.', { kind: 'good' }); installBtn.hidden = true; return; }
-      if (outcome === 'dismissed') return;
-      await sheet({ title: 'Put Hunto on your home screen', render: (body, close) => {
-        body.innerHTML = W.isIOS()
-          ? `<p class="sheet-text">Two taps, and it costs nothing.</p>
-             <ol class="stack" style="gap:10px;padding-left:1.2em">
-               <li>Tap the <b>share</b> button — the square with the arrow, at the bottom of Safari.</li>
-               <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
-               <li>Tap <b>Add</b>.</li>
-             </ol>
-             <p class="small muted" style="margin-top:14px">It has to be Safari — Chrome on an iPhone cannot do this. Once it is there, Hunto opens full screen and your card is one tap away.</p>
-             <div class="sheet-actions"><button class="btn" data-close>Got it</button></div>`
-          : `<p class="sheet-text">Open your browser's menu and choose <b>Install</b> or <b>Add to Home screen</b>. Hunto then opens like an app, and your card is one tap away.</p>
-             <div class="sheet-actions"><button class="btn" data-close>Got it</button></div>`;
-      } });
-    });
 
     walletBtn.addEventListener('click', async () => {
       if (!configured) return;
@@ -799,44 +800,38 @@ export function card({ store, go }) {
   return wrap;
 }
 
-// The jobs a role opens, and what each one is for.
+// The jobs a role opens.
 //
 // There is no separate administrator's application and no second login. Victor, Ian and Vishnu
 // hold seats like everybody else — they contribute, they hold points, they ask for stays — and
-// the work they do for the Circle sits inside their own profile, under their level and their
-// details. An Insider with no role never sees any of it.
+// the work they do for the Circle sits inside their own profile, at the top of the door list.
+// An Insider with no role never sees any of it.
 const JOBS = [
-  { roles: ['treasurer', 'deputy'], label: 'The Banker’s inbox', href: '#/bank', ico: 'vault',
-    what: 'Confirm transfers against the statement, and close a month with a second officer co-signing.' },
-  { roles: ['planner', 'comms', 'admin'], label: 'The Desk', href: '#/desk', ico: 'send',
-    what: 'Price what people ask for, keep the catalog honest, post deals, write the notes.' },
-  { roles: ['admin', 'treasurer'], label: 'Settings', href: '#/settings', ico: 'sliders',
-    what: 'People and their logins, the levels, and the rules every number on every screen is worked out from.' },
+  { roles: ['planner', 'comms', 'admin'], label: 'The Desk', href: '#/desk' },
+  { roles: ['treasurer', 'deputy'], label: 'The Banker’s inbox', href: '#/bank' },
+  { roles: ['admin', 'treasurer'], label: 'Settings', href: '#/settings' },
 ];
-const ROLE_WORDS = { treasurer: 'Banker', deputy: 'Deputy Banker', planner: 'Desk', comms: 'Voice', admin: 'Admin' };
+// Every screen that has no tab, one visible row from the name in the bar.
+const DOORS = [
+  ['#/card', 'Your card'], ['#/pay', 'Send a contribution'], ['#/ledger', 'Your ledger'],
+  ['#/requests', 'Everything you have asked for'], ['#/watching', 'What you are watching'],
+  ['#/pool', 'The Pool'], ['#/cruises', 'Cruises and trips'], ['#/rules', 'How it works'],
+];
 
-/** The officer's half of a profile. Empty string for everybody else, which is most people. */
-function jobsPanel(store) {
-  if (!store.isOfficer()) return '';
-  const held = (store.me.roles || []).filter(r => ROLE_WORDS[r]);
-  const waiting = store.officerWork();
-  const mine = JOBS.filter(j => store.hasRole(...j.roles));
-  return `<div class="panel" style="margin-top:16px">
-      <div class="row-between"><h2>Your jobs in the Circle</h2>
-        <span class="row" style="gap:6px">${held.map(r => `<span class="chip">${escapeHtml(ROLE_WORDS[r])}</span>`).join('')}</span></div>
-      <p class="small muted" style="margin-top:6px">On top of your own seat, not instead of it. You contribute, hold points and ask for stays like everyone else; these are the extra doors your roles open.</p>
-      <ul class="job-list" style="margin-top:14px">${mine.map(j => {
-        const due = waiting.filter(w => w.href.startsWith(j.href));
-        const count = due.reduce((n, w) => n + (w.count || 0), 0);
-        return `<li${due.some(w => w.urgent) ? ' class="urgent"' : ''}>
-          <a href="${escapeHtml(j.href)}">
-            <span class="job-ico">${icon(j.ico, { size: 19 })}</span>
-            <span class="job-what"><b>${escapeHtml(j.label)}${count ? ` · ${count} waiting` : ''}</b>
-              <span class="small muted">${escapeHtml(j.what)}</span></span>
-            ${icon('chevronRight', { size: 18, cls: 'ico-muted' })}
-          </a></li>`;
-      }).join('')}</ul>
-    </div>`;
+/** The door list: the officer's doors first, with what is waiting behind each, then everyone's. */
+function doorList(store) {
+  const row = (href, label, count = 0) => `<li><a href="${escapeHtml(href)}"><span class="job-what">${escapeHtml(label)}${
+    count ? `<span class="nav-badge">${count > 9 ? '9+' : count}</span><span class="sr-only">, ${count} waiting</span>` : ''}</span>${chevron()}</a></li>`;
+  let officer = '';
+  if (store.isOfficer()) {
+    // The same call the bar makes for the badge on the name, split by the door each job is behind.
+    const waiting = (() => { try { return store.officerWork(); } catch { return []; } })();
+    officer = JOBS.filter(j => store.hasRole(...j.roles)).map(j => {
+      const due = waiting.filter(w => w.href.startsWith(j.href));
+      return row(j.href, j.label, due.reduce((n, w) => n + (w.count ?? 1), 0));
+    }).join('');
+  }
+  return `<ul class="job-list" id="doors">${officer}${DOORS.map(([h, l]) => row(h, l)).join('')}</ul>`;
 }
 
 /**
@@ -856,7 +851,7 @@ function drawBadges(panel, { store, me, refresh }) {
 
   panel.innerHTML = `
     <div class="row-between"><h2>Your badges</h2>
-      <span class="tiny muted">${held.length} held${pins.length ? ` · ${pins.length} shown` : ''}</span></div>
+      <span class="tiny muted">${num(held.length)} held${pins.length ? ` · ${num(pins.length)} shown` : ''}</span></div>
     <p class="small muted" style="margin-top:6px">Pick up to three to show beside your name. Tap one to pin or unpin it.</p>
     <div class="badge-grid" style="margin-top:14px">${held.length ? held.map(h => `
       <button type="button" class="badge-card owned" data-pin="${escapeHtml(h.badgeKey)}"
@@ -867,7 +862,7 @@ function drawBadges(panel, { store, me, refresh }) {
 
     ${shop.length ? `<hr class="rule" style="margin:20px 0">
     <div class="row-between"><h2>For sale</h2>
-      <span class="tiny muted">you have ${escapeHtml(fmtPoints(lt.available))}</span></div>
+      <span class="tiny muted">you have ${num(fmtPoints(lt.available))}</span></div>
     <p class="small muted" style="margin-top:6px">Points spent here are hotel you are choosing not to have. That is the whole cost — nothing else changes.</p>
     <div class="badge-grid" style="margin-top:14px">${shop.map(b => {
       const afford = lt.available >= b.pricePoints;
@@ -918,7 +913,7 @@ function drawCorner(panel, { store, me, refresh }) {
       <label class="field" style="margin-top:8px"><select name="cover">
         ${COVERS.map(([k, n]) => `<option value="${k}"${(me.cover || '') === k ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')}
       </select></label>
-      <button class="btn" type="submit">Save your corner</button>
+      <button class="btn block" type="submit">Save your corner</button>
     </form>`;
 
   let accent = me.accent || '';
@@ -939,17 +934,21 @@ function drawCorner(panel, { store, me, refresh }) {
 export function profile({ store, go, refresh }) {
   const me = store.me, s = store.settings;
   const exit = store.exitQuote(me.id);
-  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:820px">
-      <p class="eyebrow">${escapeHtml(tierName(me.monthlyUsd))} Insider${me.founding ? ` · ${escapeHtml(VOCAB.founding)}` : ''}</p>
+  const theme = getTheme();
+  const wrap = el(`<div><section class="sec"><div class="wrap">
+      <p class="eyebrow">${escapeHtml(tierName(me.monthlyUsd))}${me.founding ? ` · ${escapeHtml(VOCAB.founding)}` : ' Insider'}</p>
       <h1>${escapeHtml(me.name)}</h1>
-      <p class="lede" style="margin-top:10px">${escapeHtml(me.title || `${fmtUsd2(me.monthlyUsd)} a month · joined ${fmtDay(me.joinedAt)}`)}</p>
+      <p class="lede" style="margin-top:10px">${me.title ? escapeHtml(me.title) : `${num(fmtUsd2(me.monthlyUsd))} a month · joined ${escapeHtml(fmtDay(me.joinedAt))}`}</p>
+
+      <!-- Every screen without a tab, one row from the name in the bar; an officer's doors first. -->
+      <div class="rule-block" style="margin-top:16px">${doorList(store)}</div>
 
       <!-- Seven unrelated panels on one scroll — level, details, badges, your corner, jobs,
            pausing, data — ran to 5.4 screens on a phone. Same shape as Settings had, so the
            same answer: four rooms, and you land on the level, which is the thing anyone comes
            here to change. Every pane stays in the DOM and is only hidden, so the forms below
            keep the handlers they are given at build time. -->
-      <div class="segmented no-print" role="group" aria-label="Profile sections" id="tabs">
+      <div class="segmented even no-print" role="group" aria-label="Profile sections" id="tabs">
         <button type="button" data-tab="level" aria-pressed="true">Level</button>
         <button type="button" data-tab="details" aria-pressed="false">Details</button>
         <button type="button" data-tab="badges" aria-pressed="false">Badges</button>
@@ -959,63 +958,61 @@ export function profile({ store, go, refresh }) {
       <div data-pane="level">
       <div class="panel" style="margin-top:20px">
         <h2>Your contribution level</h2>
-        <p class="small muted" style="margin-top:6px">A change takes effect on your next contribution and nothing you already hold is affected. Every level can ask for every stay and every trip — what changes is how fast the points build, and the perks.</p>
         <div class="choices" id="tiers" style="margin-top:14px"></div>
         <p class="eyebrow" style="margin-top:22px">What each level carries</p>
         <div style="margin-top:10px">${tierLadder(s, { mine: me.monthlyUsd })}</div>
       </div>
-
       </div>
 
       <div data-pane="details" hidden>
       <div class="panel" style="margin-top:20px">
         <h2>Details</h2>
         <form id="details" style="margin-top:12px">
-          <div class="grid g2">
-            <label class="field"><span>Name</span><input name="name" value="${escapeHtml(me.name)}" required></label>
-            <label class="field"><span>Phone</span><input name="phone" value="${escapeHtml(me.phone || '')}" placeholder="+297 000 0000"></label>
-          </div>
+          <label class="field"><span>Name</span><input name="name" value="${escapeHtml(me.name)}" required autocomplete="name"></label>
+          <label class="field"><span>Phone</span><input name="phone" type="tel" inputmode="tel" autocomplete="tel" enterkeyhint="done" value="${escapeHtml(me.phone || '')}" placeholder="+297 000 0000"></label>
           <label class="field"><span>Your dream stay</span><select name="dreamStayId">
             ${store.arubaStays().map(st => `<option value="${st.id}"${st.id === me.dreamStayId ? ' selected' : ''}>${escapeHtml(st.name)}</option>`).join('')}</select>
             <span class="hint">This is the one your home screen counts nights toward.</span></label>
-          <label class="row" style="gap:10px;align-items:flex-start;margin-bottom:12px"><input type="checkbox" name="standingOrder" ${me.standingOrder ? 'checked' : ''}>
-            <span class="small">I have a standing order set for the ${s.dueDay}th.</span></label>
-          <label class="row" style="gap:10px;align-items:flex-start;margin-bottom:12px"><input type="checkbox" name="showOnRollcall" ${me.showOnRollcall ? 'checked' : ''}>
-            <span class="small">Show my name on the monthly roll call. <span class="muted">Off by default; only the count is public.</span></span></label>
-          <button class="btn" type="submit">Save</button>
+          <label class="row-between ask-switch" style="margin-bottom:12px"><span><b>Standing order</b><span class="small muted">I have one set for the ${num(`${s.dueDay}th`)}.</span></span><input class="switch" type="checkbox" name="standingOrder" ${me.standingOrder ? 'checked' : ''}></label>
+          <label class="row-between ask-switch" style="margin-bottom:12px"><span><b>Roll call</b><span class="small muted">Show my name on the monthly roll call. Off by default; only the count is public.</span></span><input class="switch" type="checkbox" name="showOnRollcall" ${me.showOnRollcall ? 'checked' : ''}></label>
+          <button class="btn block" type="submit">Save</button>
         </form>
       </div>
-
       </div>
 
       <div data-pane="badges" hidden>
       <div class="panel" style="margin-top:20px" id="badges-panel"></div>
-      <div class="panel" style="margin-top:16px" id="corner-panel"></div>
+      <div class="panel" id="corner-panel"></div>
       </div>
 
       <div data-pane="account" hidden>
-      ${jobsPanel(store)}
-
-      <div class="panel" style="margin-top:16px">
-        <h2>Pausing and leaving</h2>
-        <p class="small muted" style="margin-top:6px">Both are yours to do, whenever you like. Neither costs you the points you hold.</p>
-        <div class="row" style="margin-top:14px">
-          ${me.status === 'paused'
-            ? `<button class="btn ghost" id="resume">Resume contributing</button>`
-            : `<button class="btn ghost" id="pause">Pause for a few months</button>`}
-          <button class="btn danger" id="leave">Leave the Circle</button>
+      <div class="panel" style="margin-top:20px">
+        <h2>Appearance</h2>
+        <div class="segmented even" role="group" aria-label="Appearance" id="theme">
+          ${[['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button type="button" data-theme="${k}" aria-pressed="${theme === k}">${l}</button>`).join('')}
         </div>
-        <p class="small muted" style="margin-top:12px">If you left today you hold ${escapeHtml(fmtPoints(exit.basePoints))} base points. After a twelve-month window to use them, ${escapeHtml(fmtUsd2(exit.basePoints / s.pointsPerDollar))} − ${escapeHtml(fmtUsd2(exit.feeUsd))} = <b>${escapeHtml(fmtUsd2(exit.refundUsd))}</b> comes back to you. ${escapeHtml(fmtPoints(exit.promoPoints))} of bonus points and the Circle’s share are not refunded.</p>
       </div>
 
-      <div class="panel" style="margin-top:16px">
+      <div class="panel">
+        <h2>Pausing and leaving</h2>
+        <p class="small muted" style="margin-top:6px">Both are yours to do, whenever you like. Neither costs you the points you hold.</p>
+        <div class="stack tight" style="margin-top:14px">
+          ${me.status === 'paused'
+            ? `<button class="btn ghost block" id="resume">Resume contributing</button>`
+            : `<button class="btn ghost block" id="pause">Pause for a few months</button>`}
+        </div>
+        <p class="small muted" style="margin-top:12px">If you left today you hold ${figs(fmtPoints(exit.basePoints))} base points. After a twelve-month window to use them, ${figs(fmtUsd2(exit.basePoints / s.pointsPerDollar))} − ${figs(fmtUsd2(exit.feeUsd))} = <b>${num(fmtUsd2(exit.refundUsd))}</b> comes back to you. ${figs(fmtPoints(exit.promoPoints))} of bonus points and the Circle’s share are not refunded.</p>
+        <button type="button" class="link-rule danger" id="leave" style="color:var(--flag)">Leave the Circle</button>
+      </div>
+
+      <div class="panel">
         <h2>Your data</h2>
         <p class="small muted" style="margin-top:6px">${store.mode === 'supabase'
           ? 'Everything you see here is held by the Circle, not by this phone — sign in anywhere and it follows you. A copy is still yours to keep whenever you want one.'
           : 'This is a preview running in your browser, and Safari clears it after about a week of not visiting. Keep a copy if you want it to survive.'}</p>
-        <div class="row" style="margin-top:12px">
-          <button class="btn ghost sm" id="export">Export everything as JSON</button>
-          <button class="btn ghost sm" id="signout">Sign out</button>
+        <div class="stack tight" style="margin-top:12px">
+          <p><button type="button" class="link-rule" id="export">Export everything as JSON</button></p>
+          <button class="btn ghost block" id="signout">Sign out</button>
         </div>
       </div>
       </div>
@@ -1030,10 +1027,18 @@ export function profile({ store, go, refresh }) {
       panes.forEach(p => { p.hidden = p.dataset.pane !== b.dataset.tab; });
     });
   }
+  {
+    // The one appearance choice, kept in theme.js so the whole app and the status bar follow it.
+    const seg = wrap.querySelector('#theme');
+    seg.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-theme]'); if (!b) return;
+      const mode = setTheme(b.dataset.theme);
+      seg.querySelectorAll('[data-theme]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.theme === mode)));
+    });
+  }
 
   wrap.querySelector('#tiers').innerHTML = s.tiers.map(t => `<button type="button" class="choice" aria-pressed="${t.monthlyUsd === me.monthlyUsd}" data-amt="${t.monthlyUsd}">
-      <span class="amt">$${t.monthlyUsd}</span><span class="tier">${escapeHtml(tierName(t.monthlyUsd))} ${treeSvg(VOCAB.tierLean[t.monthlyUsd], { size: 14 })}</span>
-      <span class="tiny muted">${escapeHtml(fmtPoints(pointsPerMonth(s, t.monthlyUsd)))} a month · ${t.holds} open request${t.holds > 1 ? 's' : ''} · ${t.guestCerts} guest passes</span></button>`).join('');
+      <span class="amt">$${t.monthlyUsd}</span><span class="tier">${escapeHtml(tierName(t.monthlyUsd))}</span></button>`).join('');
   wrap.querySelector('#tiers').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-amt]'); if (!b) return;
     const amt = Number(b.dataset.amt); if (amt === me.monthlyUsd) return;
@@ -1054,9 +1059,9 @@ export function profile({ store, go, refresh }) {
   });
   wrap.querySelector('#pause')?.addEventListener('click', async () => {
     const until = await sheet({ title: 'Pause your contributions', render: (body, close) => {
-      body.innerHTML = `<p class="sheet-text">Up to three months. Your streak freezes at ${store.streak(me.id)} rather than resetting, and everything you hold stays usable.</p>
+      body.innerHTML = `<p class="sheet-text">Up to three months. Your streak freezes at ${num(store.streak(me.id))} rather than resetting, and everything you hold stays usable.</p>
         <label class="field"><span>Resume from</span><select name="until">${[1, 2, 3].map(n => { const d = new Date(); d.setMonth(d.getMonth() + n); const m = monthKey(d); return `<option value="${m}">${escapeHtml(fmtMonth(m))}</option>`; }).join('')}</select></label>
-        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>Pause</button></div>`;
+        <div class="sheet-actions"><button type="button" class="btn block" data-ok>Pause</button></div>`;
       body.querySelector('[data-ok]').addEventListener('click', () => close(body.querySelector('select').value));
     } });
     if (until) { try { await store.pauseMember(me.id, until, me.id); toast(`Paused until ${fmtMonth(until)}. Your streak is frozen, not reset.`); } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); } }
