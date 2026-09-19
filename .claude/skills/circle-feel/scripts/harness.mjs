@@ -16,10 +16,30 @@ async function fontShim(p) {
     return existsSync(f) ? r.fulfill({ status: 200, contentType: 'font/woff2', body: readFileSync(f) }) : r.abort();
   });
 }
-/** Open the app signed in as a member with the given role ('member' | 'planner' | 'admin'). */
-export async function open({ width = 1280, height = 900, role = 'admin', scale = 1 } = {}) {
+/** The phone's status bar and home indicator, as the app reads them: --inset-top / --inset-bottom
+ *  on <html>. The router re-renders <main>, never <html>, so setting them once would do — but a
+ *  full reload inside a test (the service worker, a `page.goto`) would drop them, so go() applies
+ *  them again after every navigation. Pass null to clear. */
+export async function applyInsets(p, insets) {
+  const set = insets ?? p.__huntoInsets;
+  if (!set) return;
+  await p.evaluate(({ top = 0, bottom = 0 }) => {
+    const s = document.documentElement.style;
+    s.setProperty('--inset-top', `${top}px`);
+    s.setProperty('--inset-bottom', `${bottom}px`);
+  }, set);
+}
+/** Open the app signed in as a member with the given role ('member' | 'planner' | 'admin');
+ *  role: null opens it signed out.
+ *  touch: true makes the page a touch device (hasTouch + isMobile) when width < 500, so
+ *  focus-on-open and double-tap behaviour are measured as a phone would show them.
+ *  insets: { top, bottom } in px sets --inset-top / --inset-bottom on <html>, re-applied by go(). */
+export async function open({ width = 1280, height = 900, role = 'admin', scale = 1, touch = false, insets = null } = {}) {
   const b = await chromium.launch();
-  const p = await b.newPage({ viewport: { width, height }, deviceScaleFactor: scale });
+  const phone = touch && width < 500;
+  const p = await b.newPage({ viewport: { width, height }, deviceScaleFactor: scale,
+    ...(phone ? { hasTouch: true, isMobile: true } : {}) });
+  p.__huntoInsets = insets;
   // The real typefaces, from disk. Answering both font hosts from the saved bundle
   // (scratchpad/fonts + fonts.css) keeps every render deterministic and off the network; when a
   // face is added to index.html, add its @font-face blocks and woff2 files to the bundle first or
@@ -41,7 +61,8 @@ export async function open({ width = 1280, height = 900, role = 'admin', scale =
   });
   await p.goto('http://127.0.0.1:8899/circle/#/', { waitUntil: 'domcontentloaded' });
   await p.waitForFunction(() => !!window.__hunto, null, { timeout: 25000 });
-  await p.evaluate(async (r) => {
+  await applyInsets(p);
+  if (role) await p.evaluate(async (r) => {
     const s = window.__hunto.store;
     // A plain member carries roles ['member'], so "no roles" matches nobody: a plain member is
     // one with no officer role. Without this a "member" run signed in as members[0] — Victor.
@@ -57,6 +78,7 @@ export async function open({ width = 1280, height = 900, role = 'admin', scale =
 export async function go(p, route, wait = 1400) {
   await p.evaluate(r => { location.hash = r; }, route);
   await p.waitForTimeout(wait);
+  await applyInsets(p);
   // fullPage screenshots skip loading="lazy" images, and img.complete does not mean decoded.
   // Without this you end up "fixing" a layout that was never broken.
   await p.evaluate(async () => {
