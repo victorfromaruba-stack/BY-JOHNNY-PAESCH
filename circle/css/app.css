@@ -3,11 +3,24 @@
 @import url("tokens.css");
 
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+* { -webkit-tap-highlight-color: transparent; }
+/* The page is a phone column, everywhere. The body is capped at --wrap and centred; on a laptop
+   window it sits on the well with a hairline round it, and a phone in portrait never sees the
+   frame. `clip`, not `hidden`: clip makes no scroll container, so the sticky top bar keeps
+   working, and iOS stops panning sideways. Anything positioned fixed is outside the body's
+   flow and must carry the same cap (.botnav, .toasts, dialog.sheet do) or it spans the window. */
+html { -webkit-text-size-adjust: 100%; overflow-x: clip;
+       scroll-padding-top: calc(var(--h-bar) + var(--inset-top) + var(--s-2)); }
 body {
-  margin: 0; background: var(--ground); color: var(--ink);
+  margin: 0; max-width: var(--wrap); margin-inline: auto; min-height: 100dvh;
+  background: var(--ground); color: var(--ink);
   font-family: var(--font-body); font-size: var(--t-body); line-height: 1.5; letter-spacing: 0;
-  -webkit-font-smoothing: antialiased; overflow-x: hidden; font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased; overflow-x: clip; font-synthesis-weight: none;
+}
+/* The table under the sheet: the only min-width query in the file, and it holds no layout. */
+@media (min-width: 431px) and (min-height: 500px) {
+  html { background: var(--well); }
+  body { outline: 1px solid var(--hairline); }
 }
 /* Two registers. What is SAID — a page title, a section head — is set in the serif, one weight,
    and never bold: the face ships one weight and a browser's faux bold is the cheapest thing a
@@ -45,42 +58,42 @@ ul, ol { margin: 0; padding-left: 1.15em; }
 :focus-visible { outline: 2px solid var(--good); outline-offset: 2px; border-radius: 4px; }
 ::selection { background: var(--good-soft); }
 [hidden] { display: none !important; }
+/* No 300ms wait and no double-tap zoom on anything that is pressed. */
+a, button, summary, label, [role=button], .listing-row, .index-row, .choice, .chip-btn, .stepper button { touch-action: manipulation; }
 
 /* numbers — never in the display or body face */
 .num, .mono, td.num, .stat b, .amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; white-space: nowrap; }
 .pts::before { content: "✦ "; color: var(--ink-2); }
 
 /* ---------- shell ---------- */
-.wrap { width: 100%; max-width: var(--wrap); margin-inline: auto; padding-inline: clamp(16px, 4vw, 28px); }
+.wrap { width: 100%; max-width: var(--wrap); margin-inline: auto; padding-inline: var(--s-4); }
 .skip { position: absolute; left: -9999px; background: var(--ink); color: var(--on-ink); padding: 10px 16px; z-index: 200; }
 .skip:focus { left: 0; top: 0; }
-.topbar { position: sticky; top: 0; z-index: 60; background: var(--ground); border-bottom: 1px solid var(--hairline); }
-.topbar .wrap { display: flex; align-items: center; gap: 12px; min-height: 60px; }
-.brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; }
+/* The running head: the wordmark or the way up on the left, who you are on the right. It runs
+   under the phone's clock, so it pads itself by the top inset. */
+.topbar { position: sticky; top: 0; z-index: 60; padding-top: var(--inset-top);
+          background: var(--ground); border-bottom: 1px solid var(--hairline); }
+.topbar .wrap { display: flex; align-items: center; gap: var(--s-3); min-height: var(--h-bar); }
+.brand { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; text-decoration: none; }
 .brand .mark { width: 22px; height: 22px; flex: none; }
 /* The wordmark is set like a masthead: the serif, spaced capitals, one weight. */
 .brand b { font-family: var(--font-display); font-weight: 400; font-size: 1.3rem; line-height: 1; letter-spacing: .12em; text-transform: uppercase; }
-.brand small { font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2);
-  white-space: nowrap; }
-/* Below this the strapline is the first thing to go: "HUNTO / THE INNER CIRCLE · / ARUBA" over
-   three ragged lines is worse than no strapline at all. */
-@media (max-width: 430px) { .brand small { display: none; } }
-.topbar nav.tabs { display: flex; gap: 2px; margin-left: auto; }
-.topbar nav.tabs a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s-3); font-size: var(--t-fine); font-weight: 500;
-  color: var(--ink-2); text-decoration: none; white-space: nowrap; border-bottom: 1px solid transparent; }
-@media (max-width: 1180px) { .topbar nav.tabs a { padding: 0 var(--s-2); } }
-.topbar nav.tabs a:hover { color: var(--ink); }
-/* The current section is a rule under the word, not a box around it. */
-.topbar nav.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); }
-@media (max-width: 860px) { .topbar nav.tabs { display: none; } }
+/* Two things the bar no longer carries: the strapline and the row of desktop tabs. Their markup
+   is still written by mountChrome/updateChrome (app.js); these two lines go when it does. */
+.brand small, .topbar nav.tabs { display: none; }
+/* The way up, in the apparatus face: a deterministic link to the parent route, never history.back(). */
+.topbar .back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding-right: var(--s-2);
+                font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase;
+                color: var(--ink-2); text-decoration: none; }
+.topbar .back svg { width: 16px; height: 16px; transform: rotate(180deg); }
+.topbar .back:active { color: var(--ink); }
 .bar-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.topbar nav.tabs + .bar-actions { margin-left: 0; }
 
-main { display: block; min-height: 60vh; padding-bottom: 96px; }
+main { display: block; min-height: 60dvh; padding-bottom: calc(var(--inset-bottom) + var(--s-6)); }
+body:has(.botnav:not([hidden])) main { padding-bottom: calc(var(--h-nav) + var(--inset-bottom) + var(--s-6)); }
 main:focus { outline: none; }
 /* Sections are separated by a rule, not by air. */
 .sec { padding-block: var(--s-6); }
-@media (min-width: 780px) { .sec { padding-block: var(--s-7); } }
 .sec + .sec { border-top: 1px solid var(--hairline); }
 .sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: var(--s-5); flex-wrap: wrap; }
 .sec-head p { color: var(--ink-2); font-size: var(--t-small); max-width: 62ch; margin-top: 10px; }
@@ -100,17 +113,17 @@ main:focus { outline: none; }
 .grow { flex: 1 1 auto; }
 .pap { font-style: italic; }
 
-/* bottom nav (phones) */
-.botnav { position: fixed; inset: auto 0 0 0; z-index: 70; display: none; background: var(--surface); border-top: 1px solid var(--hairline); padding-bottom: env(safe-area-inset-bottom); }
+/* The tab bar. Fixed, so it is outside the body's flow: it carries the column's cap itself. */
+.botnav { position: fixed; inset: auto 0 0 0; max-width: var(--wrap); margin-inline: auto; z-index: 70; display: block;
+          background: var(--surface); border-top: 1px solid var(--hairline); padding-bottom: var(--inset-bottom); }
 .botnav ul { display: flex; list-style: none; margin: 0; padding: 0; }
 .botnav li { flex: 1 1 0; display: flex; min-width: 0; }
 .botnav a { position: relative; flex: 1; display: grid; gap: 3px; align-content: center; justify-items: center; padding: 7px 2px 8px;
-  font-size: var(--t-folio); font-weight: 500; line-height: 1.2; letter-spacing: .01em; color: var(--ink-2); text-decoration: none; min-height: var(--h-touch); text-align: center; }
+  font-size: var(--t-folio); font-weight: 500; line-height: 1.2; letter-spacing: .01em; color: var(--ink-2); text-decoration: none; min-height: var(--h-nav); text-align: center; }
 .botnav a svg { width: 20px; height: 20px; }
 /* Where you are: ink, and the same 2px rule the masthead carries. */
 .botnav a[aria-current="page"] { color: var(--ink); }
 .botnav a[aria-current="page"]::before { content: ""; position: absolute; top: -1px; left: 28%; right: 28%; height: 2px; background: var(--ink); }
-@media (max-width: 860px) { .botnav { display: block; } main { padding-bottom: 88px; } }
 
 /* ---------- buttons ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--h-touch);
@@ -173,10 +186,6 @@ main:focus { outline: none; }
   line-height: 1.05; margin-top: 6px; }
 
 /* ---------- chips & status ---------- */
-/* The wordmark is the way home from every screen, so it is a control even though it reads as a
-   logo. 24px tall was a thin strip to aim at. */
-a.brand { min-height: 44px; }
-
 /* A checkbox at its browser default is a 20px target with a 44px job. The input keeps its own
    size — scaling it up looks clumsy — and gains a padded hit area instead. */
 input[type=checkbox], input[type=radio] { width: 22px; height: 22px; }
@@ -507,7 +516,10 @@ dialog.sheet::backdrop { background: rgba(9, 14, 22, .55); }
   dialog.sheet { width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 12px 12px 0 0; }
   .sheet-actions .btn { flex: 1; }
 }
-.toasts { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 120; display: grid; gap: 8px; width: min(440px, calc(100% - 24px)); }
+/* Toasts are fixed, so they carry the column's cap too, and sit above the tab bar when it is there. */
+.toasts { position: fixed; left: 0; right: 0; margin-inline: auto; width: min(var(--wrap), 100%); padding-inline: var(--s-3);
+          bottom: calc(var(--s-5) + var(--inset-bottom)); z-index: 120; display: grid; gap: 8px; }
+body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inset-bottom) + var(--s-3)); }
 .toast { background: var(--ink); color: var(--on-ink); padding: 12px 16px; border-radius: var(--r-input); font-size: var(--t-small);
   opacity: 0; transform: translateY(8px); transition: opacity var(--dur-fast), transform var(--dur-fast) var(--ease-out); }
 .toast.in { opacity: 1; transform: none; }
