@@ -11,6 +11,10 @@ import { CATALOG_NAMES } from '../core/store.js';
 import { normName } from '../core/names.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
+/** One figure in the apparatus face. One figure to a call — never a whole phrase, because .num
+ *  does not wrap and a sentence wrapped in it walks straight out of a 358px column. Returns raw
+ *  so it can be dropped into an html`` template beside copy that is still escaped. */
+const num = (v) => raw(`<b class="num">${escapeHtml(v)}</b>`);
 /**
  * Which places we hold a real photograph of, and where each one came from.
  *
@@ -453,9 +457,9 @@ export function landing({ store, go }) {
   // visitor can read no members at all, so the three jobs are described either way: those
   // are facts about how the Circle is arranged, not anybody's personal data.
   const JOBS = [
-    { role: 'planner', job: 'The Desk', name: 'Victor Rosario', what: `Finds the deals, plans the trips, and quotes every request within ${Math.min(...s.tiers.map(t => t.slaHours ?? s.slaHours))} to ${Math.max(...s.tiers.map(t => t.slaHours ?? s.slaHours))} hours, depending on your level.` },
-    { role: 'comms', job: 'The Voice', name: 'Ian Hekman', what: 'Every message from the Circle comes from one person, so nobody is chased in a group chat.' },
-    { role: 'treasurer', job: 'The Banker', name: 'Vishnu', what: 'Holds the money and confirms every transfer. Points are minted only by him, and every line in your ledger carries his name and the time.' },
+    { role: 'planner', job: 'The Desk', name: 'Victor Rosario', what: html`Finds the deals, plans the trips, and quotes every request within ${num(Math.min(...s.tiers.map(t => t.slaHours ?? s.slaHours)))} to ${num(Math.max(...s.tiers.map(t => t.slaHours ?? s.slaHours)))} hours, depending on your level.` },
+    { role: 'comms', job: 'The Voice', name: 'Ian Hekman', what: html`Every message from the Circle comes from one person, so nobody is chased in a group chat.` },
+    { role: 'treasurer', job: 'The Banker', name: 'Vishnu', what: html`Holds the money and confirms every transfer. Points are minted only by him, and every line in your ledger carries his name and the time.` },
   ];
   wrap.appendChild(el(band('band-pool', 'Salt pans from above, pale shapes divided by thin channels',
     'The Reserve, checked against the bank every month.')));
@@ -472,7 +476,7 @@ export function landing({ store, go }) {
           <h3>${escapeHtml(job)}</h3>
           <p class="job-who">${m ? `${avatar(m, 30)}<span>${escapeHtml(m.name)}</span>`
             : `<span>${escapeHtml(name)}</span>`}</p>
-          <p class="small muted">${escapeHtml(what)}</p></div>`;
+          <p class="small muted">${what}</p></div>`;
       }).join('')}</div>
       </div></section>`));
 
@@ -495,22 +499,29 @@ export function landing({ store, go }) {
 
 export function rules({ store }) {
   const s = store.settings;
+  // The clauses carry their own markup so that every figure in them sits in the mono face, one
+  // figure to a <b class="num"> and never a whole phrase. They used to be plain strings that the
+  // renderer escaped, which printed "100 points = $1.00", "15%", "24 months" and "$25" in bold
+  // sans — twelve figures in the reading face, and the page's first mono fact three screens down.
+  // `html` escapes everything interpolated into it, so the settings values below are as safe as
+  // escapeHtml() left them; only the sentences written here are trusted, and they are ours.
+  const tiers = (fn) => raw(s.tiers.map(fn).join(', '));
   const clauses = [
-    ['100 points = $1.00 of backing, fixed forever.', 'The value of a point never changes, in either direction. Every balance in the app prints the dollar beside it so you never have to work it out.'],
-    ['The only fee is the Circle’s 15% share.', 'It is charged when you spend points on a room, not when you put money in, and the quote shows it before you accept. Every dollar you contribute backs a point from the day it lands. The Circle never levies special assessments.'],
-    ['Points are minted only when the Banker confirms money has arrived.', 'Marking a transfer as sent creates a pending row and nothing else. Vishnu matches it against the bank statement and confirms; the ledger line carries his name and the timestamp.'],
-    ['Base points never expire while you are active or paused.', 'Promotional points — tier bonus, streak and founding — expire 24 months after they are issued, which shows on your statement as an expiry line and returns the matching cash to Operating.'],
-    ['No borrowing.', 'If a quote is more than your available points, you pay the difference as a top-up to the Banker at face value — the 15% is already inside the quote, so it is not charged twice. Nothing is ever booked on credit.'],
-    ['A quote is locked for 72 hours; accepting it commits your points.', `Open requests at a time: ${s.tiers.map(t => `${t.holds} for ${tierName(t.monthlyUsd)}`).join(', ')}. An expired quote releases the points automatically.`],
-    ['Cancellation mirrors the hotel’s terms, in points.', 'Whatever the hotel charges us is what comes off your points; the rest is restored. Any refund the hotel sends returns to the Reserve and re-credits points — never cash. You get a reminder seven days and two days before the hotel’s deadline.'],
-    ['Pause for up to three consecutive months per year, with one tap.', 'Your streak freezes rather than resets and your points stay fully usable. Fifteen days late without contact auto-pauses you; three unpaid months makes you inactive, and you keep every point.'],
-    ['Leave any time.', `Thirty days’ notice, twelve months to use what you hold, then base points are refunded at face value minus $${s.exitFeeUsd} from the Reserve within thirty days — at the full dollar, because nothing was taken on the way in. Promotional points are forfeited. In hardship or death the refund is immediate, at face value, with no fee.`],
-    ['Household is always covered; guests use a certificate.', `Your partner and children travel on your points with no extra charge. Non-members use a guest certificate (${s.tiers.map(t => `${t.guestCerts} for ${tierName(t.monthlyUsd)}`).join(', ')} a year) or pay the same negotiated rate in cash.`],
-    ['Points and bookings cannot be sold, transferred or advertised.', 'This is a private circle of friends. Reselling a booking ends a membership and returns the backing.'],
-    ['The Circle is by invitation only.', `Every Insider is invited by someone already in and the club is capped at ${s.memberCap} seats. It is not advertised, there is no public sign-up, and nobody joins who Victor or Ian does not know. If you leave and want to come back later, you come back the same way.`],
-    ['Every Insider can ask for every stay and every trip.', `No level is a wall. What a level changes is how fast your points build — ${s.tiers.map(t => `${fmtUsd2(t.monthlyUsd)} earns ${fmtPoints(pointsPerMonth(s, t.monthlyUsd))} a month`).join(', ')} — and the perks: open requests at a time, how far ahead you can book, guest passes, and first look at a new trip. Move between levels any month; it takes effect on your next contribution and nothing you already hold changes.`],
-    ['You can chip in to each other’s bookings.', 'Open a booking to the Circle and anyone can add their own points to it — for a room you are sharing, or as a gift. Their points are committed the moment they chip in and released if it falls through; when the hotel is paid, each person’s share burns from their own ledger. Nobody can chip in more than the booking still needs, and points never change hands as points.'],
-    [`${VOCAB.clubName} is a private members’ club for prepaid, club-arranged travel.`, 'Points are not deposits and not an investment. There is no interest, no return, and no payout that depends on new members joining: your points are backed by your own money, held in the Reserve.'],
+    [html`${num(100)} points = ${num('$1.00')} of backing, fixed forever.`, html`The value of a point never changes, in either direction. Every balance in the app prints the dollar beside it so you never have to work it out.`],
+    [html`The only fee is the Circle’s ${num('15%')} share.`, html`It is charged when you spend points on a room, not when you put money in, and the quote shows it before you accept. Every dollar you contribute backs a point from the day it lands. The Circle never levies special assessments.`],
+    [html`Points are minted only when the Banker confirms money has arrived.`, html`Marking a transfer as sent creates a pending row and nothing else. Vishnu matches it against the bank statement and confirms; the ledger line carries his name and the timestamp.`],
+    [html`Base points never expire while you are active or paused.`, html`Promotional points — tier bonus, streak and founding — expire ${num(24)} months after they are issued, which shows on your statement as an expiry line and returns the matching cash to Operating.`],
+    [html`No borrowing.`, html`If a quote is more than your available points, you pay the difference as a top-up to the Banker at face value — the ${num('15%')} is already inside the quote, so it is not charged twice. Nothing is ever booked on credit.`],
+    [html`A quote is locked for ${num(72)} hours; accepting it commits your points.`, html`Open requests at a time: ${tiers(t => html`${num(t.holds)} for ${tierName(t.monthlyUsd)}`)}. An expired quote releases the points automatically.`],
+    [html`Cancellation mirrors the hotel’s terms, in points.`, html`Whatever the hotel charges us is what comes off your points; the rest is restored. Any refund the hotel sends returns to the Reserve and re-credits points — never cash. You get a reminder seven days and two days before the hotel’s deadline.`],
+    [html`Pause for up to three consecutive months per year, with one tap.`, html`Your streak freezes rather than resets and your points stay fully usable. Fifteen days late without contact auto-pauses you; three unpaid months makes you inactive, and you keep every point.`],
+    [html`Leave any time.`, html`Thirty days’ notice, twelve months to use what you hold, then base points are refunded at face value minus ${num(`$${s.exitFeeUsd}`)} from the Reserve within thirty days — at the full dollar, because nothing was taken on the way in. Promotional points are forfeited. In hardship or death the refund is immediate, at face value, with no fee.`],
+    [html`Household is always covered; guests use a certificate.`, html`Your partner and children travel on your points with no extra charge. Non-members use a guest certificate (${tiers(t => html`${num(t.guestCerts)} for ${tierName(t.monthlyUsd)}`)} a year) or pay the same negotiated rate in cash.`],
+    [html`Points and bookings cannot be sold, transferred or advertised.`, html`This is a private circle of friends. Reselling a booking ends a membership and returns the backing.`],
+    [html`The Circle is by invitation only.`, html`Every Insider is invited by someone already in and the club is capped at ${num(s.memberCap)} seats. It is not advertised, there is no public sign-up, and nobody joins who Victor or Ian does not know. If you leave and want to come back later, you come back the same way.`],
+    [html`Every Insider can ask for every stay and every trip.`, html`No level is a wall. What a level changes is how fast your points build — ${tiers(t => html`${num(fmtUsd2(t.monthlyUsd))} earns ${num(fmtPoints(pointsPerMonth(s, t.monthlyUsd)))} a month`)} — and the perks: open requests at a time, how far ahead you can book, guest passes, and first look at a new trip. Move between levels any month; it takes effect on your next contribution and nothing you already hold changes.`],
+    [html`You can chip in to each other’s bookings.`, html`Open a booking to the Circle and anyone can add their own points to it — for a room you are sharing, or as a gift. Their points are committed the moment they chip in and released if it falls through; when the hotel is paid, each person’s share burns from their own ledger. Nobody can chip in more than the booking still needs, and points never change hands as points.`],
+    [html`${VOCAB.clubName} is a private members’ club for prepaid, club-arranged travel.`, html`Points are not deposits and not an investment. There is no interest, no return, and no payout that depends on new members joining: your points are backed by your own money, held in the Reserve.`],
   ];
   // No band over the version line: the rules are read, not looked at, and a photograph above the
   // first sentence costs a phone half a screen before the page says anything.
@@ -520,7 +531,7 @@ export function rules({ store }) {
       <h1>How the Circle works</h1>
       <p class="lede" style="margin-top:12px">In plain words, and nothing here changes without telling you first.</p>
       <ol class="stack" style="margin-top:26px;padding-left:1.2em">
-        ${clauses.map(([t, b]) => `<li style="margin-bottom:16px"><b>${escapeHtml(t)}</b><p class="small muted" style="margin-top:5px">${escapeHtml(b)}</p></li>`).join('')}
+        ${clauses.map(([t, b]) => `<li style="margin-bottom:16px"><b>${t}</b><p class="small muted" style="margin-top:5px">${b}</p></li>`).join('')}
       </ol>
       <div class="notice" style="margin-top:24px"><b>The two accounts</b>
         <p class="small rules-prose">The <b>Reserve</b> holds every dollar contributed, so a point is backed by a full dollar from the day it is minted; nothing leaves it except to pay a hotel for a confirmed booking or to refund someone who leaves. <b>Operating</b> is paid its <b class="num">15%</b> out of each booking and funds the bonuses. Coverage is the Reserve divided by everything the Circle owes in points, and it is on <a href="#/pool">the Pool page</a> for everyone to see.</p></div>
