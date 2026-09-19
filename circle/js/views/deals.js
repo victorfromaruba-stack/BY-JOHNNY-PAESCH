@@ -9,7 +9,7 @@
 // There is no Deals page any more. The Stays tab IS the deals — every live one, cheapest a
 // night first — and this module is what it draws them with.
 
-import { escapeHtml, fmtDay, fmtPoints, fmtRelative, fmtUsd, fmtUsd2, nightsBetween, pointsUsd, safeUrl } from '../core/util.js';
+import { escapeHtml, fmtDay, fmtPoints, fmtUsd, fmtUsd2, nightsBetween, pointsUsd, safeUrl } from '../core/util.js';
 import { VOCAB } from '../core/vocab.js';
 import { quoteStay, fromPoints, seatPoints, isCruise } from '../core/money.js';
 import { icon } from '../ui/icons.js';
@@ -31,10 +31,15 @@ export const SOURCES = Object.freeze({
   other:    { label: 'Elsewhere', icon: 'compass', note: '' },
 });
 
-const sourceChip = (s) => {
-  const src = SOURCES[s] || SOURCES.other;
-  return `<span class="tag">${icon(src.icon, { size: 14 })}${escapeHtml(src.label)}</span>`;
-};
+/**
+ * The Desk's buttons under a row or the cover: the listing where it lives, and on or off the
+ * board. Plain words, no icons — they sit on a rule under the row, not in it.
+ */
+function deskActs(deal) {
+  const link = safeUrl(deal.sourceUrl);
+  return `${link ? `<a class="btn ghost sm" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">Book it ↗</a>` : ''}
+    ${deal.draft ? `<button class="btn ghost sm" data-act="post-draft">Board it</button>` : `<button class="btn ghost sm" data-act="retire">Gone</button>`}`;
+}
 
 /**
  * A deal's title without the place in front of it. The watcher writes "Marriott's Aruba Surf
@@ -146,37 +151,40 @@ function staleDays(t) {
 }
 
 /**
- * One deal as a listing row: the row is the ask. A thumb only where a photograph of the place
- * exists (never a beach photo at 56px), a folio number for its rank on the board, the title, the
- * dates and the stamp, and the price a night on the right with the all-in under it. `inPlace`
- * drops the thumb and the place from the title, for rows under a place's own heading.
+ * One deal as a listing row: the whole row is the anchor. A thumb only where a photograph of the
+ * place exists (never a beach photo at 56px), a folio number for its rank on the board, the
+ * title, the dates and the stamp, and the price a night on the right with the all-in under it.
+ * `inPlace` drops the thumb and the place from the title, for rows under a place's own heading,
+ * and sends the tap to the ask for those dates rather than back to the page it is on.
+ *
+ * Nothing interactive is nested inside the <a>: the Desk's buttons are a sibling under it, on
+ * their own rule, so a thumb on the price is a tap on the row and a tap on Gone is only Gone.
  */
 export function dealRow(deal, { store, folio = null, match = null, canEdit = false, inPlace = false, level = 3, picked = false } = {}) {
   const H = `h${Math.min(6, Math.max(2, level))}`;
   const s = store.settings;
   const stay = store.stay(deal.stayId);
-  const draft = !!deal.draft;
   const thumb = inPlace ? null : thumbFor(stay);
   const title = inPlace ? titleWithoutPlace(deal.title, stay, { nights: deal.nights }) : (deal.title || stay?.name || 'A deal');
   const stamp = stampFor(deal, store);
   const soon = soonLabel(deal.from);
   // Posted ahead of the hour its board opens: the place shows, the price and the dates do not.
   const teased = typeof store.teased === 'function' && store.teased(deal);
-  const node = el(`<article class="listing-row${inPlace ? ' no-thumb' : ''}${match ? ' asked' : ''}${picked ? ' picked' : ''}" data-deal="${escapeHtml(deal.id)}">
+  const node = el(`<li data-deal="${escapeHtml(deal.id)}">
+      <a class="listing-row${inPlace ? ' no-thumb' : ''}${match ? ' asked' : ''}${picked ? ' picked' : ''}" href="${inPlace ? askHrefFor(deal) : placeHrefFor(deal, stay)}">
       ${inPlace ? '' : `<span class="thumb" aria-hidden="true">${thumb ? `<img src="${escapeHtml(thumb)}" alt="" loading="lazy" decoding="async">` : `<b>${escapeHtml(beachMark(stay))}</b>`}</span>`}
       <span class="main" style="min-width:0">
         <span class="folio">${picked ? `<span class="asked">${icon('check', { size: 12 })}The week you picked</span>` : match ? `<span class="asked">${icon('bellRing', { size: 12 })}You asked for this</span>` : folio ? `No. ${folio}` : ''}</span>
-        <${H}><a class="row-link" href="${inPlace ? askHrefFor(deal) : placeHrefFor(deal, stay)}">${escapeHtml(title)}</a></${H}>
+        <${H}>${escapeHtml(title)}</${H}>
         <span class="sub">${teased ? `on the board ${escapeHtml(dropWhen(deal.dropAt))}` : `${soon ? `<span class="soon">${escapeHtml(soon)}</span> · ` : ''}${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'}`}<span class="l2">${deal.sleeps ? `<span class="sleeps">sleeps ${deal.sleeps}</span>` : ''}<span class="stamp${stamp.feed ? ' feed' : ''}${stamp.stale >= STALE_AFTER ? ' aged' : ''}">${escapeHtml(stamp.text)}</span></span></span>
       </span>
       ${teased
         ? `<span class="price-col teased"><b>—</b><small>opens</small><span class="all">${escapeHtml(dropWhen(deal.dropAt))}</span></span>`
-        : `<span class="price-col"><b>${escapeHtml(usdNight(deal, s.pointsPerDollar))}</b><span class="all">${escapeHtml(fmtPoints(deal.pointsTotal))} pts<span class="unit"> all in</span></span></span>`}
+        : `<span class="price-col"><b>${escapeHtml(usdNight(deal, s.pointsPerDollar))}</b><span class="all">${escapeHtml(fmtPoints(deal.pointsTotal))} pts</span></span>`}
       ${inPlace && !canEdit ? `<span class="go" aria-hidden="true">${icon('chevronRight', { size: 18 })}</span>` : ''}
-      ${canEdit ? `<span class="row-acts">
-        ${safeUrl(deal.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(deal.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}Go and book it</a>` : ''}
-        ${draft ? `<button class="btn ghost sm" data-act="post-draft">${icon('plus', { size: 15 })}Put it on the board</button>` : `<button class="btn ghost sm" data-act="retire">${icon('x', { size: 15 })}Gone</button>`}</span>` : ''}
-    </article>`);
+      </a>
+      ${canEdit ? `<div class="row-acts">${deskActs(deal)}</div>` : ''}
+    </li>`);
   return node;
 }
 
@@ -203,7 +211,7 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
       </a>
       <div class="cover-body">
         <span class="eyebrow cover-no">No. ${folio}${match ? ` · ${icon('bellRing', { size: 13 })}You asked for this` : ''}</span>
-        <h2><a class="cover-link" href="${placeHrefFor(deal, stay)}">${escapeHtml(deal.title || stay?.name || 'A deal')}</a></h2>
+        <h2>${escapeHtml(deal.title || stay?.name || 'A deal')}</h2>
         <span class="cover-price"><span class="num">${escapeHtml(usdNight(deal, s.pointsPerDollar))}</span><small>a night · all in</small></span>
         <span class="mono">${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'} · <b>${escapeHtml(fmtPoints(deal.pointsTotal))} pts</b> all in · ${escapeHtml(pointsUsd(deal.pointsTotal, s.pointsPerDollar))}</span>
         ${soon ? `<p class="soon">${icon('zap', { size: 15 })}${escapeHtml(soon)}</p>` : ''}
@@ -212,8 +220,7 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
         ${credit ? `<p class="tiny muted" style="margin-top:8px">${credit.html}</p>` : ''}
         <div class="row" style="margin-top:14px">
           <a class="btn" href="${askHrefFor(deal)}">${icon('send', { size: 16 })}Ask Victor</a>
-          ${canEdit && safeUrl(deal.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(deal.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 15 })}Go and book it</a>` : ''}
-          ${canEdit ? (draft ? `<button class="btn ghost sm" data-act="post-draft">${icon('plus', { size: 15 })}Put it on the board</button>` : `<button class="btn ghost sm" data-act="retire">${icon('x', { size: 15 })}Gone</button>`) : ''}
+          ${canEdit ? deskActs(deal) : ''}
         </div>
       </div>
     </article>`);
@@ -222,11 +229,6 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
   return node;
 }
 
-/**
- * One deal, as a card. `match` is set when it answers something this member asked for.
- * `inPlace` is for a card that sits under its place's own heading — no photograph strip, no
- * area line, no place in the title — so twenty of them read as a list, not twenty posters.
- */
 /** Days from today (Aruba) to a check-in day; 0 is today, negative is gone. */
 export const daysUntil = (isoDay) => {
   const today = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Aruba' }) + 'T12:00:00Z');
@@ -239,74 +241,6 @@ export const soonLabel = (isoDay) => {
   return n === 0 ? 'Checks in today' : n === 1 ? 'Checks in tomorrow' : `Checks in ${n} days`;
 };
 
-export function dealCard(deal, { store, match = null, canEdit = false, inPlace = false, level = 3, showPlace = false } = {}) {
-  // Under a place's own h3 the card's title is an h4, so a screen reader moving by heading
-  // hears places and the weeks under them as parent and child, not as peers.
-  const H = `h${Math.min(6, Math.max(2, level))}`;
-  const stay = store.stay(deal.stayId);
-  const saveUsd = deal.retailUsd ? deal.retailUsd - deal.pointsTotal / store.settings.pointsPerDollar : 0;
-  const title = inPlace ? titleWithoutPlace(deal.title, stay, { nights: deal.nights }) : null;
-  // An owner's week open on VakayMood is not on the board: the ask carries the listing link
-  // instead of a deal id, and the Desk's button puts it on the board rather than taking it off.
-  const draft = !!deal.draft;
-  const askHref = draft
-    ? `#/book/${escapeHtml(deal.stayId)}?from=${escapeHtml(deal.from)}&to=${escapeHtml(deal.to)}${safeUrl(deal.sourceUrl) ? `&src=${encodeURIComponent(deal.sourceUrl)}&srcLabel=${encodeURIComponent('VakayMood')}` : ''}`
-    : `#/book/${escapeHtml(deal.stayId)}?from=${escapeHtml(deal.from)}&to=${escapeHtml(deal.to)}&deal=${escapeHtml(deal.id)}`;
-  // The watcher's note repeats the unit the title already names ("Studio Queen · sleeps 4 ·
-  // RedWeek protects the payment"); under a place, keep only what the title does not say.
-  const noteLine = (() => {
-    const n = String(deal.note || '').trim(); if (!n) return '';
-    if (!inPlace) return n;
-    const parts = n.split(' · ').map(x => x.trim()).filter(Boolean);
-    const t = String(title || '').toLowerCase();
-    return parts.filter(x => !t.includes(x.toLowerCase())).join(' · ');
-  })();
-  const node = el(`<article class="panel deal${match ? ' matched' : ''}${inPlace ? ' in-place' : ''}" data-deal="${escapeHtml(deal.id)}">
-      ${inPlace ? '' : '<div class="deal-strip"></div>'}
-      <div class="deal-body">
-        ${match ? `<p class="eyebrow">${icon('bellRing', { size: 15 })}You asked for this</p>` : ''}
-        ${showPlace && stay ? `<p class="eyebrow"><a href="#/stays/${escapeHtml(stay.id)}" style="color:inherit;text-decoration:none">${escapeHtml(stay.name)}</a>${stay.area ? ` · ${escapeHtml(stay.area)}` : ''}</p>` : ''}
-        ${inPlace
-          ? `<${H}>${escapeHtml(title)}</${H}>
-             <p class="deal-price"><b class="num">${escapeHtml(fmtPoints(deal.pointsTotal))}</b>
-               <span class="small muted mono">${escapeHtml(pointsUsd(deal.pointsTotal, store.settings.pointsPerDollar))} · ${deal.nights} night${deal.nights === 1 ? '' : 's'}${nightly(deal) ? ` · ${escapeHtml(fmtPoints(nightly(deal)))} a night` : ''}</span></p>`
-          : `<div class="row-between" style="align-items:flex-start;gap:12px">
-          <div>
-            <${H}>${escapeHtml(deal.title || stay?.name || 'A deal')}</${H}>
-            <p class="small muted" style="margin-top:4px">${escapeHtml(stay?.area || '')}${stay && stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}</p>
-          </div>
-          <div style="text-align:right;flex:none">
-            <b class="num fig">${escapeHtml(fmtPoints(deal.pointsTotal))}</b>
-            <br><span class="small muted">${escapeHtml(pointsUsd(deal.pointsTotal, store.settings.pointsPerDollar))} · ${deal.nights} night${deal.nights === 1 ? '' : 's'}${nightly(deal) ? ` · ${escapeHtml(fmtPoints(nightly(deal)))} a night` : ''}</span>
-          </div>
-        </div>`}
-        ${soonLabel(deal.from) ? `<p class="small soon" style="margin-top:${inPlace ? 8 : 10}px">${icon('zap', { size: 15 })}${soonLabel(deal.from)}</p>` : ''}
-        <p class="small" style="margin-top:${soonLabel(deal.from) ? 4 : inPlace ? 8 : 10}px">${icon('calendar', { size: 15, cls: 'ico-muted' })}
-          ${escapeHtml(fmtDay(deal.from))} – ${escapeHtml(fmtDay(deal.to))}
-          ${deal.units > 1 && !draft ? ` · ${deal.units} of them` : ''}${saveUsd > 0 && inPlace ? ` <span style="color:var(--good-text)">· about ${escapeHtml(fmtUsd2(saveUsd))} under the public rate</span>` : ''}</p>
-        ${saveUsd > 0 && !inPlace ? `<p class="small" style="margin-top:6px;color:var(--good-text)">${icon('trend', { size: 15 })}About ${escapeHtml(fmtUsd2(saveUsd))} under the resort's public rate</p>` : ''}
-        ${noteLine ? `<p class="small muted" style="margin-top:${inPlace ? 6 : 10}px">${inPlace || draft ? escapeHtml(noteLine) : `“${escapeHtml(noteLine)}”`}</p>` : ''}
-        ${inPlace
-          ? `<p class="small muted deal-meta" style="margin-top:6px">${draft ? `Open on VakayMood as of ${escapeHtml(fmtRelative(deal.postedAt))}` : `${escapeHtml((SOURCES[deal.source] || SOURCES.other).label)} · ${escapeHtml(fmtRelative(deal.postedAt))}${deal.expiresAt ? ` · until ${escapeHtml(fmtDay(deal.expiresAt))}` : ''}`}</p>`
-          : `<div class="flags" style="margin-top:10px">
-          ${draft ? `<span class="tag">${icon('eye', { size: 14 })}Open on VakayMood</span>` : sourceChip(deal.source)}
-          <span class="tag">${icon('clock', { size: 14 })}${draft ? 'as of ' : ''}${escapeHtml(fmtRelative(deal.postedAt))}</span>
-          ${deal.expiresAt && !draft ? `<span class="tag">${icon('hourglass', { size: 14 })}until ${escapeHtml(fmtDay(deal.expiresAt))}</span>` : ''}
-        </div>`}
-        ${match && !match.affordable ? `<p class="small muted" style="margin-top:10px">${icon('spark', { size: 14 })}
-          You are ${escapeHtml(fmtPoints(match.short))} short — ask anyway and close the gap with a top-up, or open it to the Circle.</p>` : ''}
-        <div class="row" style="margin-top:14px">
-          <a class="btn sm" href="${askHref}">${icon('send', { size: 16 })}Ask for it</a>
-          ${canEdit && safeUrl(deal.sourceUrl) ? `<a class="btn ghost sm" href="${escapeHtml(safeUrl(deal.sourceUrl))}" target="_blank" rel="noopener noreferrer">${icon('external', { size: 16 })}Go and book it</a>` : ''}
-          ${canEdit && draft ? `<button class="btn ghost sm" data-act="post-draft">${icon('plus', { size: 16 })}Put it on the board</button>` : ''}
-          ${canEdit && !draft ? `<button class="btn ghost sm" data-act="retire">${icon('x', { size: 16 })}Gone</button>` : ''}
-        </div>
-      </div>
-    </article>`);
-  if (stay && !inPlace) node.querySelector('.deal-strip').appendChild(stayStrip(stay));
-  return node;
-}
-
 // Which "Show the other N" buttons have been pressed. Module-level because the whole route is
 // re-rendered on every store commit, and the Desk taking one week off the board must not fold
 // the other nineteen back up.
@@ -317,10 +251,12 @@ const REVEALED = new Set();
 export const byNight = (a, b) => nightly(a) - nightly(b) || String(a.from).localeCompare(String(b.from));
 
 /**
- * Some deals as cards, the first few shown and the rest behind one button. `key` is what the
- * button remembers itself by across re-renders; `first` is how many open with the page.
+ * Some deals as listing rows, the first few shown and the rest behind one button. `key` is what
+ * the button remembers itself by across re-renders; `first` is how many open with the page.
+ * There is one way to draw a deal now — the row — so there is no `mode` and no `wide`; a caller
+ * still passing either is simply not read.
  */
-export function dealList(slot, deals, { store, me = null, canEdit = false, first = 3, key = '', inPlace = true, noun = '', level = 3, showPlace = false, mode = 'cards', folioOf = null, wide = false, pin = null } = {}) {
+export function dealList(slot, deals, { store, me = null, canEdit = false, first = 3, key = '', inPlace = true, noun = '', level = 3, folioOf = null, pin = null } = {}) {
   const watches = me ? store.watchesFor(me.id) : [];
   const matchFor = (d) => watches.map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
   const matched = new Map(deals.map(d => [d.id, matchFor(d)]));
@@ -330,29 +266,30 @@ export function dealList(slot, deals, { store, me = null, canEdit = false, first
   // its price. A watch match keeps its "You asked for this" badge where it falls, and the board
   // gives matches a section of their own above the board rather than shuffling them into it.
   const ordered = deals.slice().sort((a, b) => (b.id === pin ? 1 : 0) - (a.id === pin ? 1 : 0));
-  const grid = el(mode === 'rows' ? `<div class="listing${wide ? ' two' : ''}"></div>` : '<div class="grid g2"></div>');
+  // The rows are <li>s and a list item draws a disc unless told not to; list-style inherits, so
+  // the one declaration here covers every row. It moves into app.css as `.listing { list-style:
+  // none }` and this attribute goes with it.
+  const grid = el('<div class="listing" style="list-style:none"></div>');
   // The unit is printed once, as a column head over the figures, not under every price. A
   // board that is all teased weeks carries no figures yet, so it carries no head either.
-  const priced = mode === 'rows' && ordered.some(d => !(typeof store.teased === 'function' && store.teased(d)));
-  if (mode === 'rows' && inPlace && !canEdit) grid.classList.add('has-go');
+  const priced = ordered.some(d => !(typeof store.teased === 'function' && store.teased(d)));
+  if (inPlace && !canEdit) grid.classList.add('has-go');
   const head = () => priced ? [el('<span class="col-head" aria-hidden="true">a night · all in</span>')] : [];
   const more = el('<div class="list-more"></div>');
   const paint = () => {
-    // A button that hides one card costs as much as the card: show it.
+    // A button that hides one row costs as much as the row: show it.
     const shown = REVEALED.has(key) || ordered.length - first <= 1 ? ordered : ordered.slice(0, first);
     const hidden = ordered.length - shown.length;
-    grid.replaceChildren(...head(), ...shown.map(d => (mode === 'rows'
-      ? dealRow(d, { store, folio: folioOf?.get(d.id) || null, match: matched.get(d.id), canEdit, inPlace, level, picked: d.id === pin })
-      : dealCard(d, { store, match: matched.get(d.id), canEdit, inPlace, level, showPlace }))));
+    grid.replaceChildren(...head(), ...shown.map(d => dealRow(d, { store, folio: folioOf?.get(d.id) || null, match: matched.get(d.id), canEdit, inPlace, level, picked: d.id === pin })));
     more.innerHTML = hidden > 0 ? `<button class="btn ghost sm" data-act="reveal">${icon('chevronDown', { size: 16 })}Show the other ${hidden}${noun ? ` ${noun}` : ''}</button>` : '';
   };
   more.addEventListener('click', (e) => {
     if (!e.target.closest('[data-act="reveal"]')) return;
     REVEALED.add(key); paint();
-    // The button that had focus is gone; put focus on the first card it revealed, so a keyboard
+    // The button that had focus is gone; put focus on the first row it revealed, so a keyboard
     // or screen-reader user lands on what appeared rather than back at the top of the page.
-    const card = grid.children[first + head().length];
-    if (card) { card.tabIndex = -1; card.focus({ preventScroll: true }); }
+    const row = grid.children[first + head().length]?.querySelector('.listing-row');
+    if (row) row.focus({ preventScroll: true });
   });
   paint();
   slot.append(grid, more);
@@ -384,9 +321,9 @@ export async function postDraft(store, draft, actorId) {
 }
 
 /**
- * The two officer buttons on a card — "Gone" and "Put it on the board" — wired once on whatever
- * node holds the cards, so they are never buttons that do nothing. `drafts` resolves a draft's
- * id to the row the page holds (the card only carries the id).
+ * The two officer buttons under a row — "Gone" and "Board it" — wired once on whatever node
+ * holds the rows, so they are never buttons that do nothing. `drafts` resolves a draft's id to
+ * the row the page holds (the markup only carries the id).
  */
 export function wireDealActions(node, store, { drafts = () => [] } = {}) {
   node.addEventListener('click', async (e) => {
@@ -419,20 +356,18 @@ export async function postDealSheet({ store, prefill = {} }) {
         <p class="sheet-text">Everyone who asked for something this answers hears about it straight away. Be quick and rough — the binding number is still the quote you give them afterwards.</p>
         <label class="field"><span>Which place</span>
           <select name="stayId" required>${stays.map(st => `<option value="${escapeHtml(st.id)}"${st.id === prefill.stayId ? ' selected' : ''}>${escapeHtml(st.name)}${st.kind === 'trip' ? ' (trip)' : ''}</option>`).join('')}</select></label>
-        <div class="grid g2">
+        <div class="pair">
           <label class="field"><span>From</span><input type="date" name="from" value="${escapeHtml(prefill.from || '')}" required></label>
           <label class="field"><span>To</span><input type="date" name="to" value="${escapeHtml(prefill.to || '')}" required></label>
         </div>
-        <div class="grid g2">
+        <div class="pair">
           <label class="field"><span>All-in cost US$</span><input type="number" name="usd" step="1" min="1" inputmode="decimal" placeholder="1995" value="${escapeHtml(prefill.usd ?? '')}"></label>
           <label class="field"><span>In points</span><input type="number" name="points" step="100" min="1" inputmode="numeric" placeholder="199500" value="${escapeHtml(prefill.points ?? '')}"></label>
         </div>
-        <div class="grid g2">
-          <label class="field"><span>Where it came from</span>
-            <select name="source">${Object.entries(SOURCES).map(([k, v]) => `<option value="${k}"${k === prefill.source ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}</select></label>
-          <label class="field"><span>Public rate US$, if you know it</span><input type="number" name="retailUsd" step="1" min="0" inputmode="decimal" placeholder="2800"></label>
-        </div>
-        <label class="field"><span>Link to it</span><input type="url" name="sourceUrl" placeholder="https://…" value="${escapeHtml(prefill.sourceUrl || '')}"></label>
+        <label class="field"><span>Where it came from</span>
+          <select name="source">${Object.entries(SOURCES).map(([k, v]) => `<option value="${k}"${k === prefill.source ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}</select></label>
+        <label class="field"><span>Public rate US$, if you know it</span><input type="number" name="retailUsd" step="1" min="0" inputmode="decimal" placeholder="2800"></label>
+        <label class="field"><span>Link to it</span><input type="url" name="sourceUrl" inputmode="url" placeholder="https://…" value="${escapeHtml(prefill.sourceUrl || '')}"></label>
         <label class="field"><span>Anything the Circle should know</span><input name="note" placeholder="Lighthouse tower, owner rental, Saturday to Saturday." value="${escapeHtml(prefill.note || '')}"></label>
         <!-- THE BOARD. Leave it empty and the week goes up now, as it always has. Set an hour and
              the Circle sees the place tonight and the price at that hour — which is the whole
@@ -445,7 +380,7 @@ export async function postDealSheet({ store, prefill = {} }) {
           <span class="small muted" id="drop-note"></span>
         </div>
         <div id="who" class="notice" style="margin-top:4px"></div>
-        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>${icon('send', { size: 16 })}Post it</button></div>`;
+        <div class="sheet-actions"><button class="btn block" data-ok>${icon('send', { size: 16 })}Post it</button></div>`;
 
       const v = (n) => body.querySelector(`[name=${n}]`);
 
@@ -518,21 +453,19 @@ export async function postDealSheet({ store, prefill = {} }) {
 export function watching({ store, go }) {
   const me = store.me;
   const mine = store.watchesFor(me.id);
-  const wrap = el(`<div><section class="sec"><div class="wrap" style="max-width:900px">
-      <div class="row-between">
-        <div><p class="eyebrow">${icon('bell')}Standing wants</p><h1>What you are watching</h1>
-          <p class="lede" style="margin-top:10px;max-width:58ch">Tell the Circle what you would take if it appeared. Nothing is reserved and nothing is charged — but when Victor finds it, you are the first to know instead of the last.</p></div>
-        <div class="row no-print"><button class="btn sm" id="add">${icon('plus', { size: 16 })}Watch for something</button></div>
-      </div>
+  const wrap = el(`<div><section class="sec"><div class="wrap">
+      <header class="masthead">
+        <p class="eyebrow">${icon('bell')}Standing wants</p>
+        <h1>What you are <em class="ac">watching</em>.</h1>
+        <p class="lede" style="margin-top:10px">Tell the Circle what you would take if it appeared. Nothing is reserved and nothing is charged — but when Victor finds it, you are the first to know instead of the last.</p>
+        <div class="row no-print"><button class="btn block" id="add">${icon('plus', { size: 16 })}Watch for something</button></div>
+      </header>
       <div class="stack" id="list" style="margin-top:22px"></div>
     </div></section></div>`);
 
   const list = wrap.querySelector('#list');
   if (!mine.length) {
-    list.appendChild(el(`<div class="empty">${icon('bell', { size: 30, cls: 'ico-muted' })}
-      <b style="display:block">You are not watching for anything</b>
-      <p class="small muted">The good weeks at the Marriott villas and the Divi go within hours of appearing. A watch is how you hear in time.</p>
-      <p style="margin-top:12px"><button class="btn sm" id="add2">${icon('plus', { size: 16 })}Watch for something</button></p></div>`));
+    list.appendChild(el(`<div class="empty"><b style="display:block">You are not watching for anything</b></div>`));
   }
   for (const w of mine) {
     const stay = w.stayId ? store.stay(w.stayId) : null;
@@ -557,7 +490,7 @@ export function watching({ store, go }) {
   }
 
   wrap.addEventListener('click', async (e) => {
-    if (e.target.closest('#add') || e.target.closest('#add2')) { await addWatchSheet({ store }); go('/watching'); return; }
+    if (e.target.closest('#add')) { await addWatchSheet({ store }); go('/watching'); return; }
     const stop = e.target.closest('[data-act="stop"]');
     if (stop) {
       const id = stop.closest('[data-watch]').dataset.watch;
@@ -584,22 +517,22 @@ export async function addWatchSheet({ store, prefill = {} }) {
         <label class="field"><span>Which place</span>
           <select name="stayId"><option value="">Anywhere on the island</option>
             ${stays.map(st => `<option value="${escapeHtml(st.id)}"${st.id === prefill.stayId ? ' selected' : ''}>${escapeHtml(st.name)}${st.kind === 'trip' ? ' (trip)' : ''}</option>`).join('')}</select></label>
-        <div class="grid g2">
+        <div class="pair">
           <label class="field"><span>Earliest</span><input type="date" name="from" value="${escapeHtml(prefill.from || inMonths(1))}" required></label>
           <label class="field"><span>Latest</span><input type="date" name="to" value="${escapeHtml(prefill.to || inMonths(4))}" required></label>
         </div>
-        <div class="grid g3">
+        <div class="trio">
           <label class="field"><span>Nights</span><input type="number" name="nights" min="1" max="30" value="${prefill.nights || 3}" inputmode="numeric"></label>
           <label class="field"><span>Flexible by</span><input type="number" name="flexDays" min="0" max="30" value="3" inputmode="numeric"></label>
           <label class="field"><span>Guests</span><input type="number" name="guests" min="1" max="12" value="2" inputmode="numeric"></label>
         </div>
-        <div class="grid g2">
-          <label class="field"><span>Most you would spend US$</span><input type="number" name="maxUsd" step="10" min="0" inputmode="decimal" placeholder="optional"></label>
+        <div class="pair">
+          <label class="field"><span>Spend up to US$</span><input type="number" name="maxUsd" step="10" min="0" inputmode="decimal" placeholder="optional"></label>
           <label class="field"><span>In points</span><input type="number" name="maxPoints" step="500" min="0" inputmode="numeric" placeholder="optional"></label>
         </div>
         <label class="field"><span>Anything else</span><input name="note" placeholder="Ground floor if there is a choice."></label>
         <div id="afford" class="notice"></div>
-        <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button><button class="btn" data-ok>${icon('bell', { size: 16 })}Watch for it</button></div>`;
+        <div class="sheet-actions"><button class="btn block" data-ok>${icon('bell', { size: 16 })}Watch for it</button></div>`;
 
       const v = (n) => body.querySelector(`[name=${n}]`);
       const draw = () => {
@@ -666,8 +599,7 @@ export async function pasteListingSheet({ store, prefill = {} }) {
       <label class="field"><span>The listing</span>
         <textarea name="raw" rows="7" placeholder="Sep 11–18, 2026  7 Nights&#10;3 Bedroom Villa, Ocean view&#10;Sleeps: 12, Building: Compass&#10;$525/night   $4,031 total" class="mono">${escapeHtml(prefill.raw || '')}</textarea></label>
       <div id="read" class="notice" style="margin-top:4px"><p class="small muted">Waiting for a paste.</p></div>
-      <div class="sheet-actions"><button class="btn ghost" data-close>Cancel</button>
-        <button class="btn" data-ok disabled>${icon('chevronRight', { size: 16 })}Check it over</button></div>`;
+      <div class="sheet-actions"><button class="btn block" data-ok disabled>${icon('chevronRight', { size: 16 })}Check it over</button></div>`;
     const ta = body.querySelector('[name=raw]'), out = body.querySelector('#read'), okBtn = body.querySelector('[data-ok]');
     let parsed = null, many = [];
     const draw = () => {
@@ -687,7 +619,7 @@ export async function pasteListingSheet({ store, prefill = {} }) {
       ];
       out.className = `notice ${parsed.taken ? 'bad' : parsed.ok ? 'good' : 'warn'}`;
       out.innerHTML = `${parsed.taken ? '<b>This one says it is already gone.</b>' : ''}
-        <dl class="grid g2" style="gap:4px 12px;margin:0">${rows.map(([k, v]) =>
+        <dl class="stack tight" style="margin:0">${rows.map(([k, v]) =>
           `<div class="row-between"><span class="small muted">${k}</span><span class="small" style="text-align:right">${v}</span></div>`).join('')}</dl>
         ${parsed.missing.length ? `<p class="small" style="margin-top:8px">You will need to fill in ${escapeHtml(parsed.missing.join(' and '))} yourself.</p>` : ''}`;
       okBtn.disabled = !parsed.from;
@@ -699,7 +631,7 @@ export async function pasteListingSheet({ store, prefill = {} }) {
       out.className = `notice ${usable.length ? 'good' : 'warn'}`;
       out.innerHTML = `<b>${many.length} week${many.length === 1 ? '' : 's'} in that paste${usable.length < many.length ? `, ${usable.length} ready to post` : ''}</b>
         <ul class="photo-rows" style="margin-top:10px;grid-template-columns:auto minmax(0,1fr) auto">${rows.map((m, i) => `
-          <li><input type="checkbox" data-pick="${i}" ${m.ok ? 'checked' : 'disabled'} style="width:20px;height:20px">
+          <li><input type="checkbox" data-pick="${i}" ${m.ok ? 'checked' : 'disabled'}>
             <span class="what"><b>${escapeHtml(m.stay?.name || 'Not one of ours')}</b>
               <span class="meta">${m.from ? `${escapeHtml(shortRange(m.from, m.to))} · ${m.nights} nights` : 'no dates'}${m.unit ? ` · ${escapeHtml(m.unit)}` : ''}${m.taken ? ' · says it is gone' : ''}${m.ok ? '' : ` · needs ${escapeHtml(m.missing.join(' and '))}`}</span></span>
             <span class="small num" style="text-align:right">${m.usdTotal && m.nights ? `${escapeHtml(fmtUsd2(m.usdTotal / m.nights))}<br><span class="muted">a night</span>` : '—'}</span></li>`).join('')}</ul>
