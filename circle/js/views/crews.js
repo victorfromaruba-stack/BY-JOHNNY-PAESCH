@@ -17,6 +17,10 @@ const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; re
 /** How much of a long conversation is drawn at once. The rest is one tap above it. */
 const PAGE = 60;
 
+/** Saying something re-draws the whole screen from the top, so the wish to see what you just
+ *  said has to survive that one render. Set when a line is sent, spent by the render it causes. */
+let chaseLatest = false;
+
 /** A stack of faces, for a crew card. */
 function faces(roster, max = 5) {
   const shown = roster.slice(0, max);
@@ -270,14 +274,24 @@ export function crewDetail({ store, params, go, refresh }) {
         </span></div>`;
     }).join('');
   };
-  /** The newest line, above the composer and the tab bar — the thread's scroll-margin does that. */
-  const toLatest = (tries = 3) => requestAnimationFrame(() => {
+  /** The newest line, above the composer and the tab bar — the thread's scroll-margin does that.
+   *  On open the page is only moved when the conversation is taller than the screen: a crew whose
+   *  whole thread fits keeps its name, which is the one thing on the page that says which crew
+   *  this is, instead of pushing it up under the running head to buy a line already within reach.
+   *  After the member says something the page always goes to what they said. */
+  const toLatest = (force = false, tries = 3) => requestAnimationFrame(() => {
     const last = thread.querySelector('.msg:last-of-type');
-    if (last?.isConnected) last.scrollIntoView({ block: 'end', behavior: 'auto' });
-    else if (tries > 0) toLatest(tries - 1);
+    if (!last?.isConnected) { if (tries > 0) toLatest(force, tries - 1); return; }
+    if (!force) {
+      const floor = wrap.querySelector('.act-bar')?.getBoundingClientRect().top ?? innerHeight;
+      const ceiling = document.getElementById('topbar')?.getBoundingClientRect().bottom || 0;
+      if (thread.getBoundingClientRect().height <= floor - ceiling) return;
+    }
+    last.scrollIntoView({ block: 'end', behavior: 'auto' });
   });
   draw();
-  toLatest();
+  toLatest(chaseLatest);
+  chaseLatest = false;
 
   thread.addEventListener('click', async (e) => {
     if (e.target.closest('#earlier')) {
@@ -302,8 +316,11 @@ export function crewDetail({ store, params, go, refresh }) {
     const text = input.value.trim();
     if (!text) return;
     input.value = '';                       // clear first, so a slow network does not eat it twice
-    try { await store.sendCrewMessage(c.id, text); draw(); toLatest(); }
-    catch (err) { input.value = text; toast(err.message, { kind: 'bad' }); }
+    chaseLatest = true;                     // whatever re-draws next, go to the line just sent
+    // The flag is spent by whichever draw comes first: the store's own re-render, or this one
+    // when the store does not re-render.
+    try { await store.sendCrewMessage(c.id, text); draw(); toLatest(true); }
+    catch (err) { chaseLatest = false; input.value = text; toast(err.message, { kind: 'bad' }); }
   });
 
   wrap.querySelector('#rename')?.addEventListener('click', async () => {
