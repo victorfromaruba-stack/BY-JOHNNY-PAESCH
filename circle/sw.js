@@ -6,10 +6,28 @@
 // kept serving its cached hero, CSS and JS and none of the work was visible. The cache name is
 // the only thing that evicts the old copies, so it has to change on every deploy, automatically.
 const VERSION = 'hunto-dev';
-const APP_SHELL = ['./', './index.html', './css/app.css', './css/tokens.css', './js/app.js', './config.js', './manifest.webmanifest'];
+// Every module the app can reach, so a phone that opens a route it has never visited — on the
+// bus, in a lobby, with no signal — still finds the file it dynamically imports. Generated from
+// `find circle/js -name '*.js'`; add a new module here when you add one.
+const APP_SHELL = [
+  './', './index.html', './css/app.css', './css/tokens.css', './config.js', './manifest.webmanifest',
+  './js/app.js', './js/core/image.js', './js/core/money.js', './js/core/names.js', './js/core/passwords.js',
+  './js/core/router.js', './js/core/share.js', './js/core/standing.js', './js/core/store.js',
+  './js/core/supabase-store.js', './js/core/util.js', './js/core/vocab.js', './js/data/listing-paste.js',
+  './js/data/places.js', './js/data/seed.js', './js/data/stays.js', './js/data/vakaymood.js',
+  './js/ui/art.js', './js/ui/charts.js', './js/ui/components.js', './js/ui/icons.js', './js/ui/install.js',
+  './js/ui/pieces.js', './js/ui/qr.js', './js/ui/qrcode.js', './js/ui/theme.js', './js/ui/wallet.js',
+  './js/views/catalog.js', './js/views/crews.js', './js/views/deals.js', './js/views/live.js',
+  './js/views/member.js', './js/views/officer.js', './js/views/postcards.js', './js/views/public.js',
+  './js/views/rooms.js', './assets/hero-tall.jpg'
+];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(APP_SHELL).catch(() => {})).then(() => self.skipWaiting()));
+  // One file at a time, and one miss does not void the rest. `addAll` is a single transaction:
+  // a renamed asset or a 404 threw the whole list away and precached nothing at all.
+  e.waitUntil(caches.open(VERSION)
+    .then((c) => Promise.allSettled(APP_SHELL.map((u) => c.add(u))))
+    .then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
