@@ -81,9 +81,6 @@ a, button, summary, label, [role=button], .listing-row, .index-row, .choice, .ch
 .brand .mark { width: 22px; height: 22px; flex: none; }
 /* The wordmark is set like a masthead: the serif, spaced capitals, one weight. */
 .brand b { font-family: var(--font-display); font-weight: 400; font-size: 1.3rem; line-height: 1; letter-spacing: .12em; text-transform: uppercase; }
-/* Two things the bar no longer carries: the strapline and the row of desktop tabs. Their markup
-   is still written by mountChrome/updateChrome (app.js); these two lines go when it does. */
-.brand small, .topbar nav.tabs { display: none; }
 /* The way up, in the apparatus face: a deterministic link to the parent route, never history.back(). */
 .topbar .back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding-right: var(--s-2);
                 font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase;

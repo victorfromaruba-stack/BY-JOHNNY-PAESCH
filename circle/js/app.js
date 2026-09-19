@@ -431,7 +431,7 @@ function updateChrome(current) {
   who.innerHTML = me
     ? `<a class="btn quiet sm" href="#/profile">${escapeHtml(me.name.split(' ')[0])}${
         urgent ? `<span class="nav-badge">${urgent > 9 ? '9+' : urgent}</span><span class="sr-only">, ${urgent} thing${urgent === 1 ? '' : 's'} waiting for you</span>` : ''}</a>`
-    : ['/sign-in', '/join', '/set-password'].includes(seg) ? '' : `<a class="btn sm" href="#/sign-in">Sign in</a>`;
+    : ['/sign-in', '/join', '/set-password'].includes(seg) ? '' : `<a class="link-rule" href="#/sign-in">Sign in</a>`;
   document.getElementById('botnav').hidden = !me;
   list.innerHTML = me ? NAV().map(n => {
     const count = n.badge === 'deals' ? unseen

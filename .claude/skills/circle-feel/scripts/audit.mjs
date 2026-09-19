@@ -244,19 +244,26 @@ for (const crawlRole of ['member', 'admin']) {
 }
 
 // ---------- §3: the laptop shows the phone ----------
+// The wider windows must agree with the phone on overflow and small taps at every route. The
+// first-figure position is compared only between the wider windows themselves: they are 900 tall
+// and the column is 430 wide there, so a line wraps differently than at 390 by 844 and the same
+// figure sits a few pixels lower; that is the phone layout, not a laptop one.
 if (byWidth[390] && widths.length > 1) {
   const base = Object.fromEntries(byWidth[390].map(r => [r.route, r]));
+  const wide = widths.filter(x => x !== 390);
+  const wideBase = wide.length > 1 ? Object.fromEntries(byWidth[wide[0]].map(r => [r.route, r])) : null;
   const differ = [];
-  for (const w of widths.filter(x => x !== 390)) {
+  for (const w of wide) {
     for (const r of byWidth[w]) {
       const b0 = base[r.route]; if (!b0) continue;
       const why = [];
       if (r.overflow !== b0.overflow) why.push('ovf');
       if (r.smallTargets !== b0.smallTargets) why.push(`small-tap ${b0.smallTargets}→${r.smallTargets}`);
-      if (r.firstFigure !== b0.firstFigure) why.push(`to-1st-fig ${b0.firstFigure ?? '-'}→${r.firstFigure ?? '-'}`);
+      const w0 = wideBase && w !== wide[0] ? wideBase[r.route] : null;
+      if (w0 && r.firstFigure !== w0.firstFigure) why.push(`to-1st-fig ${w0.firstFigure ?? '-'}@${wide[0]}→${r.firstFigure ?? '-'}`);
       if (why.length) differ.push(`${r.route} @${w}: ${why.join(', ')}`);
     }
   }
   console.log('\n=== phone-only ===');
-  console.log(differ.length ? `${differ.length} row(s) differ from 390:\n   ${differ.join('\n   ')}` : 'phone-only: same at all widths');
+  console.log(differ.length ? `${differ.length} row(s) differ from the phone:\n   ${differ.join('\n   ')}` : 'phone-only: same at all widths');
 }

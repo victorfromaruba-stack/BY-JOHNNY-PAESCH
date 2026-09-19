@@ -7,6 +7,9 @@ export class Router {
     this.onChange = onChange;
     this.notFound = notFound;
     this.current = null;
+    // hashchange only, on purpose: a sheet (ui/components.js) pushes a history entry carrying the
+    // page's own URL so the back gesture closes the sheet; that traversal fires popstate but no
+    // hashchange, so it never re-routes.
     window.addEventListener('hashchange', () => this.resolve());
   }
   start() { if (!location.hash) location.replace('#/'); this.resolve(); }
