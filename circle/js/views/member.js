@@ -379,8 +379,17 @@ export function home({ store, go, refresh }) {
       <a class="link-rule" href="#/profile">Your corner</a>
     </div>`);
   body.appendChild(standing);
-  standing.querySelector('#crest-slot')?.replaceChildren(
-    rankCrest(myStanding, { size: 54, sub: `${myStanding?.monthsHeld ?? 0} month${(myStanding?.monthsHeld ?? 0) === 1 ? '' : 's'} in the Circle` }));
+  {
+    // The crest escapes its sub line, so the count goes in flat and comes back in the mono here:
+    // "8 months in the Circle" sitting in the sans, one line under a mono figure, was the one
+    // number on this panel reading as a word.
+    const monthsHeld = myStanding?.monthsHeld ?? 0;
+    const months = `month${monthsHeld === 1 ? '' : 's'} in the Circle`;
+    const crest = rankCrest(myStanding, { size: 54, sub: `${monthsHeld} ${months}` });
+    const subLine = crest.querySelector('.small.muted');
+    if (subLine) subLine.innerHTML = `${num(monthsHeld)} ${escapeHtml(months)}`;
+    standing.querySelector('#crest-slot')?.replaceChildren(crest);
+  }
   {
     const series = store.balanceSeries(me.id).map(p => p.points);
     standing.querySelector('.spark-slot')?.replaceChildren(sparkline(series.length ? series : [0, 0], { width: 340, height: 46 }));
@@ -389,7 +398,7 @@ export function home({ store, go, refresh }) {
       <p class="eyebrow">${icon('users')}This month in the Circle</p>
       <div class="row" style="gap:14px;margin-top:12px;align-items:center">
         <span id="rollcall"></span>
-        <div class="small"><b>${num(t.confirmedThisMonth)} of ${num(t.expectedThisMonth)}</b> contributions confirmed for ${escapeHtml(fmtMonth(month))}.
+        <div class="small">${num(t.confirmedThisMonth)} of ${num(t.expectedThisMonth)} contributions confirmed for ${escapeHtml(fmtMonth(month))}.
         <br><span class="muted">Names stay private unless an Insider opts in.</span></div>
       </div>
       <a class="link-rule" href="#/circle">Everyone</a></div>`);
@@ -938,7 +947,10 @@ export function profile({ store, go, refresh }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <p class="eyebrow">${escapeHtml(tierName(me.monthlyUsd))}${me.founding ? ` · ${escapeHtml(VOCAB.founding)}` : ' Insider'}</p>
       <h1>${escapeHtml(me.name)}</h1>
-      <p class="lede" style="margin-top:10px">${me.title ? escapeHtml(me.title) : `${num(fmtUsd2(me.monthlyUsd))} a month · joined ${escapeHtml(fmtDay(me.joinedAt))}`}</p>
+      <!-- An officer holds a seat like everybody else, so the head says the seat first and the
+           job after it. Printing the title alone opened Victor's own profile on no figure at
+           all, where every other member's opens on what they send and the day they joined. -->
+      <p class="lede" style="margin-top:10px">${num(fmtUsd2(me.monthlyUsd))} a month · joined ${escapeHtml(fmtDay(me.joinedAt))}${me.title ? ` · ${escapeHtml(me.title)}` : ''}</p>
 
       <!-- Every screen without a tab, one row from the name in the bar; an officer's doors first. -->
       <div class="rule-block" style="margin-top:16px">${doorList(store)}</div>
