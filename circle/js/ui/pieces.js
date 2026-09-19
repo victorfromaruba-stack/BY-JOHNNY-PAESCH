@@ -1,6 +1,6 @@
 // The signature pieces: the Split bar, the Pool gauge, the Ring, the member Card.
 import { escapeHtml, fmtUsd2, fmtPoints, fmtPct, prefersReducedMotion } from '../core/util.js';
-import { contourSvg, treeSvg } from './art.js';
+import { contourSvg } from './art.js';
 import { VOCAB, tierName } from '../core/vocab.js';
 import { pointsPerMonth } from '../core/money.js';
 
@@ -25,22 +25,26 @@ export function tierLadder(s, { mine = null, rows: extra = [], caption = '' } = 
   const firstLook = (t) => (!t.firstLookHours ? 'Same time'
     : t.firstLookHours % 24 === 0 ? `${t.firstLookHours / 24} day${t.firstLookHours === 24 ? '' : 's'}`
     : `${t.firstLookHours} h`);
+  // The row label stands alone at 390: the one-line "why" under each label was the widest thing
+  // in the grid and pushed the three figure columns into the gutter, so it is gone rather than
+  // hidden. Every figure sits in its own mono <b class="num">; the words beside it stay in the
+  // small face.
   const rows = [
-    { k: 'Points a month', sub: 'what lands in your name',
+    { k: 'Points a month',
       vals: tiers.map(t => `<b class="num">${escapeHtml(fmtPoints(pointsPerMonth(s, t.monthlyUsd)))}</b>
         <span class="lad-sub">${escapeHtml(fmtUsd2(pointsPerMonth(s, t.monthlyUsd) / s.pointsPerDollar))}</span>`) },
-    { k: 'Points on top', sub: 'a bonus the Circle funds out of its own share, on a full month',
-      vals: tiers.map(t => (t.bonusRate ? `<b class="good">+${Math.round(t.bonusRate * 100)}%</b>` : '<span class="lad-no">—</span>')) },
-    { k: 'Open requests', sub: 'how many can sit in front of the Desk at once',
-      vals: tiers.map(t => `<b>${t.holds}</b>`) },
-    { k: 'Book ahead', sub: 'how far out you can ask for a week',
-      vals: tiers.map(t => `<b>${t.windowMonths}</b><span class="lad-sub">months</span>`) },
-    { k: 'Guest passes', sub: 'for somebody not in the Circle; household is always free',
-      vals: tiers.map(t => `<b>${t.guestCerts}</b><span class="lad-sub">a year</span>`) },
-    { k: 'First look at a trip', sub: 'before a new week is shown to everyone',
+    { k: 'Points on top',
+      vals: tiers.map(t => (t.bonusRate ? `<b class="num good">+${Math.round(t.bonusRate * 100)}%</b>` : '<span class="lad-no">—</span>')) },
+    { k: 'Open requests',
+      vals: tiers.map(t => `<b class="num">${t.holds}</b>`) },
+    { k: 'Book ahead',
+      vals: tiers.map(t => `<b class="num">${t.windowMonths}</b><span class="lad-sub">months</span>`) },
+    { k: 'Guest passes',
+      vals: tiers.map(t => `<b class="num">${t.guestCerts}</b><span class="lad-sub">a year</span>`) },
+    { k: 'First look at a trip',
       vals: tiers.map(t => `<b>${escapeHtml(firstLook(t))}</b>${t.firstLookHours ? '<span class="lad-sub">early</span>' : ''}`) },
-    { k: 'Answered within', sub: 'the promise the Desk is held to, and you can see the clock',
-      vals: tiers.map(t => `<b>${t.slaHours ?? s.slaHours}</b><span class="lad-sub">hours</span>`) },
+    { k: 'Answered within',
+      vals: tiers.map(t => `<b class="num">${t.slaHours ?? s.slaHours}</b><span class="lad-sub">hours</span>`) },
     ...extra,
   ];
   const head = `<div class="lad-r lad-head" role="row">
@@ -53,7 +57,7 @@ export function tierLadder(s, { mine = null, rows: extra = [], caption = '' } = 
     </div>`;
   return `<div class="ladder" role="table" aria-label="What each level carries">${head}
     ${rows.map(r => `<div class="lad-r" role="row">
-      <div class="lad-k" role="rowheader"><b>${escapeHtml(r.k)}</b>${r.sub ? `<span class="lad-why">${escapeHtml(r.sub)}</span>` : ''}</div>
+      <div class="lad-k" role="rowheader"><b>${escapeHtml(r.k)}</b></div>
       ${r.vals.map((v, i) => `<div class="lad-v${tiers[i].monthlyUsd === mine ? ' mine' : ''}" role="cell">${v}</div>`).join('')}
     </div>`).join('')}</div>`;
 }

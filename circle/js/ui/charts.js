@@ -38,10 +38,13 @@ export function sparkline(values, { width = 160, height = 44, stroke = 'var(--in
 /**
  * Column chart: one series (bars in slot 1) or two series (grouped) with a legend.
  * data: [{label, values:[n,(n)]}]; series: ['Paid', 'Points'] optional.
+ * `width` is the viewBox width, not the rendered one (the svg fills its column). It matters
+ * because the ticks are 10px in viewBox units: at 520 in a 358px column they render at 7px,
+ * so a caller in the phone column passes 340 and the ticks come out at the size they were drawn.
  */
-export function columns(data, { series = [], height = 180, unit = '', ariaLabel = 'chart', highlightIndex = -1 } = {}) {
+export function columns(data, { series = [], height = 180, width = 520, unit = '', ariaLabel = 'chart', highlightIndex = -1 } = {}) {
   const wrap = document.createElement('div'); wrap.className = 'chart';
-  const width = 520, padL = 44, padR = 12, padT = 12, padB = 30;
+  const padL = 44, padR = 12, padT = 12, padB = 30;
   const svg = el('svg', { viewBox: `0 0 ${width} ${height}`, width: '100%', role: 'img', 'aria-label': ariaLabel, class: 'chart-svg' });
   const allVals = data.flatMap(d => d.values);
   const max = niceMax(Math.max(...allVals, 1));
