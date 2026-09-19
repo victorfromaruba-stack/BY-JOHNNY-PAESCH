@@ -870,8 +870,11 @@ export function pool({ store }) {
       <p class="eyebrow">${icon('shield')}Proof of reserves</p>
       <h1>The Pool</h1>
       <div id="gauge" style="margin-top:var(--s-5)"></div>
-      <p class="dateline">Reserve <b class="num">${escapeHtml(fmtUsd2(t.reserveUsd))}</b> · owed <b class="num">${escapeHtml(fmtPoints(t.outstandingPoints))}</b> (<b class="num">${escapeHtml(fmtUsd2(t.liabilityUsd))}</b>)</p>
-      <p class="dateline">Coverage <b class="num">${escapeHtml(fmtPct(t.coverage))}</b> · Operating <b class="num">${escapeHtml(fmtUsd2(t.operatingUsd))}</b></p>
+      <!-- The gauge above is the bank-checked coverage and carries its own date. These two lines are
+           the ledger's arithmetic today, and the figures differ; both said 'Coverage' with nothing
+           between them, so each line now names whose count it is. -->
+      <p class="dateline">By the ledger today · Reserve <b class="num">${escapeHtml(fmtUsd2(t.reserveUsd))}</b> against <b class="num">${escapeHtml(fmtPoints(t.outstandingPoints))}</b> owed (<b class="num">${escapeHtml(fmtUsd2(t.liabilityUsd))}</b>)</p>
+      <p class="dateline">Coverage by the ledger <b class="num">${escapeHtml(fmtPct(t.coverage))}</b> · Operating <b class="num">${escapeHtml(fmtUsd2(t.operatingUsd))}</b></p>
       <p class="small muted" style="margin-top:var(--s-2)">Operating is the 15% earned on bookings, less the bonuses fronted — negative until the first one.</p>
 
       <div class="panel flat" style="margin-top:var(--s-4)">
