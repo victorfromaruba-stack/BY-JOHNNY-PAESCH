@@ -272,8 +272,14 @@ export function landing({ store, go }) {
         <figcaption class="on"><div class="wrap">
           <h1 style="max-width:16ch">A private travel circle <em class="ac">in Aruba</em>.</h1>
           <p class="lede" style="margin-top:14px">Put in a hundred dollars a month. Take it out as hotel, at cost, with people you know.</p>
-          <div class="row" style="margin-top:22px">
-            <a class="btn" href="#/sign-in">${icon('key', { size: 17 })}I have an invitation</a>
+          <!-- The masthead pairing: one filled action and one link-rule beside it, on one line.
+               At 390 the column inside the photograph is 358px, and the two labels the spec
+               settled on measure 174 + 16 + 141 — they fit with room to spare only without a
+               glyph in the button. With the key icon the button was 203 and the pair came to
+               360, two pixels over, so .row wrapped and the button sat alone with 156px of
+               hero beside it. The words are the invitation; the key was decoration. -->
+          <div class="row">
+            <a class="btn" href="#/sign-in">I have an invitation</a>
             <a class="link-rule" href="#/rules">How the Circle works</a>
           </div>
         </div></figcaption>
