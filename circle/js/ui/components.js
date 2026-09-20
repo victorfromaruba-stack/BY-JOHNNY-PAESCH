@@ -184,11 +184,56 @@ export function chip(status, label) {
   return `<span class="chip chip-${STATUS_TONE[status] || 'muted'}"><i></i>${escapeHtml(label || statusLabel(status))}</span>`;
 }
 
+/** A button says what it is doing without ceasing to be itself.
+ *  It used to swap its textContent for the word and swap it back, which flattened everything
+ *  inside it into one string: the live figure on /book came back as plain text — no
+ *  <b class="num">, no mono face — the send mark on /pay was destroyed outright, and the
+ *  separator lost its aria-hidden, so a reader said the bullet out loud. Worse, the view holds
+ *  a reference to that figure (catalog.js closes over #ask-fig once) and the restored copy is
+ *  a different node, so after one failed write the docked action showed a points total the app
+ *  already knew to be wrong while the panel above it showed the right one.
+ *  Nothing is removed now. The resting children are gathered once into a sleeve that is not a
+ *  box (display:contents), so the row lays out exactly as before — gap, icon size, the lot —
+ *  and the same nodes stay in the page, live, for the view to keep writing to. The sleeve is
+ *  only hidden while the word lies over it, and the hidden children still hold the box open,
+ *  so it does not move. The greyed look and the height are the stylesheet's own (.btn[disabled],
+ *  --h-touch); no colour, no radius and no query is introduced here. */
 export function setBusy(btn, busy, label) {
   if (!btn) return;
   btn.disabled = busy;
-  if (busy) { btn.dataset.label = btn.textContent; btn.textContent = label || 'Working…'; }
-  else if (btn.dataset.label) { btn.textContent = btn.dataset.label; }
+  btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+  btn.classList.toggle('is-busy', busy);
+  const sleeve = restingSleeve(btn);
+  let say = btn.querySelector(':scope > .busy-say');
+  if (busy) {
+    if (sleeve) sleeve.style.visibility = 'hidden';
+    if (!say) {
+      say = document.createElement('span');
+      say.className = 'busy-say';
+      say.style.cssText = 'position:absolute;inset:0;display:grid;place-items:center;';
+      if (getComputedStyle(btn).position === 'static') { btn.dataset.restPos = btn.style.position; btn.style.position = 'relative'; }
+      btn.append(say);
+    }
+    say.textContent = label || 'Working…';
+  } else {
+    say?.remove();
+    if (sleeve) sleeve.style.visibility = '';
+    if ('restPos' in btn.dataset) { btn.style.position = btn.dataset.restPos; delete btn.dataset.restPos; }
+  }
+}
+/** The sleeve the resting children live in, made on the first busy and kept afterwards: making
+ *  it twice, or unwrapping it, would hand the view a fresh set of nodes — the very bug above. */
+function restingSleeve(btn) {
+  let sleeve = btn.querySelector(':scope > .btn-rest');
+  if (sleeve) return sleeve;
+  const rest = [...btn.childNodes].filter((n) => !(n.nodeType === 1 && n.classList.contains('busy-say')));
+  if (!rest.length) return null;
+  sleeve = document.createElement('span');
+  sleeve.className = 'btn-rest';
+  sleeve.style.display = 'contents';
+  btn.insertBefore(sleeve, rest[0]);
+  sleeve.append(...rest);
+  return sleeve;
 }
 
 /** The odometer. Reserved for the balance — everything else lands instantly. */
