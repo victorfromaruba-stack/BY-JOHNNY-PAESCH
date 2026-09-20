@@ -328,3 +328,42 @@ Dead weight worth deleting while someone is in the file: `.grid` (app.css:179) h
 in `js/`; `.island-wrap`'s `max-width: 560px` (app.css:1269) can never bind, because the element
 renders at 358px inside a 430px column; `.badge-grid` (app.css:904) is the last layout that is a
 function of width, and resolves to 174px × 2 at every width the app ever has.
+
+## Re-baselined 20 Sept, after the photography pass (390px, as a member)
+
+Five commits put pictures and material on the screens that had neither. These numbers are the
+new floor; several of them are DELIBERATELY worse than the table above, and a sweep that reads
+them as regressions will try to undo work that was asked for.
+
+| route | screens | to 1st figure | targets < 44 | what changed |
+|---|---|---|---|---|
+| `/home` | 3.8 (was 3.5) | 333 (was 203) | 0 | the cover plate: a full-bleed 4:5 photograph of the place bookable today, the balance on it at `--t-fig-lg` |
+| `/stays` | **6.4** (was 5.0) | 88 | 0 | 23 name-and-chevron rows became 23 photographic plates; the board groups by property under a 3:1 strip |
+| `/circle` | 2.1 (was 1.9) | 235 | 0 | the roster on `.field-night`, three tier metals, the seat count drawn |
+| `/crews` | 1.0 | 434 | 0 | a crew leads with its booking's picture — NOT exercised by the seed, see below |
+| everything else | unchanged | | 0 | |
+
+**The first figure on /home moved 203 → 333px and that is the design, not drift.** The picture is
+above the figure now. It is still well inside the first screen.
+
+**/stays at 6.4 screens is the known cost.** Plates are taller than text rows. The lever if it ever
+has to come back: three plates to the column instead of two (`.plate-index`
+`grid-template-columns`), or a lower `first` on the board's `dealList`. Do not reach for it
+without asking — the length bought the pictures.
+
+**Weight**: `assets/stays/thumb/` and `assets/areas/thumb/` are 18 files at 400px, 422 KB in all
+against 3,819 KB for the same pictures full size. A first visit to /stays pulls most of them
+(~420 KB, was 120 KB). They are lazy and the worker caches them; `APP_SHELL` precaches the app
+and `hero-tall.jpg` only, so new pictures need no `sw.js` edit.
+
+**The crew card is the one thing here not proven by a render of the real path.** The seed's two
+crews carry no `redemptionId`, so `/crews` in the preview shows no picture and the 339px of grey
+below the card is still there. `store.js:340` shows `createCrew` sets one and crews are gated on
+an approved room, so a real crew has a booking and gets its picture. Verified by injecting the
+view's own markup with a real stay and looking at it. Do not "fix" the preview by attaching the
+seed crews to a booking: the only one Sasha has is the Ritz week the Desk DECLINED, and having
+the demo tell a false story to make a feature look good is the thing this app does not do.
+
+Open, and deliberately not built: the per-tier grounds that would tint each member's whole app,
+the season wash, and `coverPath` on a crew — reserved in `schema.sql` as `cover_path`,
+initialised by `createCrew`, written nowhere and read nowhere.
