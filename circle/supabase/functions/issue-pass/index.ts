@@ -72,8 +72,8 @@ Deno.serve(async (req) => {
     // nothing imports across this boundary, so they must be changed in step with it. The client
     // preview in circle/js/ui/wallet.js draws from VOCAB directly, and passPayload's contract
     // is that the two can never disagree — keep them equal or that promise is a lie.
-    const WORDMARK = 'THE CIRCLE';
-    const SLUG = 'the-circle';
+    const WORDMARK = 'THE INNER CIRCLE';
+    const SLUG = 'the-inner-circle';
 
     const pass = {
       formatVersion: 1,

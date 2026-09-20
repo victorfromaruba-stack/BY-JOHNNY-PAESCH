@@ -17,15 +17,21 @@
 // Changing it is an operational decision for Victor, not part of a rename.
 export const VOCAB = {
   clubName: 'The Inner Hotel Circle',
-  // The running head gives the wordmark 192px before it reaches the member's name, and the full
-  // name measures 254px in the display serif at 1.3rem — it wrapped to two lines and clipped
-  // against the 48px bar. It only fitted below 0.92rem, smaller than the name beside it. So the
-  // bar carries the short form the club already calls itself (`circle`, below): 115px, one line,
-  // no CSS change. The Wallet pass and the card PNG print this same short form.
-  wordmark: 'THE CIRCLE',
+  // The short form the bar, the card face, the Wallet pass and the card PNG all print. It is NOT
+  // clubName: the full name does not fit the running head.
+  //
+  // Measured in the bar at 390px against the worst case the app can produce — the longest first
+  // name in the club beside a two-digit urgent badge:
+  //     THE CIRCLE              146px, 78px of clearance
+  //     THE INNER CIRCLE        213px, 12px of clearance   ← this
+  //     THE INNER HOTEL CIRCLE  235px, and it is being clipped to get there
+  // Victor asked for the Inner Circle, and it fits with room to spare on every real name in the
+  // club: Ana-Lucía is the longest in the preview seed and nobody live is over seven letters.
+  // Do not lengthen it without re-measuring — the next word spends the last twelve pixels.
+  wordmark: 'THE INNER CIRCLE',
   // Downloads and the .pkpass filename. A slug, because `clubName.toLowerCase()` would put
   // spaces in every filename — and in a Content-Disposition header, where clients cut at one.
-  slug: 'the-circle',
+  slug: 'the-inner-circle',
   // The name now says "Inner Circle" itself, so the old subtitle only repeated it. This states
   // what the club is and where, both of which the club has established.
   subtitle: 'Private travel club · Aruba',
