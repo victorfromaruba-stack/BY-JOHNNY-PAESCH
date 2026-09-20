@@ -12,7 +12,7 @@
 // secondary and auxiliary fields between them.
 //
 // Deploy:  supabase functions deploy issue-pass
-// Secrets: supabase secrets set PASS_TYPE_ID=pass.aw.hunto.card \
+// Secrets: supabase secrets set PASS_TYPE_ID=pass.aw.innerhotelcircle.card \
 //            TEAM_ID=XXXXXXXXXX \
 //            PASS_CERT_P12_BASE64="$(base64 -i pass.p12)" \
 //            PASS_CERT_PASSWORD=... \

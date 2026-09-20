@@ -709,12 +709,14 @@ Three ways to get there, honestly compared:
 
 The paid path, end to end: enrol at developer.apple.com as an **Individual** (an
 organisation enrolment wants a D-U-N-S number and a company website, which a friends'
-club does not have); create a Pass Type ID (`pass.aw.hunto.card`); generate a certificate
+club does not have); create a Pass Type ID — `pass.aw.innerhotelcircle.card` below, but **choose it
+deliberately, because Apple will not let you rename it afterwards** and it is stamped into every
+pass the club ever issues; generate a certificate
 for it and export it as a `.p12`; download the **WWDR G4** intermediate from
 `apple.com/certificateauthority/AppleWWDRCAG4.cer` and convert it to PEM; then:
 
 ```sh
-supabase secrets set PASS_TYPE_ID=pass.aw.hunto.card TEAM_ID=XXXXXXXXXX \
+supabase secrets set PASS_TYPE_ID=pass.aw.innerhotelcircle.card TEAM_ID=XXXXXXXXXX \
   PASS_CERT_P12_BASE64="$(base64 -i pass.p12)" PASS_CERT_PASSWORD=... \
   WWDR_PEM="$(cat AppleWWDRCAG4.pem)" CLUB_URL=https://…/circle/
 supabase functions deploy issue-pass

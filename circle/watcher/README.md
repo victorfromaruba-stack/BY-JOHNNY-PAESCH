@@ -67,7 +67,7 @@ node index.mjs                             # every WATCH_EVERY_MIN minutes, fore
 ```ini
 # /etc/systemd/system/hunto-watcher.service
 [Unit]
-Description=Hunto Circle watcher
+Description=The Inner Hotel Circle watcher
 After=network-online.target
 
 [Service]

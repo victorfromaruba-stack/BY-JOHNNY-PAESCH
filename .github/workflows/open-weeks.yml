@@ -4,8 +4,15 @@ name: Refresh the open-weeks copy
 # the site. A member's phone that cannot reach vakaymood.com reads this instead, from the site's
 # own address. No credential, no server: a scheduled fetch of a public API and a Pages deploy.
 #
-# Nothing is committed. The copy is generated into the artifact at deploy time, here and in
-# pages.yml, so a code deploy never publishes a stale one and this job never writes to main.
+# This job never writes to main: it regenerates the copy into the published artifact, here and in
+# pages.yml, so a deploy normally carries one taken minutes ago rather than whatever is in git.
+#
+# But there IS a copy in git — circle/data/open-weeks.json is tracked — and it is the fallback,
+# not a leftover. pages.yml runs the generator with `continue-on-error: true`, so when VakayMood
+# does not answer the committed file is what gets published. If the board looks stale, check that
+# file's own `generatedAt` before hunting for a generation failure: a deploy that quietly fell
+# back is indistinguishable from a successful one in the job's own exit status. The board itself
+# stays honest either way — live.js dates every row from `generatedAt`, not from the fetch.
 
 on:
   schedule:
