@@ -7,8 +7,11 @@ yet. The Circle has the opposite problem. Forty people who already know each oth
 week to find out what a week costs and whether Victor booked it. Attention is not the scarce
 thing; trust in the figures is. So most of what follows is not merely unnecessary here, it works
 against the app, and the honest answer to "can we add this one" is usually no. Two components
-earn a place. Fourteen would work if Victor points at them. Fifty-one are wrong for this app, and
-the section at the end says what the phone alone rules out.
+were filed as earning a place; **one of those, `stateful-button`, was withdrawn on 2026-09-20
+when the flow was driven in the harness and the absence it was filed against turned out not to
+exist**, so the standing count is one Fit, and it has shipped. Fourteen would work if Victor
+points at them. Fifty-one are wrong for this app, and the section at the end says what the phone
+alone rules out.
 
 **Sixty-seven judged, and that is not all of them.** `borrow.mjs --list` probes sixty-one slugs
 and every one answered 200 on 2026-09-20; this file judges those sixty-one plus six the script
@@ -40,20 +43,52 @@ it is never installed, because a port becomes CSS.
 
 ## Fits
 
-Two. Both replace an absence, not a plain thing with a fancier thing.
+Two were listed. **One survives: `text-generate-effect`, and it has shipped.** `stateful-button`
+was struck on 2026-09-20 after the flow was driven rather than argued about — the absence it was
+filed against does not exist. Both entries are kept below, because the reason a Fit fails is
+worth as much as the reason one passes.
 
-**stateful-button** — free, no declared deps (source uses `motion`). *Screen:* the one filled
-action, `.btn.block` in the act bar on `/stays/<id>` and `/trips/<id>`, and the Ask button on
-Home. *Replaces:* nothing, which is the point — there is no `aria-busy`, no pending class and no
-disabled-while-sending state anywhere in `js/ui/` or `app.css`. A member on Aruban mobile data
-taps "Ask for these dates", the request goes, and the button looks exactly as it did. Port the
-state machine only: idle, a mark that turns while the write is in flight, a tick that holds about
-two seconds. Ink on `--on-ink`, the tick `--good`, the 44px target unchanged because the mark
-replaces the icon rather than being added beside it. Discard the gradient ring, the `layoutId`
-and the spring — the width change is a transition, not a layout animation.
+**stateful-button — WITHDRAWN 2026-09-20. Do not port it.** The clause below said "there is no
+`aria-busy`, no pending class and no disabled-while-sending state anywhere in `js/ui/` or
+`app.css`". That was wrong on both halves. `setBusy()` at `circle/js/ui/components.js:201` sets
+`btn.disabled`, writes `aria-busy`, and lays the word over the button, `app.css:140` draws
+`[disabled]` at `opacity: .45`, and both of the screens this entry named already call it —
+`catalog.js:932` on the `/book/<id>` ask and `member.js:579` on the `/pay` contribution,
+synchronously, before the first `await`, so there is no window in which a second tap can land.
+Driven in the harness at 390 on the preview backend with the write slowed to 900ms, sampling the
+docked action from the tap: `/book/stay_voco` goes `[0ms, enabled, opacity 1]` →
+`[3ms, disabled, aria-busy=true, "Sending…", opacity 0.45]`, held at 40, 200, 500 and 860ms →
+`[1300ms, route now #/requests/<id>]`; `/pay` the same at 3ms, held to 700ms, gone to `#/home` by
+1599ms. Picture: `scratchpad/skills-run/fix-catalog.md/pay-slow-during.png`, the docked action
+greyed and reading "Sending…". ("The Ask button on Home" was never a submit either —
+`member.js:71` is an `<a class="btn" href="#/book/…">`, a link to the ask form, with nothing to be
+pending about; rendered, it is `<a href="#/book/stay_voco">Ask for these dates</a>`.) The
+component's own payload is also homeless here: its tick "holds about two seconds" after the write,
+and both of these flows navigate away on success (`/requests/<id>`, `/home`) and say it in a
+toast, so a tick would be painted onto a screen that is already gone.
 
-**text-generate-effect** — free, `motion`. *Screen:* `/home`, the serif masthead
-("2 nights at *voco* Surfside Aruba"). *Replaces:* the instant paint of that title. Words fade up
+An earlier draft of this withdrawal closed by claiming the looking had turned up a live defect in
+`setBusy` — that it swaps `textContent` and flattens the button's markup. **That claim was itself
+false and is struck.** `setBusy` has not swapped `textContent` since before this entry was
+written: it gathers the resting children once into a `display: contents` sleeve
+(`components.js:226`) and lays a `.busy-say` over them, so the same nodes stay in the page, live.
+Measured in the same run: the `<b class="num">` inside the `/book` action is still there on every
+frame of the busy window, and the send mark on `/pay` still counts one `<svg>` throughout. Filing
+a defect that had already been repaired is the same failure that sank the entry above, and it is
+recorded here rather than quietly deleted for the same reason the entry is kept.
+
+**text-generate-effect** — free, `motion`. **Shipped** on the signed-out landing hero
+(`app.css:534`, `@keyframes enter-to-rest`, applied at `app.css:535` to
+`.hero-cover .on .wrap > *`); see `references/worked-example.md`. *Screen as
+filed:* `/home`, the serif masthead ("2 nights at *voco* Surfside Aruba") — **not recommended,
+and the Fit should be treated as spent by the landing port.** `/home` is the ledger: the line
+under that masthead carries the member's available points and the filled action sits directly
+beneath it, so a stagger there stages the figures a member opened the app to read. And it would
+not be an entrance felt once — `app.js:140` is `if (reason !== 'render') render();` inside
+`store.subscribe`, so the current view is re-rendered on every store change that is not itself a
+render, not only on navigation, and the masthead would replay its fade whenever anything in the
+store moved while the member sat on Home. That is question 4 answered in the wrong direction.
+*Replaces:* the instant paint of that title. Words fade up
 staggered, which is the one gesture the Edition already names ("motion is a fade"). Port with
 `filter` off: **opacity only, no blur** — the blur is the tell that marks this as a template
 effect, and it also animates a filter, which the house rule against animating anything but
