@@ -120,11 +120,18 @@ export function stampFor(deal, store) {
   // Where the week is, first. An Interval Getaway and an owner's rental on RedWeek are different
   // things at different prices, and a member choosing between two rows was being told who typed
   // it in but not what it is.
-  if (deal.draft) return { text: `VakayMood · ${hhmm}`, feed: true };
-  const where = (SOURCES[deal.source] || SOURCES.other).label;
-  const who = store.member?.(deal.postedBy)?.name.split(' ')[0];
+  // Today gets the hour alone; any other day gets its date in front of the hour. Both branches
+  // read it, because both kinds of row age.
   const sameDay = t && new Date().toDateString() === t.toDateString();
   const when = sameDay ? hhmm : (day && hhmm ? `${day} ${hhmm}` : day || hhmm);
+  // An owner's week off VakayMood ages like any other row. It is read live where the feed
+  // answers and lifted from the bundled copy where it does not, and that copy can be days old —
+  // so a stamp of the bare hour told a member reading at 11:39 that a twelve-day-old row had
+  // been seen this morning, which is a fact nobody established. It carries the date and its own
+  // staleness now, so `ageLine` can say the age out loud past two days.
+  if (deal.draft) return { text: `VakayMood · ${when}`, feed: true, seenAt: t, stale: staleDays(t) };
+  const where = (SOURCES[deal.source] || SOURCES.other).label;
+  const who = store.member?.(deal.postedBy)?.name.split(' ')[0];
   return { text: [where, who, when && `seen ${when}`].filter(Boolean).join(' · '), feed: false, seenAt: t, stale: staleDays(t) };
 }
 
