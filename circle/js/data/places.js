@@ -2276,7 +2276,14 @@ export const PLACES = Object.freeze({
         "bytes": 221399
       }
     ],
-    "sources": []
+    "sources": [
+      {
+        "kind": "site",
+        "label": "the property's own site, oceanzaruba.com",
+        "url": "https://www.oceanzaruba.com/",
+        "seenOn": "2026-09-08"
+      }
+    ]
   },
   "stay_riu": {
     "address": "J.E. Irausquin Boulevard 77, Aruba-Palm Beach, AW",
