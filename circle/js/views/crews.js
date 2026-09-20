@@ -11,6 +11,7 @@ import { escapeHtml, fmtDay, fmtDayTime, fmtPoints, fmtUsd2 } from '../core/util
 import { fmtClock } from '../core/util.js';
 import { toast, sheet, confirmDialog, avatar, setBusy } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
+import { thumbPhotoFor, photoKind, photoCredit, areaPhotoFor } from './public.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 
@@ -62,7 +63,17 @@ export function crews({ store, go }) {
     const thread = store.crewThread(c.id);
     const last = thread.at(-1);
     const who = store.member(last?.memberId);
-    list.appendChild(el(`<a class="panel crew-card" href="#/crews/${escapeHtml(c.id)}">
+    // A crew is four named people going somewhere real, and the card knew where and drew none
+    // of it — the screen ended at 456px with 387px of empty grey under it, 46% of the phone.
+    // The place they are actually going leads the card now. The picture is the one the stay
+    // already carries, so it is a licensed photograph of the property or of the beach at its
+    // door, said in words when it is the beach. A crew with no booking yet gets no picture.
+    const crewStay = (() => { const r = c.redemptionId ? store.redemption(c.redemptionId) : null; return r ? store.stay(r.stayId) : null; })();
+    const crewShot = crewStay ? thumbPhotoFor(crewStay) : null;
+    const crewArea = crewShot && photoKind(crewStay) === 'area' ? areaPhotoFor(crewStay) : null;
+    const crewCredit = crewShot ? photoCredit(crewStay) : null;
+    list.appendChild(el(`<a class="panel crew-card${crewShot ? ' has-shot' : ''}" href="#/crews/${escapeHtml(c.id)}">
+        ${crewShot ? `<span class="crew-shot"><img src="${escapeHtml(crewShot)}" alt="${escapeHtml(crewArea ? `${crewArea.area}, the beach at ${crewStay.name}` : crewStay.name)}"${crewCredit ? ` title="${escapeHtml(crewCredit.text)}"` : ''} loading="lazy" decoding="async">${crewArea ? '<span class="crew-note">the beach, not the hotel</span>' : ''}</span>` : ''}
         <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s-2);align-items:center">
           <h2>${escapeHtml(c.name)}${
             store.leadsCrew(c.id, me.id) ? '<span class="tag" style="margin-left:8px">you lead it</span>' : ''}</h2>

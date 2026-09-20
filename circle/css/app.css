@@ -1300,6 +1300,16 @@ body[data-cover="on"] .topbar .brand, body[data-cover="on"] .topbar .brand b,
 body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: var(--on-photo); }
 @media (prefers-reduced-motion: reduce) { body[data-cover] .topbar { transition: none; } }
 
+/* A CREW LEADS WITH WHERE IT IS GOING. The picture bleeds to the panel's edges and the card's
+   own padding resumes under it, so the photograph is the top of the card rather than a tile
+   sitting inside it. */
+.crew-card.has-shot { padding-top: 0; overflow: hidden; }
+.crew-card .crew-shot { display: block; position: relative; margin: 0 calc(-1 * var(--s-4)) var(--s-3);
+  aspect-ratio: 3 / 1; overflow: hidden; background: var(--well); }
+.crew-card .crew-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.crew-card .crew-note { position: absolute; left: 10px; bottom: 10px; padding: 3px 7px; border-radius: var(--r-chip);
+  font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .04em; color: var(--on-photo); background: var(--scrim); }
+
 /* A NIGHT FIELD — a route-level block of dark stock, so the app is not printed end to end on
    one sheet of grey. It takes the whole night palette by joining the nocturne selector list in
    tokens.css; nothing is redefined here but the ground it paints and the bleed to the column's
