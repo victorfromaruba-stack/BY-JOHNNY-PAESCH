@@ -132,7 +132,7 @@ reason is the most useful output this skill produces; the rejection table in the
 took longer than the port and is worth more.
 
 **If the answer is no and the person is attached to the idea, build it and render it anyway.**
-In `/home/user/BY-JOHNNY-PAESCH/aceternity-lab`, or injected at runtime in the harness — never in
+Injected at runtime in the harness, or in a viewing room built by `scripts/make-lab.sh` — never in
 `circle/`, never committed. A picture of why it is wrong ends the conversation; a paragraph
 invites a second round. The harness recipe in §4 works unchanged for this, and question 5 is only
 answerable this way.
@@ -284,10 +284,13 @@ and the CSP blocks what the interesting ones depend on); most of it is the wrong
 thing to hand over; and the two or three that do earn a place can be ported by hand, as CSS, this
 week — while the rejected ones can be *shown* rather than argued about.
 
-For showing: `/home/user/BY-JOHNNY-PAESCH/aceternity-lab` is a working Vite + React + Tailwind v4
-scratch project (gitignored) where a component can be installed and run. **Nothing from the lab
+For showing: `sh scripts/make-lab.sh` builds a throwaway Vite + React + Tailwind project in a
+minute, where a component can be installed and watched running. Aceternity's registry is public,
+so shadcn takes the URL directly and no account is involved:
+`npx shadcn@latest add https://ui.aceternity.com/registry/<slug>.json`. You need this only for an
+effect you cannot read off the `.tsx` — a canvas, a shader, a physics loop. **Nothing from the lab
 ships.** It is a viewing room, not a source directory; ported code lands in `circle/css/app.css`
-and, if it truly needs behaviour, `circle/js/ui/`.
+and, if it truly needs behaviour, `circle/js/ui/`. Delete it when you are done looking.
 
 ## References
 
@@ -295,5 +298,7 @@ and, if it truly needs behaviour, `circle/js/ui/`.
   first; for anything in it the decision is already made.
 - `scripts/borrow.mjs` — house ruling, source, Tailwind mapping and behaviour signals, in one
   call. Aceternity registry only.
+- `scripts/make-lab.sh` — builds the viewing room and its own `add.mjs` installer, for an effect
+  you cannot read off the source. Takes a minute, gitignored, delete it afterwards.
 - `references/worked-example.md` — one port end to end, with the rejection table and its lessons.
 - `circle-feel/SKILL.md` — The Edition, and the house rules a port inherits. Read before judging.
