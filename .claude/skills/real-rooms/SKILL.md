@@ -58,7 +58,9 @@ above exists to prevent, and it would be taking copyrighted photographs on top o
 
 **3. Read what comes back before trusting it.** The script marks each room `official` (from the
 property's schema.org data — their own machine-readable claim) or `page-text` (read off the
-page's headings, which is weaker). Both are real; the difference is how sure you can be. If
+page's headings, which is weaker). Both are real; the difference is how sure you can be — and
+there is a third tier, `page-image`, that the script never writes; see *The three source tiers*
+below before you add one by hand. If
 `rooms` is empty, the page is probably built in the browser — the script renders it with
 Chromium automatically. If the render fails too, say so; do not fall back to typing in numbers.
 
@@ -83,22 +85,82 @@ Never take a photo from another travel club or a competitor's marketing.
 
 ## Getting it into the catalog
 
-The catalog shape lives in `circle/js/data/rooms.js`. Map like this:
+The catalog shape lives in **`circle/js/data/places.js`** — one `PLACES[catalogId]` record per
+property, keyed by the bundled catalog id (`stay_divi`, `stay_surfclub`); resolve a live stay with
+`seedIdOf()` before looking it up. There is no `circle/js/data/rooms.js`; `circle/js/views/rooms.js`
+is the view that reads this file, not the data.
 
-| fetched | catalog | if missing |
+**That file is generated, not hand-kept.** Its own header says it is built by
+`scratchpad/build-places.py` from the fetch output. That script is *not* in the repository — the
+scratchpad is a working directory, not a tracked one — so before you edit `places.js` by hand,
+look for the script and regenerate if you have it. If you do hand-edit, keep the shape below
+exactly, keep the header's claim true (every fact traceable to a recorded source), and say in the
+commit that you edited the generated file directly.
+
+A record holds four lists:
+
+- **`rooms[]`** — the rooms the property itself lists. 7 of the 14 places have one.
+- **`units[]`** — what owners actually hold there, from VakayMood, for the resorts whose own site
+  refuses a scripted read. 3 places have only this. `roomsOf()` derives a room list from it when
+  `rooms[]` is empty (`circle/js/views/rooms.js:60`); it prints spans, not picked numbers. Never
+  hand-write a `rooms[]` entry for one of these to fill the gap — that is inventing.
+- **`photos[]`** — `file`, `thumb`, `room` (the catalog room name it shows, matched by `normName`),
+  `alt` (the property's own), `kind` (`room`, `inside`, `plan`, `property`), `page`, `seenOn`.
+- **`sources[]`** — `kind` (`site` or `vakaymood`), `label`, `url`, `seenOn`. Every fact in the
+  record has to be answerable from one of these.
+
+Map a fetched room like this:
+
+| fetched | `rooms[]` field | if missing |
 |---|---|---|
-| `name` | `name` | skip the room entirely |
+| `name` | `name` — as the property writes it | skip the room entirely |
+| — | `catalogName` — the Circle's name for the same room, so photographs match | `null` |
 | `sqft` / `sqm` | `sqft` / `sqm` | leave `null` — the app prints "not published" |
 | `sleeps` | `sleeps` | leave `null` |
 | `bedrooms` | `bedrooms` | leave `null` |
 | `beds` | `beds` | leave `null` |
-| `source` | `source` | `official` or `page-text`, never `inferred` |
+| `view` | `view` | leave `null` |
+| `description` | `description` — the property's own words, not a summary of them | `null` |
+| `source` | `source` | `official`, `page-text` or `page-image`, never `inferred` |
 
-`rateFactor` is the Circle's own commercial judgement — what this room costs relative to the
+### The three source tiers
+
+Strongest first. All three are traceable; the difference is what the property actually committed to.
+
+- **`official`** — out of the property's own schema.org data. Their machine-readable claim.
+- **`page-text`** — read off the page's headings. Their words, less structured. 22 of the 24 rooms
+  on file today.
+- **`page-image`** — the room appears only in the property's own *pictures*: the name comes from
+  the alt text or caption the property wrote under its own photograph. The fetch script never emits
+  this (it writes `official` or `page-text` only); it is applied by hand when the property shows a
+  room but does not list it. Two rooms use it, both at Divi: *Garden View King Room* (alt "Divi
+  Aruba Gardenview King Room") and *Two Bedroom Suite* (alt "Two bedroom suite floor plan").
+
+**A `page-image` room carries a name and photographs and nothing else.** Every figure —
+`sqft`, `sqm`, `sleeps`, `bedrooms`, `beds` — stays `null`, because a picture publishes no
+measurements. Both rooms on file honour this.
+
+**Should the app mark it?** It does not today, and that is the right answer while the rule above
+holds. `roomsOf()` drops `source` on the way to the view — the room objects it returns carry
+`name`, `bits`, `description`, `photos` and nothing more (`circle/js/views/rooms.js:106`) — so a
+`page-image` room renders exactly like a `page-text` one: the name, the property's own
+photographs, an "Ask for this one" link, no figures — checked on the Divi page at 390.
+Nothing is asserted that the property did not itself print under its own picture, so there is
+nothing for a mark to warn about. The moment a `page-image` room carries a figure, that changes:
+mark the tier in the view, or drop the figure. The second is usually right.
+
+### Two different things called `source`
+
+`places.js` is the bundled dossier and is not a database table. The `room_types` table in
+`circle/supabase/schema.sql:428` has its own `source` column with a different vocabulary —
+`official`, `aggregator`, `inferred` — and its own `rate_factor`. That is the Desk's bookable
+room list, not this one, and no view reads it today. Do not carry a `page-image` value into it:
+the CHECK constraint rejects it, and widening the constraint is a both-backends change
+(`circle/js/core/store.js` and `circle/supabase/schema.sql` together).
+
+`rateFactor` there is the Circle's own commercial judgement — what this room costs relative to the
 property's headline room. It is not on the hotel's page and must not be invented from the size.
 Leave it out and let Victor set it.
-
-Full field notes and worked examples: `references/catalog-shape.md`.
 
 ## When you find nothing
 
