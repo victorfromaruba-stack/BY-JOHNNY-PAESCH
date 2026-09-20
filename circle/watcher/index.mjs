@@ -7,6 +7,9 @@
 //   node index.mjs --dry       find and print, post nothing
 //   node index.mjs --dump      save what a signed-in Interval session sees, then stop
 //
+// The timer sweeps RedWeek, which needs no login. Interval is signed into only on a run a
+// person started — --once or --dump — and never by the service. See "Interval by hand" below.
+//
 // Everything it needs is in .env next to this file. Nothing is written down anywhere else.
 
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -18,8 +21,10 @@ import { Circle } from './circle.mjs';
 import { loadEnv } from './dotenv.mjs';
 // Which finds go up, and what they look like when they do. Pure, and on trial in judge.test.mjs.
 import { worthPosting, asDeal, resolveStay, capPerResortMonth, dedupeKey } from './judge.mjs';
-// How soon to ask Interval again after it said no. Pure, and on trial in pace.test.mjs.
-import { loadPace, savePace, refused as refusedPace, accepted as acceptedPace, due as paceDue, backoffMinutes } from './pace.mjs';
+// How many times in a row Interval said no. Pure, and on trial in pace.test.mjs. The `due`
+// gate it also exports is not read here any more: nothing signs in on a timer for it to hold
+// back. What is left is the count, which is what the next run by hand wants to be told.
+import { loadPace, savePace, refused as refusedPace, accepted as acceptedPace } from './pace.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // Where the Interval pace lives between passes and across restarts. Git-ignored, like .env.
@@ -56,6 +61,58 @@ const CFG = {
 
 const log = (...a) => console.log(new Date().toISOString().slice(0, 19).replace('T', ' '), ...a);
 
+/**
+ * Move the last-seen clock on the weeks this pass found on the page again.
+ *
+ * A row on the board carries two times: when it was first posted here, and when it was last
+ * seen where it lives. The board shows the second one, and after two days it says it out loud —
+ * "Last seen 3 days ago. Victor looks again before he books" (js/views/deals.js). The watcher
+ * sweeps RedWeek every half hour and confirms these same weeks are still on the page, and until
+ * now it wrote nothing when it did: anything already posted was skipped and that was the end of
+ * it. So seen_at stayed at first sighting for ever, and since RedWeek is 78 of the 85 weeks on
+ * the board, most of the board was telling members it was older than it is — about weeks the
+ * watcher had confirmed forty-eight times that day. A row that is wrong about its own age is
+ * worse than no row at all: browsing without having to ask is the entire point of the board.
+ *
+ * This is the watcher's half of a rule the Grab path already keeps. ingest-deal writes
+ * `{ seen_at: now }` the moment it meets a week it has posted before (supabase/functions/
+ * ingest-deal/index.ts). Two writers of one column, one rule, and only one of them kept it.
+ *
+ * Live rows only. A week Victor has taken down is not a listing any more, and a retired row
+ * with a moving clock would read as alive in the Desk's own lists.
+ *
+ * It counts what came BACK, not what it asked for. The watcher signs in as an ordinary member —
+ * the bot account holds no role and there is no service key on the VPS — and `deals` is behind
+ * row-level security. An update that no policy allows does not fail loudly: Postgres filters the
+ * rows away and PostgREST answers with nothing changed. Counting the rows the database returns
+ * is the difference between a log line that is true and one that merely reads well.
+ */
+async function refreshSeen(circle, refs) {
+  if (!refs.length) return { asked: 0, moved: 0, said: '' };
+  const now = new Date().toISOString();
+  let moved = 0, said = '';
+  // In batches: a pass can see a hundred weeks again, and a URL is not the place to put a
+  // hundred references at once.
+  for (let i = 0; i < refs.length; i += 50) {
+    const batch = refs.slice(i, i + 50);
+    // JSON.stringify quotes each reference the way PostgREST wants them inside in.(…), so a
+    // reference carrying a comma cannot become two.
+    const list = encodeURIComponent(batch.map(r => JSON.stringify(String(r))).join(','));
+    const res = await circle.call(`/rest/v1/deals?status=eq.live&source_ref=in.(${list})&select=source_ref`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', prefer: 'return=representation' },
+      body: JSON.stringify({ seen_at: now }),
+    });
+    if (!res.ok) {
+      said = `the Circle answered ${res.status}: ${String(await res.text().catch(() => '')).slice(0, 160)}`;
+      break;
+    }
+    const rows = await res.json().catch(() => []);
+    moved += Array.isArray(rows) ? rows.length : 0;
+  }
+  return { asked: refs.length, moved, said };
+}
+
 async function pass(circle) {
   const found = [];
 
@@ -66,24 +123,40 @@ async function pass(circle) {
   });
   found.push(...rw);
 
+  // INTERVAL, BY HAND AND ONLY BY HAND.
+  //
   // Interval is off unless it is deliberately switched on, and having a username set is not
   // deliberate enough. RedWeek needs no login, works today, and finds around 138 open weeks a
-  // pass across the six resorts — so the watcher does its job either way, and Interval is a
-  // separate decision rather than a blocker. See the README on what that decision involves.
+  // pass across the six resorts — so the timer does the watcher's job either way, and Interval
+  // is a separate decision rather than a blocker. See the README on what that decision involves.
   //
-  // The pace (pace.mjs): a refused sign-in doubles the wait before the next attempt, up to a
-  // day, and a sign-in that works puts it back to every pass. A run by hand — --once, --dump —
-  // is a deliberate attempt and always goes ahead; the service is what honours the wait.
+  // The part of that decision the code does not get to make: a sign-in to Interval on a timer
+  // is the exact pattern their bot management exists to catch, and the penalty in the
+  // membership terms is termination, not a warning. Victor's VIP Gold membership is the
+  // Circle's entire supply of cheap weeks — lose it and there is no board left to keep fresh.
+  // The browser client goes further still: its own comments describe waiting out Radware's
+  // interstitial until the __uzm cookies are minted. That is working around bot management, and
+  // it was happening unattended every half hour on a machine nobody watches, because the
+  // service loop imported it like any other pass.
+  //
+  // So the sign-in happens on a run a person started and at no other time. `--once` and
+  // `--dump` behave exactly as they did. The service sweeps RedWeek and says plainly what it is
+  // not doing. WATCH_INTERVAL=on still carries Victor's decision that Interval is worth
+  // looking at; it no longer means a timer looks on his behalf.
+  //
+  // The pace file (pace.mjs) outlives this: its refusal count is what the next run by hand is
+  // told on the way in. Its wait is not consulted, because nothing is waiting to try.
   const wantsInterval = /^(1|on|true|yes)$/i.test(process.env.WATCH_INTERVAL || '');
   const pace = loadPace(PACE_FILE);
-  const stamp = (iso) => new Date(iso).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  const byHand = ONCE || DUMP;
+  const refusalsSaid = (n) => `${n} time${n === 1 ? '' : 's'} in a row`;
   if (!wantsInterval) {
     log('Interval: off (WATCH_INTERVAL is not set) — RedWeek only');
   } else if (!process.env.INTERVAL_USER) {
     log('Interval: no INTERVAL_USER set, skipping');
-  } else if (!ONCE && !DUMP && !paceDue(pace)) {
-    const inMin = Math.max(0, Math.ceil((Date.parse(pace.nextTryAt) - Date.now()) / 60_000));
-    log(`Interval: the sign-in was refused ${pace.refusals} time${pace.refusals === 1 ? '' : 's'} in a row — next try ${stamp(pace.nextTryAt)}, ${inMin} min from now; RedWeek still runs every pass`);
+  } else if (!byHand) {
+    log('Interval: signed into by hand only, never on this timer — run `node index.mjs --once` when you want a look. RedWeek runs every pass.'
+      + (pace.refusals ? ` (the last attempt was refused, ${refusalsSaid(pace.refusals)})` : ''));
   } else {
     let iv = null;
     try {
@@ -151,8 +224,10 @@ async function pass(circle) {
       } else if (err.refused) {
         const next = refusedPace(pace, { everyMin: CFG.everyMin, maxMin: CFG.intervalRetryMaxMin, said: err.message });
         savePace(PACE_FILE, next);
-        log(`  Interval refused the sign-in (${next.refusals} in a row): ${err.message}`);
-        log(`  next try ${stamp(next.nextTryAt)} — ${backoffMinutes(next.refusals, CFG.everyMin, { maxMin: CFG.intervalRetryMaxMin })} minutes from now; RedWeek carries on every pass`);
+        log(`  Interval refused the sign-in (${refusalsSaid(next.refusals)}): ${err.message}`);
+        // No "next try" line any more: nothing tries on its own, so naming an hour would be
+        // promising something no timer is going to keep.
+        log('  Nothing retries this on its own. RedWeek carries on every pass.');
       } else log(`  Interval failed: ${err.message}`);
     } finally {
       // A browser left running would hold memory on a small VPS for as long as the watcher
@@ -206,10 +281,21 @@ async function pass(circle) {
   catch (err) { log(`could not read the Circle's settings (${err.message}) — nothing posted this pass`); return { found: good, posted: 0 }; }
   const already = await circle.knownRefs();
   let posted = 0;
+  // The weeks this pass met on the page that are already on the board. Meeting one again is
+  // news — it is the whole difference between "posted on Monday" and "still there this
+  // morning" — so it is no longer thrown away with the `continue`.
+  const seenAgain = new Set();
   for (const f of good) {
     const deal = asDeal(f, CFG, settings);
     if (!deal) { log(`  could not price ${f.source} ${f.from} at ${f.resortName || f.ourName || '?'} — skipped`); continue; }
-    if (already.refs.has(deal.sourceRef) || already.weeks.has(dedupeKey(deal))) continue;
+    if (already.refs.has(deal.sourceRef) || already.weeks.has(dedupeKey(deal))) {
+      // Only ever by the source's own reference. A week matched on the WEEK key is the same
+      // week standing on somebody else's page — an owner lists on RedWeek and on VakayMood
+      // alike — and the row on the board belongs to that other page, which this pass never
+      // read. Moving its clock would be the app saying it had seen something it had not.
+      if (deal.sourceRef && already.refs.has(deal.sourceRef)) seenAgain.add(deal.sourceRef);
+      continue;
+    }
     try {
       await circle.post(deal); posted++;
       already.refs.add(deal.sourceRef); already.weeks.add(dedupeKey(deal));
@@ -218,7 +304,21 @@ async function pass(circle) {
     await new Promise(r => setTimeout(r, 400));
   }
   log(`${posted} new on the board`);
-  return { found: good, posted };
+
+  const clocks = await refreshSeen(circle, [...seenAgain]);
+  const weeks = (n) => `${n} week${n === 1 ? '' : 's'}`;
+  if (clocks.said) {
+    log(`  ${weeks(clocks.asked)} were on the page again — their last-seen clocks were NOT moved: ${clocks.said}`);
+  } else if (clocks.moved) {
+    log(`  ${weeks(clocks.asked)} seen again — ${clocks.moved} last-seen clock${clocks.moved === 1 ? '' : 's'} moved`);
+  } else if (clocks.asked) {
+    // Say the true thing rather than the tidy one. Zero rows came back changed, and from here
+    // there is no way to tell whether those rows have stopped being live or whether nothing
+    // grants this account the write — `deals` carries a read policy and, as supabase/schema.sql
+    // stands, no write policy that would let the watcher move seen_at.
+    log(`  ${weeks(clocks.asked)} seen again — 0 clocks moved. Either those rows are no longer live, or nothing in supabase/schema.sql lets this account write deals.seen_at; the board will keep showing them at their first sighting until it does.`);
+  }
+  return { found: good, posted, refreshed: clocks.moved };
 }
 
 // A dry run still signs in, because judging a find needs the catalog to judge it against.
