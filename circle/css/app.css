@@ -505,6 +505,26 @@ body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-
 .hero-cover .link-rule { color: var(--on-photo); }
 /* The landing's signature pairing: the invitation and the explanation, with room between them. */
 .hero-cover .on .row { gap: var(--s-4); margin-top: var(--s-5); }
+/* The caption arrives in reading order — the claim, then the promise, then the invitation —
+   instead of the three landing at once. Ported from Aceternity UI's "text-generate-effect"
+   (https://ui.aceternity.com/registry/text-generate-effect.json, fetched 2026-09-20; the free
+   tier answers 200, and the licence permits modification inside an end product — what it
+   forbids is republishing the item as source, which this is not). Two thirds of that component
+   did not survive the crossing and should not have: it reveals one WORD at a time, and it does
+   it by animating a 10px blur away. A sentence typing itself out word by word is a machine
+   writing, which is the single impression this page cannot afford, and `filter` is not a
+   property we animate — it is composited per frame and janks on the phones this club uses.
+   What is left is the only part that was ever the idea: turn an element's index into a delay.
+   The stagger lives here rather than as inline `--d` on the view because these three children
+   are fixed by the layout, so the template should not have to know their order.
+   Short enough that it reads as the page settling, not as a sequence being performed. */
+.hero-cover .on .wrap > * { animation: enter var(--dur-water) var(--ease-out) both; }
+.hero-cover .on .wrap > :nth-child(2) { animation-delay: 90ms; }
+.hero-cover .on .wrap > :nth-child(3) { animation-delay: 180ms; }
+/* The guard has to switch the animation off, not just shorten it: reduced motion zeroes
+   --dur-water, and a 0ms animation with `both` and a delay still holds its `from` state for the
+   length of the delay — so the invitation would blink in 180ms late with no motion to explain it. */
+@media (prefers-reduced-motion: reduce) { .hero-cover .on .wrap > * { animation: none; } }
 /* A ghost button on a photograph has to be drawn in the photo tokens, or it disappears into
    the scrim in light mode and into the sky in dark. */
 .hero-cover .btn.ghost { color: var(--on-photo); border-color: rgba(255, 255, 255, .52); background: rgba(255, 255, 255, .10); }
