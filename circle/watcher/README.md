@@ -1,7 +1,10 @@
 # The Circle's watcher
 
-Checks RedWeek and Interval for weeks at the places the Circle uses, and puts anything that
-undercuts our own rate on the board — so Victor and Ian can book it the same day.
+Checks RedWeek for weeks at the places the Circle uses, and puts anything that undercuts the
+resort's public rate on the board — so Victor and Ian can book it the same day.
+
+It does not check Interval, and that is a decision rather than an unfinished job — see
+*Interval, and where it stops*.
 
 Runs on Victor's VPS. Nothing about it lives in this repository except the code: every
 credential is read from `.env` on that machine.
@@ -23,7 +26,7 @@ text. One request per resort, 2.5 seconds apart, identifying itself in the user 
 below for the three reasons, each read off the live site. Signing in is a form POST
 (`j_username` / `j_password` to `/web/my/auth/login`, a Spring application), but the session
 only survives if a JavaScript engine runs what comes back. The Getaway search sits behind that
-login; see *Finishing Interval*.
+login and is not reached from here — see *Interval, and where it stops*.
 
 **Posting** happens as an ordinary account calling the same `post_deal` the Desk calls. There
 is no service key on the VPS, and the account holds no role at all — `post_deal` lets a member
@@ -93,21 +96,40 @@ Needs Node 20 or newer. RedWeek and the posting path use nothing but the standar
 Interval additionally needs Playwright and one browser (`npx playwright install firefox`); if it
 is missing the watcher says so and carries on with RedWeek rather than dying.
 
-## Finishing Interval
+## Interval, and where it stops
 
-The Getaway search form is behind the login, so its exact shape is not in this code yet. Run
-this once on the VPS:
+`INTERVAL_SEARCH_PATH` and `INTERVAL_SEARCH_FIELDS` are blank on purpose. They are not a
+to-do, there is no recipe here for filling them in, and nobody should be asked to go and get
+their shape off the live site.
 
-```sh
-node index.mjs --dump
-```
+**Blank is the stop.** A sign-in is one request a person could have made by hand. A search
+path is what turns it into a sweep: with those two set, `getaways()` asks Interval for the
+next fortnight and then the next four months, over and over, on a box nobody is watching.
+That is the exact pattern Interval's bot management exists to catch, and the penalty in the
+membership terms is termination, not a warning. The membership is Victor's own, and it is the
+Circle's entire supply of cheap weeks — lose it and there is no board left to keep fresh.
 
-It signs in, saves the pages that session lands on into `watcher/dump/`, and stops. Those are
-ordinary HTML pages and **no password appears in them** — the trace records cookie *names*
-only. Send them over and `INTERVAL_SEARCH_PATH` and `INTERVAL_SEARCH_FIELDS` get filled in
-for good.
+Victor's call of 8 September (below) is that Interval is worth signing into. It is not a
+decision to scan, and nothing here reads it as one.
 
-Until then the watcher runs RedWeek only and says so in the log.
+So the watcher sweeps RedWeek, which needs no login, and Interval weeks reach the board the
+way they already do — by a person who is on the page anyway:
+
+- **Grab** (`circle/tools/grab.js`) — two taps put a whole results page up, move the clock on
+  the weeks still there, and flag the ones that have gone.
+- **The mail pipe** (`circle/supabase/functions/ingest-deal/gmail-forwarder.gs`) —
+  confirmations post the weeks the Circle holds, cancellations take them down by themselves.
+- **The reminder** (`circle/tools/check-interval.ics`) — a subscribed calendar that nudges him
+  with the link four times a day.
+
+Nothing watches Interval for the Circle. Somebody has to look, and the work worth doing is
+making that look cost nothing, not finding a way around the door.
+
+`interval.mjs` and `interval-browser.mjs` both stop with a plain message when the path is
+unset, and the pass carries on with RedWeek — the log says what it is not doing. Both of those
+messages still end "run `--dump` and send it over"; they are older than this section, and
+`--dump` is a diagnostic for whether a sign-in landed (*How to tell whether it actually got
+in*, below), not the next step in a job.
 
 ### Interval is off, and turning it on is a decision, not a setting
 
@@ -151,7 +173,8 @@ Interval: the sign-in was refused 3 times in a row — next try 2026-09-09 02:00
 
 The count and the next time live in `.interval-pace.json` next to `.env` (git-ignored), so a
 restart of the service does not start the clock again. Only a refusal moves the pace: a
-missing browser, or a search page not yet set, is reported as what it is and waits nothing.
+missing browser, or the search path that is unset on purpose, is reported as what it is and
+waits nothing.
 Running by hand — `--once` or `--dump` — is a deliberate attempt and always goes ahead,
 whatever the pace says; it still counts, so the service sees it.
 
@@ -247,11 +270,17 @@ credentials:
 | `/web/my/home` | 200 | Sign In |
 | `/web/my/info/benefits/getaways` | 200 | Sign In |
 
-So the URL a login lands on proves nothing, and neither does an HTTP 200. `--dump` therefore
-fetches every page **twice** — once with the session, once with a brand-new jar and no login —
-and writes both, with sizes, into `02_what_happened.html`. If the two match, the password was
-not accepted. That file also carries every hop with its status, its redirect and which cookies
-it set, so a failed run can be read afterwards without another trip to the VPS.
+So the URL a login lands on proves nothing, and neither does an HTTP 200. `node index.mjs
+--dump` — one run, started by a person, which signs in, saves the pages that session lands on
+into `watcher/dump/` and stops — therefore fetches every page **twice**, once with the session
+and once with a brand-new jar and no login, and writes both, with sizes, into
+`02_what_happened.html`. If the two match, the password was not accepted. That file also
+carries every hop with its status, its redirect and which cookies it set, so a failed run can
+be read afterwards without another trip to the VPS. The saved pages are ordinary HTML and **no
+password appears in any of them** — the trace records cookie *names* only.
+
+It answers one question — did the sign-in land — and it is not a step towards switching the
+Getaway search on. See *Interval, and where it stops*.
 
 The login form itself, read off the live page: one form, `POST /web/my/auth/login`, fields
 `j_username` / `j_password` / `_spring_security_remember_me`. It appears to carry **no CSRF
