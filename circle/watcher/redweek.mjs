@@ -46,7 +46,8 @@ const num = (s) => { const n = Number(String(s).replace(/[^0-9.]/g, '')); return
 
 /**
  * Pull the listings out of a rentals page. Exported so it can be tested against saved HTML
- * without going near the network.
+ * without going near the network — fixtures-redweek-surfclub.html is that page, and
+ * redweek.test.mjs is the trial. `node --test redweek.test.mjs` before you touch this.
  */
 export function parseRentals(html, { slug, ourName = null } = {}) {
   const out = [];

@@ -1,10 +1,14 @@
 <!-- A trimmed, scrubbed sample of a RedWeek resort-rentals page, kept so the parser can be
      tested with no network. 9 of the 83 cards that page carried, chosen to cover what the
      parser has to get right: the two largest cards (the ones an earlier size cap silently
-     dropped), the biggest villa, the smallest unit, four ordinary listings, and two sold-out
-     cards. Everything session-shaped has been stripped — no CSRF token, no asset URLs, no
+     dropped, each over 5,000 characters because it hides two more postings behind "View 2
+     More"), the biggest villa, the smallest unit, four ordinary listings, and one sold-out
+     card. Everything session-shaped has been stripped — no CSRF token, no asset URLs, no
      handlers — and the prices and dates are left exactly as RedWeek served them, because those
-     are the thing under test. -->
+     are the thing under test.
+
+     redweek.test.mjs reads this file. Change a figure here and change it there, or the change
+     is not a fixture edit, it is a broken test. -->
 <section class="postings">
 <div class="posting-card posting-protected" data-posting-path="/posting/R1503417" data-view="Oceanside" data-price="2450" data-sleeps="8" data-nights="7" data-check_in="20260926" data-bedrooms="2" data-check_out="20261003" data-price_per_night="350.00" data-bathrooms="2" data-posting_date="20260727">
   
