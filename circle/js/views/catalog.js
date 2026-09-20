@@ -29,6 +29,12 @@ const retryLine = () => `<p class="row"><button type="button" class="btn ghost s
  * One sentence, under every list of what is open: where the owner weeks came from and when.
  * Never "available" — open on VakayMood at the time shown, or the Circle's own copy of it.
  * The sentence only; the caller puts the retry button on its own line when `res.error`.
+ *
+ * Two figures live on this panel and they are not the same fact: the heading counts the weeks
+ * the Circle has in front of it here, `res.total` counts every owner week VakayMood LISTS at the
+ * place — the whole resort, not the page we asked for (we ask for 24). Printing both as "open at
+ * Marriott's Aruba Surf Club", one line apart, made a member read one of them as false, so the
+ * big number is now "listed" and the sentence says plainly that only some of them are priced.
  */
 function asOfLine(res, where = 'the places we stay') {
   const t = res.generatedAt ? new Date(res.generatedAt) : null;
@@ -37,10 +43,11 @@ function asOfLine(res, where = 'the places we stay') {
   const eye = icon('eye', { size: 14, cls: 'ico-muted' });
   if (res.error) return `${eye} This phone could not reach VakayMood just now${res.blocked ? ' — mobile data, or a content blocker' : ''}, so owner weeks are missing here. What the Desk has posted is what you see.`;
   const n = `<b class="num">${res.total.toLocaleString('en-US')}</b>`;
-  const weeks = `${n} owner week${res.total === 1 ? '' : 's'} open at ${escapeHtml(where)}`;
+  const weeks = `${n} owner week${res.total === 1 ? '' : 's'} listed at ${escapeHtml(where)}`;
+  const some = res.total > (res.deals?.length || 0) ? '; the ones the Circle can price are below' : '';
   return res.fromCopy
-    ? `${eye} ${weeks} in the Circle’s copy of VakayMood, taken ${escapeHtml(day)} ${escapeHtml(time)} — this phone could not reach it live.`
-    : `${eye} ${weeks} on VakayMood as of ${escapeHtml(time)}${res.failed ? ` (<b class="num">${res.failed}</b> place${res.failed === 1 ? '' : 's'} did not answer)` : ''}.`;
+    ? `${eye} ${weeks} in the Circle’s copy of VakayMood, taken ${escapeHtml(day)} ${escapeHtml(time)} — this phone could not reach it live${some}.`
+    : `${eye} ${weeks} on VakayMood as of ${escapeHtml(time)}${res.failed ? ` (<b class="num">${res.failed}</b> place${res.failed === 1 ? '' : 's'} did not answer)` : ''}${some}.`;
 }
 
 /**
@@ -468,29 +475,15 @@ export function stayDetail({ store, params, go, query = {} }) {
   // a button to add photographs it holds the rights to.
   if (!isTrip) {
     const canEdit = store.hasRole('planner', 'comms', 'admin');
-    // Interval, which is where the cheapest weeks here come from, sells a unit by its SIZE and
-    // never by its aspect: a Getaway row says "2 beds, 0 bedrooms, sleeps 4", not "oceanfront".
-    // Our catalog splits that one studio into four rows — Gardenview, Oceanfront, Oceanside,
-    // Oceanview — so the Surf Club lists thirteen rooms for what is really four units, and every
-    // one of those rows quietly promises a view the Desk cannot honour. Group by the unit, keep
-    // the aspects as a line, and say plainly whose gift the view is.
-    const splitName = (n) => String(n).split(/\s+[-–—]\s+|,\s+/)[0].trim();
-    const groupByUnit = (list) => {
-      const out = new Map();
-      for (const r of list) {
-        const base = splitName(r.name);
-        const view = String(r.name).slice(base.length).replace(/^[\s,–—-]+/, '').trim();
-        const k = `${base.toLowerCase()}|${r.bedrooms ?? ''}|${r.sleeps ?? ''}`;
-        const had = out.get(k);
-        if (!had) out.set(k, { ...r, name: base, views: view ? [view] : [], photos: [...(r.photos || [])] });
-        else {
-          if (view && !had.views.includes(view)) had.views.push(view);
-          had.photos.push(...(r.photos || []));
-        }
-      }
-      return [...out.values()];
-    };
-    const rooms = groupByUnit(roomsOf(stay, place));
+    // A room is called what the property calls it. This page used to cut every name at the first
+    // comma or dash and group what was left, because the Surf Club once listed thirteen rows for
+    // four units — Gardenview, Oceanfront, Oceanside, Oceanview — and promised views the Desk
+    // cannot honour. That job now belongs to roomsFromUnits (rooms.js), which groups by the unit
+    // name VakayMood files ("Studio", "1 Bedroom"); the cut merged nothing any more and only
+    // renamed rooms: RIU's "Superior Jr. Suite with sea view - Elite Club" lost the paid tier,
+    // Divi's "Pool View room, two beds" lost its beds, and the "Ask for the ..." link then sent
+    // the Desk a room the property does not publish. Print the published name, whole.
+    const rooms = roomsOf(stay, place);
     const pics = roomPhotosFor(stay, place);
     const property = pics.filter(ph => ph.kind === 'property');
     const plans = pics.filter(ph => ph.kind === 'plan').length;
@@ -502,22 +495,25 @@ export function stayDetail({ store, params, go, query = {} }) {
     const host = site ? new URL(site).host.replace(/^www\./, '') : '';
     const chain = /marriott\.com/.test(site || '') ? 'Marriott' : /hilton\.com/.test(site || '') ? 'Hilton' : /hyatt\.com/.test(site || '') ? 'Hyatt' : null;
     const roomsSlot = wrap.querySelector('#rooms');
-    // The big strip shows the full-size picture, not the thumbnail: a 300px tile on a 2x or 3x
-    // phone is 600-900 device pixels wide, and the thumb was cut for a 44px square.
-    const bigStrip = (list, opts) => galleryStrip(list.map(ph => ({ ...ph, thumb: ph.src || ph.thumb })), opts);
+    // The strip shows the thumbnail the dossier ships. It used to swap in the full-size file on
+    // the grounds that "the thumb was cut for a 44px square" — never true of the asset: the 111
+    // thumbs are 360-640px wide, cut for this tile. The swap put 1.79 MB of photographs on a
+    // member's phone on one stay page before a scroll (Divi); the thumbs are 582 KB. Where a
+    // thumb is only 360px it is soft in a 300px tile on a 2x screen — that is the asset's fault,
+    // and its answer is a srcset on the tile in rooms.js or thumbs cut at 900px, not the 1200px
+    // file for every tile on every phone. Tapping a tile still opens the full-size picture.
     const vmUrl = vm ? safeUrl(vm.url) : null;
     roomsSlot.innerHTML = `<section class="rooms" id="the-rooms">
       <div class="running-head"><h2>The rooms</h2><p class="eyebrow">${pics.length
         ? `<span class="num">${pics.length}</span> picture${pics.length === 1 ? '' : 's'}${plans ? ` · <span class="num">${plans}</span> plan${plans === 1 ? '' : 's'}` : ''}`
         : fromUnits ? 'the sizes owners have here' : 'as the property lists them'}</p></div>
       ${rooms.map((r, i) => `<article class="room" data-room="${i}">
-        ${r.photos.length ? bigStrip(r.photos, { room: i }) : ''}
+        ${r.photos.length ? galleryStrip(r.photos, { room: i }) : ''}
         <div class="room-head"><h3>${escapeHtml(r.name)}</h3>${r.bits.length ? `<span class="meta num">${escapeHtml(r.bits.join(' · '))}</span>` : ''}</div>
         ${r.description ? `<p class="small muted">${escapeHtml(r.description)}</p>` : ''}
-        ${r.views && r.views.length > 1 ? `<p class="tiny muted">${escapeHtml(r.views.join(' · '))} — whichever the Desk can get. Interval sells the size, not the view.</p>` : ''}
         ${r.unnamed ? '' : `<a class="link-rule" href="#/book/${escapeHtml(stay.id)}?note=${encodeURIComponent(`The ${r.name}, if there is one.`)}">Ask for the ${escapeHtml(r.name)}</a>`}
       </article>`).join('')}
-      ${property.length ? `<article class="room" data-room="property">${bigStrip(property, { room: 'property' })}<div class="room-head"><h3>The property</h3><span class="meta"><span class="num">${property.length}</span> photograph${property.length === 1 ? '' : 's'}</span></div></article>` : ''}
+      ${property.length ? `<article class="room" data-room="property">${galleryStrip(property, { room: 'property' })}<div class="room-head"><h3>The property</h3><span class="meta"><span class="num">${property.length}</span> photograph${property.length === 1 ? '' : 's'}</span></div></article>` : ''}
       ${!pics.length || fromUnits ? `<details class="fineprint" style="margin-top:10px"><summary>${pics.length ? 'Where these sizes come from' : 'Why there are no room photographs yet'}</summary>
         ${!pics.length ? `<p class="small muted">No photographs of the rooms yet. ${chain ? `${chain} does not let a program copy its pictures, and the Circle does not take what it has not been given.` : 'The property’s own pictures are its copyright, and the Circle does not take what it has not been given.'}</p>
           ${site ? `<p class="tiny muted credit">The rooms are on <a href="${escapeHtml(site)}" target="_blank" rel="noopener noreferrer">${escapeHtml(host)} ↗</a>.</p>` : ''}` : ''}
@@ -976,7 +972,12 @@ export function requests({ store }) {
     return wrap;
   }
   // Every request is one whole-row anchor, the same row as the board: the place and its dates
-  // on the left, the money on the right, the state under it. A decline reason wraps in full.
+  // on the left, the money on the right, the state under it. A decline reason wraps in full —
+  // and in the body face, not the row's mono: the rest of the sub is dates and figures, but this
+  // is Victor writing to a member in sentences, and seven lines of English in the apparatus face
+  // on the one row carrying bad news read like a terminal error instead of a person explaining.
+  // It is set here rather than in the sheet because `.l2` also carries the board's stamps, which
+  // stay mono; a `.listing-row .sub .l2` rule beside app.css:1302 would only fit if it did not.
   for (const [status, label] of GROUPS) {
     const items = mine.filter(r => r.status === status);
     if (!items.length) continue;
@@ -988,7 +989,7 @@ export function requests({ store }) {
         const pts = r.quotedPoints || r.indicativePoints || r.points;
         return `<a class="listing-row no-thumb" href="#/requests/${escapeHtml(r.id)}">
           <span class="main" style="min-width:0"><h3>${escapeHtml(st?.name || 'Stay')}</h3>
-            <span class="sub">${escapeHtml(fmtDay(r.checkIn))} · ${r.nights}&nbsp;night${r.nights > 1 ? 's' : ''}${r.shared ? ` · ${(r.pledges || []).length ? `${(r.pledges || []).length} chipped in` : 'open to the Circle'}` : ''}${r.decision ? `<span class="l2">${escapeHtml(r.decision)}</span>` : ''}</span></span>
+            <span class="sub">${escapeHtml(fmtDay(r.checkIn))} · ${r.nights}&nbsp;night${r.nights > 1 ? 's' : ''}${r.shared ? ` · ${(r.pledges || []).length ? `${(r.pledges || []).length} chipped in` : 'open to the Circle'}` : ''}${r.decision ? `<span class="l2" style="font-family:var(--font-body)">${escapeHtml(r.decision)}</span>` : ''}</span></span>
           <span class="price-col"><b>${escapeHtml(fmtUsd(pts / s.pointsPerDollar))}</b><small>${left ? `expires in ${escapeHtml(left)}` : escapeHtml(requestLabel(r))}</small><span class="all">${escapeHtml(fmtPoints(pts))}</span></span>
           <span class="go" aria-hidden="true">${icon('chevronRight', { size: 18 })}</span></a>`;
       }).join('')}</div></div>`));
