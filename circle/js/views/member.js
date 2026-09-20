@@ -512,8 +512,12 @@ export function pay({ store, go }) {
           <div class="copyline"><code class="num">${escapeHtml(s.reserveAccount.number)}</code><button type="button" class="btn ghost sm" data-copy="${escapeHtml(s.reserveAccount.number)}">Copy</button></div>
         </div>`;
   const h1 = settled ? `${escapeHtml(fmtMonth(month))} is settled` : pending ? `${escapeHtml(fmtMonth(month))} is marked as sent` : `${escapeHtml(fmtMonth(month))} is due`;
+  // The date the Banker confirmed it belongs with the rest of the confirmation, not in a panel
+  // underneath repeating the headline around it. It is `reviewedAt` on a contribution —
+  // `confirmedAt` is a redemption's field, and the panel that used to sit below asked for it by
+  // that name, so the date it promised has never once printed on either backend.
   const dateline = settled
-    ? `${num(fmtUsd2(landed?.amountUsd ?? landed?.expectedUsd ?? me.monthlyUsd))} landed · confirmed by ${escapeHtml(landed?.reviewedBy ? banker(landed.reviewedBy) : 'the Banker')} · next due ${escapeHtml(dueOn(s, month))}`
+    ? `${num(fmtUsd2(landed?.amountUsd ?? landed?.expectedUsd ?? me.monthlyUsd))} landed · confirmed by ${escapeHtml(landed?.reviewedBy ? banker(landed.reviewedBy) : 'the Banker')}${landed?.reviewedAt ? ` ${escapeHtml(fmtDay(landed.reviewedAt))}` : ''} · next due ${escapeHtml(dueOn(s, month))}`
     : pending
       ? `${num(fmtUsd2(pending.expectedUsd))} · marked as sent ${escapeHtml(fmtDay(pending.submittedAt))} · awaiting the Banker`
       : `${num(fmtUsd2(me.monthlyUsd))} · ${escapeHtml(fmtAfl2(me.monthlyUsd, s.awgPerUsd))} · becomes ${num(fmtPoints(sp.points))} · all of it to the Reserve`;
@@ -522,8 +526,14 @@ export function pay({ store, go }) {
       <h1>${h1}</h1>
       <p class="dateline">${dateline}</p>
 
-      ${settled ? `<div class="panel flat" style="margin-top:20px"><b><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.thanks[0])}</span> · ${escapeHtml(VOCAB.pap.thanks[1])}</b>
-        <p class="small" style="margin-top:6px">${escapeHtml(fmtMonth(month))} is confirmed${landed?.confirmedAt ? ` — ${escapeHtml(fmtDay(landed.confirmedAt))}` : ''}. Your next one is due on the ${num(`${s.dueDay}th`)} of next month.</p></div>
+      <!-- The thanks, and nothing else. This was a panel that said "September 2026 is confirmed.
+           Your next one is due on the 5th" — the heading above it and the dateline beside it
+           already said both, so a member read the same fact three times in four lines, and "the
+           5th" a fourth time in the Autopilot line below. The only thing it held that the page
+           did not is the date the Banker confirmed it, and that has gone up into the dateline
+           with the rest of the confirmation. What is left is worth saying once, so it is said
+           once, on a rule rather than in a box. -->
+      ${settled ? `<p class="thanks"><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.thanks[0])}</span> · ${escapeHtml(VOCAB.pap.thanks[1])}</p>
 
       <details class="fineprint" style="margin-top:16px">
         <summary>Send something extra</summary>

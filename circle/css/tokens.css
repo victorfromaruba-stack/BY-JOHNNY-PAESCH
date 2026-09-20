@@ -94,7 +94,13 @@
   --chart-grid: #1B2637; --chart-axis: #2A3648; --ring-track: #1B2637; --ring-fill: #4FD0DC; --surface-1: #131C2B;
   }
 }
-:root[data-theme="dark"], .nocturne {
+/* The running head and the tab bar are siblings of <main>, not children of it, so the one screen
+   that goes to night — the card — opened with a pale band across the top of a dark field and
+   another along the bottom: the app's chrome sitting on somebody else's page. They take the night
+   palette too while that page is on, which is the same trick app.css already plays with
+   `main:has(.nocturne-page)`. No palette is repeated here; the chrome simply joins the list. */
+:root[data-theme="dark"], .nocturne,
+body:has(.nocturne-page) .topbar, body:has(.nocturne-page) .botnav {
   color-scheme: dark;
   --ground: #0B1220; --surface: #131C2B; --raised: #1B2637; --well: #0F1727;
   --hairline: rgba(255,255,255,.24); --hairline-soft: rgba(255,255,255,.11);

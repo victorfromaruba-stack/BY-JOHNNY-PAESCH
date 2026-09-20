@@ -898,7 +898,9 @@ export function pool({ store }) {
                they stay; they just stop pretending to be addends. Every term that can move the
                Reserve now has a row of its own, printed only when it is not zero, so the column
                still adds up on the day a refund, a correction or an expiry lands in it. -->
-          <p class="small muted" style="margin-top:10px">Insiders have sent <b class="num">${escapeHtml(fmtUsd2(t.collected))}</b> in all, and nothing is taken when points are bought — every dollar of it went into the Reserve. ${escapeHtml(VOCAB.share)} is earned later, when points are spent on a room: <b class="num">${escapeHtml(fmtUsd2(t.serviceEarnedUsd))}</b> so far.</p>
+          <!-- VOCAB.share reads "the Circle's share", so it can never open a sentence: the
+               semicolon is load-bearing. -->
+          <p class="small muted" style="margin-top:10px">Insiders have sent <b class="num">${escapeHtml(fmtUsd2(t.collected))}</b> in all. Nothing is taken when points are bought, so every dollar of it went into the Reserve; ${escapeHtml(VOCAB.share)} is earned later, when points are spent on a room — <b class="num">${escapeHtml(fmtUsd2(t.serviceEarnedUsd))}</b> so far.</p>
           <ul class="ledger" style="margin-top:12px">
             <li><span class="what"><b>Into the Reserve</b><span class="meta">every confirmed contribution, in full</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.backing))}</b></span></li>
             <li><span class="what"><b>Bonuses funded by the Circle</b><span class="meta">tier, streak and founding — fronted against the <b class="num">15%</b> still to be earned on bookings</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.promoUsd))}</b></span></li>
