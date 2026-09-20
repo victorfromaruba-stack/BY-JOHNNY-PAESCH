@@ -20,6 +20,8 @@
 //
 // Anything it cannot read is left blank for a person to fill in rather than guessed at.
 
+import { normName, nameWithin } from '../core/names.js';
+
 const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, sept: 8, oct: 9, nov: 10, dec: 11 };
 const iso = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 const nightsBetween = (a, b) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 864e5);
@@ -120,25 +122,44 @@ export function parsePrice(text, nights) {
 /** Already gone. RedWeek keeps sold listings on the page and marks them. */
 export const looksTaken = (text) => /\bRENTED!?\b|\bSOLD\b|no longer available/i.test(text);
 
-/** Match the pasted text to a place in the catalog, by the longest catalog name it contains. */
+/**
+ * The distinctive word, for a page that never prints the full name: "Surf Club" alone still finds
+ * the Surf Club. One spelling each, because both sides of the comparison are normalised — "barcel"
+ * is enough for "Barceló Aruba", and having a separate needle and label was itself a place for the
+ * two to drift apart.
+ */
+const BRAND_WORDS = ['surf club', 'ocean club', 'la cabana', 'costa linda', 'playa linda', 'divi',
+                     'renaissance', 'casa del mar', 'eagle aruba', 'barcel', 'tamarijn', 'riu', 'marriott'];
+
+/**
+ * Match the pasted text to a place in the catalog, by the longest catalog name it contains.
+ *
+ * The comparison goes through core/names.js, the way every name comparison in this app does. It
+ * used to fold apostrophes and nothing else, and that one gap put a real price on the wrong hotel:
+ * the catalog holds "Aruba Marriott Resort & Stellaris Casino", the resort's own page heads itself
+ * "Aruba Marriott Resort and Stellaris Casino", the full-name pass missed by that one word, and the
+ * brand table below answered "marriott" with whichever Marriott stood first in the catalog. The row
+ * came back ok:true and went on the board — a $1,400 week at a hotel nobody had looked at. normName
+ * reads "&" as "and", folds accents and collapses punctuation, so the two spellings meet.
+ */
 export function matchStay(text, stays, { loose = true } = {}) {
-  const hay = text.toLowerCase().replace(/[’'`]/g, "'");
-  const hit = stays
-    .filter(s => s.kind !== 'trip')
-    .map(s => ({ s, name: s.name.toLowerCase().replace(/[’'`]/g, "'") }))
-    .filter(({ name }) => hay.includes(name))
+  const rooms = stays.filter(s => s.kind !== 'trip');
+  const hit = rooms
+    .map(s => ({ s, name: normName(s.name) }))
+    .filter(({ s, name }) => name !== '' && nameWithin(text, s.name))
     .sort((a, b) => b.name.length - a.name.length)[0];
   if (hit) return hit.s;
   if (!loose) return null;
-  // Fall back to the distinctive word, so "Surf Club" alone still finds the Surf Club.
-  const words = [['surf club', 'Surf Club'], ['ocean club', 'Ocean Club'], ['la cabana', 'La Cabana'],
-                 ['costa linda', 'Costa Linda'], ['playa linda', 'Playa Linda'], ['divi', 'Divi'],
-                 ['renaissance', 'Renaissance'], ['casa del mar', 'Casa del Mar'], ['eagle aruba', 'Eagle Aruba'],
-                 ['barcel', 'Barceló'], ['tamarijn', 'Tamarijn'], ['riu', 'RIU'], ['marriott', 'Marriott']];
-  for (const [needle, label] of words) {
-    if (!hay.includes(needle)) continue;
-    const s = stays.find(x => x.kind !== 'trip' && x.name.toLowerCase().includes(label.toLowerCase()));
-    if (s) return s;
+  // Only now, and only when the word names ONE place. The catalog holds four Marriotts, so a bare
+  // "Marriott" is an ambiguity, not a match, and answering an ambiguity with the first of the four
+  // is exactly how the Stellaris week above landed at the Surf Club. Refusing leaves the row saying
+  // "which place it is" is missing, which is not-ok, which keeps it off the board and in front of
+  // the Desk — the right end for a week we cannot name.
+  const hay = normName(text);
+  for (const word of BRAND_WORDS) {
+    if (!hay.includes(word)) continue;
+    const found = rooms.filter(s => normName(s.name).includes(word));
+    if (found.length === 1) return found[0];
   }
   return null;
 }
