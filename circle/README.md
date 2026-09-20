@@ -721,9 +721,24 @@ different signature.
 
 ## Notes on the build
 
+- **The phone is the only page.** The Circle is read in the hand, so the stylesheet has no
+  layout breakpoints at all: one column of 430px (the widest iPhone), one type scale, one
+  set of spacing steps. A laptop shows that same column, centred on a darker ground with a
+  hairline around it — nothing widens, nothing gains a second column, and nothing appears on
+  a laptop that a phone never sees. The only `@media` rules left in `css/app.css` are the
+  eight that respect reduced motion, the print sheet, the frame that draws the table under
+  the column above 430px, and the one that stops the rubber band inside an installed app.
+  If you are tempted to add a breakpoint, move the thing into the column instead.
+- The top bar is a running head: the wordmark on a tab root, otherwise the way up to the
+  parent route. The five tabs are always there when signed in. Everything not in the bar is
+  reached from Home or from the door list at the top of Profile.
+- Every dialog is a bottom sheet whose actions stay under the thumb; the back gesture closes
+  it. Every control clears 44px in both directions and is at least 16px, so iOS never zooms
+  a field on focus.
 - No framework, no bundler, no dependencies to install, and one lazily-loaded library:
   `@supabase/supabase-js`, only in Supabase mode. Everything else — the QR encoder, the
-  charts, the card artwork — is in the repository.
+  charts, the card artwork — is in the repository. Nothing here is React, and nothing here
+  is compiled, so a component library that ships `.tsx` cannot be dropped in.
 - The service worker caches the shell but never Supabase traffic.
 - A strict `Content-Security-Policy` is set in `index.html`; there are no inline scripts.
 - The demo lives in `localStorage`, so on iOS Safari it is cleared after about a week of

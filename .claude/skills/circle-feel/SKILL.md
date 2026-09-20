@@ -170,8 +170,18 @@ on the element, and an inline declaration beats any stylesheet rule without `!im
 separate rules here have turned out never to have applied even once — a mobile `justify-content`,
 a `min-height` on a Desk button, three checkbox sizes — because the value was also inline. A rule
 that appears to do nothing is more often being outranked by the element than by another selector,
-so open the template and look. Fixing it inline is usually right; reach for `!important` only when
-the desktop and phone layouts genuinely want different values.
+so open the template and look. Fixing it inline is usually right; `!important` almost never is,
+because there is only one layout to satisfy.
+
+**The phone is the only page, and the stylesheet has no breakpoints.** This is the house rule that
+outranks every layout instinct you brought with you. `css/app.css` carries eleven `@media` rules
+and not one of them is a layout breakpoint: eight respect reduced motion, one is the print sheet,
+one draws the table under the column on anything wider than a phone, and one stops the rubber band
+inside an installed app. `--wrap` is 430px — the widest iPhone — and the body *is* that column, so
+a laptop shows the phone, centred, with a hairline around it. When something does not fit, the
+answer is to change what is in the column, never to add a width at which it behaves differently.
+Anything fixed to the viewport (the tab bar, the toasts, a sheet) must carry the same cap or it
+will span a laptop window.
 
 **Ship-visibility.** The service worker's cache name is stamped with the commit SHA at deploy
 time, and the page reloads once when a new worker takes over. If you touch `sw.js`, do not break
