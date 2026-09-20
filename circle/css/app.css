@@ -197,9 +197,34 @@ dialog .stat { background: var(--surface); border: 1px solid var(--hairline); bo
   line-height: 1.05; margin-top: 6px; }
 
 /* ---------- chips & status ---------- */
-/* A checkbox at its browser default is a 20px target with a 44px job. The input keeps its own
-   size — scaling it up looks clumsy — and gains a padded hit area instead. */
-input[type=checkbox], input[type=radio] { width: 22px; height: 22px; }
+/* A checkbox at its browser default is a 20px target with a 44px job, and the tick it draws is
+   the browser's blue — the one colour on the screen that never came from tokens.css. So the box
+   is ours: 22px of paint, sitting exactly where the native one sat, inside a 44px hit ring made
+   of transparent border. The input still keeps its own size — scaling the paint up looks clumsy —
+   but now the ring IS the element, so what the thumb gets and what a measurement sees are the
+   same thing. The negative margin is the browser's own 3px/4px around the box less that 11px
+   ring, so no row moves by a pixel. Labels carry their own 44px floor as well, below. */
+input[type=checkbox]:not(.switch), input[type=radio] {
+  appearance: none; -webkit-appearance: none;
+  width: 44px; height: 44px; margin: -8px -8px -8px -7px;
+  border: 11px solid transparent; border-radius: calc(var(--r-chip) + 11px);
+  background: var(--surface); background-clip: padding-box;
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  position: relative; cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out); }
+input[type=radio] { border-radius: 50%; }
+input[type=checkbox]:not(.switch):checked, input[type=radio]:checked {
+  background-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+/* The tick and the dot are drawn, not fetched: two borders of a turned rectangle, and a disc. */
+input[type=checkbox]:not(.switch)::after { content: ""; position: absolute; left: 7px; top: 3px;
+  width: 6px; height: 11px; border: 2px solid var(--on-ink); border-top: 0; border-left: 0;
+  transform: rotate(42deg); opacity: 0; }
+input[type=radio]::after { content: ""; position: absolute; inset: 5px; border-radius: 50%;
+  background: var(--on-ink); opacity: 0; }
+input[type=checkbox]:not(.switch):checked::after, input[type=radio]:checked::after { opacity: 1; }
+input[type=checkbox]:not(.switch):disabled, input[type=radio]:disabled { opacity: .45; cursor: default; }
+input[type=checkbox]:not(.switch):focus-visible, input[type=radio]:focus-visible {
+  outline: 2px solid var(--good); outline-offset: -9px; }
 label:has(> input[type=checkbox]), label:has(> input[type=radio]) { min-height: 44px;
   display: inline-flex; align-items: center; gap: 10px; }
 label.row:has(> input[type=checkbox]) { min-height: 44px; align-items: center; }
@@ -1000,9 +1025,16 @@ a.stay-card {
 .ask-switch { align-items: center; flex-wrap: nowrap; }
 .ask-switch > span { display: grid; gap: 3px; min-width: 0; }
 .ask-switch > span b { font-size: var(--t-small); }
-input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex: none; width: 50px; height: 30px; border-radius: var(--r-pill); background: var(--hairline); position: relative; cursor: pointer; transition: background var(--dur-fast) var(--ease-out); margin: 0; }
+/* The pill is 50 by 30 and stays 50 by 30; the seven pixels of transparent border above and below
+   are the rest of the thumb's target, so the element measures 50 by 44 without the switch growing.
+   The paint is clipped to the padding box, which is why :checked sets background-COLOUR — the
+   shorthand would put the clip back to the border box and the ink would fill the whole ring. */
+input.switch[type="checkbox"] { appearance: none; -webkit-appearance: none; flex: none; width: 50px; height: 44px; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-radius: var(--r-pill); background: var(--hairline); background-clip: padding-box; position: relative; cursor: pointer; transition: background var(--dur-fast) var(--ease-out); margin: 0; }
 .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 1px var(--hairline); transition: transform var(--dur-fast) var(--ease-out); }
-.switch:checked { background: var(--ink); }
+/* Written out in full because the base rule above carries a class AND an attribute: as plain
+   `.switch:checked` this lost to it on specificity and an ON switch stayed hairline grey, telling
+   a member nothing about whether their standing order was set. */
+input.switch[type="checkbox"]:checked { background-color: var(--ink); }
 .switch:checked::after { transform: translateX(20px); }
 .switch:focus-visible { outline: 2px solid var(--good); outline-offset: 2px; }
 .ask-quote { display: grid; gap: 10px; padding: 16px; border-radius: var(--r-input); background: var(--raised); border: 1px solid var(--hairline-soft); }
