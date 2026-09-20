@@ -38,7 +38,10 @@ export const ARUBA_STAYS = [
       interval: { seenUsd: 90.50, seenOn: '2026-09-06', nights: 7, note: 'A Getaway week, when one is there' },
       redweek: { fromUsd: 150, seenOn: '2026-09-06', note: '1,725 owner rentals, $150 to $3,600 a night' },
     },
-    vibe: 'Aruba’s largest villa resort, at the north end of Palm Beach: 450 villas across the Lighthouse, Compass and Spyglass towers, wrapped around the lazy river, with a side gate onto the restaurant strip.',
+    // No villa count here on purpose: nothing in the dossier records one, and the rooms section
+    // on this very page says Marriott publishes no room list a program may read. The towers are
+    // named because Victor books into them; the count was marketing copy nobody could source.
+    vibe: 'Aruba’s largest villa resort, at the north end of Palm Beach: villas across the Lighthouse, Compass and Spyglass towers, wrapped around the lazy river, with a side gate onto the restaurant strip.',
     features: ['Villas sleep up to 8', 'Full kitchen', 'Washer-dryer in villa', 'Lazy river', 'On the sand'],
     dealNote: 'One of the four we keep coming back to. Owner weeks rent Saturday to Saturday, so this is a seven-night booking — but a two-bedroom villa sleeps eight, and split three or four ways it is the cheapest good week on Palm Beach. No resort fee, and taxes are already in the price.' },
   { id: 'stay_oceanclub', site: 'https://www.marriott.com/en-us/hotels/auaao-marriotts-aruba-ocean-club/overview/', kind: 'aruba', name: 'Marriott’s Aruba Ocean Club', area: 'Palm Beach', country: 'Aruba', category: 4, house: true,
@@ -51,9 +54,16 @@ export const ARUBA_STAYS = [
       interval: { seenUsd: 167.50, seenOn: '2026-09-10', nights: 7, note: 'A Getaway week, when one is there' },
       redweek: { fromUsd: 150, seenOn: '2026-09-06', note: '607 owner rentals, $150 to $4,800 a night' },
     },
-    vibe: 'The original Marriott villas — 218 of them, a quarter the size of the Surf Club next door, quieter, and two minutes from the Stellaris casino and the whole strip.',
+    vibe: 'The original Marriott villas — smaller than the Surf Club next door, quieter, and two minutes from the Stellaris casino and the whole strip.',
     features: ['Villas sleep 4–8', 'Full kitchen', 'Mandara Spa', 'Casino next door', 'On the sand'],
-    dealNote: 'One of the four we keep coming back to. Seven nights, Saturday to Saturday, the same as the Surf Club. The 941 sq ft one-bedroom is the sweet spot for two; the 1,335 sq ft two-bedroom sleeps eight. No washer-dryer in the villas here — that is the Surf Club’s trick.' },
+    // The two square-foot figures that used to sit in this note (941 and 1,335) came from
+    // nowhere: PLACES.stay_oceanclub.rooms is empty and not one VakayMood unit record carries a
+    // sqft or sqm field, so the page printed two Marriott room sizes as fact a few inches below
+    // its own line saying Marriott publishes no room list a program may read. "Sleeps eight"
+    // stays — every 2-Bedroom unit on file here and at the Surf Club records sleeps 8. If a size
+    // is ever wanted back, it belongs in PLACES.stay_oceanclub.rooms with the URL and the day it
+    // was fetched, not in prose.
+    dealNote: 'One of the four we keep coming back to. Seven nights, Saturday to Saturday, the same as the Surf Club. The one-bedroom is the sweet spot for two; the two-bedroom sleeps eight. No washer-dryer in the villas here — that is the Surf Club’s trick.' },
   { id: 'stay_marriott', site: 'https://www.marriott.com/en-us/hotels/auaar-aruba-marriott-resort-and-stellaris-casino/overview/', kind: 'aruba', name: 'Aruba Marriott Resort & Stellaris Casino', area: 'Palm Beach', country: 'Aruba', category: 3,
     rates: { low: 420, high: 640, peak: 768 }, retailUsd: 980, minNights: 2, peakMinNights: 7, onSand: true, adultsOnly: false,
     vibe: 'Renovated through 2025, adults-only Tradewinds wing, the largest casino on the island.',
@@ -66,7 +76,11 @@ export const ARUBA_STAYS = [
     rates: { low: 420, high: 640, peak: 930 }, retailUsd: 800, minNights: 2, peakMinNights: 5, onSand: false, adultsOnly: false,
     vibe: 'A marina hotel in the middle of the capital with a forty-acre private island: flamingos, iguanas, and a water taxi that leaves from the lobby.',
     features: ['Private island', 'Flamingo Beach', 'Adults-only tower', 'Casino', 'Renaissance Mall'],
-    dealNote: 'One of the four we keep coming back to. Marina tower is 18+ (297 rooms); Ocean Suites is the family side (258 one-bedroom suites with kitchenettes). Renaissance Island is free for guests of both — outsiders queue for about thirty day passes a day at $130 a head. The $65 resort fee and taxes are already in our price.' },
+    // Room counts, the day-pass allowance and the day-pass price are gone: none of them is in the
+    // dossier and all three are the sort of number a resort changes without telling anyone. What
+    // is left is what the Desk establishes by booking here — which tower is which, that the
+    // island comes with the room, and that our price is already all-in.
+    dealNote: 'One of the four we keep coming back to. Marina tower is 18+; Ocean Suites is the family side, one-bedroom suites with kitchenettes. Renaissance Island is free for guests of both — outsiders pay for a day pass. The resort fee and taxes are already in our price.' },
   { id: 'stay_manchebo', site: 'https://www.manchebo.com/', kind: 'aruba', name: 'Manchebo Beach Resort & Spa', area: 'Eagle Beach', country: 'Aruba', category: 3,
     rates: { low: 340, high: 510, peak: 612 }, retailUsd: 694, minNights: 3, peakMinNights: 7, onSand: true, adultsOnly: false,
     vibe: 'Barefoot boutique with a yoga pavilion on the sand and not a high-rise in sight.',
@@ -93,7 +107,9 @@ export const ARUBA_STAYS = [
     features: ['All inclusive', 'Oceanfront rooms', 'Divi access'], dealNote: 'Rate is all-inclusive for two adults.' },
   { id: 'stay_divi', site: 'https://www.diviandtamarijnaruba.com/divi-rooms.htm', kind: 'aruba', name: 'Divi Aruba All Inclusive', area: 'Druif Beach', country: 'Aruba', category: 'ai', house: true,
     rates: { low: 520, high: 700, peak: 950 }, retailUsd: 850, minNights: 3, peakMinNights: 7, onSand: true, adultsOnly: false, allInclusive: true,
-    vibe: '203 rooms in low buildings on Druif Beach, five minutes from Oranjestad and ten from the airport; every room has a patio facing the sea or the garden.',
+    // The "203 rooms" that opened this line sat directly above the About panel's own
+    // "Nothing this place publishes in a form we can read yet". Both cannot be true at once.
+    vibe: 'Low buildings on Druif Beach, five minutes from Oranjestad and ten from the airport; every room has a patio facing the sea or the garden.',
     features: ['All inclusive', '15 restaurants', 'Alhambra casino', 'Tamarijn included'],
     dealNote: 'One of the four we keep coming back to. Rate is all-inclusive for two adults and it buys the Tamarijn next door as well — the two together are fifteen restaurants, twelve bars and eleven pools. On an all-inclusive, tax applies to only part of the package, which is why this looks better against retail than it should.' },
   { id: 'stay_embassy', site: 'https://www.hilton.com/en/hotels/auajmes-embassy-suites-aruba-resort/', kind: 'aruba', name: 'Embassy Suites by Hilton Aruba Resort', area: 'Eagle Beach', country: 'Aruba', category: 2,
