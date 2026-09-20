@@ -195,6 +195,12 @@ export function poolGauge({ coverage = 1, reserveUsd = 0, outstandingPoints = 0,
   // whose whole job is to be believed, the numbers cannot be the only thing in the reading face.
   // The separator before "owes"/"backs" is glued to the figure before it with a non-breaking
   // space, so a narrow column never starts a line with a bare mid-dot.
+  // The third line used to read "$153.00 less was there", three lines under "Coverage 100.0%".
+  // Both were true — coverage is the bank against what is owed, the variance is the bank against
+  // what the books expected — but stacked without a frame the second reads as money missing and
+  // the first as a lie, on the one page a member opens to decide whether to believe us. It is a
+  // reconciliation, so it is named as one. The direction is still readable: the account figure
+  // sits on the line above.
   const bankUsd = verifiedAt && verifiedVarianceUsd !== null ? reserveUsd + verifiedVarianceUsd : null;
   const bankCoverage = bankUsd !== null && liabilityUsd ? bankUsd / liabilityUsd : null;
   const shown = bankCoverage === null ? coverage : bankCoverage;
@@ -221,7 +227,7 @@ export function poolGauge({ coverage = 1, reserveUsd = 0, outstandingPoints = 0,
              ? 'from the ledger — not yet checked against the bank'
              : Math.abs(verifiedVarianceUsd) < 0.005
                ? `the ledger expected the same, to the cent`
-               : `the ledger expected <b class="num">${escapeHtml(fmtUsd2(reserveUsd))}</b> — <b class="num">${escapeHtml(fmtUsd2(Math.abs(verifiedVarianceUsd)))}</b> ${verifiedVarianceUsd > 0 ? 'more' : 'less'} was there`}</span>`
+               : `the books and the bank differ by <b class="num">${escapeHtml(fmtUsd2(Math.abs(verifiedVarianceUsd)))}</b> — the ledger expected <b class="num">${escapeHtml(fmtUsd2(reserveUsd))}</b>`}</span>`
         : `<b>Coverage: not yet verifiable</b><span>The Banker has not registered separate Reserve and Operating accounts.</span>`}
     </div>`;
   return el;

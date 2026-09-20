@@ -93,7 +93,16 @@ export class Store {
   get me() { return this.state.session ? this.member(this.state.session.memberId) : null; }
   hasRole(...roles) { const m = this.me; return !!m && roles.some(r => m.roles.includes(r)); }
   isOfficer() { return this.hasRole('treasurer', 'deputy', 'planner', 'comms', 'admin'); }
+  // Two questions that sound alike and are not. canConfirmMoney asks whose seat the bank is —
+  // it drives the nav and the officer's work list, and the Desk is not nudged about transfers
+  // he is not the one chasing. canBank asks who the database will let touch money, and there
+  // the answer has always included the admin: every one of the eight money guards in
+  // schema.sql reads has_role('treasurer','deputy','admin'). Every money method below asks
+  // canBank, because when these two drifted apart the demo refused Victor two things the
+  // server would have let him do, and a rule the server does not enforce is a lie in a
+  // preview somebody is being shown.
   canConfirmMoney() { return this.hasRole('treasurer', 'deputy'); }
+  canBank() { return this.hasRole('treasurer', 'deputy', 'admin'); }
   canPlan() { return this.hasRole('planner', 'admin'); }
   // The board is the Voice's job as much as the Planner's, and post_deal on the server has
   // always said so. The client said planner-or-admin, so Ian was refused here for something
@@ -895,7 +904,10 @@ export class Store {
     return {
       collected: round(collected), share: round(share), backing: round(backing), promoUsd: round(promoUsd),
       burnedUsd: round(burnedUsd), paidOutUsd: round(paidOutUsd), topUpsUsd: round(topUpsUsd),
-      refundedUsd: round(refundedUsd), expiredUsd: round(expiredUsd),
+      // adjustUsd is a term of reserveExpectedUsd like the rest, and the Pool prints the sum
+      // for members to check. Leaving it out of this object was the reason a correction could
+      // move the Reserve without appearing in the column that explains the Reserve.
+      refundedUsd: round(refundedUsd), adjustUsd: round(adjustUsd), expiredUsd: round(expiredUsd),
       // The Circle's income, now that nothing is taken at the door. Defined as what the Reserve
       // holds over and above what it owes — which is what it is, and which needs no assumption
       // about how any particular quote was priced. Every booking hands back more in points than
@@ -1077,7 +1089,7 @@ export class Store {
     // Every one of these gates is the first line of the SQL twin. Without them the preview could
     // never show an officer the refusal they will meet live, and the demo's whole authorisation
     // model lived in which buttons a screen chose to draw.
-    if (!(this.canConfirmMoney() || this.hasRole('admin'))) throw new Error('Only the Banker can confirm money');
+    if (!this.canBank()) throw new Error('Only the Banker can confirm money');
     const c = this.contribution(id); if (!c) throw new Error('No such contribution');
     if (c.status !== CONTRIBUTION_STATUS.pending) throw new Error('This contribution is not waiting for the Banker');
     const m = this.member(c.memberId); const s = this.settings;
@@ -1126,9 +1138,15 @@ export class Store {
    * With `forMonth` set it IS that month's contribution and earns everything a normal one
    * does. With `forMonth` null it is an extra: base points only, and it covers no month.
    */
-  async recordDirectContribution({ memberId, amountUsd, forMonth = null, method = 'cash', currency = 'USD', note = '', sentOn = '' }, actorId) {
-    if (!this.canConfirmMoney()) throw new Error('Only the Banker can record money that arrived');
+  // No sentOn here, unlike submitContribution: the server stamps current_date and takes no such
+  // argument, so honouring one locally would let the preview backdate money the real one cannot.
+  async recordDirectContribution({ memberId, amountUsd, forMonth = null, method = 'cash', currency = 'USD', note = '' }, actorId) {
+    if (!this.canBank()) throw new Error('Only the Banker can record money that arrived');
     const m = this.member(memberId); if (!m) throw new Error('No such member');
+    // A robot sends no money. The picker only offers people(), so this is not a hole anyone can
+    // fall into from the screen — but record_direct_contribution refuses it on the server, and a
+    // row against the watcher would sit in the queue and wedge the month close.
+    if (m.bot) throw new Error(`${m.name} is a robot, not a member who pays`);
     const usd = round(amountUsd);
     if (!(usd > 0)) throw new Error('Enter the amount that actually arrived');
     const extra = !forMonth;
@@ -1139,7 +1157,7 @@ export class Store {
     const c = {
       id: uid('con'), memberId, forMonth: extra ? null : forMonth, extra, expectedUsd: usd, amountUsd: usd, receivedUsd: null,
       currency, method, bank: '', reference: extra ? '' : refFor(m, forMonth),
-      note: note.trim(), proofName: '', proofDataUrl: '', sentOn: sentOn || nowIso().slice(0, 10), submittedAt: nowIso(),
+      note: note.trim(), proofName: '', proofDataUrl: '', sentOn: nowIso().slice(0, 10), submittedAt: nowIso(),
       status: CONTRIBUTION_STATUS.pending, reviewedBy: null, reviewedAt: null, reason: '', shareUsd: null, backingUsd: null,
       points: null, basePoints: null, bonusPoints: null, streakPoints: 0, foundingPoints: 0, full: null, reversedOf: null,
       recordedBy: actorId,
@@ -1169,7 +1187,7 @@ export class Store {
     return out;
   }
   async rejectContribution(id, actorId, reason) {
-    if (!(this.canConfirmMoney() || this.hasRole('admin'))) throw new Error('Only the Banker can return a transfer');
+    if (!this.canBank()) throw new Error('Only the Banker can return a transfer');
     const c = this.contribution(id); if (!c) throw new Error('No such contribution');
     if (c.status !== CONTRIBUTION_STATUS.pending) throw new Error('This contribution is not waiting for the Banker');
     if (!reason?.trim()) throw new Error('A reason is required so the member knows what to fix');
@@ -1179,7 +1197,7 @@ export class Store {
   canReverse(c, actorId) { return c?.status === CONTRIBUTION_STATUS.confirmed && c.reviewedBy === actorId && (Date.now() - new Date(c.reviewedAt).getTime()) < this.settings.undoSeconds * 1000; }
   /** Undo a confirmation: reversing ledger rows, contribution reopened as pending. */
   async reverseContribution(id, actorId) {
-    if (!(this.canConfirmMoney() || this.hasRole('admin'))) throw new Error('Only the Banker can undo a confirmation');
+    if (!this.canBank()) throw new Error('Only the Banker can undo a confirmation');
     const c = this.contribution(id); if (!this.canReverse(c, actorId)) throw new Error('This confirmation can no longer be undone');
     const at = nowIso();
     for (const l of this.state.ledger.filter(l => l.refType === 'contribution' && l.refId === c.id)) {
@@ -1463,7 +1481,7 @@ export class Store {
     this.log(actorId, 'redemption.pay', 'redemption', id, { points: r.points, paidUsd: r.paidUsd, confirmationRef }); await this.commit('redemptions', 'looks'); return r;
   }
   async confirmTopUp(id, actorId) {
-    if (!(this.canConfirmMoney() || this.hasRole('admin'))) throw new Error('Only the Banker can confirm a top-up');
+    if (!this.canBank()) throw new Error('Only the Banker can confirm a top-up');
     const r = this.redemption(id); if (!r) throw new Error('No such request');
     if (![REDEMPTION_STATUS.quoted, REDEMPTION_STATUS.held].includes(r.status)) throw new Error('A top-up is only owed on a live quote');
     if (!(r.topUpUsd > 0)) throw new Error('No top-up is owed on this booking');
@@ -1756,7 +1774,7 @@ export class Store {
     return { month, rows, confirmedCount: rows.filter(r => r.status === 'confirmed').length, pendingCount: rows.filter(r => r.status === 'pending').length, missingCount: rows.filter(r => r.status === 'missing').length, grossUsd: round(sum(rows, r => r.receivedUsd || 0)), shareUsd: 0, treasury: t, deferrals, expiring, alreadyClosed: this.state.monthCloses.find(c => c.month === month) || null };
   }
   async closeMonth(month, actorId, { bankBalanceUsd, cosignerId, note = '' }) {
-    if (!this.canConfirmMoney()) throw new Error('Only the Banker can close a month');
+    if (!this.canBank()) throw new Error('Only the Banker can close a month');
     const p = this.closePreview(month);
     if (p.alreadyClosed) throw new Error(`${month} is already closed`);
     if (p.pendingCount) throw new Error(`${p.pendingCount} sent contribution${p.pendingCount > 1 ? 's are' : ' is'} still waiting — confirm or return ${p.pendingCount > 1 ? 'them' : 'it'} first`);

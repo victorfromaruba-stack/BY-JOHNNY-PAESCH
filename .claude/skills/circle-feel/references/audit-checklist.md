@@ -233,3 +233,98 @@ no console error on any route at 390 or 1440, light or dark.
 Deliberate, not a regression: a stay page is taller because it now answers "what does the room
 look like" and "where is it" without leaving the page. The under-44px controls the sweep reports
 on a stay page are words inside sentences (an address, a phone number, a site link), not controls.
+
+## Re-baselined 20 Sept, after the phone-only rebuild (390px, both roles; checked again at 1440)
+
+The numbers above are all pre-rebuild. The stylesheet now carries twelve `@media` rules and not
+one is a layout breakpoint (nine reduced-motion, the print sheet, the display-mode rule, and the
+`min-width: 431px` block that draws the table under the column and holds no layout). `--wrap` is
+430px, the body IS the column, five tabs, six `.act-bar` sites, every dialog a bottom sheet.
+Measured with `audit.mjs --width 390` for each role, `--width 1440` as admin, and a second probe
+that walks the WHOLE document (the audit only looks inside `<main>`) for sub-44px targets and for
+figures set outside the mono face.
+
+| route | screens (member / admin) | to 1st figure | targets < 44 | chars (member) |
+|---|---|---|---|---|
+| `/` `/sign-in` | 3.5 / 3.9 (redirect to `/home`) | 203 / 219 | 0 | 1952 |
+| `/home` | 3.5 / 3.9 | 203 / 219 | 0 | 1952 |
+| `/stays` | 5.0 / 5.8 | **88** | 0 | 2684 |
+| `/stays/:id` | 4.6 / 4.9 | 478 | 0 | 3284 |
+| `/cruises` | 2.7 | 187 | 0 | 1351 |
+| `/cruises/:id` | 2.3 | 606 | 0 | 1264 |
+| `/trips/:id` | 2.2 | 658 | 0 | 1536 |
+| `/postcards` | 2.7 / 2.9 | 176 | 0 | 801 |
+| `/requests` | 1.0 | 138 | 0 | **320** |
+| `/pay` | 1.0 / 1.4 | 155 / 192 | 0 | **366** |
+| `/ledger` | 5.7 / 5.3 | 248 | 0 | 3781 |
+| `/pool` | 2.5 | 165 | 0 | 1509 |
+| `/circle` | 1.9 | — | 0 | 855 |
+| `/crews` | 1.0 | 434 / 383 | 0 | **291** |
+| `/watching` | 1.0 | — | 0 | **264** |
+| `/card` | 1.7 | 183 | 0 | 641 |
+| `/profile` | 1.7 / 1.9 | 145 | 0 | 693 |
+| `/rules` | 3.9 | 226 | 0 | 4866 |
+| `/desk` | — / 2.2 | 224 | 0 | 771 |
+| `/bank` | — / 2.5 | 161 | 0 | 1236 |
+| `/settings` | — / 3.3 | 239 | 0 | 1305 |
+
+What moved, and why:
+
+- **Every target is 44px or bigger, everywhere.** The old baseline had 32 under 44 on `/settings`
+  and 11 on five other routes; the count is now zero on all 22 routes for both roles — and zero
+  again when the probe is widened past `<main>` to the running head and the tab bar. The loudest
+  complaint in this file is answered.
+- **The first figure is above the fold on every route that has one.** Worst is `/trips/:id` at
+  658px; `/stays` is 88px, better than anything in the file. `/settings` went 2883 → 239.
+- **Nothing overflows and nothing errors**, member and admin, at 390 and 1440. The 1440 run
+  matches the 390 run on overflow, small taps and character count, route for route; only the
+  first-figure position moves, because the column is 430 there and a line wraps differently.
+  The laptop draws the phone: body 430px wide at left 505 on a 1440 window, hairline round it,
+  ground on the well, and the tab bar and the sheets carry the same cap (a sheet measures 430px
+  at 1440 and 390px at 390).
+- **Reachability**: 58 link targets as a member, 63 as an admin; every authed route in `app.js`
+  is reached within two hops of `/home` or `/profile`.
+- **Interaction sweep**: 392 controls clicked (57 skipped) across 2 roles × 22 routes in 6.0
+  minutes. Every one of them did something. No dead controls this run — the `/bank` "Copy"
+  false positive from the 12 Sept run did not recur.
+- **Sheets**: 8 opened as a member, 21 as an admin; no control under 16px inside any of them,
+  no segmented control scrolls, never more than one `.act-bar`, and every listing row is tappable
+  to its right edge.
+
+The near-empty routes are the one number that has not moved. `/crews` holds a tab slot for 291
+characters; `/watching` is 264 and its empty state is a single bold line where every other
+`.empty` in the app names what would fill it; `/requests` is 320 and `/pay` 366 when the month is
+settled. Each ends at 1.0 screens with roughly half a screen of blank above the tab bar.
+
+Two families of drift the rebuild did not carry over, both measured rather than eyeballed — and
+**both closed on 20 Sept**, in the same sweep that found them. Kept here because the shapes recur,
+not as open work:
+
+- **Figures outside the mono face.** `app.css` gave the mono face to `inputmode="decimal"`,
+  `type="date"` and `.mono` only — so 16 of the 20 `inputmode="numeric"` fields typed in Instrument
+  Sans, and in the watch sheet "Spend up to US$" typed mono while "In points" typed sans, side by
+  side, same placeholder. The same gap showed in rendered text: the tier ladder's heads and
+  sub-line, the board cover's "sleeps 4 · the owner asks $194.25 a night" (`.why`), and the
+  `/bank` confirm buttons. `app.css:337` now lists `inputmode="numeric"` too, the ladder carries
+  `.num`, and `.why` is built as HTML so its two figures can be wrapped (everything interpolated
+  into it is escaped at the source, because the line that prints it no longer escapes).
+- **Prose in the apparatus face.** `.listing-row .sub` is mono, and `/requests` put the Desk's
+  free-text decision inside it — so a decline reason printed as a mono paragraph on the one row
+  carrying bad news. `.l2` now takes the body face; the date and the night count beside it stay
+  mono, which is the right split.
+
+Re-measured 20 Sept across `/home /stays /stays/:id /ledger /pool /pay /requests /card /circle
+/watching /profile /rules` for both roles: every remaining digit outside the mono face is a date
+or a month name inside a sentence ("Contribution · 04 Sept 2026", "since 05 Jan 2026"), or a count
+inside a display heading ("2 nights at *voco Surfside Aruba*"). Those belong in the reading face —
+a sweep that counts them reports about 70 false positives, which is what the first one did. The
+rule worth checking is narrower than "every digit": **money, points and the counts in apparatus
+lines are mono; dates and counts inside prose are not.** Deliberately left in mono: the bank
+reference (`HUNTO-SW-2026-09` — someone types it into a transfer), the dated facts on `/pool` and
+`/card`, and the room spec strip ("sleeps 4 · 1 bath · full kitchen"), which is apparatus under a
+mono eyebrow and reads as a spec line rather than a sentence.
+
+Dead weight worth deleting while someone is in the file: `.grid` (app.css:179) has no usages left
+in `js/`; `.island-wrap`'s `max-width: 560px` (app.css:1269) can never bind, because the element
+renders at 358px inside a 430px column; `.badge-grid` (app.css:904) is the last layout that is a
+function of width, and resolves to 174px × 2 at every width the app ever has.

@@ -311,6 +311,11 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-
 .ledger .delta { font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
 .ledger .delta b { font-weight: 500; }
 .ledger .delta small { color: var(--ink-2); }
+/* The last row of a column that adds up. A rule above it and a heavier figure is how a total
+   has been set since before anyone typeset one on a screen, and on the Pool it is the
+   difference between a list of amounts and a sum a member can check. */
+.ledger li.sum { border-top: 1px solid var(--ink-3); margin-top: 2px; }
+.ledger li.sum .delta b { font-weight: 600; }
 
 /* ---------- forms ---------- */
 .field { display: grid; gap: 6px; margin-bottom: 14px; }

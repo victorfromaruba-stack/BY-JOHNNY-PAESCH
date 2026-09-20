@@ -890,14 +890,24 @@ export function pool({ store }) {
       <div class="stack" style="margin-top:var(--s-5)">
         <div class="panel">
           <h2>Where the money has gone</h2>
+          <!-- This column is a sum, and a member checking it with his thumb has to be able to
+               make it add up. Two figures used to sit in it that are not terms of it: what has
+               been collected (the same money as the first row, counted at the door instead of in
+               the account) and the Circle's share (earned on bookings, not taken here — and it
+               carried a + sign in front of a total it is not part of). They are worth knowing, so
+               they stay; they just stop pretending to be addends. Every term that can move the
+               Reserve now has a row of its own, printed only when it is not zero, so the column
+               still adds up on the day a refund, a correction or an expiry lands in it. -->
+          <p class="small muted" style="margin-top:10px">Insiders have sent <b class="num">${escapeHtml(fmtUsd2(t.collected))}</b> in all, and nothing is taken when points are bought — every dollar of it went into the Reserve. ${escapeHtml(VOCAB.share)} is earned later, when points are spent on a room: <b class="num">${escapeHtml(fmtUsd2(t.serviceEarnedUsd))}</b> so far.</p>
           <ul class="ledger" style="margin-top:12px">
-            <li><span class="what"><b>Collected from Insiders</b><span class="meta">every confirmed contribution</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.collected))}</b></span></li>
-            <li><span class="what"><b>${escapeHtml(VOCAB.share)}</b><span class="meta"><b class="num">15%</b>, earned when points are spent on a room</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.serviceEarnedUsd))}</b></span></li>
-            <li><span class="what"><b>Into the Reserve</b><span class="meta">all of it — nothing is taken when points are bought</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.backing))}</b></span></li>
+            <li><span class="what"><b>Into the Reserve</b><span class="meta">every confirmed contribution, in full</span></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.backing))}</b></span></li>
             <li><span class="what"><b>Bonuses funded by the Circle</b><span class="meta">tier, streak and founding — fronted against the <b class="num">15%</b> still to be earned on bookings</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.promoUsd))}</b></span></li>
             ${t.topUpsUsd ? `<li><span class="what"><b>Cash top-ups received</b><span class="meta">paid straight on to the hotel; no 15% is taken</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.topUpsUsd))}</b></span></li>` : ''}
+            ${t.refundedUsd ? `<li><span class="what"><b>Refunded to members</b><span class="meta">points handed back when a booking was undone or someone left</span></span><span class="delta"><b>+${escapeHtml(fmtUsd2(t.refundedUsd))}</b></span></li>` : ''}
+            ${t.adjustUsd ? `<li><span class="what"><b>Corrections</b><span class="meta">lines the Banker entered by hand, each with a reason on the ledger</span></span><span class="delta"><b>${t.adjustUsd > 0 ? '+' : '−'}${escapeHtml(fmtUsd2(Math.abs(t.adjustUsd)))}</b></span></li>` : ''}
+            ${t.expiredUsd ? `<li><span class="what"><b>Points expired</b><span class="meta">promotional points that ran out — the dollars behind them are released</span></span><span class="delta"><b>−${escapeHtml(fmtUsd2(t.expiredUsd))}</b></span></li>` : ''}
             <li><span class="what"><b>Paid to hotels</b><span class="meta">confirmed bookings, at the invoiced amount</span></span><span class="delta"><b>−${escapeHtml(fmtUsd2(t.paidOutUsd))}</b></span></li>
-            <li><span class="what"><b>Reserve today</b></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.reserveExpectedUsd))}</b></span></li>
+            <li class="sum"><span class="what"><b>Reserve today</b></span><span class="delta"><b>${escapeHtml(fmtUsd2(t.reserveExpectedUsd))}</b></span></li>
           </ul>
         </div>
         <div class="panel flat">

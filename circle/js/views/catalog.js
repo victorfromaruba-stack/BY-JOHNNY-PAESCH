@@ -240,7 +240,7 @@ export function stays({ store, go, query = {} }) {
     if (all.length) coverSlot.appendChild(dealCover(all[0], { store, canEdit, match: matchFor(all[0]), folio: 1 }));
     const rest = all.slice(1);
     if (rest.length) {
-      dealsSlot.appendChild(el(`<div class="running-head"><h2>The other ${rest.length}</h2><p class="eyebrow">cheapest a night first</p></div>`));
+      dealsSlot.appendChild(el(`<div class="running-head"><h2>The other <b class="num">${rest.length}</b></h2><p class="eyebrow">cheapest a night first</p></div>`));
       dealList(dealsSlot, rest, { store, me, canEdit, first: FIRST - 1, key: 'stays', inPlace: false, noun: 'open', folioOf });
     } else if (!loading && !all.length) {
       dealsSlot.appendChild(el(`<div class="rule-block"><p class="small muted">Nothing open right now. Open a place below and put your dates in — Victor prices any nights.</p><a class="link-rule" href="#/watching">Set a watch and hear the moment something opens</a></div>`));
@@ -300,7 +300,7 @@ export function stays({ store, go, query = {} }) {
   }
 
   if (rest.length) {
-    placesSlot.appendChild(el(`<div class="running-head"><h2>${open.length ? `The rest of the island · ${rest.length}` : `The places · ${rest.length}`}</h2>
+    placesSlot.appendChild(el(`<div class="running-head"><h2>${open.length ? `The rest of the island · <b class="num">${rest.length}</b>` : `The places · <b class="num">${rest.length}</b>`}</h2>
       <p class="eyebrow">nothing on the board today · Victor prices these on your dates</p></div>`));
     const idx = el('<div class="index quiet-index"></div>');
     for (const st of rest) idx.appendChild(el(`<a class="index-row" href="#/stays/${escapeHtml(st.id)}">

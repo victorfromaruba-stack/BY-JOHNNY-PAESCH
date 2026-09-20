@@ -228,9 +228,13 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
   const stamp = stampFor(deal, store);
   const soon = soonLabel(deal.from);
   const who = store.member?.(deal.postedBy)?.name.split(' ')[0];
+  // Built as HTML, not text, so the two figures in it can sit in the mono face like every other
+  // figure in the app — an owner's asking price is money, and it was reading in the body face in
+  // the middle of a card whose other prices are mono. Everything interpolated is escaped here,
+  // because the line below prints this without escaping it.
   const why = draft
-    ? `Owner’s week on VakayMood${deal.sleeps ? ` · sleeps ${deal.sleeps}` : ''}${deal.usdNightly ? ` · the owner asks ${fmtUsd2(deal.usdNightly)} a night` : ''}`
-    : `${(SOURCES[deal.source] || SOURCES.other).label}${who ? ` · found by ${who}` : ''}${deal.note ? ` · ${deal.note}` : ''}`;
+    ? `Owner’s week on VakayMood${deal.sleeps ? ` · sleeps <b class="num">${escapeHtml(String(deal.sleeps))}</b>` : ''}${deal.usdNightly ? ` · the owner asks <b class="num">${escapeHtml(fmtUsd2(deal.usdNightly))}</b> a night` : ''}`
+    : `${escapeHtml((SOURCES[deal.source] || SOURCES.other).label)}${who ? ` · found by ${escapeHtml(who)}` : ''}${deal.note ? ` · ${escapeHtml(deal.note)}` : ''}`;
   const node = el(`<article class="cover${photo ? '' : ' plate'}${match ? ' matched' : ''}" data-deal="${escapeHtml(deal.id)}">
       <a class="cover-shot" href="${placeHrefFor(deal, stay)}" aria-label="${escapeHtml(stay?.name || 'The place')}: the rooms, the map and this week">
       </a>
@@ -240,7 +244,7 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
         <span class="cover-price"><span class="num">${escapeHtml(usdNight(deal, s.pointsPerDollar))}</span><small>a night · all in</small></span>
         <span class="mono">${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'} · <b>${escapeHtml(fmtPoints(deal.pointsTotal))} pts</b> all in · ${escapeHtml(pointsUsd(deal.pointsTotal, s.pointsPerDollar))}</span>
         ${soon ? `<p class="soon">${icon('zap', { size: 15 })}${escapeHtml(soon)}</p>` : ''}
-        <p class="why">${escapeHtml(why)} · <span class="stamp${stamp.feed ? ' feed' : ''}">${escapeHtml(stamp.text)}</span></p>
+        <p class="why">${why} · <span class="stamp${stamp.feed ? ' feed' : ''}">${escapeHtml(stamp.text)}</span></p>
         ${ageLine(stamp)}
         ${creditLine(credit)}
         <!-- The cover story's one decision, and it gets the column. A content-width button on the
@@ -320,7 +324,7 @@ export function dealList(slot, deals, { store, me = null, canEdit = false, first
     const shown = REVEALED.has(key) || ordered.length - first <= 1 ? ordered : ordered.slice(0, first);
     const hidden = ordered.length - shown.length;
     grid.replaceChildren(...head(), ...shown.map(d => dealRow(d, { store, folio: folioOf?.get(d.id) || null, match: matched.get(d.id), canEdit, inPlace, level, picked: d.id === pin })));
-    more.innerHTML = hidden > 0 ? `<button class="btn ghost sm" data-act="reveal">${icon('chevronDown', { size: 16 })}Show the other ${hidden}${noun ? ` ${noun}` : ''}</button>` : '';
+    more.innerHTML = hidden > 0 ? `<button class="btn ghost sm" data-act="reveal">${icon('chevronDown', { size: 16 })}Show the other <b class="num">${hidden}</b>${noun ? ` ${noun}` : ''}</button>` : '';
   };
   more.addEventListener('click', (e) => {
     if (!e.target.closest('[data-act="reveal"]')) return;
