@@ -498,6 +498,10 @@ export function pay({ store, go }) {
   const settled = status === 'confirmed';
   const landed = store.contributionsFor(me.id).find(c => c.forMonth === month && c.status === 'confirmed');
   const banker = (id) => store.member(id)?.name.split(' ')[0] || 'the Banker';
+  // What a member carries to WhatsApp when the month is already settled. It says "extra" in so
+  // many words, because the Banker's own screen distinguishes an extra from a monthly and the
+  // reference alone would read as a duplicate of the transfer he has already confirmed.
+  const extraNote = `Hi Vishnu, I am sending something extra on top of my monthly — ${fmtMonth(month)} is already settled. Reference: ${reference}. Please record it as an extra. — ${me.name}`;
   // The reference first: it is the one thing Vishnu reads off the statement.
   const bankDetails = `<div class="stack" style="margin-top:14px">
           <div><p class="eyebrow">${icon('tag')}Put this in the description</p>
@@ -525,6 +529,16 @@ export function pay({ store, go }) {
         <summary>Send something extra</summary>
         <p class="small muted" style="margin-top:10px">Only if you mean to. This month is already paid, and a second transfer has to be spotted and returned by hand.</p>
         ${bankDetails}
+        <!-- The disclosure handed over the bank details and then dropped the member: the "I sent
+             it" form, the docked action and the WhatsApp line all lived in the not-settled arm of
+             the ternary below, so on a settled month the page invited a transfer and left no way
+             to tell anyone about it. The form cannot simply move up here — submitContribution
+             refuses a month that already holds a confirmed row, and only the Banker may enter an
+             extra — so what moves is the part that does work, with what happens to the money
+             after it lands said plainly. -->
+        <p class="small muted" style="margin-top:14px">Nothing here records a second transfer. Tell Vishnu and he enters it by hand as an extra: base points at the plain rate, no tier bonus, and it covers no month.</p>
+        <p><a class="link-rule" id="wa-extra" target="_blank" rel="noopener"
+              href="${escapeHtml(waLink(store.member('mem_vishnu')?.phone || '', extraNote))}">Message Vishnu on WhatsApp</a></p>
       </details>
 
       <label class="row-between ask-switch" style="margin-top:20px">
@@ -925,40 +939,41 @@ function drawBadges(panel, { store, me, refresh }) {
   };
 }
 
-/** A member's own corner. Deliberately small — a line, an accent, a cover. */
+/**
+ * A member's own corner. Deliberately small — one line.
+ *
+ * It used to open on "A line about you, a colour, and a picture. It shows on your card in the
+ * Circle and nowhere else", and every word of the second sentence was untrue: nothing in the app
+ * reads member.cover or member.accent back. memberCard() draws the guilloche, the wordmark, the
+ * name, the tier and the foot line, and has no slot for a picture at all — so the cover the
+ * member chose was written to both backends and then never looked at again. One of the six
+ * covers, 'hero', did not even name a file in the repo (it is hero-tall.jpg), so wiring it up as
+ * written would have 404'd. The colour went the same way, and could not be painted as it stood
+ * either: 'Coral' is --flag, which tokens.css reserves for returned, declined or expired and
+ * always with a sentence, and 'Ink' and 'Deep' resolve to the same token.
+ *
+ * So both pickers come out rather than stand under a promise the app cannot keep. The columns
+ * stay on the member in both backends and in SQL, untouched by the patch below, so whoever gives
+ * the card a cover layer can put the picker back the same day.
+ */
 function drawCorner(panel, { store, me, refresh }) {
-  const ACCENTS = [['good', 'Sea'], ['flight', 'Gold'], ['flag', 'Coral'], ['ink', 'Ink'], ['sea', 'Deep'], ['sand', 'Sand']];
-  const COVERS = [['', 'None'], ['hero', 'The shallows'], ['band-pool', 'Salt pans'], ['band-circle', 'The table'],
-                  ['band-open', 'The colonnade'], ['season-carnival', 'Carnival'], ['season-winter', 'The west coast']];
   panel.innerHTML = `
     <h2>Your corner</h2>
-    <p class="small muted" style="margin-top:6px">A line about you, a colour, and a picture. It shows on your card in the Circle and nowhere else.</p>
     <form id="corner" style="margin-top:14px">
       <label class="field"><span>A line about you</span>
         <input name="about" maxlength="200" placeholder="Always in the sea before breakfast."
                value="${escapeHtml(me.about || '')}">
         <span class="hint">200 characters. It is a line, not an essay.</span></label>
-      <p class="eyebrow">Your colour</p>
-      <div class="row" style="gap:8px;margin-top:8px">${ACCENTS.map(([k, n]) => `
-        <button type="button" class="chip accent-chip" data-accent="${k}" aria-pressed="${(me.accent || '') === k}">
-          <i style="background:var(--${k === 'sea' ? 'ink' : k === 'sand' ? 'share' : k})"></i>${escapeHtml(n)}</button>`).join('')}</div>
-      <p class="eyebrow" style="margin-top:16px">Your cover</p>
-      <label class="field" style="margin-top:8px"><select name="cover">
-        ${COVERS.map(([k, n]) => `<option value="${k}"${(me.cover || '') === k ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')}
-      </select></label>
       <button class="btn block" type="submit">Save your corner</button>
     </form>`;
 
-  let accent = me.accent || '';
-  panel.querySelectorAll('[data-accent]').forEach(b => b.addEventListener('click', () => {
-    accent = b.dataset.accent === accent ? '' : b.dataset.accent;
-    panel.querySelectorAll('[data-accent]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.accent === accent)));
-  }));
   panel.querySelector('#corner').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
     try {
-      await store.updateMember(me.id, { about: f.get('about'), accent, cover: f.get('cover') }, me.id);
+      // Only `about` goes in the patch. A key left out is a key left alone on both backends, so
+      // a member who set a colour or a cover before today keeps what they set.
+      await store.updateMember(me.id, { about: f.get('about') }, me.id);
       toast('Saved.', { kind: 'good' }); refresh();
     } catch (err) { toast(err.message, { kind: 'bad' }); }
   });
