@@ -113,6 +113,18 @@ export const photoFor = (stay) => {
 };
 
 /**
+ * The same picture as photoFor, at 400px wide. A plate two to the column renders at about
+ * 195 CSS px, so the full-size file is ten times the pixels it can show and ten times the bytes
+ * on a phone: the eighteen originals are 3,819 KB against 422 KB as thumbs. The Desk's own
+ * upload has no thumb — it is whatever was uploaded — so it falls through unchanged.
+ */
+export const thumbPhotoFor = (stay) => {
+  const f = photoFor(stay);
+  const m = f && /^assets\/(stays|areas)\/([^/]+)$/.exec(f);
+  return m ? `assets/${m[1]}/thumb/${m[2]}` : f;
+};
+
+/**
  * Who the photograph is by and where it came from — as plain text for an image title, and as
  * HTML for the line under the hero. A licensed photograph carries its author and licence, which
  * is what the licence asks; a property's own photograph names the site; the Desk's upload

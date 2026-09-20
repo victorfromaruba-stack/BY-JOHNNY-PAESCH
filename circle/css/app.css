@@ -1300,6 +1300,26 @@ body[data-cover="on"] .topbar .brand, body[data-cover="on"] .topbar .brand b,
 body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: var(--on-photo); }
 @media (prefers-reduced-motion: reduce) { body[data-cover] .topbar { transition: none; } }
 
+/* THE PRINTED INDEX — the places, two to the column.
+   A grid INSIDE the 430px column, never a width query: this app has no layout breakpoints and
+   this does not add one. The whole plate is the tap target, so it clears 44px many times over
+   without a single rule about hit areas. */
+.plate-index { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4) var(--s-3); margin-top: var(--s-4); }
+/* align-content: start, or the plate stretches to the tallest cell in its row and shares the
+   spare height out between the name and the area line — so two plates side by side set their
+   own type at two different rhythms and the grid reads as hand-placed. */
+.place-plate { display: grid; align-content: start; gap: 2px; text-decoration: none; color: inherit; min-width: 0; }
+.place-plate .shot { display: block; aspect-ratio: 3 / 2; overflow: hidden; background: var(--well); position: relative; }
+.place-plate .shot img, .place-plate .shot .scene, .place-plate .shot .scene svg { width: 100%; height: 100%; object-fit: cover; display: block; }
+.place-plate .pn { margin-top: 8px; font-size: var(--t-small); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.place-plate .pa, .place-plate .pnote { font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .04em; color: var(--ink-2); }
+/* Said on the plate, not only in the title attribute: at this size a beach reads as the hotel
+   unless the picture says otherwise, and that is the one thing the house rule is about. */
+.place-plate .pnote { color: var(--ink-3); }
+@media (hover: hover) { .place-plate:hover .pn { text-decoration: underline; text-underline-offset: 3px; } }
+.place-plate:active .shot { opacity: .82; }
+@media (prefers-reduced-motion: reduce) { .place-plate:active .shot { opacity: 1; } }
+
 /* A link inside a credit line or the rules' prose keeps its line rhythm and still gets a 44px
    tap: the padding is handed back by the margin. The half pixel is not a flourish — the credit
    is set at 13px, so 12px each way lands on 43.5 and misses the floor. Scoped to these two,

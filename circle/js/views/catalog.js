@@ -3,7 +3,7 @@ import { escapeHtml, fmtUsd, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, 
 import { VOCAB, tierName } from '../core/vocab.js';
 import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth, round2, hotelOwedUsd, isCruise, unitWord } from '../core/money.js';
 import { effectiveTier } from '../core/standing.js';
-import { stayCard, stayStrip, photoFor, photoCredit, seedIdOf } from './public.js';
+import { stayCard, stayStrip, photoFor, photoCredit, seedIdOf, thumbPhotoFor, photoKind, areaPhotoFor } from './public.js';
 import { roomPhotosFor, roomsOf, roomPhotoSheet, galleryStrip } from './rooms.js';
 import { PLACES } from '../data/places.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
@@ -302,13 +302,44 @@ export function stays({ store, go, query = {} }) {
   if (rest.length) {
     placesSlot.appendChild(el(`<div class="running-head"><h2>${open.length ? `The rest of the island · <b class="num">${rest.length}</b>` : `The places · <b class="num">${rest.length}</b>`}</h2>
       <p class="eyebrow">nothing on the board today · Victor prices these on your dates</p></div>`));
-    const idx = el('<div class="index quiet-index"></div>');
-    for (const st of rest) idx.appendChild(el(`<a class="index-row" href="#/stays/${escapeHtml(st.id)}">
-        <span class="name">${escapeHtml(st.name)}<span class="meta">${st.house ? '<span class="house">where we stay</span>' : ''}<span class="beach">${escapeHtml(st.area)}</span></span></span>
-        <span class="from" aria-hidden="true">${icon('chevronRight', { size: 15 })}</span></a>`));
-    placesSlot.appendChild(idx);
+    placesSlot.appendChild(plateIndex(rest));
   }
   return wrap;
+}
+
+/**
+ * The places, printed. This was 23 rows of a name, an area and a chevron — about 1,830px of
+ * text on a screen whose whole job is to make somebody want to go somewhere, while twelve of
+ * those places had a full licensed photograph sitting on disk and not one of them drew it.
+ *
+ * Two to the column, from the 400px thumb set. The grid is a grid inside the 430px column, NOT
+ * a width query — the app has no layout breakpoints and this does not add one.
+ *
+ * A place whose only picture is its beach says so on the plate, because a beach standing in for
+ * a building is the picture the house rule is about. A place with no picture at all keeps the
+ * drawn plate it already had; nothing here invents one.
+ */
+function plateIndex(stays) {
+  const grid = el('<div class="plate-index"></div>');
+  for (const st of stays) {
+    const src = thumbPhotoFor(st);
+    const area = photoKind(st) === 'area' ? areaPhotoFor(st) : null;
+    const credit = photoCredit(st);
+    const a = el(`<a class="place-plate" href="#/stays/${escapeHtml(st.id)}">
+        <span class="shot"></span>
+        <span class="pn">${escapeHtml(st.name)}</span>
+        <span class="pa">${escapeHtml(st.area)}${st.house ? ' · where we stay' : ''}</span>
+        ${area ? '<span class="pnote">the beach, not the hotel</span>' : ''}
+      </a>`);
+    const shot = a.querySelector('.shot');
+    if (src) {
+      shot.innerHTML = `<img src="${escapeHtml(src)}" alt="${escapeHtml(area ? `${area.area}, the beach at ${st.name}` : st.name)}"${credit ? ` title="${escapeHtml(credit.text)}"` : ''} loading="lazy" decoding="async">`;
+    } else {
+      shot.appendChild(stayStrip(st));
+    }
+    grid.appendChild(a);
+  }
+  return grid;
 }
 
 /**
