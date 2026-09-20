@@ -95,7 +95,13 @@ export class SupabaseStore extends Store {
       failedOnce.forEach((i, k) => { results[i] = again[k]; });
     }
     const failed = tables.filter((t, i) => results[i].error);
-    if (failed.length && !this._loadedOnce) {
+    // Signed out, EVERY one of these fails, and that is the design: schema.sql revokes all
+    // tables in the schema from `anon`, so the club's rows are only ever readable with a
+    // session. Counting that as an outage aborted the load right here — before publicOnly was
+    // computed below — which made the whole public fallback dead code and put "0 of 40 taken ·
+    // 0 places" on the front page of a club that is neither. Only a member who IS signed in and
+    // still gets nothing back is the Circle failing to answer.
+    if (failed.length && !this._loadedOnce && this.state.session) {
       throw new Error(`The Circle is not answering right now (${failed.slice(0, 3).join(', ')}${failed.length > 3 ? '…' : ''}).`);
     }
     results.forEach((r, i) => { if (!r.error) this.state[tables[i]] = (r.data || []).map(toCamel); });
@@ -142,16 +148,29 @@ export class SupabaseStore extends Store {
     // back to it exposes nothing new and keeps the front page from being a blank frame.
     // Recomputed on every reload, never latched: signing in must lift it, or a member who
     // arrived at the front page first keeps being shown the stranger's copy.
-    this.publicOnly = !this.state.session && !this.state.stays.length;
+    //
+    // It reads the READ OUTCOME, not the row count, and that distinction is the whole of it.
+    // The fallback below writes the bundled catalog into state.stays, and a failed fetch keeps
+    // the last known rows rather than blanking them — so on the second reload a row count would
+    // find twenty-three stays sitting there and conclude the stranger had signed in. The public
+    // page would then print the empty store as fact.
+    this.publicOnly = !this.state.session && (failed.includes('stays') || !this.state.stays.length);
     if (this.publicOnly) {
       const { ARUBA_STAYS, WORLD_TRIPS } = await import('../data/stays.js');
       this.state.stays = [...ARUBA_STAYS, ...WORLD_TRIPS].map(x => ({ ...x, active: true }));
     }
     const { data: s, error: sErr } = await this.sb.from('settings').select('*').eq('id', 1).maybeSingle();
-    if (sErr && !this._loadedOnce) throw new Error('The Circle is not answering right now (settings).');
+    // Same rule as the tables above: settings_read is `to authenticated`, so a stranger is
+    // refused by design and keeps DEFAULT_SETTINGS, which is what the public page is priced off.
+    if (sErr && !this._loadedOnce && this.state.session) throw new Error('The Circle is not answering right now (settings).');
     if (sErr) this.partial = [...(this.partial || []), 'settings'];
     if (s) this.state.settings = { ...DEFAULT_SETTINGS, serviceRate: Number(s.service_rate), pointsPerDollar: Number(s.points_per_dollar), awgPerUsd: Number(s.awg_per_usd), tiers: s.tiers, streakBonuses: s.streak_bonuses, foundingBonus: s.founding_bonus, memberCap: s.member_cap, exitFeeUsd: Number(s.exit_fee_usd), quoteHours: s.quote_hours, lookHours: s.look_hours || DEFAULT_SETTINGS.lookHours, minQuoteHours: s.min_quote_hours ?? 12, looksFrom: s.looks_from || null, bankerSlaHours: s.banker_sla_hours, reserveAccount: s.reserve_account, operatingAccount: s.operating_account, reserveVerified: s.reserve_verified, wallet: s.wallet, clubName: s.club_name, momentsOn: !!s.moments_on };
     this._loadedOnce = true;
+    // Nothing is stale for a stranger: with no session there was never anything to refresh, so
+    // every table and settings "failing" is the expected answer rather than a degraded one.
+    // Cleared here, after the settings read has had its say, or the public page would open on
+    // "Some of this could not be refreshed" — an outage notice for a page that is working.
+    if (this.publicOnly) this.partial = [];
     this.notify(this.partial?.length ? 'partial' : 'reload');
   }
   subscribeRealtime() {

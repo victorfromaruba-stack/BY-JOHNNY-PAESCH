@@ -55,7 +55,10 @@ test('nothing posts without a catalog stay, whatever the source', () => {
 test('points are all-in: the owner’s ask, times points to the dollar, plus the Circle’s share', () => {
   const d = asDeal(find({ source: 'redweek', usdTotal: 1165, usdNightly: 166.43, unit: 'Studio Queen, Oceanside' }), cfg, { pointsPerDollar: 100, serviceRate: 0.15 });
   assert.equal(d.pointsTotal, Math.round(1165 * 100 * 1.15));
-  assert.equal(d.expiresAt, '2026-09-26T12:00:00Z');
+  // A week stays on the board until the end of its check-in DAY in Aruba, not noon UTC: someone
+  // can still take a room that checks in this afternoon. Aruba is UTC-4 with no daylight saving,
+  // so the last second of the 26th on the island is 03:59:59 on the 27th in UTC.
+  assert.equal(d.expiresAt, '2026-09-27T03:59:59.000Z');
   assert.match(d.title, /owner asking \$166 a night on RedWeek/);
   assert.doesNotMatch(d.title, /sav/i);
 });
