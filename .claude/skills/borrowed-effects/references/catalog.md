@@ -7,8 +7,14 @@ yet. The Circle has the opposite problem. Forty people who already know each oth
 week to find out what a week costs and whether Victor booked it. Attention is not the scarce
 thing; trust in the figures is. So most of what follows is not merely unnecessary here, it works
 against the app, and the honest answer to "can we add this one" is usually no. Two components
-earn a place. Twelve would work if Victor points at them. Thirty-six are wrong for this app, and
+earn a place. Fourteen would work if Victor points at them. Fifty-one are wrong for this app, and
 the section at the end says what the phone alone rules out.
+
+**Sixty-seven judged, and that is not all of them.** `borrow.mjs --list` probes sixty-one slugs
+and every one answered 200 on 2026-09-20; this file judges those sixty-one plus six the script
+does not probe. Aceternity keeps shipping. **A slug missing from this file says nothing about
+whether it is free** — it means nobody has ruled on it yet. Put it through the five questions in
+`SKILL.md` §2 and write the answer in here afterwards.
 
 Judged after rendering `/home`, `/stays`, `/stays/stay_surfclub` and the signed-out landing at
 390x844 and looking at them: paper ground, ink serif titles with one italic word, mono figures,
@@ -74,30 +80,52 @@ Mechanically sound, palette-neutral once ported, and solving a problem the app h
 | animated-modal | 200 | motion | If a sheet ever wants a spring, this is the maths. Transform and opacity only; keep the `--wrap` cap or it spans a laptop. |
 | placeholders-and-vanish-input | 200 | motion | The cycling placeholder is harmless if `/stays` ever gets a search field. The vanish is canvas particles — leave that half. |
 | multi-step-loader | 200 | @tabler/icons-react, motion | A checklist that ticks through steps. Would suit a long wait. Nothing here waits that long. |
+| container-text-flip | 200 | none | One word swaps inside a box that resizes to fit it. Same family as flip-words and the same objection — the only variable word here is the italic accent — but the resizing box is a genuinely nice piece of maths if a figure ever has to change in place. Needs a module: it measures the word and steps on a timer. |
+| carousel | 200 | @tabler/icons-react | An arrow-and-drag slider that writes its position to a custom property. The `.horizon` strip already scrolls by thumb and does it natively; this would only matter if a row ever needed arrows. |
 
 ## Wrong for this app
 
-Thirty-six. Grouped by the reason, because the reason is the reusable part.
+Fifty-one. Grouped by the reason, because the reason is the reusable part.
 
 **Glow, gradient border or neon — the exact register Victor calls AI slop.** Every one of these
 needs a colour that is not in `tokens.css`, and the ones that do not still put a light source on
 a page that is printed paper.
 `background-gradient` (motion), `hover-border-gradient` (motion), `moving-border` (motion),
-`glowing-effect` (lucide-react), `card-spotlight` (motion), `spotlight` (none), `lamp` (motion),
-`hero-highlight` (mini-svg-data-uri, motion), `colourful-text` (none), `tracing-beam` (motion),
-`timeline` (motion — the only thing it adds over plain layout is a purple-to-blue beam),
-`glare-card` (none). All free; all wrong.
+`glowing-effect` (lucide-react), `card-spotlight` (motion), `spotlight` (none), `spotlight-new`
+(motion — the same ellipse rebuilt from three `hsla(210, 100%, …)` radial gradients that drift
+sideways forever), `lamp` (motion), `hero-highlight` (mini-svg-data-uri, motion), `colourful-text`
+(none), `tracing-beam` (motion), `timeline` (motion — the only thing it adds over plain layout is
+a purple-to-blue beam), `glare-card` (none), `tailwindcss-buttons` (@tabler/icons-react — a
+gallery of twenty button treatments, most of them a gradient ring or a neon border; this app has
+one filled action and one ruled link on purpose, and a second button style is a decision, not an
+import). All free; all wrong.
 
 **Aurora or particle field behind the content.** A full-screen background effect competes with
 the one photograph the app already leads with, and on `/stays` the photograph is the evidence
 that the week is real.
 `aurora-background` (none), `background-beams` (motion), `background-beams-with-collision`
-(motion), `background-lines` (motion), `background-boxes` (mini-svg-data-uri, motion), `meteors`
-(none), `shooting-stars` (none), `vortex` (motion), `sparkles` (@tsparticles/react,
+(motion), `background-lines` (motion), `background-boxes` (mini-svg-data-uri, motion),
+`shooting-stars` (none), `vortex` (simplex-noise, motion), `wavy-background` (simplex-noise — a
+canvas loop, so there is no CSS underneath to take at all), `sparkles` (@tsparticles/react,
 @tsparticles/engine, @tsparticles/slim, motion), `canvas-reveal-effect` (three,
-@react-three/fiber). The last two also lose on the Content-Security-Policy: `script-src` allows
+@react-three/fiber). The last three also lose on the Content-Security-Policy: `script-src` allows
 `'self'` and jsdelivr only, and neither tsparticles nor three.js belongs in a no-build app that
 ships as ES modules.
+
+**meteors** (none) sits in that group but earns its own paragraph, because the group's reason
+does not fit it and someone will notice. It is the only one here that needs no cursor and touches
+no photograph, so it will look portable — and the one dark surface it suits, the tier-200
+`.card-obj` on `/card`, is not a background at all but a drawn object whose `--etch` gold every
+baked colour in the component maps onto cleanly. It fails on two other things instead. It is
+`infinite`: a member opens `/card` to hold a QR code up at a hotel desk, and the surface under
+the thing they came for would be permanently in motion. And `.card-obj`'s own comment in
+`app.css` settled this before Aceternity was ever mentioned — *"a simulated highlight is a
+lighting effect, and this house has none."* Rendered on the card it is worse than unwanted: the
+tails are the same gold, the same 1px weight and close to the same angle as the `.contours`
+hairlines already on it, so they read as the card's engraving coming loose rather than as
+meteors. Mechanically it is not free either — twenty spans minted from a count, each with a
+`Math.random()` delay, duration and offset, which means markup from `pieces.js` and a fixed
+scatter, not four lines of CSS.
 
 **Needs a mouse, so it is dead on the only device that matters.** A hover-only reaction is no
 reaction — this is already written into circle-feel and it disqualifies the largest group here.
@@ -106,22 +134,34 @@ reaction — this is already written into circle-feel and it disqualifies the la
 `text-reveal-card` (motion), `svg-mask-effect` (motion), `card-hover-effect` (motion),
 `floating-dock` (@tabler/icons-react, motion — a dock that magnifies under the cursor; the app
 has a tab bar), `evervault-card` (motion), `focus-cards` (none), `file-upload`
-(@tabler/icons-react, react-dropzone, motion — drag-and-drop onto a phone).
+(@tabler/icons-react, react-dropzone, motion — drag-and-drop onto a phone), `lens` (motion — a
+magnifier that follows `clientX`/`clientY` over an image), `sidebar` (@tabler/icons-react,
+motion — a rail that expands from 60px to 300px `onMouseEnter`; the app has a tab bar and no
+desktop), `navbar-menu` (motion — a dropdown that opens `onMouseEnter` and closes
+`onMouseLeave`, so on a phone it never opens), `link-preview` (@radix-ui/react-hover-card, qss,
+motion — and it fetches a screenshot of the linked page from `api.microlink.io`, a third-party
+request this app makes nowhere and would not start making for a hover card).
 
 **Prints a word over a photograph, or asserts something the app has not established.**
 `focus-cards` again (the title paints onto the image on hover), `evervault-card` again (a field
 of random hex characters that means nothing), `sticky-scroll-reveal` (motion — swaps the page
-background per section from a baked palette).
+background per section from a baked palette), `animated-testimonials` (@tabler/icons-react,
+motion — rotates head-and-shoulders photographs on a 5s timer with the quote typing in beneath;
+every photograph in this app is sourced and dated, and there is nobody to quote).
 
 **Landing-page set pieces.** Built to fill a viewport above the fold for a stranger.
 `hero-parallax` (motion), `container-scroll-animation` (motion), `layout-grid` (motion),
-`google-gemini-effect` (motion).
+`google-gemini-effect` (motion), `apple-cards-carousel` (@tabler/icons-react, motion — a
+full-bleed card rail that drives its own scroll container and opens a modal per card),
+`resizable-navbar` (none declared — a header that shrinks and blurs as you scroll; this app's
+chrome does not move, and a header that resizes while a ledger scrolls under it is motion the
+figures did not ask for).
 
 ## What the phone changes
 
 Three things decide most of the calls above before taste enters.
 
-**There is no cursor.** Fourteen of these components have their entire effect on `:hover` or on
+**There is no cursor.** Eighteen of these components have their entire effect on `:hover` or on
 `mousemove`. On the device this club uses, they do nothing at all — not a degraded version, the
 element simply sits there. If a port is attempted anyway, the hover rule goes inside
 `@media (hover: hover)` and `:active` gets a state of its own, or the tap produces no visual
@@ -131,20 +171,24 @@ change and the screen feels broken rather than plain.
 `timeline` and `text-generate-effect` all animate as the reader scrolls, and a scroll animation
 is exactly the kind that gets forgotten under `prefers-reduced-motion`. Every one of them needs
 the reduced-motion branch to render the **final** state on the first frame — not a faster
-animation, not a shorter distance. `app.css` carries eight reduced-motion rules today and a
-ninth is the price of any port that moves.
+animation, not a shorter distance. A reduced-motion guard of its own is the price of any port
+that moves, and `app.css` has a rule for every one that ships.
 
 **The background is already spoken for.** Every screen worth looking at leads with one
 photograph, sourced and credited, and that picture is the app's main claim that a week is real.
-A beam field, an aurora or a meteor shower behind it does not decorate the photograph, it argues
-with it. If a background effect ever seems necessary, the question to ask first is what the
-photograph is failing to do.
+A beam field or an aurora behind it does not decorate the photograph, it argues with it. If a
+background effect ever seems necessary, the question to ask first is what the photograph is
+failing to do. Where there is no photograph — the member card, the one drawn object in the app —
+the argument is different and is spelled out under `meteors` above: the surface has a texture of
+its own, and a borrowed effect that shares its colour and weight corrupts it rather than layering
+over it.
 
 And the standing constraints a port inherits whatever bucket it came from: colours from
 `tokens.css` only — no Tailwind palette values, no new hex; `--r-pill` untouched; 44px minimum in
-both dimensions; no horizontal overflow at 390px; **no width breakpoint**, because the eleven
-`@media` rules in `app.css` contain not one and the phone is the only layout; transform and
-opacity only. The licence permits the port (unlimited end products, modification, derivative
-works; no redistributing the source files and no reselling), and it does not demand credit — but
-this codebase records where every photograph and every price came from, so a ported effect
-records its slug and the date it was fetched in a comment above the CSS, for the same reason.
+both dimensions; no horizontal overflow at 390px; **no width breakpoint** — `app.css` has exactly
+one `min-width` query, the laptop frame, and it holds no layout at all, only a background and an
+outline; transform and opacity only. The licence permits the port (unlimited end products,
+modification, derivative works; no redistributing the source files and no reselling), and it does
+not demand credit — but this codebase records where every photograph and every price came from,
+so a ported effect records its slug and the date it was fetched in a comment above the CSS, for
+the same reason. If it needs a module, the same record goes at the top of the module too.

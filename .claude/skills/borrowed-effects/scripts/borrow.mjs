@@ -65,6 +65,43 @@ const KNOWN = {
 };
 const ALL_KNOWN = Object.values(KNOWN).flat();
 
+// What references/catalog.md already decided, keyed by slug and grouped by the reason, because
+// the reason is the reusable part. This is printed ABOVE the mechanism verdict on purpose: for
+// any slug in here the decision is already taken, and a "PORTABLE AS CSS ALONE" line read
+// without it points the opposite way. Keep this in step with catalog.md — the file is the
+// record, this table is a pointer to it.
+const HOUSE = [
+  ['FITS', 'it replaces an absence rather than dressing up something plain — port it',
+    ['stateful-button', 'text-generate-effect']],
+  ['ONLY IF ASKED', 'mechanically sound and palette-neutral once ported, but it solves a problem this app has not had — do not volunteer it',
+    ['infinite-moving-cards', 'loader', 'pointer-highlight', 'flip-words', 'typewriter-effect',
+      'card-stack', 'compare', 'images-slider', 'parallax-scroll', 'animated-modal',
+      'placeholders-and-vanish-input', 'multi-step-loader', 'container-text-flip', 'carousel']],
+  ['WRONG FOR THIS APP', 'glow, gradient border or neon — the exact register Victor calls AI slop, and every one needs a colour tokens.css does not have',
+    ['background-gradient', 'hover-border-gradient', 'moving-border', 'glowing-effect',
+      'card-spotlight', 'spotlight', 'spotlight-new', 'lamp', 'hero-highlight', 'colourful-text',
+      'tracing-beam', 'timeline', 'glare-card', 'tailwindcss-buttons']],
+  ['WRONG FOR THIS APP', 'an aurora or particle field, which argues with the one photograph each screen leads on — and meteors additionally loops forever',
+    ['aurora-background', 'background-beams', 'background-beams-with-collision', 'background-lines',
+      'background-boxes', 'meteors', 'shooting-stars', 'vortex', 'wavy-background', 'sparkles',
+      'canvas-reveal-effect']],
+  ['WRONG FOR THIS APP', 'the whole effect is on :hover or mousemove, and the phone is the only layout here — it does not degrade, it does nothing',
+    ['3d-card', '3d-pin', 'direction-aware-hover', 'wobble-card', 'following-pointer',
+      'animated-tooltip', 'text-hover-effect', 'text-reveal-card', 'svg-mask-effect',
+      'card-hover-effect', 'floating-dock', 'evervault-card', 'focus-cards', 'file-upload',
+      'lens', 'sidebar', 'navbar-menu', 'link-preview']],
+  ['WRONG FOR THIS APP', 'it prints over a photograph or asserts something the app has not established',
+    ['sticky-scroll-reveal', 'animated-testimonials']],
+  ['WRONG FOR THIS APP', 'a landing-page set piece, built to fill a viewport above the fold for a stranger',
+    ['hero-parallax', 'container-scroll-animation', 'layout-grid', 'google-gemini-effect',
+      'apple-cards-carousel', 'resizable-navbar']],
+];
+
+function houseVerdict(slug) {
+  for (const [ruling, why, slugs] of HOUSE) if (slugs.includes(slug)) return { ruling, why };
+  return null;
+}
+
 // ---------------------------------------------------------------------------- fetching
 
 // The registry answers 200 for anything free, and 401 for BOTH a paid component and a slug
@@ -539,6 +576,13 @@ const SIGNALS = [
   [/\.split\(\s*["'`]\s+?["'`]\s*\)|\.split\(\s*["'`]["'`]\s*\)/, 'splits text into per-word or per-letter spans — the wrapping needs JS, the animation does not'],
   [/useEffect|useState|useRef/, 'holds React state (only a hint: often just hover or mounted)'],
   [/cloneNode|appendChild|insertAdjacent/, 'duplicates its own DOM at runtime — a seamless loop usually needs a second copy of the children, and CSS cannot make one'],
+  // JSX multiplies DOM declaratively, so the two lines below are the same failure as cloneNode
+  // wearing different clothes. meteors is the case that taught this: it maps over an array of
+  // twenty and gives each span a random delay, duration and offset, and nothing about that
+  // reads the pointer or the scroll — so without these two the report says "nothing read at
+  // runtime" and a porter starts writing pure CSS for something CSS cannot express.
+  [/Math\.random/, 'uses runtime randomness — CSS has no random(), so the scatter must become a fixed value per element (an :nth-child table, or a module that assigns one)'],
+  [/new Array\(|Array\.from\(\s*\{\s*length/, 'mints N elements from a count — CSS cannot create elements, so a module or hand-written markup has to emit them'],
   [/style\.setProperty|setProperty\(\s*["'`]--/, 'writes a CSS custom property from JS — that is exactly the seam a vanilla module plugs into'],
   [/localStorage|sessionStorage/, 'stores something in the browser'],
 ];
@@ -597,7 +641,7 @@ function analyse(slug, res) {
   const extraSignals = extras.map(f => ({ path: f.path, signals: signalsFor(f.content) }));
 
   const CANVAS = /getContext\(|<canvas|WebGL|THREE\.|@react-three/;
-  const RUNTIME = /onMouseMove|mousemove|clientX|getBoundingClientRect|ResizeObserver|IntersectionObserver|useInView|useScroll|scrollYProgress|onScroll|scrollLeft|scrollBy|scrollTo\(|scrollWidth|useMotionValue|requestAnimationFrame|cloneNode|appendChild|style\.setProperty|\.split\(/;
+  const RUNTIME = /onMouseMove|mousemove|clientX|getBoundingClientRect|ResizeObserver|IntersectionObserver|useInView|useScroll|scrollYProgress|onScroll|scrollLeft|scrollBy|scrollTo\(|scrollWidth|useMotionValue|requestAnimationFrame|cloneNode|appendChild|style\.setProperty|\.split\(|Math\.random|new Array\(|Array\.from\(\s*\{\s*length/;
   const hardDeps = deps.filter(d => !MOTION.test(d) && !INCIDENTAL.test(d));
   const needsCanvas = CANVAS.test(primary.content);
   const needsRuntime = RUNTIME.test(primary.content);
@@ -751,7 +795,20 @@ function render(a, { source = true } = {}) {
   }
 
   p(THIN);
-  p(`VERDICT  ${a.verdict} — ${a.why}`);
+  const house = houseVerdict(a.slug);
+  if (house) {
+    p(`THE HOUSE HAS ALREADY RULED  ${house.ruling}`);
+    p(`  ${house.why}.`);
+    p('  That decision is written down in references/catalog.md, with the full clause. Read it');
+    p('  before the line below, which is about MECHANISM only and cannot overturn it.');
+  } else {
+    p('THE HOUSE HAS NOT RULED ON THIS ONE');
+    p('  references/catalog.md does not judge this slug. Put it through the five questions in');
+    p('  SKILL.md section 2 yourself, and write the verdict into the catalogue afterwards so the');
+    p('  next person does not repeat the work.');
+  }
+  p(THIN);
+  p(`MECHANISM  ${a.verdict} — ${a.why}`);
   p(THIN);
   p('Portable is not the same as wanted. Read The Edition in circle-feel/SKILL.md and the house');
   p('verdict in borrowed-effects/SKILL.md before porting: most of this library is a register this');
@@ -820,18 +877,39 @@ async function runList() {
   await Promise.all(Array.from({ length: 6 }, worker));
   const by = new Map(rows.map(r => [r.slug, r]));
 
-  console.log('Known Aceternity slugs, probed live just now.');
+  const tag = (slug) => {
+    const h = houseVerdict(slug);
+    if (!h) return 'UNJUDGED';
+    return h.ruling === 'FITS' ? 'fits'
+      : h.ruling === 'ONLY IF ASKED' ? 'only if asked' : 'wrong';
+  };
+
+  console.log('Known Aceternity slugs, probed live just now. This script reads the Aceternity');
+  console.log('registry only — 21st.dev and shadcn publish their source on the page instead.');
   console.log('status 200 = free and the source is readable; anything else = no source to port.');
-  console.log('verdict is about MECHANISM only, not about whether The Edition wants the effect.');
+  console.log('house   = what references/catalog.md already decided. That is the decision.');
+  console.log('mech    = whether the MECHANISM fits in CSS. It never says an effect is wanted.');
   console.log();
   for (const [group, slugs] of Object.entries(KNOWN)) {
     console.log(group);
     for (const slug of slugs) {
       const r = by.get(slug) || { status: '?', deps: '-', verdict: '-' };
-      console.log(`  ${String(slug).padEnd(32)} ${String(r.status).padEnd(5)} ${String(r.deps).padEnd(34)} ${r.verdict}`);
+      console.log(`  ${String(slug).padEnd(32)} ${String(r.status).padEnd(4)} ${tag(slug).padEnd(14)} ${String(r.verdict).padEnd(16)} ${r.deps}`);
     }
     console.log();
   }
+  const tally = (pred) => rows.filter(pred).length;
+  console.log(`${rows.length} slugs probed: ${tally(r => r.status === 200)} answered 200.`);
+  console.log(`mechanism: ${tally(r => r.verdict === 'css alone')} css alone, `
+    + `${tally(r => r.verdict === 'css + js module')} css + js module, `
+    + `${tally(r => r.verdict === 'not worth porting')} not worth porting.`);
+  console.log(`house: ${ALL_KNOWN.filter(s => tag(s) === 'fits').length} fits, `
+    + `${ALL_KNOWN.filter(s => tag(s) === 'only if asked').length} only if asked, `
+    + `${ALL_KNOWN.filter(s => tag(s) === 'wrong').length} wrong for this app, `
+    + `${ALL_KNOWN.filter(s => tag(s) === 'UNJUDGED').length} not judged yet.`);
+  console.log('These counts move whenever Aceternity ships a component. Trust this table, not a');
+  console.log('number written into a skill file months ago.');
+  console.log();
   const bad = rows.filter(r => r.status === 'ERR');
   if (bad.length) {
     console.error(`${bad.length} slug(s) could not be reached: ${bad.map(b => b.slug).join(', ')}`);
@@ -841,8 +919,9 @@ async function runList() {
 
 // ---------------------------------------------------------------------------- main
 
-const USAGE = `Usage:
-  node borrow.mjs <slug> [<slug>...]          print the verdict and the source
+const USAGE = `Usage (Aceternity UI only — 21st.dev and shadcn have no registry to read, their
+source is on the component page; save it to a file and read it by hand):
+  node borrow.mjs <slug> [<slug>...]          print the house ruling, the mechanism and the source
   node borrow.mjs --save <dir> <slug>...      also write the raw .tsx and the report to <dir>
   node borrow.mjs --list                      probe the known slugs and print a table
   node borrow.mjs --no-source <slug>...       the report without the full source`;

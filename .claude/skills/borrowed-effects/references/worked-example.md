@@ -1,9 +1,11 @@
 # One effect, ported end to end
 
 This is the whole path for a single component, with the real code at every step: Aceternity UI's
-`text-generate-effect` onto the signed-out landing hero. It shipped. It is four lines of CSS in
+`text-generate-effect` onto the signed-out landing hero. It shipped. It is five lines of CSS in
 `circle/css/app.css` and no JavaScript, which is roughly what a faithful port of anything in that
-library should cost once the React is gone.
+library should cost once the React is gone. It also shipped with a bug in the fill mode, which
+§6 is now about, because a worked example that only shows the parts that went well is a
+brochure.
 
 Read this before porting your first one. The shape of the work is always the same; what changes
 is how much of the original survives, and the honest answer is usually "less than you expected,
@@ -30,6 +32,10 @@ books rooms with other people's money*. Specifically —
 | `text-generate-effect` | The only one left. See below. |
 
 That table is most of the value of the exercise. **If you port nothing, you have not failed.**
+And if someone is attached to one of the rows, build it in the scratchpad and render it rather
+than arguing the paragraph again — §9's harness recipe works unchanged on a thing you intend to
+throw away, and some objections (a borrowed effect colliding with a texture the surface already
+has) are only visible in the picture.
 
 ## 1. Fetch the registry JSON, and let the status code decide
 
@@ -39,8 +45,13 @@ $ curl -s -o /tmp/tge.json -w "%{http_code}\n" \
 200
 ```
 
-`200` means free and portable. `401` means it is Pro and Victor has not bought it — stop there,
-do not read it, do not reimplement it from the marketing page. `3d-card-effect` returns 401.
+`200` means free and portable, and it is the only reliable signal. **`401` does not mean paid.**
+The registry answers 401 for a paid component and for a slug that does not exist, byte for byte
+the same — so it means *not yours, or not a thing*, and the first move on one is to drop an
+`-effect` suffix and try the bare noun. `3d-card-effect` returns 401 and `3d-card` returns 200.
+The suffix is not the tell either — `google-gemini-effect` is 200. Only after every obvious
+variant also 401s is "paid" even a guess, and telling Victor to buy a misspelling is the failure
+this paragraph exists to prevent.
 
 The body:
 
@@ -158,47 +169,89 @@ hero; a rule in a quarantine block gets read by nobody.
    What is left is the only part that was ever the idea: turn an element's index into a delay.
    The stagger lives here rather than as inline `--d` on the view because these three children
    are fixed by the layout, so the template should not have to know their order.
-   Short enough that it reads as the page settling, not as a sequence being performed. */
-.hero-cover .on .wrap > * { animation: enter var(--dur-water) var(--ease-out) both; }
+   Short enough that it reads as the page settling, not as a sequence being performed.
+   [the rest of the comment, on the fill mode and the keyframe, is in §6] */
+@keyframes enter-to-rest { from { opacity: 0; } }
+.hero-cover .on .wrap > * { animation: enter-to-rest var(--dur-water) var(--ease-out) backwards; }
 .hero-cover .on .wrap > :nth-child(2) { animation-delay: 90ms; }
 .hero-cover .on .wrap > :nth-child(3) { animation-delay: 180ms; }
 ```
 
-Note what it reuses. `@keyframes enter` and `.enter` were already in the stylesheet — a 600ms
-opacity fade driven by an inline `--d` delay. **The house already owned this effect at element
-granularity.** The genuinely new part is three lines: doing the index-to-delay mapping in CSS
-with `:nth-child` so the view does not have to carry a hand-written `--d` on each child.
-`var(--dur-water)` and `var(--ease-out)` are the existing motion tokens, so this moves with the
-same physics as everything else.
+Note what it reuses. `.enter` and `@keyframes enter` were already in the stylesheet — an opacity
+fade driven by an inline `--d` delay. **The house already owned this effect at element
+granularity.** The genuinely new part is the index-to-delay mapping in CSS with `:nth-child`, so
+the view does not have to carry a hand-written `--d` on each child. `var(--dur-water)` (700ms)
+and `var(--ease-out)` are the existing motion tokens, so this moves with the same physics as
+everything else. The one thing it does *not* reuse is the keyframe, and §6 is why.
 
-## 6. The reduced-motion guard, and the trap inside it
+## 6. The fill mode quietly changed the design, and the first check caught it
+
+The rule shipped as `animation: enter var(--dur-water) var(--ease-out) both`, and that was wrong
+in a way nothing in the render showed. `.hero-cover .lede` is declared `opacity: .94`. The shared
+`@keyframes enter` ends at `to { opacity: 1 }`, and `fill-mode: both` holds the end state
+forever — so the lede rested at `1` when motion ran and at `.94` when it did not. Measured in the
+real browser at 390:
+
+```
+settled, motion allowed:        1      0.94*  1        (* was 1 before this section's fix)
+same elements, animation off:   1      0.94   1
+reduced motion:                 1      0.94   1   animation-name: none
+```
+
+Those first two rows are the check in §9, and they used to disagree. The fix is two changes:
+
+- **`backwards`, not `both`.** Backwards is the only half that was ever wanted: it holds
+  `from { opacity: 0 }` through the *delay*, so the second and third children do not flash before
+  their turn. It then releases the element to its own declared style when the run ends.
+- **A keyframe with only a `from`.** `backwards` alone still leaves the lede climbing to 1 during
+  the run and stepping back to .94 the instant it finishes — measured at t≈808ms, a 6% drop at
+  exactly the moment the eye is on that element. `@keyframes enter-to-rest { from { opacity: 0 } }`
+  writes no 100% keyframe, so the browser builds one from the element's own computed style and
+  each child fades up to the opacity it was already assigned. Re-measured: the lede converges
+  smoothly on 0.940 with no step.
+
+The reusable lesson, and it is the second way after the delay trap that a shared entrance
+misbehaves: **`to { opacity: 1 }` with `fill-mode: both` silently overwrites any resting opacity
+the element already had.** If a borrowed entrance is going onto elements you did not author,
+write the `from` and let the browser infer the `to`.
+
+## 7. The reduced-motion guard, and the trap inside it
 
 ```css
 /* The guard has to switch the animation off, not just shorten it: reduced motion zeroes
-   --dur-water, and a 0ms animation with `both` and a delay still holds its `from` state for the
-   length of the delay — so the invitation would blink in 180ms late with no motion to explain it. */
+   --dur-water, and a 0ms animation with a backwards fill and a delay still holds its `from`
+   state for the length of the delay — so the invitation would blink in 180ms late with no
+   motion to explain it. */
 @media (prefers-reduced-motion: reduce) { .hero-cover .on .wrap > * { animation: none; } }
 ```
 
 `tokens.css` already sets every duration to `0ms` under reduced motion, so it is tempting to
-think the guard is redundant. It is not. `animation-fill-mode: both` makes an element hold its
-`from` keyframe through the *delay*, and the delay is a literal, not a token. Without this rule a
-reduced-motion visitor gets an invisible headline for 0ms, an invisible promise for 90ms, and an
-invisible button for 180ms — no animation, just three things popping in out of order. Verified:
+think the guard is redundant. It is not. A fill mode that covers the delay — `backwards` here,
+`both` before §6 — makes an element hold its `from` keyframe through the *delay*, and the delay
+is a literal, not a token. Without this rule a reduced-motion visitor gets an invisible headline
+for 0ms, an invisible promise for 90ms, and an invisible button for 180ms — no animation, just
+three things popping in out of order. Verified:
 
 ```
-reduced-motion at 60ms: [["1","none"],["0.94","none"],["1","none"]]
+reduced motion: [["1","none"],["0.94","none"],["1","none"]]
 ```
 
-Opacity settled, `animation-name: none`. (`0.94` is `.hero-cover .lede`'s own resting opacity,
-not the animation.)
+Opacities settled and `animation-name: none` on all three. The `0.94` is `.hero-cover .lede`'s
+own resting opacity, and §6 is the story of how it came to be the same number here as it is with
+the animation running.
 
-This adds a twelfth `@media` rule to `app.css`. That is fine and it is the *only* kind of `@media`
-a port may add: the eleven that were there are eight reduced-motion guards, the print sheet, the
-laptop frame and a display-mode rule, and none of them is a width breakpoint. **A port that wants
-a width breakpoint is a port that does not belong** — there is one layout, the phone.
+`animation: none` is the right guard here because these three elements carry the page's content.
+For a layer that is *purely* decorative, `display: none` on the container is the better guard: it
+drops the elements as well as the motion, and it cannot leak a fill-mode state. So the check in
+§9 is "confirm it is not animating", not "confirm `animation-name` reads `none`".
 
-## 7. Wiring it into the markup
+This adds a reduced-motion `@media` rule to `app.css`, and that is the *only* kind a port may
+add. Everything else in the file is a reduced-motion guard, the print sheet, a display-mode rule,
+or the laptop frame — the file's one `min-width` query, which holds no layout at all, only a
+background and an outline, and says so in its own comment. **A port that wants a width breakpoint
+is a port that does not belong** — there is one layout, the phone.
+
+## 8. Wiring it into the markup
 
 There is nothing to wire, and that was a deliberate constraint rather than luck. The selector
 targets structure the view already emits:
@@ -224,7 +277,7 @@ If a port genuinely does need behaviour, it is one small ES module in `circle/js
 modules, no build step, and it has to survive the CSP (`script-src 'self' https://cdn.jsdelivr.net`)
 — no inline handlers, no `eval`, no CDN that is not jsDelivr.
 
-## 8. Render it, and read the picture
+## 9. Render it, and read the picture
 
 Two things need to be seen: that it settles correctly in both themes, and that the stagger is
 actually happening rather than just being declared.
@@ -242,30 +295,44 @@ await p.emulateMedia({ colorScheme: 'dark' });
 await p.screenshot({ path: `${OUT}/landing-dark-after.png` });
 ```
 
-Then `Read` both PNGs. Settled light and settled dark are pixel-for-pixel what they were before
-the change, which is the correct result for an entrance: an entrance that alters the resting
-state is not an entrance, it is a redesign.
-
-A settled screenshot cannot prove a stagger, so measure it instead of trusting the eye:
+Then `Read` both PNGs. Settled light and settled dark have to be pixel-for-pixel what they were
+before the change: an entrance that alters the resting state is not an entrance, it is a
+redesign. The eye is not good enough for this on its own — §6 is a case where the two differed by
+6% on one element and no screenshot showed it — so read the number as well:
 
 ```js
-els.forEach(e => e.getAnimations().forEach(a => { a.cancel(); a.play(); }));
-// sample getComputedStyle(e).opacity over time
+// the element as it rests, then the same element with the animation taken away
+getComputedStyle(e).opacity;
+e.style.animation = 'none'; getComputedStyle(e).opacity;
 ```
 
 ```
-t≈216ms   h1 0.837   lede 0.640   row 0.212
-t≈416ms   h1 0.970   lede 0.934   row 0.862
-t≈880ms   1          1            1
+settled, motion allowed:      1   0.94   1
+same elements, animation off: 1   0.94   1
 ```
 
-Three curves, 90ms apart, everything at rest inside a second. That is the claim, checked.
+One trap in that snippet: writing `style.animation` restarts the animation from its first frame,
+so a screenshot taken straight after that read catches the caption mid-fade and looks like a
+regression. Take the settled pictures in a separate pass, before you touch any style.
+
+A settled screenshot also cannot prove a stagger, so measure that too. Sample from
+`waitUntil: 'commit'` rather than replaying: a finished animation whose fill is not `forwards` is
+removed from `getAnimations()`, so `cancel(); play()` after the fact silently does nothing.
+
+```
+t= 215ms   h1 0.837   lede 0.602   row 0.212
+t= 425ms   h1 0.970   lede 0.934   row 0.862
+t= 876ms   1.000      0.940        1.000
+```
+
+Three curves, 90ms apart, everything at rest inside a second, and each one landing on the opacity
+that element already had. That is the claim, checked.
 
 Renders for this port: `scratchpad/borrow-example/landing-{light,dark}-{before,after}.png`,
 plus `landing-light-mid.png` (caught mid-flight, the button visibly behind the headline) and
 `landing-reduced-motion.png`.
 
-## 9. Check that nothing moved
+## 10. Check that nothing moved — when something ships
 
 ```
 node .claude/skills/circle-feel/scripts/audit.mjs --role member --width 390
@@ -275,12 +342,21 @@ Before and after, diffed: **identical**. No overflow at 390 on any route, no con
 every control still 16px or more, tap targets unchanged. An effect that improves the feel should
 move at least one number or none; it must never move one backwards.
 
-## 10. Record where it came from
+This step, and §9's before/after pair, only apply to a port that ships. A rejection has no
+"after", and a scratchpad demonstration injected at runtime is not in the audit's world at all —
+for those, §9's harness recipe is still the tool, but the audit is not.
+
+## 11. Record where it came from
 
 The house records provenance for every photograph and every price, so a borrowed effect records
-it too. There is no separate manifest — the CSS comment is the record, and it carries all four
+it too. There is no separate manifest — the comment is the record, and it carries all four
 things a future reader needs: the library, the exact URL, the date it was fetched, and the
-licence position.
+licence position. Two more rules that this port did not need and the next one will. If any timing
+was **reconstructed** rather than read out of the registry response — which is the usual case for
+an `animate-<name>` class, because those keyframes live in the consumer's Tailwind config and the
+registry does not ship it — say so here, in that word. Otherwise an invented duration ships
+looking sourced. And if the port lands in `circle/js/ui/`, the same four facts go in a header
+comment at the top of the module, with a one-line pointer to it from the CSS the module feeds.
 
 > Ported from Aceternity UI's "text-generate-effect"
 > (https://ui.aceternity.com/registry/text-generate-effect.json, fetched 2026-09-20; the free
@@ -295,7 +371,7 @@ landing: stagger the hero caption (ported from Aceternity text-generate-effect)
 
 ## What this port actually taught
 
-Four things, in the order they surprised me:
+Five things, in the order they surprised me:
 
 1. **The dependency was a lie of omission.** `dependencies: ["motion"]` sounds like Framer Motion
    is load-bearing. It is not — `stagger()` is `animation-delay` and the fade is `@keyframes`.
@@ -309,8 +385,13 @@ Four things, in the order they surprised me:
    and it is unusable here, not for a technical reason but because it makes the page read as
    machine-written. Judge the impression, not the fidelity.
 4. **`0ms` is not `none`.** Reduced motion zeroing the duration token looks like enough and is
-   not, because `animation-delay` is untouched and `fill-mode: both` honours it. Every port needs
-   its own explicit `animation: none` guard, not a shortened duration.
+   not, because `animation-delay` is untouched and a fill mode that covers the delay honours it.
+   Every port needs its own explicit guard, not a shortened duration.
+5. **The keyframe's end is a declaration, not a no-op.** `to { opacity: 1 }` with `fill-mode:
+   both` overwrote the `.94` the lede already rested at, and the port changed the settled design
+   while §9 was busy asserting it had not. This one shipped wrong and was caught later by
+   someone re-reading the claim — which is the argument for measuring the settled state rather
+   than eyeballing it. Write the `from`; let the browser infer the `to`.
 
 And one that is not a surprise so much as a standing warning: the rejection table in §0 took
 longer than the port and is worth more. The library's median component is a coloured glow, and a

@@ -517,8 +517,18 @@ body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-
    What is left is the only part that was ever the idea: turn an element's index into a delay.
    The stagger lives here rather than as inline `--d` on the view because these three children
    are fixed by the layout, so the template should not have to know their order.
-   Short enough that it reads as the page settling, not as a sequence being performed. */
-.hero-cover .on .wrap > * { animation: enter var(--dur-water) var(--ease-out) both; }
+   Short enough that it reads as the page settling, not as a sequence being performed.
+   Two things about the fill and the keyframe, both of which are how an entrance quietly becomes
+   a redesign. `backwards`, not `both`: backwards is the half that was wanted, holding
+   `from { opacity: 0 }` through the delay so the second and third children do not flash before
+   their turn, while `both` would also pin the end state forever after. And this uses its own
+   keyframe rather than the shared `enter`, because `enter` ends at `opacity: 1` and .lede rests
+   at .94 — the shared one would drag the lede up to 1 and hold it there, or, once the fill is
+   backwards, step it back down 6% at the exact moment the motion stops. `enter-to-rest` writes
+   only the `from`. When a 100% keyframe is not written the browser builds one from the
+   element's own computed style, so each child fades up to the opacity it was already given. */
+@keyframes enter-to-rest { from { opacity: 0; } }
+.hero-cover .on .wrap > * { animation: enter-to-rest var(--dur-water) var(--ease-out) backwards; }
 .hero-cover .on .wrap > :nth-child(2) { animation-delay: 90ms; }
 .hero-cover .on .wrap > :nth-child(3) { animation-delay: 180ms; }
 /* The guard has to switch the animation off, not just shorten it: reduced motion zeroes
