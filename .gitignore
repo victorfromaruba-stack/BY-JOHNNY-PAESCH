@@ -1,3 +1,8 @@
 circle/watcher/.env
 circle/watcher/dump/
 circle/watcher/.interval-pace.json
+
+# A scratch React project used only to look at third-party component libraries.
+# The Circle itself is vanilla ES modules with no build step; nothing here ships.
+aceternity-lab/
+node_modules/
