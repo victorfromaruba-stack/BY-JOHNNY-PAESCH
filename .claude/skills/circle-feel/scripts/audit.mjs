@@ -67,14 +67,22 @@ async function measure(p) {
     // Test 23: a segmented control never scrolls sideways.
     const segs = [...document.querySelectorAll('.segmented')];
     const segScroll = segs.filter(s => s.scrollWidth !== s.clientWidth).length;
-    // Test 19: the far right of every listing row is still the row's own link.
+    // Test 19: the far right of every listing row is still the row's own link. elementFromPoint
+    // only answers for what is on the screen, so each row is scrolled into view before it is
+    // probed; clamping the point to the viewport instead measures the tab bar and fails every
+    // row below the fold, which is what this check used to do.
     const rows = [...document.querySelectorAll('.listing-row')];
-    const rowBad = rows.filter(row => {
+    const firstY = window.scrollY;
+    let rowBad = 0;
+    for (const row of rows) {
+      const box = row.getBoundingClientRect();
+      if (!box.width || !box.height) { rowBad++; continue; }
+      row.scrollIntoView({ block: 'center' });
       const r = row.getBoundingClientRect();
-      if (!r.width || !r.height) return true;
-      const hit = document.elementFromPoint(Math.min(r.right - 8, innerWidth - 1), Math.max(0, Math.min(r.top + r.height / 2, innerHeight - 1)));
-      return hit?.closest('a.listing-row') !== row;
-    }).length;
+      const hit = document.elementFromPoint(Math.round(r.right - 8), Math.round(r.top + r.height / 2));
+      if (hit?.closest('a.listing-row') !== row) rowBad++;
+    }
+    window.scrollTo(0, firstY);
     return { overflow: doc.scrollWidth > window.innerWidth + 1,
              tall: Math.round(doc.scrollHeight / window.innerHeight * 10) / 10,
              firstFigure: fig == null ? null : Math.round(fig),
