@@ -51,15 +51,40 @@ function asOfLine(res, where = 'the places we stay') {
 }
 
 /**
+ * The newest moment any week ON THE BOARD was last seen — the one figure that answers "how old
+ * is what I am looking at". Every row already carries its own: `seenAt` for a week the Desk has
+ * looked at again, `postedAt` for one nobody has re-read, and for an owner's draft `postedAt` is
+ * the minute VakayMood's answer was generated. Null when not one row carries a time.
+ */
+function lastSeenOf(list) {
+  let best = null;
+  for (const d of list) {
+    const t = Date.parse(d.seenAt || d.postedAt || '');
+    if (!Number.isFinite(t)) continue;
+    if (best == null || t > best) best = t;
+  }
+  return best == null ? null : new Date(best);
+}
+
+/**
  * The masthead's dateline: which edition of the market this is, in one line. Never "live",
  * never "available". The provenance — how many owner weeks, whose copy, who did not answer —
  * is the colophon at the foot (colophonOf), so the first screen carries the edition and the count.
+ *
+ * The date is the BOARD's, not VakayMood's. It used to be `res.generatedAt`, which dated a count
+ * of the Circle's own posted weeks by a clock those weeks were never on: when this phone could
+ * not reach VakayMood live — the ordinary case, since nothing stored is a live-feed row — the
+ * fallback copy's stamp put "Edition of 8 Sept" over a board read on the 20th. And where
+ * `generatedAt` was absent the other branch did the opposite, stamping the current minute on
+ * weeks nobody had looked at in days. VakayMood's own timestamp keeps the place it belongs, the
+ * colophon and asOfLine; here the line is dated by the newest week on the board, and when no row
+ * carries a time there is no date to print, so none is printed.
  */
-function datelineOf(res, open) {
-  const t = res.generatedAt ? new Date(res.generatedAt) : new Date();
-  const time = t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const day = t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  return `Edition of ${escapeHtml(day)} · <span class="stamp">${escapeHtml(time)}</span> · <b class="num">${open}</b> open${res.error ? ' · what the Desk has posted' : ''}`;
+function datelineOf(res, open, seen) {
+  const time = seen ? seen.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const day = seen ? seen.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+  const edition = seen ? `Edition of ${escapeHtml(day)} · <span class="stamp">${escapeHtml(time)}</span> · ` : '';
+  return `${edition}<b class="num">${open}</b> open${res.error ? ' · what the Desk has posted' : ''}`;
 }
 
 /** The sentence under the dateline when this phone could not reach VakayMood; '' otherwise. */
@@ -189,7 +214,7 @@ export function stays({ store, go, query = {} }) {
     const folioOf = new Map(ranked.map((d, i) => [d.id, i + 1]));
     const all = ranked;
     count.textContent = `${ranked.length} open`;
-    asof.innerHTML = res ? datelineOf(res, ranked.length) : 'Looking at what owners have open at the places we stay…';
+    asof.innerHTML = res ? datelineOf(res, ranked.length, lastSeenOf(ranked)) : 'Looking at what owners have open at the places we stay…';
     const note2 = res ? reachNote(res) : '';
     reach.hidden = !note2;
     reach.innerHTML = note2 ? `<p>${note2}</p>${retryLine()}` : '';
@@ -197,14 +222,16 @@ export function stays({ store, go, query = {} }) {
     const stamps = res ? [...colophonOf(res), ...madeOf(ranked)] : [];
     colophon.hidden = !stamps.length;
     colophon.innerHTML = stamps.map(t => `<span class="stamp">${t}</span>`).join(' · ');
-    // Interval's Getaways are the cheapest weeks the Circle can get, and none of them arrive on
-    // their own: Interval refuses the watcher's sign-in. When there is nothing from Interval on
-    // the board, the Desk is told why and handed the two ways in, right where it is looking.
+    // Interval's Getaways are the cheapest weeks the Circle can get, and a person puts every one
+    // of them here — Grab is how the Desk works, not a fallback from something that failed. This
+    // line used to say "Interval will not let the watcher sign in", which framed the Circle's own
+    // rule as a technical blocker and read as an invitation to beat it. The three ways in are the
+    // useful half of the sentence and they survive the cut.
     const noInterval = !ranked.some(d => !d.draft && d.source === 'interval');
     const note = wrap.querySelector('#no-interval');
     if (note) {
       note.hidden = !(noInterval && canEdit && !loading);
-      note.innerHTML = note.hidden ? '' : `<p>${icon('alert', { size: 15, cls: 'ico-muted' })} Nothing here is an Interval Getaway. Interval will not let the watcher sign in, so a Getaway only reaches the board when you put it there — tap Grab on the Interval page you are looking at, share one to Hunto, or paste it.</p>
+      note.innerHTML = note.hidden ? '' : `<p>${icon('alert', { size: 15, cls: 'ico-muted' })} Nothing here is an Interval Getaway. Getaways reach the board when you put them there — tap Grab on the page you are looking at, share one to Hunto, or paste it.</p>
         <div class="row"><a class="link-rule" href="#/desk">The Desk has the bookmark</a><button type="button" class="link-rule" id="paste-interval">Paste a Getaway</button></div>`;
     }
     paintSoon(ranked, folioOf);
