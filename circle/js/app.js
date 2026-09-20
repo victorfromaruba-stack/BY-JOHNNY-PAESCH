@@ -233,6 +233,10 @@ function ctx(current) {
 
 function render(current = router?.current) {
   if (!current) return;
+  // A cover belongs to one screen. Clear it before every paint so the running head cannot be
+  // left transparent over a route that has no picture under it — the view that wants a cover
+  // sets this again on its way in.
+  delete document.body.dataset.cover;
   const { route, params } = current;
   // A member never sees the brochure or the sign-in form: those two are for a stranger, and
   // Home is where a member's own day starts. `replace`, so Back does not bounce off them.

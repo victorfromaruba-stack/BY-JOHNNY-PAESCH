@@ -1259,6 +1259,47 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 .hero-place .share { position: absolute; top: 12px; right: 12px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--scrim-soft); color: var(--on-photo); display: grid; place-items: center; cursor: pointer; }
 .hero-place .scene { position: absolute; inset: 0; }
 .hero-place + .credit { margin-top: 8px; }
+/* THE COVER PLATE — Home, printed.
+   Same bleed, same scrim and the same photo tokens as .hero-place above, because the stay page
+   already solved "type on a photograph" and a second solution would only drift from it. What
+   differs is what it carries: a stay page prints a price, Home prints the member's own money,
+   so the figure is the largest object on the page and the headline demotes to a deck under it.
+   Every line takes --on-photo EXPLICITLY, including the figure. The first proof of this plate
+   rendered the balance in --ink against the dark scrim — dark ink on a dark photograph, the
+   one figure on the screen that has to be readable — because .num sets a face and a variant
+   but no colour, and inherited the page's. The wildcard below is the guard. */
+.cover-plate { position: relative; margin: calc(-1 * var(--s-6)) calc(-1 * var(--s-4)) 0; background: var(--well); overflow: hidden; aspect-ratio: 4 / 5; }
+.cover-plate img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover-plate .strip-tag { top: 14px; left: 14px; right: auto; bottom: auto; }
+.cover-plate .on { position: absolute; z-index: 1; inset: auto 0 0 0; margin: 0; padding: 112px var(--s-4) 20px;
+  background: linear-gradient(to top, var(--scrim) 0%, var(--scrim) 42%, var(--scrim-soft) 74%, transparent 100%); }
+.cover-plate .on, .cover-plate .on * { color: var(--on-photo); }
+.cover-plate .on .eyebrow { opacity: 1; white-space: normal; overflow-wrap: anywhere; }
+/* The cover price. --t-fig-lg is the largest figure token the app has, and tokens.css calls it
+   "the cover price, the balance" — but it was spent once, on a stranger's imaginary balance on
+   the signed-out landing. No member had ever seen their own money at this size. */
+.cover-plate .plate-fig { display: block; margin-top: 10px; font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums slashed-zero; font-size: var(--t-fig-lg); font-weight: 500; line-height: 1; letter-spacing: -.02em; }
+.cover-plate .plate-sub { display: block; margin-top: 8px; font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums; font-size: var(--t-folio); letter-spacing: .04em; opacity: .92; }
+.cover-plate .deck { margin-top: 12px; font-size: var(--t-head); line-height: 1.12; max-width: 18ch; }
+.cover-plate + .credit { margin-top: 8px; }
+.plate-acts { margin-top: 14px; }
+/* Under the running head. The pull-up is gated on the attribute, not the value, so the head
+   going solid on scroll changes a colour and never the layout — a masthead that jumped 48px
+   the first time a thumb moved would be worse than the seam it fixes. */
+body[data-cover] .cover-plate { margin-top: calc(-1 * (var(--s-6) + var(--h-bar) + var(--inset-top) + 1px)); }
+body[data-cover] .cover-plate .strip-tag { top: calc(var(--h-bar) + var(--inset-top) + 14px); }
+/* The wordmark can land on open sky, so the head gets its own scrim rather than trusting the
+   photograph to be dark where the type is. */
+body[data-cover] .cover-plate::before { content: ""; position: absolute; inset: 0 0 auto 0; z-index: 1; pointer-events: none;
+  height: calc(var(--h-bar) + var(--inset-top) + 28px); background: linear-gradient(to bottom, var(--scrim-soft), transparent); }
+body[data-cover] .topbar { transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+body[data-cover="on"] .topbar { background: transparent; border-bottom-color: transparent; }
+body[data-cover="on"] .topbar .brand, body[data-cover="on"] .topbar .brand b,
+body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: var(--on-photo); }
+@media (prefers-reduced-motion: reduce) { body[data-cover] .topbar { transition: none; } }
+
 /* A link inside a credit line or the rules' prose keeps its line rhythm and still gets a 44px
    tap: the padding is handed back by the margin. The half pixel is not a flourish — the credit
    is set at 13px, so 12px each way lands on 43.5 and misses the floor. Scoped to these two,

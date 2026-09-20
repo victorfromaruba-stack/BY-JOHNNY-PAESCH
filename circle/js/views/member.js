@@ -7,6 +7,7 @@ import { memberCard, poolGauge, rankCrest, ring, tierLadder, badgeMark, badgeRow
 import { treeSvg } from '../ui/art.js';
 import { toast, sheet, confirmDialog, setBusy, countUp, statusLabel, avatar } from '../ui/components.js';
 import { dropWhen } from './deals.js';
+import { photoFor, photoCredit, photoKind, areaPhotoFor } from './public.js';
 import { postCard, postcardSheet, cheersLine } from './postcards.js';
 import { sparkline, columns, tableFor } from '../ui/charts.js';
 import { waLink, TEMPLATES, copyText, shareText } from '../core/share.js';
@@ -74,12 +75,63 @@ export function home({ store, go, refresh }) {
           h1Html: `${book.nights} night${book.nights === 1 ? '' : 's'} at <em class="ac">${escapeHtml(book.stay.name)}</em>`,
           cta: `<a class="btn" href="#/pay">${icon('arrowUp', { size: 17 })}Send a contribution</a>
                 <a class="link-rule" href="#/stays">Other places</a>` };
-  wrap.querySelector('#masthead').innerHTML = `<div class="masthead">
-      <p class="eyebrow"><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span>, ${escapeHtml(me.name.split(' ')[0])}${head.eyebrow ? ` · ${escapeHtml(head.eyebrow)}` : ''}</p>
+  // THE COVER PLATE.
+  //
+  // The screen forty members open was 0% picture. The club owns 251 photographs — 12 licensed
+  // property shots, 113 rooms, the beaches — and spent every one of them on a stay page three
+  // taps down, so Home named a hotel in 44px of serif and showed nothing of it. A magazine that
+  // composed its pages and never sent the plates to press.
+  //
+  // So the plate prints the place the member can book today, full-bleed, and the money goes ON
+  // the picture as the cover price: the balance at --t-fig-lg, the largest figure anywhere in
+  // the member app, with the headline demoted to a deck beneath it. It is not larger than that
+  // on purpose — Geist Mono is monospaced, so a seven-figure balance at 76px measures 400px
+  // against a 358px column and would push the phone sideways.
+  //
+  // No photograph, no plate. The old masthead is kept verbatim for that case, because a screen
+  // that invents a picture of a place somebody is about to spend points on is the one thing
+  // this app must never do.
+  const plateStay = book?.stay || null;
+  const plateSrc = plateStay ? photoFor(plateStay) : null;
+  const plateCredit = plateSrc ? photoCredit(plateStay) : null;
+  const plateArea = plateSrc && photoKind(plateStay) === 'area' ? areaPhotoFor(plateStay) : null;
+  const welcome = `<span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span>, ${escapeHtml(me.name.split(' ')[0])}${head.eyebrow ? ` · ${escapeHtml(head.eyebrow)}` : ''}`;
+  wrap.querySelector('#masthead').innerHTML = plateSrc
+    ? `<figure class="cover-plate">
+        <img src="${escapeHtml(plateSrc)}" alt="${escapeHtml(plateArea ? `${plateArea.area}, the beach at ${plateStay.name}` : plateStay.name)}"${plateCredit ? ` title="${escapeHtml(plateCredit.text)}"` : ''} fetchpriority="high" decoding="async">
+        ${plateArea ? `<span class="strip-tag">${escapeHtml(plateArea.area)} · the beach</span>` : ''}
+        <figcaption class="on">
+          <p class="eyebrow">${welcome}</p>
+          <b class="plate-fig num" id="avail">0</b>
+          <span class="plate-sub" id="avail-usd"></span>
+          <h1 class="deck">${head.h1Html || escapeHtml(head.h1)}</h1>
+        </figcaption>
+      </figure>
+      ${plateCredit ? `<p class="credit tiny muted">${plateCredit.html}</p>` : ''}
+      <div class="row no-print plate-acts">${head.cta}</div>`
+    : `<div class="masthead">
+      <p class="eyebrow">${welcome}</p>
       <h1>${head.h1Html || escapeHtml(head.h1)}</h1>
       <p class="dateline"><b class="num" id="avail">0</b> <span id="avail-usd"></span></p>
       <div class="row no-print">${head.cta}</div>
     </div>`;
+  // The cover runs up behind the running head, so the screen opens on the picture instead of on
+  // a slab of chrome above it. The head gives up its ground only while the picture is actually
+  // behind it — the moment the plate has scrolled past, it takes the ground back, because pale
+  // type over whatever happens to be underneath is not legible. An observer rather than a scroll
+  // handler: it fires twice in a journey down the page, not on every frame. If the browser has
+  // no IntersectionObserver the head simply stays solid, which is the old behaviour and fine.
+  if (plateSrc) {
+    document.body.dataset.cover = 'on';
+    const plateEl = wrap.querySelector('.cover-plate');
+    if (plateEl && 'IntersectionObserver' in window) {
+      const io = new IntersectionObserver(([e]) => {
+        if (!plateEl.isConnected) { io.disconnect(); return; }
+        document.body.dataset.cover = e.isIntersecting ? 'on' : 'off';
+      }, { rootMargin: '-56px 0px 0px 0px' });
+      io.observe(plateEl);
+    }
+  }
   const top = el(`<div class="rule-block">
       <div id="balbar"></div>
       <div class="row no-print">
@@ -90,7 +142,9 @@ export function home({ store, go, refresh }) {
     </div>`);
   body.appendChild(top);
   countUp(wrap.querySelector('#avail'), lt.available, { format: (n) => `✦ ${Math.round(n).toLocaleString('en-US')}` });
-  wrap.querySelector('#avail-usd').textContent = `· ${pointsUsd(lt.available, s.pointsPerDollar)} of hotel${lt.committed ? ` · ${fmtPoints(lt.committed)} committed` : ''}`;
+  // On the plate the sub-line sits on its own row under the figure, so it opens with the
+  // dollar amount; in the old inline dateline it follows the figure and needs the separator.
+  wrap.querySelector('#avail-usd').textContent = `${plateSrc ? '' : '· '}${pointsUsd(lt.available, s.pointsPerDollar)} of hotel${lt.committed ? ` · ${fmtPoints(lt.committed)} committed` : ''}`;
   {
     const total = Math.max(1, lt.available + lt.committed);
     top.querySelector('#balbar').innerHTML = `
