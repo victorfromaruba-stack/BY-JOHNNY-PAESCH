@@ -1139,10 +1139,17 @@ export function settings({ store, go }) {
              way to change it: clubName is in SupabaseAdapter.RULE_FIELDS and update_club_rules
              patches the column, but no screen ever offered it. So the name lived in the code and
              in a database row that could only disagree with it, and the Apple Wallet pass — which
-             reads the ROW, not the code — was the thing that told members the old name. -->
+             reads the ROW, not the code — was the thing that told members the old name.
+
+             The hint used to promise "the card, the pass, the tab and the link a stranger sees".
+             Three of those four are false and were false when it was written: the card
+             (member.js), the browser tab (app.js) and the social card (index.html) all render
+             VOCAB.clubName, which is code and only moves on a deploy. This row reaches exactly
+             one place — issue-pass, the Wallet Edge Function. Saying more than that invites an
+             officer to rename the club here and believe the app has changed. -->
         <label class="field" style="margin-top:12px"><span>The name of the club</span>
           <input name="clubName" type="text" maxlength="60" value="${escapeHtml(s.clubName || VOCAB.clubName)}" autocomplete="off">
-          <span class="hint">On the card, the pass, the tab and the link a stranger sees. The wordmark in the bar is set separately.</span></label>
+          <span class="hint">What the Apple Wallet pass is stamped with. The name on the screens is in the app itself and changes when the app is next published — ask whoever deploys it.</span></label>
         <div class="pair" style="margin-top:12px">
           <label class="field"><span>The Circle’s share</span><input name="serviceRate" type="number" step="0.01" min="0" max="0.5" value="${s.serviceRate}" inputmode="decimal"><span class="hint"><b class="num">0.15</b> is <b class="num">15%</b></span></label>
           <label class="field"><span>Points per dollar</span><input name="pointsPerDollar" type="number" value="${s.pointsPerDollar}" inputmode="numeric"><span class="hint"><b class="num">100</b> = a point is a cent</span></label>

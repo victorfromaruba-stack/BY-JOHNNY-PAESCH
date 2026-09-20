@@ -556,14 +556,25 @@ export function pay({ store, go }) {
   // many words, because the Banker's own screen distinguishes an extra from a monthly and the
   // reference alone would read as a duplicate of the transfer he has already confirmed.
   const extraNote = `Hi Vishnu, I am sending something extra on top of my monthly — ${fmtMonth(month)} is already settled. Reference: ${reference}. Please record it as an extra. — ${me.name}`;
+  // The Reserve account has to actually exist before this screen tells anyone to send money to it.
+  // On the live database reserve_account is still `{}` — the Banker has not registered it — and
+  // escapeHtml(undefined) is the empty string, so the three lines below rendered as three empty
+  // boxes with a Copy button that put nothing on the clipboard. A member reading "Make the
+  // transfer" over a blank account number either does not send, or sends somewhere they guessed.
+  // On the one screen where a misread costs real money, say what is missing instead of printing a
+  // gap. `accountsConfigured` is the same signal the coverage gauge already reads (store.js:900).
+  const haveReserve = !!(s.reserveAccount?.bank && s.reserveAccount?.holder && s.reserveAccount?.number);
   // The reference first: it is the one thing Vishnu reads off the statement.
   const bankDetails = `<div class="stack" style="margin-top:14px">
           <div><p class="eyebrow">${icon('tag')}Put this in the description</p>
             <div class="copyline" style="margin-top:6px"><code class="num">${escapeHtml(reference)}</code><button type="button" class="btn ghost sm" data-copy="${escapeHtml(reference)}">Copy</button></div>
             <p class="small muted" style="margin-top:6px">It is how Vishnu matches your transfer against the statement in seconds. Same reference every month, with the month on the end.</p></div>
+          ${haveReserve ? `
           <div class="copyline"><code>${escapeHtml(s.reserveAccount.bank)}</code></div>
           <div class="copyline"><code>${escapeHtml(s.reserveAccount.holder)}</code></div>
-          <div class="copyline"><code class="num">${escapeHtml(s.reserveAccount.number)}</code><button type="button" class="btn ghost sm" data-copy="${escapeHtml(s.reserveAccount.number)}">Copy</button></div>
+          <div class="copyline"><code class="num">${escapeHtml(s.reserveAccount.number)}</code><button type="button" class="btn ghost sm" data-copy="${escapeHtml(s.reserveAccount.number)}">Copy</button></div>` : `
+          <div><p class="eyebrow">${icon('shield')}Where to send it is not set yet</p>
+            <p class="small" style="margin-top:6px">The Banker has not registered the Reserve account in the app, so there is no account number to show you — and the Circle will not guess one on a transfer screen. <b>Ask Vishnu or Victor for the account before you send anything</b>, and keep the reference above in the description.</p></div>`}
         </div>`;
   const h1 = settled ? `${escapeHtml(fmtMonth(month))} is settled` : pending ? `${escapeHtml(fmtMonth(month))} is marked as sent` : `${escapeHtml(fmtMonth(month))} is due`;
   // The date the Banker confirmed it belongs with the rest of the confirmation, not in a panel
@@ -610,7 +621,7 @@ export function pay({ store, go }) {
         <input class="switch" type="checkbox" id="autopilot" name="standingOrder" ${me.standingOrder ? 'checked' : ''}>
       </label>` : `
       <div class="panel" style="margin-top:22px">
-        <h2>1 · Make the transfer</h2>
+        <h2>1 · ${haveReserve ? 'Make the transfer' : 'Get the account, then transfer'}</h2>
         ${bankDetails}
         <p class="small muted" style="margin-top:14px">Florins between local banks land in seconds through I-Pago. A US-dollar transfer can take a business day. Your points follow the amount that actually arrives — bank fees and exchange spread are yours, and the Circle never rounds in its own favour.</p>
       </div>
