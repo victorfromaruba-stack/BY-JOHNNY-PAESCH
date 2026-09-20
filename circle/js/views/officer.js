@@ -968,20 +968,31 @@ export function circle({ store }) {
         // Standing beside the name, at the size it is actually read: a mark, not a picture.
         slot.replaceChildren(rankCrest(store.standingOf(slot.dataset.crest), { size: 30, withName: false }));
       });
-      panel.replaceChildren(el(`<ul class="roster">${roster.map(m => {
+      // The roster goes to night. Fourteen members each carried the identical grey shield, so
+      // the ladder the club is built on — Watapana, Fofoti, Kibrahacha — showed nothing at all.
+      // The three finishes only read on dark stock: on the page's own ground a Watapana metal
+      // is 1.07:1 and invisible. So this one screen is a different material, and on it each
+      // seat carries its tier's metal as an edge and as the name. The field is fixed nocturne,
+      // not the reader's own tier: this page is the club, not the member.
+      panel.replaceChildren(el(`<div class="field-night"><p class="field-head"><b class="num">${s.memberCap - roster.length}</b> seats open · <b class="num">${roster.length}</b> of <b class="num">${s.memberCap}</b> taken</p>
+        <ul class="roster">${roster.map(m => {
         const named = m.showOnRollcall || m.id === me.id || m.roles.some(r => r !== 'member');
         const streak = store.streak(m.id);
         const tags = [m.founding ? 'Founding' : '', m.standingOrder ? 'Autopilot' : '', m.status === 'paused' ? 'Paused' : '',
           streak >= 6 ? `${streak} in a row` : ''].filter(Boolean);
-        return `<li>
+        // The seat's own metal, on the edge and on the tier's name. An officer's title is what
+        // they do, so it stays where it is and the tier is named beside it rather than instead.
+        return `<li data-tier="${escapeHtml(String(m.monthlyUsd))}">
           <div class="row" style="gap:12px;min-width:0;flex-wrap:nowrap">
             ${avatar(m, 40)}
             <div style="min-width:0"><b>${escapeHtml(named ? m.name : initials(m.name))}</b>
-              <br><span class="small muted">${escapeHtml(m.title || `${tierName(m.monthlyUsd)} · since ${fmtDay(m.joinedAt)}`)}</span>
+              <br><span class="small muted">${m.title
+                ? `${escapeHtml(m.title)} · <span class="tier-name">${escapeHtml(tierName(m.monthlyUsd))}</span>`
+                : `<span class="tier-name">${escapeHtml(tierName(m.monthlyUsd))}</span> · since ${escapeHtml(fmtDay(m.joinedAt))}`}</span>
               ${tags.length ? `<br>${tags.map(x => `<span class="tag">${escapeHtml(x)}</span>`).join(' ')}` : ''}</div>
           </div>
           <span style="flex:none" data-crest="${m.id}"></span></li>`;
-      }).join('')}</ul>`));
+      }).join('')}</ul></div>`));
       paintCrests(panel);
     } else if (tab === 'chipin') {
       const open = store.openToChipIn();

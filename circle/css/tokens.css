@@ -34,6 +34,19 @@
   /* A drawing on paper stays on paper in either theme: a plan composited onto white would
      otherwise sit in a white box on a dark page, or bleed into a light one. */
   --paper: #FFFFFF;
+  /* THE TIER METALS. Declared once, here, and never redefined below — stock does not change
+     when the room does, exactly as --on-photo, --scrim and --paper already work in this file.
+     A block that does not list a token inherits it, so one declaration IS both themes.
+     These exist because the card finishes cannot do this job: --card-100 is #E9EEEE, which is
+     1.07:1 against the ground, and --card-200 is near-black at 15.77:1 — so the three tiers
+     drawn with them read as nothing, faint and black, which is not a ladder. A metal only
+     reads on dark stock, which is why the roster goes to a night field to carry them.
+     Used as a 1px-3px line or a letterform, never as a fill — that is what keeps --gilt from
+     being confused with --flight, whose own comment above reads "fills only". */
+  --gilt: #D8B863;            /* Kibrahacha */
+  --metal-100: #B9C4AE;       /* Watapana — sage bone, the cunucu after dark */
+  --metal-150: #C2CCD4;       /* Fofoti — slate bone, Eagle Beach at dusk */
+  --metal-200: var(--gilt);
   /* card finishes */
   --card-100: #E9EEEE; --card-100-etch: #121A26; --card-100-line: rgba(18,26,38,.16);
   --card-150: #8E9AA0; --card-150-etch: #F3F6F6; --card-150-line: rgba(255,255,255,.22);
@@ -99,7 +112,10 @@
    another along the bottom: the app's chrome sitting on somebody else's page. They take the night
    palette too while that page is on, which is the same trick app.css already plays with
    `main:has(.nocturne-page)`. No palette is repeated here; the chrome simply joins the list. */
-:root[data-theme="dark"], .nocturne,
+/* .field-night joins this list rather than repeating the palette: a route-level block of dark
+   stock takes the night tokens wholesale, so there is exactly one dark palette in this file and
+   a screen either sits on it or does not. */
+:root[data-theme="dark"], .nocturne, .field-night,
 body:has(.nocturne-page) .topbar, body:has(.nocturne-page) .botnav {
   color-scheme: dark;
   --ground: #0B1220; --surface: #131C2B; --raised: #1B2637; --well: #0F1727;

@@ -1300,6 +1300,26 @@ body[data-cover="on"] .topbar .brand, body[data-cover="on"] .topbar .brand b,
 body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: var(--on-photo); }
 @media (prefers-reduced-motion: reduce) { body[data-cover] .topbar { transition: none; } }
 
+/* A NIGHT FIELD — a route-level block of dark stock, so the app is not printed end to end on
+   one sheet of grey. It takes the whole night palette by joining the nocturne selector list in
+   tokens.css; nothing is redefined here but the ground it paints and the bleed to the column's
+   edge. Used on the roster, which is the club rather than the member. */
+.field-night { background: var(--ground); color: var(--ink); margin-inline: calc(-1 * var(--s-4));
+  padding: var(--s-4) var(--s-4) var(--s-5); }
+.field-night .field-head { font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-2); margin-bottom: var(--s-3); }
+.field-night .field-head b { color: var(--gilt); font-weight: 500; }
+/* THE LADDER, finally visible. Fourteen seats carried the identical grey shield; the tier a
+   member is on is the thing this club is built around and it was not drawn anywhere. Each seat
+   now carries its own metal, on the edge and on the name. Three metals a thumb can tell apart —
+   which is only possible on dark stock: on the page's own ground the Watapana metal measures
+   1.07:1 and simply is not there. */
+.field-night .roster li { border-left: 3px solid var(--seat-metal, var(--hairline)); padding-left: var(--s-3); }
+.field-night .roster li[data-tier="100"] { --seat-metal: var(--metal-100); }
+.field-night .roster li[data-tier="150"] { --seat-metal: var(--metal-150); }
+.field-night .roster li[data-tier="200"] { --seat-metal: var(--metal-200); }
+.field-night .tier-name { color: var(--seat-metal); }
+
 /* A RUN OF WEEKS AT ONE PROPERTY, under one photograph of it. A 3:1 strip the full width of
    the column, the name on it, and the weeks listed beneath without repeating where they are. */
 .board-group { position: relative; margin: var(--s-5) 0 0; display: grid; }
