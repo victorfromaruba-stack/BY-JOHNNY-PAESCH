@@ -1300,6 +1300,20 @@ body[data-cover="on"] .topbar .brand, body[data-cover="on"] .topbar .brand b,
 body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: var(--on-photo); }
 @media (prefers-reduced-motion: reduce) { body[data-cover] .topbar { transition: none; } }
 
+/* A RUN OF WEEKS AT ONE PROPERTY, under one photograph of it. A 3:1 strip the full width of
+   the column, the name on it, and the weeks listed beneath without repeating where they are. */
+.board-group { position: relative; margin: var(--s-5) 0 0; display: grid; }
+.board-group .bg-shot { display: block; aspect-ratio: 3 / 1; overflow: hidden; background: var(--well); position: relative; }
+.board-group .bg-shot img, .board-group .bg-shot .scene, .board-group .bg-shot .scene svg { width: 100%; height: 100%; object-fit: cover; display: block; }
+.board-group .bg-name { margin-top: 8px; font-size: var(--t-lede); font-weight: 600; line-height: 1.2; }
+.board-group .bg-area { font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .04em; color: var(--ink-2); }
+/* Said on the picture, because a beach at this width reads as the hotel otherwise. */
+.board-group .bg-note { position: absolute; left: 10px; bottom: 10px; padding: 3px 7px; border-radius: var(--r-chip);
+  font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .04em; color: var(--on-photo); background: var(--scrim); }
+.bg-weeks { margin-top: 2px; }
+/* The first group opens under the running head, not a fifth of a screen below it. */
+.listing > .board-group:first-of-type { margin-top: var(--s-3); }
+
 /* THE PRINTED INDEX — the places, two to the column.
    A grid INSIDE the 430px column, never a width query: this app has no layout breakpoints and
    this does not add one. The whole plate is the tap target, so it clears 44px many times over

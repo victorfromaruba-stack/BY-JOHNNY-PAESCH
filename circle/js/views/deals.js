@@ -14,7 +14,7 @@ import { VOCAB } from '../core/vocab.js';
 import { quoteStay, fromPoints, seatPoints, isCruise } from '../core/money.js';
 import { icon } from '../ui/icons.js';
 import { toast, sheet, confirmDialog, setBusy, avatar } from '../ui/components.js';
-import { stayStrip, thumbFor, beachMark, photoFor, photoKind, photoCredit } from './public.js';
+import { stayStrip, thumbFor, beachMark, photoFor, photoKind, photoCredit, thumbPhotoFor, areaPhotoFor } from './public.js';
 import { sameName, nameWithin } from '../core/names.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -167,7 +167,7 @@ function staleDays(t) {
  * Nothing interactive is nested inside the <a>: the Desk's buttons are a sibling under it, on
  * their own rule, so a thumb on the price is a tap on the row and a tap on Gone is only Gone.
  */
-export function dealRow(deal, { store, folio = null, match = null, canEdit = false, inPlace = false, level = 3, picked = false } = {}) {
+export function dealRow(deal, { store, folio = null, match = null, canEdit = false, inPlace = false, level = 3, picked = false, hide = null } = {}) {
   const H = `h${Math.min(6, Math.max(2, level))}`;
   const s = store.settings;
   const stay = store.stay(deal.stayId);
@@ -183,7 +183,7 @@ export function dealRow(deal, { store, folio = null, match = null, canEdit = fal
       <span class="main" style="min-width:0">
         <span class="folio">${picked ? `<span class="asked">${icon('check', { size: 12 })}The week you picked</span>` : match ? `<span class="asked">${icon('bellRing', { size: 12 })}You asked for this</span>` : folio ? `No. ${folio}` : ''}</span>
         <${H}>${escapeHtml(title)}</${H}>
-        <span class="sub">${teased ? `on the board ${escapeHtml(dropWhen(deal.dropAt))}` : `${soon ? `<span class="soon">${escapeHtml(soon)}</span> · ` : ''}${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'}`}<span class="l2">${deal.sleeps ? `<span class="sleeps">sleeps ${deal.sleeps}</span>` : ''}<span class="stamp${stamp.feed ? ' feed' : ''}${stamp.stale >= STALE_AFTER ? ' aged' : ''}">${escapeHtml(stamp.text)}</span></span></span>
+        <span class="sub">${teased ? `on the board ${escapeHtml(dropWhen(deal.dropAt))}` : `${soon ? `<span class="soon">${escapeHtml(soon)}</span> · ` : ''}${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'}`}<span class="l2">${deal.sleeps && !hide?.sleeps ? `<span class="sleeps">sleeps ${deal.sleeps}</span>` : ''}${hide?.stamp ? '' : `<span class="stamp${stamp.feed ? ' feed' : ''}${stamp.stale >= STALE_AFTER ? ' aged' : ''}">${escapeHtml(stamp.text)}</span>`}</span></span>
       </span>
       ${teased
         ? `<span class="price-col teased"><b>—</b><small>opens</small><span class="all">${escapeHtml(dropWhen(deal.dropAt))}</span></span>`
@@ -299,7 +299,41 @@ export const byNight = (a, b) => nightly(a) - nightly(b) || String(a.from).local
  * There is one way to draw a deal now — the row — so there is no `mode` and no `wide`; a caller
  * still passing either is simply not read.
  */
-export function dealList(slot, deals, { store, me = null, canEdit = false, first = 3, key = '', inPlace = true, noun = '', level = 3, folioOf = null, pin = null } = {}) {
+/**
+ * A run of weeks at one property, under one wide photograph of it.
+ *
+ * The board is ordered cheapest a night first and the cheapest inventory on the island is all
+ * one room: seventeen of the twenty cheapest listings are a Surf Club studio. Printed as
+ * independent rows that came out as six consecutive lines of the identical title beside the
+ * identical grey two-letter square, with the identical "sleeps 4" and the identical timestamp,
+ * at $254, $254, $255, $268, $274. A barcode, on the screen a member opens to choose where to
+ * spend their money — and a licensed photograph of the place spent at 44x44, three per cent of
+ * the row it sat in.
+ *
+ * So consecutive weeks at one property collapse under one 3:1 photographic strip carrying the
+ * name, and the weeks list beneath it without repeating it. This changes the PRINTING only: the
+ * order is untouched, so the same property appearing again further down at a different price
+ * gets its own strip, which is right — that is a different price, not a duplicate.
+ */
+function boardGroup(stay, store, shared = '') {
+  const g = el(`<div class="board-group"><span class="bg-shot"></span>
+      <span class="bg-name">${escapeHtml(stay?.name || 'The place')}</span>
+      <span class="bg-area">${escapeHtml(stay?.area || '')}${stay?.house ? ' · where we stay' : ''}${shared ? ` · ${escapeHtml(shared)}` : ''}</span>
+    </div>`);
+  const shot = g.querySelector('.bg-shot');
+  const src = thumbPhotoFor(stay);
+  const area = photoKind(stay) === 'area' ? areaPhotoFor(stay) : null;
+  const credit = photoCredit(stay);
+  if (src) {
+    shot.innerHTML = `<img src="${escapeHtml(src)}" alt="${escapeHtml(area ? `${area.area}, the beach at ${stay.name}` : stay.name)}"${credit ? ` title="${escapeHtml(credit.text)}"` : ''} loading="lazy" decoding="async">`
+      + (area ? '<span class="bg-note">the beach, not the hotel</span>' : '');
+  } else {
+    shot.appendChild(stayStrip(stay));
+  }
+  return g;
+}
+
+export function dealList(slot, deals, { store, me = null, canEdit = false, first = 3, key = '', inPlace = true, noun = '', level = 3, folioOf = null, pin = null, group = false } = {}) {
   const watches = me ? store.watchesFor(me.id) : [];
   const matchFor = (d) => watches.map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
   const matched = new Map(deals.map(d => [d.id, matchFor(d)]));
@@ -323,15 +357,62 @@ export function dealList(slot, deals, { store, me = null, canEdit = false, first
     // A button that hides one row costs as much as the row: show it.
     const shown = REVEALED.has(key) || ordered.length - first <= 1 ? ordered : ordered.slice(0, first);
     const hidden = ordered.length - shown.length;
-    grid.replaceChildren(...head(), ...shown.map(d => dealRow(d, { store, folio: folioOf?.get(d.id) || null, match: matched.get(d.id), canEdit, inPlace, level, picked: d.id === pin })));
+    const row = (d, ip) => dealRow(d, { store, folio: folioOf?.get(d.id) || null, match: matched.get(d.id), canEdit, inPlace: ip, level, picked: d.id === pin });
+    if (group) {
+      // Every week at one property under one photograph of it, and the properties in the order
+      // their cheapest week falls. Grouping only CONSECUTIVE runs was the first attempt and it
+      // was worse than what it replaced: the price order interleaves, so the Surf Club came out
+      // as three separate strips carrying the same photograph, one at 1 week, one at 3 and one
+      // at 2. A place appears once.
+      //
+      // "Always lowest price first" still holds and is still what a member sees: the first group
+      // is the property with the cheapest week on the board, and the cheapest week leads inside
+      // it. What moves is that the second-cheapest week at that property no longer has to wait
+      // its turn behind another hotel to be printed.
+      //
+      // Rows inside a group are drawn inPlace, the mode that already drops the 44px thumb and
+      // the repeated property name — so "Marriott's Aruba Surf Club · Studio" reads "Studio"
+      // under a strip that has already said where it is.
+      const runs = [];
+      const bySt = new Map();
+      for (const d of shown) {
+        let run = bySt.get(d.stayId);
+        if (!run) { run = { stayId: d.stayId, deals: [] }; bySt.set(d.stayId, run); runs.push(run); }
+        run.deals.push(d);
+      }
+      const out = [...head()];
+      const same = (list, f) => { const v = f(list[0]); return list.every(x => f(x) === v) ? v : null; };
+      for (const r of runs) {
+        // A fact that is true of every week in the group belongs to the group. Six rows each
+        // printing "sleeps 4" and the identical "VakayMood · 04:11 PM" is the same repetition
+        // the strip was built to end, one line further down. When the weeks disagree — two room
+        // sizes, or finds read at different minutes — each row keeps its own and the group says
+        // nothing, because the alternative is a shared line that is true of only some of them.
+        const sleeps = same(r.deals, d => d.sleeps || 0);
+        const stampText = same(r.deals, d => stampFor(d, store).text);
+        const shared = [sleeps ? `sleeps ${sleeps}` : '', stampText || ''].filter(Boolean).join(' · ');
+        out.push(boardGroup(store.stay(r.stayId), store, shared));
+        const ul = el('<div class="bg-weeks" style="list-style:none"></div>');
+        for (const d of r.deals) ul.appendChild(dealRow(d, { store, folio: folioOf?.get(d.id) || null, match: matched.get(d.id), canEdit, inPlace: true, level, picked: d.id === pin, hide: { sleeps: !!sleeps, stamp: !!stampText } }));
+        out.push(ul);
+      }
+      grid.replaceChildren(...out);
+    } else {
+      grid.replaceChildren(...head(), ...shown.map(d => row(d, inPlace)));
+    }
     more.innerHTML = hidden > 0 ? `<button class="btn ghost sm" data-act="reveal">${icon('chevronDown', { size: 16 })}Show the other <b class="num">${hidden}</b>${noun ? ` ${noun}` : ''}</button>` : '';
   };
   more.addEventListener('click', (e) => {
     if (!e.target.closest('[data-act="reveal"]')) return;
+    // Count the rows BEFORE repainting, because that count is what "the first new one" means.
+    // This used to index grid.children, which worked only while every child was a row; grouped,
+    // the children are strips and week-lists, so the index landed on a photograph or on nothing
+    // and the keyboard went back to the top of the page.
+    const before = grid.querySelectorAll('.listing-row').length;
     REVEALED.add(key); paint();
     // The button that had focus is gone; put focus on the first row it revealed, so a keyboard
     // or screen-reader user lands on what appeared rather than back at the top of the page.
-    const row = grid.children[first + head().length]?.querySelector('.listing-row');
+    const row = grid.querySelectorAll('.listing-row')[before];
     if (row) row.focus({ preventScroll: true });
   });
   paint();
