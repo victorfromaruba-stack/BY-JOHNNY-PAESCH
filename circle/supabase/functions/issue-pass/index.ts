@@ -64,7 +64,16 @@ Deno.serve(async (req) => {
     const tiers = (settings?.tiers ?? []) as Array<Record<string, unknown>>;
     const reach = String((tiers.find((t) => Number(t.monthlyUsd) === member.monthly_usd)?.reach) ?? 'aruba');
     const site = Deno.env.get('CLUB_URL') ?? '';
-    const clubName = settings?.club_name ?? 'Hunto';
+    const clubName = settings?.club_name ?? 'The Inner Hotel Circle';
+    // Apple prints logoText across the top of the pass in a fixed width and truncates it hard,
+    // so the pass carries the same short wordmark the app's running head does rather than
+    // clubName.toUpperCase() — which would be the full 22-character name. These two literals
+    // are the Edge Function's copy of VOCAB.wordmark and VOCAB.slug (circle/js/core/vocab.js);
+    // nothing imports across this boundary, so they must be changed in step with it. The client
+    // preview in circle/js/ui/wallet.js draws from VOCAB directly, and passPayload's contract
+    // is that the two can never disagree — keep them equal or that promise is a lie.
+    const WORDMARK = 'THE CIRCLE';
+    const SLUG = 'the-circle';
 
     const pass = {
       formatVersion: 1,
@@ -76,7 +85,7 @@ Deno.serve(async (req) => {
       backgroundColor: finish.bg,
       foregroundColor: finish.fg,
       labelColor: finish.label,
-      logoText: clubName.toUpperCase(),
+      logoText: WORDMARK,
       sharingProhibited: true,
       storeCard: {
         headerFields: [{ key: 'tier', label: 'Level', value: finish.name }],
@@ -136,7 +145,7 @@ Deno.serve(async (req) => {
       headers: {
         ...CORS,
         'content-type': 'application/vnd.apple.pkpass',
-        'content-disposition': `attachment; filename="${clubName.toLowerCase()}-${member.card_code ?? 'card'}.pkpass"`,
+        'content-disposition': `attachment; filename="${SLUG}-${member.card_code ?? 'card'}.pkpass"`,
       },
     });
   } catch (err) {

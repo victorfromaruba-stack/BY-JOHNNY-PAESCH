@@ -696,7 +696,7 @@ export function join({ store, params, go }) {
     const sp = splitContribution(state.monthlyUsd, s, tier);
     body.innerHTML = `
       <p class="eyebrow">Invitation from ${escapeHtml(sponsor?.name || 'the Circle')}</p>
-      <h1>Join the ${escapeHtml(VOCAB.clubName)}</h1>
+      <h1>Join ${escapeHtml(VOCAB.clubName)}</h1>
       <p class="lede" style="margin-top:12px"><b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of <b class="num">${s.memberCap}</b> seats are taken. ${store.activeMembers().length < s.foundingSeats ? 'You would be a Founding Insider — it stays on your card for good.' : ''}</p>
       <div class="stack" style="margin-top:24px">
         <div>

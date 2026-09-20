@@ -102,7 +102,7 @@ export function toCsv(rows, columns) {
   return [columns.map(c => esc(c.label)).join(','), ...rows.map(r => columns.map(c => esc(typeof c.value === 'function' ? c.value(r) : r[c.value])).join(','))].join('\n');
 }
 
-// ---- Hunto formatting: every number is printed with its unit, and points
+// ---- The Inner Hotel Circle formatting: every number is printed with its unit, and points
 // always carry the dollar behind them. 100 points = $1.00.
 export const fmtPoints = (n) => `✦ ${intFmt.format(Math.round(Number(n) || 0))}`;
 export const fmtPointsUsd = (n, ppd = 100) => `✦ ${intFmt.format(Math.round(Number(n) || 0))} (${usdFmtCents.format((Number(n) || 0) / ppd)})`;

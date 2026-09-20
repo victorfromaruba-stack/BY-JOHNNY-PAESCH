@@ -41,7 +41,7 @@ const SHEET_TRIGGERS = [
   'Start a crew', 'Rename', 'Add someone',                        // crews
   'Watch for something',                                         // deals: addWatchSheet
   'Choose one', 'Change',                                         // member: goalSheet
-  'Put Hunto on your home screen', 'Pause for a few months',      // member: install, pause
+  'Put the Circle on your home screen', 'Pause for a few months',      // member: install, pause
   'Send a postcard',                                             // postcards
   'Money came in', 'See the screenshot', 'A different amount arrived', // officer: bank
   'Add a stay, trip or cruise', 'Edit',                          // officer: desk editStay, settings edit member

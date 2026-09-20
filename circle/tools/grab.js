@@ -120,7 +120,7 @@
     '  .ghost{border-color:rgba(255,255,255,.14);color:#E8EEF0}}',
     '</style>',
     '<div class="wrap">',
-    '  <div class="head"><span class="mark">Hunto</span><span class="said" id="said">Reading this page…</span>',
+    '  <div class="head"><span class="mark">The Circle</span><span class="said" id="said">Reading this page…</span>',
     '    <button class="x" id="close" aria-label="Close">×</button></div>',
     '  <div class="list" id="list"></div>',
     '  <div class="foot" id="foot" hidden></div>',

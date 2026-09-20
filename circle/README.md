@@ -1,4 +1,4 @@
-# Hunto — the Inner Circle
+# The Inner Hotel Circle
 
 A private travel club for a group of friends in Aruba. It is invitation only: every
 Insider is someone Victor or Ian knows, there is no public sign-up, and the club is
@@ -160,7 +160,7 @@ rooms and the map under it; the ask is one tap from there. Anything that checks 
 expires at the end of that day in Aruba, not at noon somewhere else.
 
 A Getaway Victor finds on his phone reaches the board through the share sheet: the app is a
-share target (`manifest.webmanifest`), so **Share → Hunto** from Interval's page lands the
+share target (`manifest.webmanifest`), so **Share → The Circle** from Interval's page lands the
 text in the paste sheet already parsed, and one tap posts it. That is the fastest honest path
 while Interval keeps refusing the watcher's sign-in.
 
@@ -619,12 +619,17 @@ The demo is deliberately self-contained. To run this for real:
    and the two Marriott Vacation Club resorts are rented as owner weeks (RedWeek/Vrbo),
    which is a different negotiation from a hotel contract. The three trips likewise: the
    hotel and villa figures behind them are aggregator ranges, not held blocks.
-6. The club is named **Hunto** — Papiamento for "together". The name lives in
-   `js/core/vocab.js`; change it there and every screen, reference and message follows.
+6. The club is named **The Inner Hotel Circle** (renamed from "Hunto", 2026-09-20). The
+   name lives in `js/core/vocab.js` as `clubName`, with a short `wordmark` — "THE CIRCLE" —
+   for the running head and the Wallet pass, where the full name does not fit. Changing
+   `clubName` does NOT carry everywhere: `index.html`, `manifest.webmanifest`, `schema.sql`,
+   the Wallet Edge Function (which reads `settings.club_name` from the database), `tools/`
+   and this file all hold their own literals. The transfer reference stays `HUNTO-` — see
+   the note at the top of `js/core/vocab.js`.
 7. *Settled:* anyone can join any trip at any level, and someone who wants a bigger trip
    moves up for the year rather than buying into one. `reach` is now only a description of
    how far a trip goes, not a gate.
-8. Wallet passes: pay Apple the $99 so the pass says Hunto, or use a free shared
+8. Wallet passes: pay Apple the $99 so the pass is the club’s own, or use a free shared
    certificate and accept someone else's name on it?
 
 ## The back office
@@ -662,7 +667,7 @@ Four ways to keep the card, in the order they cost anything:
    300dpi with the QR on it, so it is scannable on its own.
 2. **Print it, card sized** — the print dialog is set to 85.6 × 53.98 mm, so it comes out
    as a card rather than a card floating on A4.
-3. **Put Hunto on the home screen** — this is the default and it costs nothing. On Chrome
+3. **Put the Circle on the home screen** — this is the default and it costs nothing. On Chrome
    and Edge the button triggers the browser's real install prompt; on iPhone it opens a
    sheet with the two taps (Safari's Share button, then *Add to Home Screen*), because iOS
    gives a page no way to offer it directly. Afterwards the card is one tap away and its QR
@@ -698,7 +703,7 @@ Three ways to get there, honestly compared:
 
 | | Cost | Whose name is on the pass | Worth it when |
 |---|---|---|---|
-| **Apple developer account** | $99 a year | Hunto's | You want the club to own its pass and control updates |
+| **Apple developer account** | $99 a year | The club's | You want the club to own its pass and control updates |
 | **A shared-certificate service** (PassSource is free; WalletWallet has a free tier well above 40 members) | $0 | Theirs | You want a pass in Wallet this weekend |
 | **Home screen app, QR and a saved image** | $0 | — | **What the club does.** Honestly fine for forty people who know each other |
 

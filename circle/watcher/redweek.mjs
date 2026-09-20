@@ -9,7 +9,7 @@ const BASE = 'https://www.redweek.com';
 // block less likely. Whose address that is, though, is not this file's to decide: set
 // WATCH_CONTACT in .env and it goes in, leave it out and nothing personal is sent or published.
 const UA = process.env.WATCH_UA
-  || `HuntoCircleWatcher/1.0 (private travel club${process.env.WATCH_CONTACT ? `; contact ${process.env.WATCH_CONTACT}` : ''})`;
+  || `InnerHotelCircleWatcher/1.0 (private travel club${process.env.WATCH_CONTACT ? `; contact ${process.env.WATCH_CONTACT}` : ''})`;
 
 /**
  * Every Aruba resort RedWeek lists, read off their own search page, mapped to the name our

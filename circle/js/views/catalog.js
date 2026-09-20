@@ -231,7 +231,7 @@ export function stays({ store, go, query = {} }) {
     const note = wrap.querySelector('#no-interval');
     if (note) {
       note.hidden = !(noInterval && canEdit && !loading);
-      note.innerHTML = note.hidden ? '' : `<p>${icon('alert', { size: 15, cls: 'ico-muted' })} Nothing here is an Interval Getaway. Getaways reach the board when you put them there — tap Grab on the page you are looking at, share one to Hunto, or paste it.</p>
+      note.innerHTML = note.hidden ? '' : `<p>${icon('alert', { size: 15, cls: 'ico-muted' })} Nothing here is an Interval Getaway. Getaways reach the board when you put them there — tap Grab on the page you are looking at, share one to the Circle, or paste it.</p>
         <div class="row"><a class="link-rule" href="#/desk">The Desk has the bookmark</a><button type="button" class="link-rule" id="paste-interval">Paste a Getaway</button></div>`;
     }
     paintSoon(ranked, folioOf);
@@ -797,7 +797,7 @@ export function stayDetail({ store, params, go, query = {} }) {
       ${escapeHtml(tierName(me.monthlyUsd))} can hold ${N(tier.holds)} open request${tier.holds > 1 ? 's' : ''} and book ${N(tier.windowMonths)} months ahead.</p>`);
   }
   wrap.querySelector('#share')?.addEventListener('click', () => shareText({
-    title: stay.name, text: `${stay.name} — ${fmtPoints(per)} a ${unitWord(stay)} through the ${VOCAB.clubName}.`,
+    title: stay.name, text: `${stay.name} — ${fmtPoints(per)} a ${unitWord(stay)} through ${VOCAB.clubName}.`,
     url: `${location.origin}${location.pathname}#/${isCruise(stay) ? 'cruises' : isTrip ? 'trips' : 'stays'}/${stay.id}`,
   }));
   return wrap;
@@ -1264,7 +1264,7 @@ export function requestDetail({ store, params, go, refresh }) {
         catch (err) { toast(err.message, { kind: 'bad' }); }
       }
       if (e.target.id === 'ask-circle') {
-        shareText({ title: stay?.name, text: `I am putting ${fmtPoints(target)} toward ${stay?.name} from ${fmtDay(r.checkIn)} through the ${VOCAB.clubName} and ${fmtPoints(outstanding)} is still to cover. Chip in if you are coming.`,
+        shareText({ title: stay?.name, text: `I am putting ${fmtPoints(target)} toward ${stay?.name} from ${fmtDay(r.checkIn)} through ${VOCAB.clubName} and ${fmtPoints(outstanding)} is still to cover. Chip in if you are coming.`,
           url: `${location.origin}${location.pathname}#/requests/${r.id}` });
       }
     });
@@ -1370,7 +1370,7 @@ export async function lookSheet(store, r, stay, { found, url = '', label = '' } 
     const out = await sheet({ title: phone ? 'You rang them' : 'What did you see?', render: (body, close) => {
       body.innerHTML = `<p class="sheet-text">${escapeHtml(stay?.name || '')} · ${escapeHtml(fmtDay(r.checkIn))} – ${escapeHtml(fmtDay(r.checkOut))}.
           This is written down with your name and the time on it, and the member reads it.</p>
-        ${phone ? `<label class="field"><span>What did they say?</span><input name="note" placeholder="Held under Hunto until Tuesday, ref 4471" required></label>
+        ${phone ? `<label class="field"><span>What did they say?</span><input name="note" placeholder="Held under the Circle until Tuesday, ref 4471" required></label>
           <label class="field"><span>Was the week there?</span><select name="found">
             <option value="showing">Yes, it is there</option><option value="gone">No, it is gone</option>
             <option value="unclear">They could not say</option></select></label>` : ''}

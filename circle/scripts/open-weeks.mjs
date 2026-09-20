@@ -26,7 +26,7 @@ const KEEP = ['listingId', 'unitType', 'sleeps', 'bedrooms', 'checkin', 'checkou
 
 async function page(slug) {
   const url = `${BASE}/availability?resort=${encodeURIComponent(slug)}&sort=price_asc&limit=${PER_RESORT}`;
-  const res = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'HuntoCircle/1.0 (+https://victorfromaruba-stack.github.io/BY-JOHNNY-PAESCH/) open-weeks' } });
+  const res = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'InnerHotelCircle/1.0 (+https://victorfromaruba-stack.github.io/BY-JOHNNY-PAESCH/) open-weeks' } });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${slug}`);
   const body = await res.json();
   return {

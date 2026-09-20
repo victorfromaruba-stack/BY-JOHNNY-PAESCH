@@ -1,6 +1,6 @@
 ---
 name: circle-feel
-description: Make the Hunto Circle app feel like a considered, high-quality product rather than a form with a stylesheet — interaction feedback, responsive layout, information density, and cutting complexity. Use this skill whenever anyone says the site looks complicated, cheap, dated, empty, cluttered or "like AI", whenever they mention spacing, wasted space, an Apple feel, polish, responsiveness, mobile, or things not reacting when tapped, and before you change any screen, panel, button, card or stylesheet in circle/. Also use it when adding a new screen, so it is born matching the rest, and when auditing whether the app is actually usable end to end.
+description: Make the Inner Hotel Circle app feel like a considered, high-quality product rather than a form with a stylesheet — interaction feedback, responsive layout, information density, and cutting complexity. Use this skill whenever anyone says the site looks complicated, cheap, dated, empty, cluttered or "like AI", whenever they mention spacing, wasted space, an Apple feel, polish, responsiveness, mobile, or things not reacting when tapped, and before you change any screen, panel, button, card or stylesheet in circle/. Also use it when adding a new screen, so it is born matching the rest, and when auditing whether the app is actually usable end to end.
 ---
 
 # The feel of the Circle

@@ -9,7 +9,7 @@ Aruba resale marketplace for timeshare weeks and property. Lives at the reposito
 
 Live: https://victorfromaruba-stack.github.io/BY-JOHNNY-PAESCH/
 
-## Hunto — the Inner Circle
+## The Inner Hotel Circle
 
 A private travel club for Victor's circle of friends: monthly contributions confirmed by
 the Banker, points at 100 to the dollar, and stays in Aruba and trips further afield.

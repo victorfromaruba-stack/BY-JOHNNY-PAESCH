@@ -19,7 +19,7 @@ import * as postcards from './views/postcards.js';
 import { icon } from './ui/icons.js';
 
 const ROUTES = [
-  { path: '/', view: pub.landing, title: `${VOCAB.clubName} — a private travel circle in Aruba`, chrome: false },
+  { path: '/', view: pub.landing, title: 'A private travel circle in Aruba', chrome: false },
   { path: '/rules', view: pub.rules, title: 'How the Circle works' },
   { path: '/sign-in', view: pub.signIn, title: 'Sign in', chrome: false },
   { path: '/join/:code', view: pub.join, title: 'Your invitation', chrome: false },

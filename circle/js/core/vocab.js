@@ -1,17 +1,39 @@
-// Every word the app prints lives here, so the club can be renamed in one file.
+// Every word the app prints lives here — but not quite every one. See the note below the name.
 //
-// Name note for Victor: the design panel's first pick, "Conchi" (the Natural Pool),
-// reads as vulgar slang across much of Spanish-speaking Latin America, so it is not
-// printed anywhere. "Hunto" is Aruban Papiamento for "together". Alternatives the
-// panel liked: "Sotavento" (the leeward side), "The Pool". Change `clubName`,
-// `wordmark` and `refPrefix` below and every screen, reference and template follows.
+// Name note for Victor: the design panel's first pick, "Conchi" (the Natural Pool), reads as
+// vulgar slang across much of Spanish-speaking Latin America, so it was never printed anywhere.
+// The club then ran as "Hunto" — Aruban Papiamento for "together" — until 2026-09-20, when
+// Victor renamed it The Inner Hotel Circle. Alternatives the panel liked: "Sotavento" (the
+// leeward side), "The Pool". The new name has no folk etymology and the app claims none.
+//
+// What `clubName` actually carries: the render sites in circle/js, and nothing else. It does NOT carry
+// to index.html, manifest.webmanifest, the Wallet Edge Function (which reads `club_name` from
+// the database), tools/grab.js, tools/check-interval.ics, the Gmail forwarder labels, schema.sql
+// or the READMEs. Those hold their own literals; a rename means editing them too.
+//
+// `refPrefix` stays HUNTO on purpose. It is the reference a member types into a bank transfer
+// and the Banker matches against the statement, so it is carried by transfers already sent and
+// by contributions already in the database. schema.sql builds the same string a second time.
+// Changing it is an operational decision for Victor, not part of a rename.
 export const VOCAB = {
-  clubName: 'Hunto',
-  wordmark: 'HUNTO',
-  subtitle: 'The Inner Circle · Aruba',
-  meaning: 'Papiamento for “together”',
+  clubName: 'The Inner Hotel Circle',
+  // The running head gives the wordmark 192px before it reaches the member's name, and the full
+  // name measures 254px in the display serif at 1.3rem — it wrapped to two lines and clipped
+  // against the 48px bar. It only fitted below 0.92rem, smaller than the name beside it. So the
+  // bar carries the short form the club already calls itself (`circle`, below): 115px, one line,
+  // no CSS change. The Wallet pass and the card PNG print this same short form.
+  wordmark: 'THE CIRCLE',
+  // Downloads and the .pkpass filename. A slug, because `clubName.toLowerCase()` would put
+  // spaces in every filename — and in a Content-Disposition header, where clients cut at one.
+  slug: 'the-circle',
+  // The name now says "Inner Circle" itself, so the old subtitle only repeated it. This states
+  // what the club is and where, both of which the club has established.
+  subtitle: 'Private travel club · Aruba',
+  // `meaning` is gone. It read 'Papiamento for “together”', which described the word HUNTO and
+  // is simply false of this name. Nothing read the field, and there is no etymology to put in
+  // its place — inventing one would be the app asserting something it has not established.
   tagline: 'Every point has a dollar behind it.',
-  refPrefix: 'HUNTO',            // transfer reference: HUNTO-VR-2026-09
+  refPrefix: 'HUNTO',            // UNCHANGED on purpose — see the note at the top of this file
   circle: 'the Circle',
   member: 'Insider', members: 'Insiders',
   points: 'points', point: 'point', glyph: '✦',
@@ -34,7 +56,7 @@ export const VOCAB = {
     congrats: ['Pabien', 'Congratulations'],
     bye: ['Te aworo', 'See you later'],
   },
-  legal: 'Hunto is a private members’ club for prepaid, club-arranged travel. Points are not deposits and not an investment; there is no interest and no return.',
+  legal: 'The Inner Hotel Circle is a private members’ club for prepaid, club-arranged travel. Points are not deposits and not an investment; there is no interest and no return.',
 };
 export const tierName = (monthlyUsd) => VOCAB.tiers[monthlyUsd] || `$${monthlyUsd}`;
 export const initialsOf = (name = '') => name.split(/\s+/).filter(Boolean).map(s => s[0]).join('').slice(0, 2).toUpperCase();

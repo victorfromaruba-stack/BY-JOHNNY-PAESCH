@@ -26,7 +26,7 @@
 -- described here and must not be dropped by anything derived from this file.
 
 -- =====================================================================
---  Hunto — the Inner Circle
+--  The Inner Hotel Circle
 --  Schema, row-level security and the money rules, for Supabase/Postgres.
 --
 --  Apply once in the SQL editor. Everything that touches money runs inside a
@@ -60,7 +60,11 @@ alter type ledger_kind add value if not exists 'badge';
 -- ---------- settings (one row) ----------
 create table if not exists settings (
   id                int primary key default 1 check (id = 1),
-  club_name         text not null default 'Hunto',
+  -- Renaming the club changes this default, but a default only applies to rows inserted
+  -- afterwards — the existing settings row keeps whatever it was created with and must be
+  -- updated separately. The Wallet pass reads THIS column, not vocab.js, so a stale row here
+  -- means newly issued passes still carry the old name.
+  club_name         text not null default 'The Inner Hotel Circle',
   service_rate      numeric(5,4) not null default 0.15,
   points_per_dollar int not null default 100,
   awg_per_usd       numeric(6,3) not null default 1.79,

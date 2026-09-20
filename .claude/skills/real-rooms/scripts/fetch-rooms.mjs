@@ -17,7 +17,7 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
-const UA_DEFAULT = 'HuntoCircleCatalog/1.0 (private travel club; contact via the club)';
+const UA_DEFAULT = 'InnerHotelCircleCatalog/1.0 (private travel club; contact via the club)';
 const args = process.argv.slice(2);
 const flag = (n, d = null) => { const i = args.indexOf(n); return i >= 0 ? (args[i + 1] ?? true) : d; };
 const has = (n) => args.includes(n);

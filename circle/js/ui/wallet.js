@@ -14,6 +14,12 @@ import { paintQr } from './qrcode.js';
 /**
  * The pass, as data. The Edge Function signs exactly this shape, and the card on
  * screen is drawn from the same values, so the two can never disagree.
+ *
+ * Two caveats that keep that sentence true. The Edge Function reads the club's name from
+ * settings.club_name in the database, not from VOCAB — rename the club and that row has to
+ * be updated too. And logoText is the short wordmark, not clubName.toUpperCase(), because
+ * Apple truncates logoText hard; the Edge Function repeats VOCAB.wordmark and VOCAB.slug as
+ * literals (supabase/functions/issue-pass/index.ts) since it cannot import this file.
  */
 export function passPayload(member, store) {
   const s = store.settings;

@@ -1,4 +1,4 @@
-/* Hunto — design tokens. Light set on :root; dark redefines colours only. Zero drop shadows:
+/* The Inner Hotel Circle — design tokens. Light set on :root; dark redefines colours only. Zero drop shadows:
    depth is three luminance steps plus hairlines. Numbers always in the mono face.
    Type and space are scales, declared once here and never invented in a component: a size that
    is not on the scale was not chosen, and forty people can tell when nothing was chosen. */

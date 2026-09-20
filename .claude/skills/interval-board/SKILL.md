@@ -1,6 +1,6 @@
 ---
 name: interval-board
-description: Keep Interval International and RedWeek weeks flowing onto the Hunto Circle's board, and fix the reader fast when a site changes its page. Use this skill whenever anyone mentions Interval, Getaways, RedWeek, the Grab bookmark, the ingest-deal function, a week showing the wrong price or the wrong hotel, the board being empty or stale, "it read it wrong", a screenshot of the Grab panel, Getaway Alerts, a forwarded confirmation or cancellation email, or asks to automate/scan/scrape/poll either site on a schedule. Also use it before touching parseListings, parsePrice, parseDates or matchStay in either copy, because those exist twice on purpose and a fix applied to one is a bug in the other.
+description: Keep Interval International and RedWeek weeks flowing onto the Inner Hotel Circle's board, and fix the reader fast when a site changes its page. Use this skill whenever anyone mentions Interval, Getaways, RedWeek, the Grab bookmark, the ingest-deal function, a week showing the wrong price or the wrong hotel, the board being empty or stale, "it read it wrong", a screenshot of the Grab panel, Getaway Alerts, a forwarded confirmation or cancellation email, or asks to automate/scan/scrape/poll either site on a schedule. Also use it before touching parseListings, parsePrice, parseDates or matchStay in either copy, because those exist twice on purpose and a fix applied to one is a bug in the other.
 ---
 
 # The Interval board

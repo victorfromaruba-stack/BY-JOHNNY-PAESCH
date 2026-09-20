@@ -22,7 +22,7 @@ export const TEMPLATES = {
   confirmed: ({ member, amountUsd, points, month, v }) =>
     `${v.greeting} ${member.name.split(' ')[0]}! Vishnu confirmed your ${fmtUsd(amountUsd)} for ${fmtMonth(month)}. ${fmtInt(points)} ${v.points} are in your account. ${v.thanks}! — Ian`,
   reminder: ({ member, amountUsd, month, reference, v }) =>
-    `Hi ${member.name.split(' ')[0]}, a friendly note from the ${v.clubName}: your ${fmtUsd(amountUsd)} for ${fmtMonth(month)} is due. Transfer to Vishnu with reference ${reference} and tap “I transferred” in the app. — Ian`,
+    `Hi ${member.name.split(' ')[0]}, a friendly note from ${v.clubName}: your ${fmtUsd(amountUsd)} for ${fmtMonth(month)} is due. Transfer to Vishnu with reference ${reference} and tap “I transferred” in the app. — Ian`,
   notMatched: ({ member, month, reason, v }) =>
     `Hi ${member.name.split(' ')[0]}, Vishnu couldn’t match your ${fmtMonth(month)} transfer yet: ${reason} Could you check and resend the details in the app? — Ian`,
   stayApproved: ({ member, stay, nights, checkIn, points, v }) =>
@@ -30,5 +30,5 @@ export const TEMPLATES = {
   stayConfirmed: ({ member, stay, nights, checkIn, confirmationRef }) =>
     `Bon biaha, ${member.name.split(' ')[0]}! ${stay.name}, ${nights} nights from ${checkIn}, is booked. Confirmation ${confirmationRef}. Victor will send the details before you go. — Ian`,
   drop: ({ stay, points, v }) =>
-    `This week’s drop from the ${v.clubName}: ${stay.name} (${stay.area}, ${stay.country}) from ${fmtInt(points)} ${v.points} a night. Requests in the app before Sunday. — Ian`,
+    `This week’s drop from ${v.clubName}: ${stay.name} (${stay.area}, ${stay.country}) from ${fmtInt(points)} ${v.points} a night. Requests in the app before Sunday. — Ian`,
 };

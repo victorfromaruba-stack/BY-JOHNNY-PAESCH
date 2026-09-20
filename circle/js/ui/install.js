@@ -1,4 +1,4 @@
-// Putting Hunto on the home screen, from anywhere that asks.
+// Putting the Circle on the home screen, from anywhere that asks.
 //
 // The card screen used to hold this on its own; Home now nudges for it too, so the one path
 // lives here. Chrome and Edge hand the app a real one-tap prompt (app.js keeps it under
@@ -33,9 +33,9 @@ export function dismissInstallNudge() {
 export async function showInstall() {
   // Chrome and Edge can do this properly. Everyone else gets told exactly which taps.
   const outcome = await (window.__huntoInstall?.() ?? null);
-  if (outcome === 'accepted') { toast('Added. Hunto is on your home screen.', { kind: 'good' }); return outcome; }
+  if (outcome === 'accepted') { toast('Added. The Circle is on your home screen.', { kind: 'good' }); return outcome; }
   if (outcome === 'dismissed') return outcome;
-  await sheet({ title: 'Put Hunto on your home screen', render: (body) => {
+  await sheet({ title: 'Put the Circle on your home screen', render: (body) => {
     body.innerHTML = isIOS()
       ? `<p class="sheet-text">Two taps, and it costs nothing.</p>
          <ol class="stack tight" style="padding-left:1.2em">
@@ -43,9 +43,9 @@ export async function showInstall() {
            <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
            <li>Tap <b>Add</b>.</li>
          </ol>
-         <p class="small muted" style="margin-top:14px">It has to be Safari — Chrome on an iPhone cannot do this. Once it is there, Hunto opens full screen and your card is one tap away.</p>
+         <p class="small muted" style="margin-top:14px">It has to be Safari — Chrome on an iPhone cannot do this. Once it is there, the Circle opens full screen and your card is one tap away.</p>
          <div class="sheet-actions"><button type="button" class="btn block" data-close>Got it</button></div>`
-      : `<p class="sheet-text">Open your browser's menu and choose <b>Install</b> or <b>Add to Home screen</b>. Hunto then opens like an app, and your card is one tap away.</p>
+      : `<p class="sheet-text">Open your browser's menu and choose <b>Install</b> or <b>Add to Home screen</b>. The Circle then opens like an app, and your card is one tap away.</p>
          <div class="sheet-actions"><button type="button" class="btn block" data-close>Got it</button></div>`;
   } });
   return 'shown';

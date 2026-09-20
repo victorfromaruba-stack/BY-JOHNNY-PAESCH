@@ -1135,6 +1135,14 @@ export function settings({ store, go }) {
       ${isAdmin ? `<form class="panel" id="rules-form" style="margin-top:16px">
         <h2>The rules of the club</h2>
         <p class="small muted" style="margin-top:6px">Changing the share or the value of a point affects everyone. Tell the Circle before you do, and never after someone has booked against it.</p>
+        <!-- The club's name is a rule like any other, and until now it was the only one with no
+             way to change it: clubName is in SupabaseAdapter.RULE_FIELDS and update_club_rules
+             patches the column, but no screen ever offered it. So the name lived in the code and
+             in a database row that could only disagree with it, and the Apple Wallet pass — which
+             reads the ROW, not the code — was the thing that told members the old name. -->
+        <label class="field" style="margin-top:12px"><span>The name of the club</span>
+          <input name="clubName" type="text" maxlength="60" value="${escapeHtml(s.clubName || VOCAB.clubName)}" autocomplete="off">
+          <span class="hint">On the card, the pass, the tab and the link a stranger sees. The wordmark in the bar is set separately.</span></label>
         <div class="pair" style="margin-top:12px">
           <label class="field"><span>The Circle’s share</span><input name="serviceRate" type="number" step="0.01" min="0" max="0.5" value="${s.serviceRate}" inputmode="decimal"><span class="hint"><b class="num">0.15</b> is <b class="num">15%</b></span></label>
           <label class="field"><span>Points per dollar</span><input name="pointsPerDollar" type="number" value="${s.pointsPerDollar}" inputmode="numeric"><span class="hint"><b class="num">100</b> = a point is a cent</span></label>
@@ -1248,7 +1256,12 @@ export function settings({ store, go }) {
   });
   wrap.querySelector('#rules-form')?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
-    const patch = Object.fromEntries([...f.entries()].map(([k, v]) => [k, Number(v)]));
+    // Every other rule here is a figure; the name is not. Number('The Inner Hotel Circle') is
+    // NaN, so a blanket coercion would have wiped the club's name the first time anyone saved
+    // the form for an unrelated reason.
+    const TEXT = new Set(['clubName']);
+    const patch = Object.fromEntries([...f.entries()].map(([k, v]) => [k, TEXT.has(k) ? String(v).trim() : Number(v)]));
+    if ('clubName' in patch && !patch.clubName) { toast('The club needs a name.', { kind: 'bad' }); return; }
     const yes = await confirmDialog({ title: 'Change the rules?', confirmText: 'Change them',
       message: 'The share and the value of a point are promises to every Insider. Tell the Circle first, and never change them after someone has booked against them.' });
     if (yes) { await store.updateSettings(patch, me.id); toast('Saved. Tell the Circle what changed.', { kind: 'good' }); }
@@ -1439,7 +1452,7 @@ export function settings({ store, go }) {
       } });
       if (out?.note) { try { await store.adjustPoints(m.id, out.pts, out.note, me.id); toast('Written to the ledger.'); } catch (err) { toast(err.message, { kind: 'bad' }); } }
     }
-    if (e.target.id === 'backup') downloadText(`${VOCAB.clubName.toLowerCase()}-backup-${new Date().toISOString().slice(0, 10)}.json`, store.exportJson(), 'application/json');
+    if (e.target.id === 'backup') downloadText(`${VOCAB.slug}-backup-${new Date().toISOString().slice(0, 10)}.json`, store.exportJson(), 'application/json');
     if (e.target.id === 'reset') {
       const yes = await confirmDialog({ title: 'Reset the preview?', danger: true, confirmText: 'Reset', message: 'Everything in this browser goes back to how the preview started. The real Circle is untouched.' });
       if (yes) { const { seed } = await import('../data/seed.js'); await store.reset(seed); toast('Back to the start.'); go('/'); }

@@ -243,10 +243,10 @@ export function home({ store, go, refresh }) {
   // The list of everything asked, which had no way in from the chrome at all.
   if (store.state.redemptions.some(r => r.memberId === me.id)) body.appendChild(el(`<p><a class="link-rule" href="#/requests">Everything you have asked for</a></p>`));
 
-  // 2b — the one-line nudge to put Hunto on the home screen, on a phone that has not, until
+  // 2b — the one-line nudge to put the Circle on the home screen, on a phone that has not, until
   // the member says not now. It never says the app is installed: the display mode does.
   if (wantsInstallNudge()) {
-    const nudge = el(`<p class="rule-block small">Hunto works best from your home screen<span class="row" style="gap:20px"><button type="button" class="link-rule" id="install-how">Show me</button><button type="button" class="link-rule quiet muted" id="install-no">Not now</button></span></p>`);
+    const nudge = el(`<p class="rule-block small">The Circle works best from your home screen<span class="row" style="gap:20px"><button type="button" class="link-rule" id="install-how">Show me</button><button type="button" class="link-rule quiet muted" id="install-no">Not now</button></span></p>`);
     nudge.querySelector('#install-how').addEventListener('click', () => showInstall());
     nudge.querySelector('#install-no').addEventListener('click', () => { dismissInstallNudge(); nudge.remove(); });
     body.appendChild(nudge);
@@ -789,7 +789,7 @@ export function ledger({ store, params }) {
       { label: 'Description', value: 'note' }, { label: 'Points', value: 'points' },
       { label: 'US$', value: (r) => (r.points / s.pointsPerDollar).toFixed(2) }, { label: 'Running balance', value: 'running' },
     ]);
-    downloadText(`${VOCAB.clubName.toLowerCase()}-ledger-${me.name.split(' ')[0].toLowerCase()}${month ? `-${month}` : ''}.csv`, `﻿${csv}`, 'text/csv;charset=utf-8');
+    downloadText(`${VOCAB.slug}-ledger-${me.name.split(' ')[0].toLowerCase()}${month ? `-${month}` : ''}.csv`, `﻿${csv}`, 'text/csv;charset=utf-8');
   });
   return wrap;
 }
@@ -815,7 +815,7 @@ export function card({ store, go }) {
         <p class="eyebrow">${icon('idCard')}Keep it on your phone</p>
         <p class="small muted" id="wallet-note" style="margin-top:8px"></p>
         <div class="stack tight" style="margin-top:12px">
-          <button class="btn block" id="install">Put Hunto on your home screen</button>
+          <button class="btn block" id="install">Put the Circle on your home screen</button>
           <button class="btn ghost block" id="save">Save the card to your photos</button>
           <button class="btn ghost block" id="share">Send it to someone</button>
           <button class="btn ghost block" id="wallet" hidden>Add to Apple Wallet</button>
@@ -837,7 +837,7 @@ export function card({ store, go }) {
   const installBtn = wrap.querySelector('#install');
   if (isStandalone()) {
     installBtn.hidden = true;
-    note.textContent = 'Hunto is already on your home screen, so the card is one tap away — no pass needed.';
+    note.textContent = 'The Circle is already on your home screen, so the card is one tap away — no pass needed.';
   } else {
     note.textContent = 'It opens like an app, works offline, and the card is one tap away — with the QR always current, which a saved picture is not.';
   }
@@ -864,7 +864,7 @@ export function card({ store, go }) {
         const blob = await W.fetchApplePass(store, me);
         if (!blob) throw new Error('No pass came back.');
         const url = URL.createObjectURL(blob);
-        const a = Object.assign(document.createElement('a'), { href: url, download: `${VOCAB.clubName.toLowerCase()}-${me.cardCode || 'card'}.pkpass` });
+        const a = Object.assign(document.createElement('a'), { href: url, download: `${VOCAB.slug}-${me.cardCode || 'card'}.pkpass` });
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 30000);
         toast('Wallet should offer to add it. If nothing happens, open this page in Safari.', { kind: 'good', timeout: 7000 });
@@ -874,7 +874,7 @@ export function card({ store, go }) {
 
     wrap.querySelector('#save').addEventListener('click', async () => {
       const blob = await W.cardImage(me);
-      const file = new File([blob], `${VOCAB.clubName.toLowerCase()}-card.png`, { type: 'image/png' });
+      const file = new File([blob], `${VOCAB.slug}-card.png`, { type: 'image/png' });
       // On iOS the share object must contain nothing but `files`, or the sheet never opens.
       if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file] }); return; } catch { /* fall through to a download */ } }
       const url = URL.createObjectURL(blob);
@@ -901,7 +901,7 @@ export function card({ store, go }) {
 
     wrap.querySelector('#share').addEventListener('click', () => shareText({
       title: `${VOCAB.clubName} · ${me.name}`,
-      text: `${me.name} — ${tierName(me.monthlyUsd)} Insider of the ${VOCAB.clubName}, card ${me.cardCode || ''}.`,
+      text: `${me.name} — ${tierName(me.monthlyUsd)} Insider of ${VOCAB.clubName}, card ${me.cardCode || ''}.`,
       url: W.cardUrl(me),
     }));
   });
@@ -1192,7 +1192,7 @@ export function profile({ store, go, refresh }) {
   drawBadges(wrap.querySelector('#badges-panel'), { store, me, refresh });
   drawCorner(wrap.querySelector('#corner-panel'), { store, me, refresh });
 
-  wrap.querySelector('#export').addEventListener('click', () => downloadText(`${VOCAB.clubName.toLowerCase()}-backup.json`, store.exportJson(), 'application/json'));
+  wrap.querySelector('#export').addEventListener('click', () => downloadText(`${VOCAB.slug}-backup.json`, store.exportJson(), 'application/json'));
   wrap.querySelector('#signout').addEventListener('click', async () => { await store.signOut(); toast(`${VOCAB.pap.bye[0]} · ${VOCAB.pap.bye[1]}`); go('/'); });
   return wrap;
 }

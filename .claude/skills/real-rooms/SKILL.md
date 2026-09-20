@@ -1,11 +1,11 @@
 ---
 name: real-rooms
-description: Get REAL room information and REAL photographs from a hotel's own website into the Hunto Circle catalog — room names, sizes, occupancy, bed configuration and pictures, each recorded with the URL it came from and the date it was fetched. Use this skill whenever anyone mentions adding or updating a property or a room in the catalog, says the pictures look fake, generic, drawn, AI-made or "ghost", asks where a room photo or a room size came from, wants to replace an illustration with a real photograph, doubts whether a room actually exists, asks to check what a hotel really offers, or wants scraped or sourced hotel data of any kind. Also use it before publishing any room a member could book, so nothing on the board is invented.
+description: Get REAL room information and REAL photographs from a hotel's own website into the Inner Hotel Circle catalog — room names, sizes, occupancy, bed configuration and pictures, each recorded with the URL it came from and the date it was fetched. Use this skill whenever anyone mentions adding or updating a property or a room in the catalog, says the pictures look fake, generic, drawn, AI-made or "ghost", asks where a room photo or a room size came from, wants to replace an illustration with a real photograph, doubts whether a room actually exists, asks to check what a hotel really offers, or wants scraped or sourced hotel data of any kind. Also use it before publishing any room a member could book, so nothing on the board is invented.
 ---
 
 # Real rooms, real pictures
 
-The Hunto catalog draws every place as an SVG illustration and carries eleven room types whose
+The catalog draws every place as an SVG illustration and carries eleven room types whose
 sizes nobody published — they were estimated. Victor's objection is exact: *"I don't want fantasy
 rooms only rooms that are actual there… it's all ghost fantasy pictures."*
 
