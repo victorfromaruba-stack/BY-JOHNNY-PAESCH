@@ -19,12 +19,25 @@ import { pointsPerMonth } from '../core/money.js';
  */
 export function tierLadder(s, { mine = null, rows: extra = [], caption = '' } = {}) {
   const tiers = [...s.tiers].sort((a, b) => a.monthlyUsd - b.monthlyUsd);
+  // app.css dresses every <b> inside a level column as a main row figure — 14px, weight 600, on
+  // its own line — and `.lad-v b.num` then sets the mono face at 13px. A figure that belongs to
+  // the small grey sub-line needs the face without the size and the weight, and app.css is not
+  // this file's to change, so those two are handed back here. The class stays `num`: it is a
+  // figure and it reads in the figure face, which is the whole point.
+  const subFig = (txt) => `<b class="num" style="display:inline;font-size:inherit;font-weight:inherit">${escapeHtml(txt)}</b>`;
   // Days, not hours, once it divides evenly: "2 days" and "7 days" line up in a 74px column
   // and read as the same kind of thing. "48 hours" wrapped onto two lines and made the row
-  // twice as tall as the ones around it.
-  const firstLook = (t) => (!t.firstLookHours ? 'Same time'
-    : t.firstLookHours % 24 === 0 ? `${t.firstLookHours / 24} day${t.firstLookHours === 24 ? '' : 's'}`
-    : `${t.firstLookHours} h`);
+  // twice as tall as the ones around it. The count is split off from its unit so it can sit in
+  // its own mono <b class="num"> like every other figure in the grid — it was the one row that
+  // printed its number in the reading face — and the unit goes to the sub-line with "early",
+  // which is the shape "Book ahead" and "Guest passes" already use.
+  const firstLook = (t) => {
+    if (!t.firstLookHours) return '<b>Same time</b>';
+    const evenDays = t.firstLookHours % 24 === 0;
+    const n = evenDays ? t.firstLookHours / 24 : t.firstLookHours;
+    const unit = evenDays ? `day${t.firstLookHours === 24 ? '' : 's'}` : 'h';
+    return `<b class="num">${n}</b><span class="lad-sub">${escapeHtml(unit)} early</span>`;
+  };
   // The row label stands alone at 390: the one-line "why" under each label was the widest thing
   // in the grid and pushed the three figure columns into the gutter, so it is gone rather than
   // hidden. Every figure sits in its own mono <b class="num">; the words beside it stay in the
@@ -32,7 +45,7 @@ export function tierLadder(s, { mine = null, rows: extra = [], caption = '' } = 
   const rows = [
     { k: 'Points a month',
       vals: tiers.map(t => `<b class="num">${escapeHtml(fmtPoints(pointsPerMonth(s, t.monthlyUsd)))}</b>
-        <span class="lad-sub">${escapeHtml(fmtUsd2(pointsPerMonth(s, t.monthlyUsd) / s.pointsPerDollar))}</span>`) },
+        <span class="lad-sub">${subFig(fmtUsd2(pointsPerMonth(s, t.monthlyUsd) / s.pointsPerDollar))}</span>`) },
     { k: 'Points on top',
       vals: tiers.map(t => (t.bonusRate ? `<b class="num good">+${Math.round(t.bonusRate * 100)}%</b>` : '<span class="lad-no">—</span>')) },
     { k: 'Open requests',
@@ -42,16 +55,22 @@ export function tierLadder(s, { mine = null, rows: extra = [], caption = '' } = 
     { k: 'Guest passes',
       vals: tiers.map(t => `<b class="num">${t.guestCerts}</b><span class="lad-sub">a year</span>`) },
     { k: 'First look at a trip',
-      vals: tiers.map(t => `<b>${escapeHtml(firstLook(t))}</b>${t.firstLookHours ? '<span class="lad-sub">early</span>' : ''}`) },
+      vals: tiers.map(t => firstLook(t)) },
     { k: 'Answered within',
       vals: tiers.map(t => `<b class="num">${t.slaHours ?? s.slaHours}</b><span class="lad-sub">hours</span>`) },
     ...extra,
   ];
+  // The three column heads are the money the member is choosing between — the most consequential
+  // figures on the page — and they were the only ones in the grid still set in the reading face.
+  // `num` puts them in the figure face. The inline size only holds the head where it already
+  // renders: `.lad-amt` asks for --t-lede but `.lad-v b` has always outranked it and served
+  // --t-small, and `.lad-v b.num` would now pull it down again to the row figure's size. Which
+  // of those two app.css means is a question for app.css; this changes the face, not the scale.
   const head = `<div class="lad-r lad-head" role="row">
       <div class="lad-k" role="columnheader"><span class="lad-cap">${escapeHtml(caption || 'A month costs')}</span></div>
       ${tiers.map(t => `<div class="lad-v${t.monthlyUsd === mine ? ' mine' : ''}" role="columnheader">
         ${t.monthlyUsd === mine ? '<span class="lad-you">You</span>' : ''}
-        <b class="lad-amt">$${t.monthlyUsd}</b>
+        <b class="lad-amt num" style="font-size:var(--t-small)">$${t.monthlyUsd}</b>
         <span class="lad-name">${escapeHtml(tierName(t.monthlyUsd))}</span>
       </div>`).join('')}
     </div>`;
@@ -298,16 +317,60 @@ function attachTilt(wrap) {
 }
 
 /**
+ * The twenty-four marks, drawn here rather than fetched.
+ *
+ * They were <img src="assets/badges/x.svg"> and every one of them came out pure black in both
+ * themes. An SVG loaded through an <img> is its own document: the stroke="currentColor" those
+ * files are drawn with resolves against THAT document's initial colour, so .badge-mark's colour
+ * — --ink-2, or --flight on a founder chip — never reached them. In the dark theme that is a
+ * black mark on a near-black chip: 1.38:1, a chip with nothing legible in it. Inline, the marks
+ * are part of this page again and currentColor is the chip's colour, which is how the rank crest
+ * two hundred lines up has always done it. Twenty-four requests fall away with them.
+ *
+ * Every drawing is the file's, unchanged, and the files in assets/badges/ stay where they are.
+ * The wrapper below carries the attributes they all shared, so the set keeps its one stroke
+ * weight: a mark added here must be drawn on the same 48-unit square at the same weight.
+ */
+const MARKS = {
+  camera: '<rect x="7" y="15" width="34" height="22" rx="4"/><circle cx="24" cy="26" r="7"/><path d="M18 15l3-4h6l3 4"/>',
+  clock: '<circle cx="24" cy="24" r="15"/><path d="M24 15v10l7 4"/>',
+  crown: '<path d="M8 32h32M10 32 8 16l9 7 7-11 7 11 9-7-2 16" fill="currentColor" fill-opacity=".18"/>',
+  door: '<rect x="14" y="9" width="20" height="30" rx="2"/><circle cx="29" cy="25" r="1.6" fill="currentColor"/>',
+  eye: '<path d="M6 24s7-10 18-10 18 10 18 10-7 10-18 10S6 24 6 24Z"/><circle cx="24" cy="24" r="4.5"/>',
+  flag: '<path d="M14 40V9M14 11h20l-4 6 4 6H14"/>',
+  hands: '<path d="M10 28l7-7 7 7M38 28l-7-7-7 7"/><path d="M12 30v6h24v-6"/>',
+  map: '<path d="M9 13l10-4 10 4 10-4v26l-10 4-10-4-10 4Z"/><path d="M19 9v26M29 13v26"/>',
+  moon: '<path d="M32 8a16 16 0 1 0 8 26A16 16 0 0 1 32 8Z"/>',
+  pen: '<path d="M11 37l3-8 18-18 5 5-18 18Z"/><path d="M29 14l5 5"/>',
+  pin: '<path d="M24 41s12-12 12-20a12 12 0 1 0-24 0c0 8 12 20 12 20Z"/><circle cx="24" cy="21" r="4.5"/>',
+  plane: '<path d="M40 26 8 34l7-10L8 14l32 8a2.2 2.2 0 0 1 0 4Z"/>',
+  plus: '<circle cx="24" cy="24" r="15"/><path d="M24 17v14M17 24h14"/>',
+  pot: '<path d="M12 20h24v10a8 8 0 0 1-8 8h-8a8 8 0 0 1-8-8Z"/><path d="M9 20h30M20 14v-3M28 14v-3"/>',
+  quill: '<path d="M14 34c8-18 16-22 22-22 0 12-6 20-16 22l-6 2Z" fill="currentColor" fill-opacity=".18"/><path d="M14 34l-4 4"/>',
+  repeat: '<path d="M12 20a12 12 0 0 1 21-7M36 28a12 12 0 0 1-21 7"/><path d="M33 8v6h-6M15 40v-6h6"/>',
+  ring: '<circle cx="19" cy="26" r="9"/><circle cx="29" cy="26" r="9"/>',
+  star: '<path d="m24 9 4.6 9.7 10.4 1.5-7.5 7.5 1.8 10.6L24 33.3l-9.3 5 1.8-10.6-7.5-7.5 10.4-1.5Z"/>',
+  sunrise: '<path d="M8 34h32M14 34a10 10 0 0 1 20 0M24 12v5M12 18l3 3M36 18l-3 3"/>',
+  tf: '<circle cx="24" cy="24" r="15"/><path d="M17 18v7h5M22 18v13M26 18h4v13"/>',
+  twelve: '<circle cx="24" cy="24" r="15"/><path d="M20 18h2v13M26 18h4v6h-4v7h4"/>',
+  vault: '<rect x="9" y="10" width="30" height="28" rx="4" fill="currentColor" fill-opacity=".14"/><circle cx="24" cy="24" r="7"/><path d="M24 13v4M24 31v4M13 24h4M31 24h4"/>',
+  wave: '<path d="M7 20c5-5 10-5 15 0s10 5 15 0M7 30c5-5 10-5 15 0s10 5 15 0"/>',
+  wheel: '<circle cx="24" cy="24" r="15"/><circle cx="24" cy="24" r="5"/><path d="M24 9v10M11 30l9-4M37 30l-9-4"/>',
+};
+
+/**
  * A badge mark. Flat single-weight line art, deliberately not the prestige-crest treatment:
  * these appear at 26px in a grid of two dozen, and a bevelled gold shield at that size is a
  * dark blob. Silhouette first, and the same stroke weight across the whole set so one heavy
- * mark cannot ruin a row.
+ * mark cannot ruin a row. A mark nobody has drawn falls back to the star rather than to an
+ * empty chip.
  */
 export function badgeMark(badge, { size = 26, tone = '' } = {}) {
-  const mark = badge?.mark || 'star';
+  const mark = MARKS[badge?.mark] ? badge.mark : 'star';
   return `<span class="badge-mark ${tone}" style="--s:${size}px" role="img"
-    aria-label="${escapeHtml(badge?.name || 'Badge')}"><img src="assets/badges/${escapeHtml(mark)}.svg"
-    width="${size}" height="${size}" alt="" loading="lazy"></span>`;
+    aria-label="${escapeHtml(badge?.name || 'Badge')}"><svg viewBox="0 0 48 48" width="${size}" height="${size}"
+    fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"
+    aria-hidden="true">${MARKS[mark]}</svg></span>`;
 }
 
 /** The three badges someone chose to show, beside their name. */
