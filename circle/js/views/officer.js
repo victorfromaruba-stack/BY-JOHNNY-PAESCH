@@ -944,6 +944,11 @@ export function pool({ store }) {
 }
 
 // ---------------------------------------------------------------- the Circle
+// Which section of the Circle is open, kept OUTSIDE the view. app.js re-renders the whole route
+// on every store commit, and joining a table is a commit — so a tab held in the closure put the
+// member back on Insiders the instant they said they were coming, and the thing they had just
+// done scrolled off the screen. Same reason the Deals filters live at module scope.
+let circleTab = 'people';
 export function circle({ store }) {
   const me = store.me, s = store.settings;
   const roster = store.people().filter(m => m.status !== 'left');
@@ -953,15 +958,16 @@ export function circle({ store }) {
       <p class="eyebrow">${roster.length} Insiders · capped at ${s.memberCap} · ${s.memberCap - roster.length} seats open</p>
       <h1>The Circle</h1>
       <div class="segmented even no-print" role="group" aria-label="Circle sections" id="tabs">
-        <button type="button" data-tab="people" aria-pressed="true">Insiders</button>
+        <button type="button" data-tab="people" aria-pressed="false">Insiders</button>
         <button type="button" data-tab="chipin" aria-pressed="false">Chip in${store.openToChipIn().length ? ` <span class="nav-badge">${store.openToChipIn().length}</span>` : ''}</button>
+        <button type="button" data-tab="tables" aria-pressed="false">Tables${store.comingUpDinners().length ? ` <span class="nav-badge">${store.comingUpDinners().length}</span>` : ''}</button>
         <button type="button" data-tab="notes" aria-pressed="false">Notes</button>
         <button type="button" data-tab="milestones" aria-pressed="false">Milestones</button>
       </div>
       <div id="panel" style="margin-top:var(--s-4)"></div>
     </div></section></div>`);
   const panel = wrap.querySelector('#panel');
-  let tab = 'people';
+  let tab = circleTab;
   const draw = () => {
     if (tab === 'people') {
       const paintCrests = (root) => root.querySelectorAll('[data-crest]').forEach((slot) => {
@@ -994,6 +1000,44 @@ export function circle({ store }) {
           <span style="flex:none" data-crest="${m.id}"></span></li>`;
       }).join('')}</ul></div>`));
       paintCrests(panel);
+    } else if (tab === 'tables') {
+      // A table is the one thing in this app that costs no points, so the screen says so before
+      // anything else. Everywhere else a number on a card is money out of somebody's balance;
+      // here it is a headcount, and a member who assumes otherwise would be right to be annoyed.
+      const desk = store.hasRole('planner', 'comms', 'admin');
+      const up = store.comingUpDinners();
+      panel.replaceChildren(el(`<div class="stack">
+        <p class="small muted">Victor books a table, you say whether you are coming, and everyone settles with the
+          restaurant on the night. Nothing is spent through the Circle and nothing is taken by it — this is the
+          Circle eating together, not the Circle buying anything. Bring whoever you like.</p>
+        ${desk ? `<button class="btn block" id="new-dinner">${icon('plus', { size: 16 })}Put a table on the board</button>` : ''}
+        ${up.length ? up.map(d => {
+          const heads = store.dinnerHeadcount(d.id);
+          const mine = store.myPlaceAt(d.id);
+          const left = store.dinnerSeatsLeft(d);
+          return `<div class="panel">
+            <div class="row-between">
+              <div><b>${escapeHtml(d.name)}</b>${d.area ? `<span class="small muted"> · ${escapeHtml(d.area)}</span>` : ''}<br>
+                <span class="small muted">${escapeHtml(fmtDayTime(d.at))}</span></div>
+              <div style="text-align:right"><b class="num">${heads}</b><br><span class="small muted">coming</span></div></div>
+            ${d.note ? `<p class="small" style="margin-top:10px">${escapeHtml(d.note)}</p>` : ''}
+            ${left != null ? `<p class="small muted" style="margin-top:8px"><b class="num">${left}</b> of
+               <b class="num">${d.maxSeats}</b> place${d.maxSeats === 1 ? '' : 's'} left</p>` : ''}
+            <div class="row-between" style="margin-top:12px;gap:8px;flex-wrap:wrap">
+              <label class="row" style="gap:8px;align-items:center">
+                <span class="small muted">Bringing</span>
+                <input class="guest-n" type="number" min="0" max="10" inputmode="numeric" style="width:76px;min-height:44px"
+                       value="${mine ? (mine.guests || 0) : 0}" data-din="${escapeHtml(d.id)}"
+                       aria-label="How many you bring to ${escapeHtml(d.name)}"></label>
+              <div class="row" style="gap:8px">
+                ${mine ? `<button class="btn ghost sm" data-leave="${escapeHtml(d.id)}">Not coming</button>` : ''}
+                <button class="btn sm" data-join="${escapeHtml(d.id)}">${mine ? 'Change it' : 'I am coming'}</button></div></div>
+            ${mine ? `<p class="small muted" style="margin-top:8px">You are down for
+               <b class="num">${1 + (mine.guests || 0)}</b>.</p>` : ''}
+            ${d.link ? `<p style="margin-top:8px"><a class="link-rule" href="${escapeHtml(d.link)}" target="_blank" rel="noopener">The restaurant</a></p>` : ''}
+          </div>`;
+        }).join('') : `<p class="small muted">No table on the board. ${desk ? 'Put one up and see who comes.' : 'Victor puts them up when he books one.'}</p>`}
+      </div>`));
     } else if (tab === 'chipin') {
       const open = store.openToChipIn();
       const avail = store.availablePoints(me.id);
@@ -1044,11 +1088,62 @@ export function circle({ store }) {
       </div>`));
     }
   };
+  // The buttons are painted from `tab`, not from a hard-coded default, so returning to this
+  // screen lands where the member left it rather than back on Insiders.
+  const paintTabs = () => wrap.querySelectorAll('#tabs [data-tab]')
+    .forEach(x => x.setAttribute('aria-pressed', String(x.dataset.tab === tab)));
+  paintTabs();
   draw();
+
+  // Tables. Nothing here spends points, so nothing here needs a confirmation except calling one
+  // off, which other people have already put in their diary.
+  wrap.addEventListener('click', async (e) => {
+    const join = e.target.closest('[data-join]');
+    const leave = e.target.closest('[data-leave]');
+    const post = e.target.closest('#new-dinner');
+    if (!join && !leave && !post) return;
+    try {
+      if (post) {
+        const out = await sheet({ title: 'Put a table on the board', render: (body, close) => {
+          body.innerHTML = `
+            <p class="sheet-text">Insiders say whether they are coming and settle with the restaurant themselves.
+              Leave the places blank unless the restaurant has actually held you to a number.</p>
+            <label class="field"><span>Restaurant</span><input name="name" required maxlength="80" placeholder="Papiamento"></label>
+            <label class="field"><span>Where</span><input name="area" maxlength="40" placeholder="Oranjestad"></label>
+            <label class="field"><span>When</span><input name="at" type="datetime-local" required></label>
+            <label class="field"><span>Anything they should know</span>
+              <textarea name="note" rows="2" maxlength="280" placeholder="Eight o'clock, the courtyard table."></textarea></label>
+            <label class="field"><span>Places, if the table is held to a number</span>
+              <input name="max" type="number" min="1" max="200" inputmode="numeric" placeholder="no limit">
+              <span class="hint">Leave it empty and anyone can come.</span></label>
+            <label class="field"><span>The restaurant's page</span><input name="link" type="url" placeholder="https://"></label>
+            <div class="sheet-actions"><button type="button" class="btn block" data-ok>Put it up</button></div>`;
+          body.querySelector('[data-ok]').addEventListener('click', () => {
+            const v = (n) => body.querySelector(`[name=${n}]`).value.trim();
+            if (!v('name') || !v('at')) { toast('The restaurant and the time, at least.', { kind: 'bad' }); return; }
+            close({ name: v('name'), area: v('area'), at: new Date(v('at')).toISOString(),
+                    note: v('note'), link: v('link'), maxSeats: Number(v('max')) || null });
+          });
+        } });
+        if (!out) return;
+        await store.postDinner(out);
+        toast('It is on the board.');
+      } else if (join) {
+        const n = wrap.querySelector(`.guest-n[data-din="${join.dataset.join}"]`);
+        await store.joinDinner(join.dataset.join, Number(n?.value) || 0);
+        toast('You are down for it.');
+      } else if (leave) {
+        await store.leaveDinner(leave.dataset.leave);
+        toast('Taken off the list.');
+      }
+      draw();
+    } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
+  });
+
   wrap.querySelector('#tabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-tab]'); if (!b) return;
-    tab = b.dataset.tab;
-    wrap.querySelectorAll('[data-tab]').forEach(x => { const on = x.dataset.tab === tab; x.setAttribute('aria-pressed', String(on)); });
+    tab = b.dataset.tab; circleTab = tab;
+    paintTabs();
     draw();
   });
   return wrap;

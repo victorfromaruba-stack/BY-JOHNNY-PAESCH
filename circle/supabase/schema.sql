@@ -3330,3 +3330,8 @@ grant execute on function revoke_signup_link(uuid) to authenticated;
    rather than left beside the four-argument one: two overloads of an admin function is the
    ambiguity trap this schema has been bitten by before. */
 alter table signup_links add column if not exists member_id uuid references members(id);
+
+/* Dinners: a table Victor books and Insiders join. Applied live as
+   20260921_dinners_a_table_anyone_can_join. Deliberately NOT a stay and NOT a redemption —
+   those exist to move points, and no points move here. max_seats null means no limit, which is
+   the point: a table is not a hotel room. */

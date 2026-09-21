@@ -16,7 +16,7 @@ export const OPEN_REDEMPTION = [REDEMPTION_STATUS.requested, REDEMPTION_STATUS.q
 export const LEDGER_KIND = Object.freeze({ earn: 'earn', bonus: 'bonus', streak: 'streak', founding: 'founding', burn: 'burn', refund: 'refund', adjust: 'adjust', expire: 'expire', reverse: 'reverse', badge: 'badge' });
 export const PROMO_KINDS = [LEDGER_KIND.bonus, LEDGER_KIND.streak, LEDGER_KIND.founding];
 export const ROLES = Object.freeze(['member', 'treasurer', 'deputy', 'planner', 'comms', 'admin']);
-export const COLLECTIONS = ['members', 'badgeCatalog', 'memberBadges', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes', 'pledges', 'looks', 'standings', 'crews', 'crewMembers', 'crewMessages', 'moments', 'momentReactions', 'signupLinks'];
+export const COLLECTIONS = ['members', 'badgeCatalog', 'memberBadges', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes', 'pledges', 'looks', 'standings', 'crews', 'crewMembers', 'crewMessages', 'moments', 'momentReactions', 'signupLinks', 'dinners', 'dinnerGuests'];
 /**
  * A complete, empty state. Every adapter starts from this — a missing collection is not a
  * missing feature, it is `[...undefined]` the first time any screen asks for it, which is
@@ -969,6 +969,72 @@ export class Store {
     return inv;
   }
   invitation(code) { return this.state.invitations.find(i => i.code.toUpperCase() === String(code).toUpperCase() && !i.acceptedMemberId) || null; }
+
+  // ---------- dinners ----------
+  //
+  // A table Victor books and Insiders join. No points move: everyone pays the restaurant
+  // themselves, which is why there is no quote, no share and nothing for the Banker. The getters
+  // live on Store so both backends read a dinner the same way.
+  dinners() {
+    return (this.state.dinners || []).slice().sort((a, b) => new Date(a.at) - new Date(b.at));
+  }
+  dinner(id) { return this.dinners().find(d => d.id === id) || null; }
+  /** Still to come and not called off. The list a member actually wants. */
+  comingUpDinners() {
+    const now = Date.now();
+    return this.dinners().filter(d => !d.cancelledAt && new Date(d.at).getTime() >= now);
+  }
+  dinersOn(dinnerId) { return (this.state.dinnerGuests || []).filter(g => g.dinnerId === dinnerId); }
+  /** Heads at the table: each Insider counts as one, plus whoever they bring. */
+  dinnerHeadcount(dinnerId) { return sum(this.dinersOn(dinnerId), g => 1 + (g.guests || 0)); }
+  myPlaceAt(dinnerId) { return this.dinersOn(dinnerId).find(g => g.memberId === this.me?.id) || null; }
+  dinnerSeatsLeft(d) {
+    return d?.maxSeats == null ? null : Math.max(0, d.maxSeats - this.dinnerHeadcount(d.id));
+  }
+  async postDinner({ name, at, area = '', note = '', link = '', maxSeats = null }) {
+    if (!this.hasRole('planner', 'comms', 'admin')) throw new Error('Only Victor or Ian can put a table on the board');
+    if (!String(name || '').trim()) throw new Error('Which restaurant?');
+    if (!at) throw new Error('A table needs a day and a time');
+    const d = { id: uid('din'), name: String(name).trim(), area: area || '', at,
+                note: note || '', link: safeUrl(link) || '', maxSeats: maxSeats ?? null,
+                createdBy: this.me?.id || null, createdAt: nowIso(), cancelledAt: null, cancelledReason: '' };
+    this.state.dinners.push(d);
+    this.log(this.me?.id, 'dinner.post', 'dinner', d.id, { name: d.name, at: d.at, maxSeats: d.maxSeats });
+    await this.commit('dinners');
+    return d;
+  }
+  async cancelDinner(id, reason) {
+    if (!this.hasRole('planner', 'comms', 'admin')) throw new Error('Only Victor or Ian can call off a table');
+    if (!String(reason || '').trim()) throw new Error('Say why — the people coming read it');
+    const d = this.dinner(id); if (!d) throw new Error('No such table');
+    d.cancelledAt = nowIso(); d.cancelledReason = String(reason).trim();
+    this.log(this.me?.id, 'dinner.cancel', 'dinner', d.id, { reason: d.cancelledReason });
+    await this.commit('dinners');
+    return d;
+  }
+  async joinDinner(id, guests = 0) {
+    const me = this.me; if (!me) throw new Error('Only an Insider can join a table');
+    const d = this.dinner(id); if (!d) throw new Error('No such table');
+    if (d.cancelledAt) throw new Error('That table was called off');
+    if (new Date(d.at).getTime() < Date.now()) throw new Error('That evening has been and gone');
+    const g = Math.round(Number(guests) || 0);
+    if (g < 0 || g > 10) throw new Error('Between none and ten guests');
+    if (d.maxSeats != null) {
+      const others = sum(this.dinersOn(id).filter(x => x.memberId !== me.id), x => 1 + (x.guests || 0));
+      if (others + 1 + g > d.maxSeats) throw new Error(`That table only has room for ${d.maxSeats}`);
+    }
+    const mine = this.myPlaceAt(id);
+    if (mine) mine.guests = g;
+    else this.state.dinnerGuests.push({ dinnerId: id, memberId: me.id, guests: g, at: nowIso() });
+    await this.commit('dinnerGuests');
+    return this.myPlaceAt(id);
+  }
+  async leaveDinner(id) {
+    const me = this.me; if (!me) throw new Error('Only an Insider can do that');
+    this.state.dinnerGuests = (this.state.dinnerGuests || []).filter(g => !(g.dinnerId === id && g.memberId === me.id));
+    await this.commit('dinnerGuests');
+    return true;
+  }
 
   // ---------- the sign-up link ----------
   //

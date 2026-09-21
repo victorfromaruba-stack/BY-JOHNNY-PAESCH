@@ -75,7 +75,7 @@ export class SupabaseStore extends Store {
   async reload() {
     const tables = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'pledges', 'looks', 'announcements', 'audit', 'invitations', 'month_closes', 'promo_deferrals', 'room_types', 'watches', 'deals',
       'standings', 'crews', 'crew_members', 'crew_messages', 'moments', 'moment_reactions',
-      'badge_catalog', 'member_badges', 'signup_links'];
+      'badge_catalog', 'member_badges', 'signup_links', 'dinners', 'dinner_guests'];
     // members comes from a view that leaves out auth_user_id and the officer's private notes;
     // it is security_invoker, so the members_read policy still decides which rows come back.
     // standing_v answers for everybody — months held, a rank and a list of badges, and nothing
@@ -117,6 +117,7 @@ export class SupabaseStore extends Store {
     // RLS-gated to admin, so a plain member's fetch succeeds and returns nothing rather than
     // erroring. The Desk panel is the only reader.
     this.state.signupLinks = this.state.signup_links || this.state.signupLinks || [];
+    this.state.dinnerGuests = this.state.dinner_guests || this.state.dinnerGuests || [];
     this.state.memberBadges = this.state.member_badges || this.state.memberBadges || [];
     // The database calls them from_date/to_date because `from` and `to` are awkward in SQL;
     // the rest of the app calls them from/to. Bridge it here rather than everywhere else.
@@ -307,6 +308,16 @@ export class SupabaseStore extends Store {
   async pauseMember(id, untilMonth) { return this.rpc('set_my_status', { p_status: 'paused', p_paused_until: untilMonth }); }
   async resumeMember() { return this.rpc('set_my_status', { p_status: 'active' }); }
   async leaveMember() { return this.rpc('set_my_status', { p_status: 'left' }); }
+  // ---------- dinners ----------
+  // The getters live on Store; only the writes differ, and every guard here exists in SQL too.
+  async postDinner({ name, at, area = '', note = '', link = '', maxSeats = null }) {
+    return this.rpc('post_dinner', { p_name: name, p_at: at, p_area: area || null,
+                                     p_note: note || null, p_link: link || null, p_max_seats: maxSeats });
+  }
+  async cancelDinner(id, reason) { return this.rpc('cancel_dinner', { p_id: id, p_reason: reason }); }
+  async joinDinner(id, guests = 0) { return this.rpc('join_dinner', { p_id: id, p_guests: Math.round(Number(guests) || 0) }); }
+  async leaveDinner(id) { return this.rpc('leave_dinner', { p_id: id }); }
+
   // ---------- the sign-up link ----------
   //
   // A person holding the link is nobody yet, so these two go straight to the database rather
