@@ -69,8 +69,12 @@ jobs:
           set -euo pipefail
           rm -rf circle/watcher circle/supabase circle/scripts .claude .github
           rm -f README.md circle/README.md
+          # google*.html is Search Console's proof that Victor owns this site. Google re-checks it
+          # periodically and silently un-verifies if it stops answering, which would cost the
+          # Safe Browsing review — so it is asserted here rather than trusted to survive a tidy-up.
           for must in circle/index.html circle/js/app.js circle/tools/grab.js \
-                      circle/tools/check-interval.ics circle/data/open-weeks.json circle/sw.js; do
+                      circle/tools/check-interval.ics circle/data/open-weeks.json circle/sw.js \
+                      google98640c688d2ce245.html; do
             test -e "$must" || { echo "::error::$must was removed and the app needs it"; exit 1; }
           done
           for gone in circle/watcher circle/supabase .claude; do
