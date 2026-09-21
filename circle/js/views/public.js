@@ -670,6 +670,7 @@ const LINK_REFUSED = {
   revoked: ['That link has been turned off', 'It was working and someone closed it. Ask Victor or Ian for a fresh one.'],
   expired: ['That link has expired', 'Ask Victor or Ian for a fresh one — it takes them a moment.'],
   used_up: ['That link has been used', 'It was meant for one person. Ask Victor or Ian for one of your own.'],
+  claimed: ['You are already in', 'This invitation has been used and there is an account waiting for you. Sign in with the username you chose; if you cannot remember it, ask Victor or Ian.'],
   full: ['Every seat is taken', 'The Circle is capped and all of them are spoken for. Ask Victor to tell you when one opens.'],
 };
 
@@ -699,7 +700,12 @@ async function joinByLink(wrap, { store, token, go }) {
   const s2 = { pointsPerDollar: info.pointsPerDollar, serviceRate: info.serviceRate, tiers: info.tiers,
                foundingSeats: info.foundingSeats, memberCap: info.memberCap, exitFeeUsd: info.exitFeeUsd };
   const tiers = (info.tiers || []).slice().sort((a, b) => a.monthlyUsd - b.monthlyUsd);
-  const state = { monthlyUsd: tiers[1]?.monthlyUsd ?? tiers[0]?.monthlyUsd ?? 100, show: false };
+  // An invitation written FOR someone on the list already knows their name and the level Victor
+  // put them down for, so it greets them instead of asking who they are — and their level is the
+  // starting point rather than the middle option.
+  const forMember = !!info.forName;
+  const state = { monthlyUsd: info.forMonthlyUsd ?? tiers[1]?.monthlyUsd ?? tiers[0]?.monthlyUsd ?? 100,
+                  show: false, name: info.forName || '' };
 
   // Picking a level redraws the panel, which rebuilds the form — so whatever has been typed is
   // read back into state first. Without this, choosing a level after filling your name silently
@@ -716,7 +722,8 @@ async function joinByLink(wrap, { store, token, go }) {
     const sp = splitContribution(state.monthlyUsd, s2, tier);
     wrap.innerHTML = `
       <p class="eyebrow">${icon('key', { size: 14 })}${info.invitedBy ? `An invitation from ${escapeHtml(info.invitedBy)}` : 'Your invitation'}</p>
-      <h1>Join ${escapeHtml(info.clubName)}</h1>
+      <h1>${forMember ? `${escapeHtml(String(info.forName).split(' ')[0])}, join ${escapeHtml(info.clubName)}`
+                       : `Join ${escapeHtml(info.clubName)}`}</h1>
       <p class="lede" style="margin-top:12px">Put in a hundred dollars a month. Take it out as hotel, at cost,
         with people you know. <b class="num">${info.seatsTaken}</b> of <b class="num">${info.memberCap}</b> seats taken.
         ${info.wouldBeFounding ? 'You would be a Founding Insider — it stays on your card for good.' : ''}</p>
@@ -749,9 +756,12 @@ async function joinByLink(wrap, { store, token, go }) {
 
       <form class="panel" id="take-seat">
         <h2>Take your seat</h2>
-        <label class="field" style="margin-top:12px"><span>Your name</span>
+        ${forMember ? `<p class="small muted" style="margin-top:12px">You are on the list as
+            <b>${escapeHtml(info.forName)}</b>. Choose how you sign in and you are through.</p>
+          <input name="name" type="hidden" value="${escapeHtml(info.forName)}">`
+        : `<label class="field" style="margin-top:12px"><span>Your name</span>
           <input name="name" type="text" autocomplete="name" required maxlength="60" value="${escapeHtml(state.name || '')}">
-          <span class="hint">As it should read on your card.</span></label>
+          <span class="hint">As it should read on your card.</span></label>`}
         <label class="field"><span>Choose a username</span>
           <input name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off"
                  spellcheck="false" required maxlength="30" placeholder="marcus" value="${escapeHtml(state.username || '')}">

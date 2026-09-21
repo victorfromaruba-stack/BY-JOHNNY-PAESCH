@@ -986,9 +986,16 @@ export class Store {
     if (l.revokedAt) return { ok: false, reason: 'revoked' };
     if (l.expiresAt && new Date(l.expiresAt) < new Date()) return { ok: false, reason: 'expired' };
     if (l.maxUses != null && (l.uses || 0) >= l.maxUses) return { ok: false, reason: 'used_up' };
-    if (taken >= s.memberCap) return { ok: false, reason: 'full' };
+    const forMember = l.memberId ? this.member(l.memberId) : null;
+    if (l.memberId && !forMember) return { ok: false, reason: 'unknown' };
+    // An invitation for somebody already on the list does not have to clear the cap: their seat
+    // is already counted. It is spent once they have signed in.
+    if (forMember?.username) return { ok: false, reason: 'claimed' };
+    if (!forMember && taken >= s.memberCap) return { ok: false, reason: 'full' };
     return { ok: true, clubName: s.clubName || VOCAB.clubName, seatsTaken: taken, memberCap: s.memberCap,
-      foundingSeats: s.foundingSeats, wouldBeFounding: this.people().filter(m => !m.bot).length < s.foundingSeats,
+      forName: forMember?.name || null, forMonthlyUsd: forMember?.monthlyUsd ?? null,
+      foundingSeats: s.foundingSeats,
+      wouldBeFounding: forMember?.founding ?? (this.people().filter(m => !m.bot).length < s.foundingSeats),
       tiers: s.tiers, serviceRate: s.serviceRate, pointsPerDollar: s.pointsPerDollar,
       exitFeeUsd: s.exitFeeUsd, rulesVersion: s.rulesVersion,
       invitedBy: this.member(l.createdBy)?.name || null };
@@ -997,6 +1004,7 @@ export class Store {
     const info = this.signupLinkInfo(token);
     if (!info.ok) throw new Error({ unknown: 'That link is not valid', revoked: 'That link has been turned off',
       expired: 'That link has expired', used_up: 'That link has been used already',
+      claimed: 'That invitation has already been used',
       full: `The Circle is capped at ${this.settings.memberCap} Insiders` }[info.reason] || 'That link is not valid');
     const u = String(username || '').trim().toLowerCase();
     if (!String(name || '').trim()) throw new Error('Your name is needed for the card');
@@ -1011,6 +1019,21 @@ export class Store {
       throw new Error('Pick one of the levels the Circle offers');
     }
     const l = this.signupLink(token);
+    const existing = l.memberId ? this.member(l.memberId) : null;
+    if (existing) {
+      // Claim the row that is already there: roles, founding, name and history are Victor's and
+      // are not touched. An invitation is a way in, not a way to re-grade yourself.
+      Object.assign(existing, { username: u, email: `${u}@members.hunto.aw`, phone: phone || existing.phone,
+        monthlyUsd: Number(monthlyUsd), mustChangePassword: false,
+        status: existing.status === 'invited' ? 'active' : existing.status });
+      l.uses = (l.uses || 0) + 1;
+      this.state.rulesAcceptances.push({ memberId: existing.id, version: this.settings.rulesVersion, at: nowIso() });
+      this.log(existing.id, 'member.join_link', 'member', existing.id, { name: existing.name, linkId: l.id, claimedExisting: true });
+      await this.commit('members', 'signupLinks');
+      await this.setPasswordFor(existing.id, password);
+      await this.signIn(existing.id);
+      return { memberId: existing.id, username: u, email: existing.email, name: existing.name };
+    }
     // roles is written here, never taken from the caller: a link seats a member and nothing else.
     const m = {
       id: uid('mem'), name: String(name).trim(), email: `${u}@members.hunto.aw`, phone: phone || '',
@@ -1030,12 +1053,16 @@ export class Store {
     await this.signIn(m.id);
     return { memberId: m.id, username: u, email: m.email, name: m.name };
   }
-  async createSignupLink({ label = '', expiresAt = null, maxUses = null } = {}) {
+  async createSignupLink({ label = '', expiresAt = null, maxUses = null, memberId = null } = {}) {
     if (!this.hasRole('admin')) throw new Error('Only an admin can make a sign-up link');
+    if (memberId && !this.state.members.some(m => m.id === memberId && !m.username)) {
+      throw new Error('That person is not on the list, or already has a login');
+    }
     const l = { id: uid('lnk'), token: [...crypto.getRandomValues(new Uint8Array(16))]
                   .map(b => b.toString(16).padStart(2, '0')).join(''),
                 label: String(label || '').trim() || null, createdBy: this.me?.id || null,
-                createdAt: nowIso(), expiresAt, maxUses, uses: 0, revokedAt: null };
+                createdAt: nowIso(), expiresAt, memberId,
+                maxUses: memberId ? (maxUses ?? 1) : maxUses, uses: 0, revokedAt: null };
     this.state.signupLinks.push(l);
     this.log(this.me?.id, 'signup_link.create', 'signup_link', l.id, { label: l.label, expiresAt, maxUses });
     await this.commit('signupLinks');

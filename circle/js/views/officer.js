@@ -1189,6 +1189,7 @@ export function settings({ store, go }) {
         ${(store.signupLinks?.() || []).filter(l => !l.revokedAt).length
           ? `<ul class="ledger" style="margin-top:var(--s-3)">${(store.signupLinks() || []).filter(l => !l.revokedAt).map(l => `<li>
               <div><b>${escapeHtml(l.label || 'Untitled link')}</b>
+                ${l.memberId ? `<span class="chip">for ${escapeHtml(store.member(l.memberId)?.name || 'someone on the list')}</span>` : ''}
                 <span class="small muted">used <b class="num">${l.uses || 0}</b>${l.maxUses ? ` of <b class="num">${l.maxUses}</b>` : ' times'}${l.expiresAt ? ` · until ${escapeHtml(fmtDay(l.expiresAt))}` : ''}</span></div>
               <div class="row" style="gap:6px">
                 <button class="btn ghost sm" data-copy-link="${escapeHtml(l.token)}">${icon('clipboard', { size: 15 })}Copy</button>
@@ -1301,9 +1302,18 @@ export function settings({ store, go }) {
   const linkUrl = (token) => `${location.origin}${location.pathname}#/join/${token}`;
   wrap.querySelector('#new-link')?.addEventListener('click', async () => {
     const out = await sheet({ title: 'Write an invitation', render: (body, close) => {
+      // Anyone already on the list without a login. An invitation written for one of them claims
+      // their row — Vishnu keeps the Banker role instead of arriving as a second, plain member.
+      const waiting = store.members.filter(m => !m.username && !m.bot);
       body.innerHTML = `
-        <p class="sheet-text">Anyone who opens this can take a seat — they pick their own username and password and
-          are in straight away. Give it a name you will recognise later, and set a limit unless you mean it to stay open.</p>
+        <p class="sheet-text">Whoever opens this takes a seat — they pick their own username and password and are in
+          straight away. Give it a name you will recognise later, and set a limit unless you mean it to stay open.</p>
+        <label class="field"><span>Who is it for</span>
+          <select name="member">
+            <option value="">Anyone with the link — a new Insider</option>
+            ${waiting.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}${m.roles.filter(r => r !== 'member').length ? ` · ${escapeHtml(m.roles.filter(r => r !== 'member').join(', '))}` : ''}</option>`).join('')}
+          </select>
+          <span class="hint">${waiting.length ? 'Choosing a name connects them to the row they are already on, and keeps what they do in the club.' : 'Everyone on the list already has a login.'}</span></label>
         <label class="field"><span>What is it for</span>
           <input name="label" required maxlength="60" placeholder="For Marcus"></label>
         <label class="field"><span>How many people may use it</span>
@@ -1317,7 +1327,7 @@ export function settings({ store, go }) {
         const v = (n) => body.querySelector(`[name=${n}]`).value.trim();
         if (!v('label')) { toast('Give it a name so you know what it was for.', { kind: 'bad' }); return; }
         const days = Number(v('days'));
-        close({ label: v('label'), maxUses: Number(v('maxUses')) || null,
+        close({ label: v('label'), memberId: v('member') || null, maxUses: Number(v('maxUses')) || null,
                 expiresAt: days > 0 ? new Date(Date.now() + days * 864e5).toISOString() : null });
       });
     } });

@@ -331,8 +331,9 @@ export class SupabaseStore extends Store {
   }
   /** Admin only, both here and in SQL. signup_links is readable by an admin and by nobody else:
    *  a readable table of live tokens is a list of keys to the club. */
-  async createSignupLink({ label = '', expiresAt = null, maxUses = null } = {}) {
-    return this.rpc('create_signup_link', { p_label: label || null, p_expires_at: expiresAt, p_max_uses: maxUses });
+  async createSignupLink({ label = '', expiresAt = null, maxUses = null, memberId = null } = {}) {
+    return this.rpc('create_signup_link', { p_label: label || null, p_expires_at: expiresAt,
+                                            p_max_uses: maxUses, p_member: memberId });
   }
   async revokeSignupLink(id) { return this.rpc('revoke_signup_link', { p_id: id }); }
 

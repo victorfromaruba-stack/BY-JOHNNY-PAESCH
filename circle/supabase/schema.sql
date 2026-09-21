@@ -3322,3 +3322,11 @@ revoke all on function create_signup_link(text, timestamptz, int) from public, a
 revoke all on function revoke_signup_link(uuid) from public, anon;
 grant execute on function create_signup_link(text, timestamptz, int) to authenticated;
 grant execute on function revoke_signup_link(uuid) to authenticated;
+
+/* An invitation written FOR someone already on the list claims their row instead of making a
+   second one. Applied live as 20260921_invitation_can_be_for_someone_already_on_the_list.
+   Without it, Vishnu using a link arrives as a brand-new plain member and the Banker role is
+   left behind on the row nobody signed into. The three-argument create_signup_link is dropped
+   rather than left beside the four-argument one: two overloads of an admin function is the
+   ambiguity trap this schema has been bitten by before. */
+alter table signup_links add column if not exists member_id uuid references members(id);
