@@ -718,7 +718,7 @@ async function joinByLink(wrap, { store, token, go }) {
       <p class="eyebrow">${icon('key', { size: 14 })}${info.invitedBy ? `An invitation from ${escapeHtml(info.invitedBy)}` : 'Your invitation'}</p>
       <h1>Join ${escapeHtml(info.clubName)}</h1>
       <p class="lede" style="margin-top:12px">Put in a hundred dollars a month. Take it out as hotel, at cost,
-        with people you know. <b class="num">${info.seatsTaken}</b> of <b class="num">${info.memberCap}</b> seats are taken.
+        with people you know. <b class="num">${info.seatsTaken}</b> of <b class="num">${info.memberCap}</b> seats taken.
         ${info.wouldBeFounding ? 'You would be a Founding Insider — it stays on your card for good.' : ''}</p>
 
       <div class="panel" style="margin-top:20px">
