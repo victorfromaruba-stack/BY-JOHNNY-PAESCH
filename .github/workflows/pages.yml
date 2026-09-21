@@ -48,6 +48,35 @@ jobs:
         continue-on-error: true
         run: node circle/scripts/open-weeks.mjs
 
+      # Publish the app, not the repository.
+      #
+      # `path: "."` served the whole checkout, so victorfromaruba-stack.github.io was handing out
+      # circle/watcher/interval.mjs and redweek.mjs — scraping code for two login-gated sites,
+      # bot-management handling and all — circle/supabase/schema.sql, which is 196KB describing
+      # every policy, function and guard the club has, and .claude/ with the internal instructions.
+      #
+      # Chrome flagged the site as malicious and this is the likeliest reason. To a crawler the
+      # site read as a credential form on a free host, sitting beside JavaScript that injects into
+      # and scrapes a third-party login page. That is the fingerprint of a phishing kit, and it is
+      # a fair reading of what was actually published.
+      #
+      # Deleted from the CHECKOUT rather than by moving the publish root, so every URL that exists
+      # today still resolves: the app, tools/grab.js (the Desk's bookmarklet loads it by URL at
+      # officer.js:415) and tools/check-interval.ics (a subscribed calendar) are untouched. Nothing
+      # removed here is fetched by the app — verified against every path it imports.
+      - name: Leave the private half of the repo out of the artifact
+        run: |
+          set -euo pipefail
+          rm -rf circle/watcher circle/supabase circle/scripts .claude .github
+          rm -f README.md circle/README.md
+          for must in circle/index.html circle/js/app.js circle/tools/grab.js \
+                      circle/tools/check-interval.ics circle/data/open-weeks.json circle/sw.js; do
+            test -e "$must" || { echo "::error::$must was removed and the app needs it"; exit 1; }
+          done
+          for gone in circle/watcher circle/supabase .claude; do
+            test ! -e "$gone" || { echo "::error::$gone is still in the artifact"; exit 1; }
+          done
+
       - uses: actions/configure-pages@v5
         with:
           enablement: true
