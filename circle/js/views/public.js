@@ -1,5 +1,5 @@
 // Public and entry screens: the landing page, the rules, sign-in, and the invitation.
-import { escapeHtml, html, raw, fmtUsd, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, fmtDay, fmtPct, initials } from '../core/util.js';
+import { escapeHtml, html, raw, fmtUsd, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDay, fmtPct, initials } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, projectPoints, fromPoints, seatPoints, unitPoints, pointsPerMonth, monthsToAfford } from '../core/money.js';
 import { poolGauge, memberCard, ring, tierLadder } from '../ui/pieces.js';
@@ -657,27 +657,168 @@ export function setPassword({ store, go }) {
 }
 
 /** The invitation: choose a tier, watch the card mint, accept the rules. */
+/** Sixteen characters somebody can read off one screen and type into another without a mistake:
+ *  no O/0, no l/1/I. The same alphabet the Desk's generator uses when it hands out a first login. */
+const madeUpPassword = () => {
+  const a = 'abcdefghijkmnopqrstuvwxyz23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  return [...crypto.getRandomValues(new Uint8Array(16))].map(b => a[b % a.length]).join('');
+};
+
+/** Why a link did not open, in words, with what to do next. Never "invalid" on its own. */
+const LINK_REFUSED = {
+  unknown: ['That link does not open anything', 'Check you copied the whole line — they are long and a chat app can cut one. Otherwise ask for a new one.'],
+  revoked: ['That link has been turned off', 'It was working and someone closed it. Ask Victor or Ian for a fresh one.'],
+  expired: ['That link has expired', 'Ask Victor or Ian for a fresh one — it takes them a moment.'],
+  used_up: ['That link has been used', 'It was meant for one person. Ask Victor or Ian for one of your own.'],
+  full: ['Every seat is taken', 'The Circle is capped and all of them are spoken for. Ask Victor to tell you when one opens.'],
+};
+
+/**
+ * The sign-up link, end to end: read the token, show what the club is, take a seat.
+ *
+ * Async because the token means nothing until the database has looked at it, and join() has to
+ * return a node straight away. Everything it prints comes from signup_link_info — nothing about
+ * the club is baked in here, so a link cannot promise a rate or a seat count that has moved.
+ */
+async function joinByLink(wrap, { store, token, go }) {
+  const said = (title, body, cta = true) => {
+    wrap.innerHTML = `<p class="eyebrow">${icon('key', { size: 14 })}Your invitation</p>
+      <h1>${escapeHtml(title)}</h1>
+      <p class="lede" style="margin-top:14px">${escapeHtml(body)}</p>
+      ${cta ? `<p class="row" style="margin-top:22px"><a class="btn ghost" href="#/">See what the Circle is</a>
+        <a class="link-rule" href="#/sign-in">I already have a login</a></p>` : ''}`;
+  };
+  let info;
+  try { info = await store.signupLinkInfo(token); }
+  catch { return said('The Circle is not answering', 'That is our server, not your link. Try again in a minute — the link keeps working.'); }
+  if (!info?.ok) { const [t, b] = LINK_REFUSED[info?.reason] || LINK_REFUSED.unknown; return said(t, b); }
+
+  // A settings-shaped object so the money is worked out by the same functions every other screen
+  // uses. Writing the arithmetic again here is how the join page ends up quoting a rate the club
+  // stopped using.
+  const s2 = { pointsPerDollar: info.pointsPerDollar, serviceRate: info.serviceRate, tiers: info.tiers,
+               foundingSeats: info.foundingSeats, memberCap: info.memberCap, exitFeeUsd: info.exitFeeUsd };
+  const tiers = (info.tiers || []).slice().sort((a, b) => a.monthlyUsd - b.monthlyUsd);
+  const state = { monthlyUsd: tiers[1]?.monthlyUsd ?? tiers[0]?.monthlyUsd ?? 100, show: false };
+
+  // Picking a level redraws the panel, which rebuilds the form — so whatever has been typed is
+  // read back into state first. Without this, choosing a level after filling your name silently
+  // emptied both fields and the submit button then did nothing, because `required` blocks a
+  // submit without saying so.
+  const capture = () => {
+    const f = wrap.querySelector('#take-seat');
+    if (!f) return;
+    state.name = f.name.value; state.username = f.username.value;
+    state.password = f.password.value; state.phone = f.phone.value;
+  };
+  const draw = () => {
+    const tier = tierFor(s2, state.monthlyUsd);
+    const sp = splitContribution(state.monthlyUsd, s2, tier);
+    wrap.innerHTML = `
+      <p class="eyebrow">${icon('key', { size: 14 })}${info.invitedBy ? `An invitation from ${escapeHtml(info.invitedBy)}` : 'Your invitation'}</p>
+      <h1>Join ${escapeHtml(info.clubName)}</h1>
+      <p class="lede" style="margin-top:12px">Put in a hundred dollars a month. Take it out as hotel, at cost,
+        with people you know. <b class="num">${info.seatsTaken}</b> of <b class="num">${info.memberCap}</b> seats are taken.
+        ${info.wouldBeFounding ? 'You would be a Founding Insider — it stays on your card for good.' : ''}</p>
+
+      <div class="panel" style="margin-top:20px">
+        <h2>What you are joining</h2>
+        <p class="small" style="margin-top:8px">A private travel club in Aruba. Everyone puts in the same way every month,
+          the money sits in a named Reserve account, and it buys hotel weeks at what the club pays rather than what a
+          hotel asks. You do not book anything yourself — you ask, Victor prices it, and he books it in your name.</p>
+        <p class="small" style="margin-top:10px">Nothing is taken on the way in. The Circle is paid
+          <b class="num">${fmtPct(info.serviceRate)}</b> when you spend points on a room — for the thing it actually does,
+          which is find the room and book it. Leave any time: unused base points come back at face value minus
+          <b class="num">${fmtUsd(info.exitFeeUsd)}</b> after a twelve-month window.</p>
+        <p class="small muted" style="margin-top:10px">Points are not deposits and not an investment. There is no interest,
+          no return, and no payout that depends on anyone else joining.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Pick your level</h2>
+        <p class="small muted" style="margin-top:6px">No level shuts you out of anything. It changes how fast the points
+          build, and how far in front you stand when something good comes up.</p>
+        <div class="segmented even" role="group" aria-label="A month costs">
+          ${tiers.map(t => `<button type="button" data-tier="${t.monthlyUsd}"
+            aria-pressed="${t.monthlyUsd === state.monthlyUsd}"><b class="num">${fmtUsd(t.monthlyUsd)}</b>
+            ${escapeHtml(tierName(t.monthlyUsd))}</button>`).join('')}
+        </div>
+        <p class="dateline" style="margin-top:12px"><b class="num">${fmtUsd2(state.monthlyUsd)}</b> a month becomes
+          <b class="num">${fmtPoints(sp.points)}</b> — <b class="num">${pointsUsd(sp.points, info.pointsPerDollar)}</b> of hotel, every month.</p>
+      </div>
+
+      <form class="panel" id="take-seat">
+        <h2>Take your seat</h2>
+        <label class="field" style="margin-top:12px"><span>Your name</span>
+          <input name="name" type="text" autocomplete="name" required maxlength="60" value="${escapeHtml(state.name || '')}">
+          <span class="hint">As it should read on your card.</span></label>
+        <label class="field"><span>Choose a username</span>
+          <input name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off"
+                 spellcheck="false" required maxlength="30" placeholder="marcus" value="${escapeHtml(state.username || '')}">
+          <span class="hint">How you sign in. Letters and numbers, and you may use . _ or -</span></label>
+        <label class="field"><span>Choose a password</span>
+          <span class="pw-wrap"><input name="password" type="${state.show ? 'text' : 'password'}"
+                 autocomplete="new-password" required minlength="12" value="${escapeHtml(state.password || '')}">
+            <button type="button" class="pw-peek" id="show-pw" aria-label="${state.show ? 'Hide' : 'Show'} the password">${icon('eye', { size: 18 })}</button></span>
+          <span class="hint">Twelve characters at least. <button type="button" class="link-rule" id="make-pw">Make one up for me</button></span></label>
+        <label class="field"><span>Phone <span class="muted">— optional</span></span>
+          <input name="phone" type="tel" autocomplete="tel" maxlength="30" placeholder="+297" value="${escapeHtml(state.phone || '')}">
+          <span class="hint">Only so Victor can reach you about a booking.</span></label>
+        <button class="btn block" type="submit" style="margin-top:16px">${icon('key', { size: 17 })}Take my seat</button>
+        <p class="small muted" style="margin-top:12px">Taking a seat accepts the club's rules
+          (version <b class="num">${escapeHtml(String(info.rulesVersion || ''))}</b>) — you can read them in full
+          <a class="link-rule" href="#/rules">here</a> before or after. Nothing is emailed to you at any point.</p>
+      </form>`;
+
+    wrap.querySelectorAll('[data-tier]').forEach(b => b.addEventListener('click', () => {
+      capture(); state.monthlyUsd = Number(b.dataset.tier); draw();
+    }));
+    wrap.querySelector('#make-pw').addEventListener('click', () => {
+      capture(); state.password = madeUpPassword(); state.show = true; draw();
+      wrap.querySelector('#take-seat').password.focus();
+    });
+    wrap.querySelector('#show-pw').addEventListener('click', () => {
+      capture(); state.show = !state.show; draw();
+    });
+    wrap.querySelector('#take-seat').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const btn = f.querySelector('button[type=submit]');
+      setBusy(btn, true, 'Taking your seat…');
+      try {
+        await store.joinWithLink(token, {
+          name: f.name.value, username: f.username.value, password: f.password.value,
+          monthlyUsd: state.monthlyUsd, phone: f.phone.value,
+        });
+        toast('You are in. Welcome to the Circle.');
+        go('/home');
+      } catch (err) {
+        toast(err.message, { kind: 'bad', timeout: 8000 });
+        setBusy(btn, false);
+      }
+    });
+  };
+  draw();
+}
+
 export function join({ store, params, go }) {
   const s = store.settings;
-  // On the real backend an invitation cannot be read by a signed-out browser — the
-  // invitations table is admin-only, deliberately — so the code in the link tells us
-  // nothing. Rather than "that invitation is not valid", say what actually happens next.
-  if (store.mode === 'supabase') {
-    return el(`<div class="wrap sec">
-      <p class="eyebrow">${icon('key', { size: 14 })}You were invited</p>
-      <h1>One step to get in</h1>
-      <p class="lede" style="margin-top:14px">Victor or Ian has put you on the list. There is no code in this link to type
-        and nothing to confirm — they give you a username and a password directly.</p>
-      <ol class="stack small" style="margin-top:20px;line-height:1.6">
-        <li>Ask them for your username and password — they have it, and they will send it to you.</li>
-        <li>Open the sign-in screen and put both in.</li>
-        <li>Choose your own password. The app will ask you to, before anything else.</li>
-      </ol>
-      <p class="row" style="margin-top:22px">
-        <a class="btn" href="#/sign-in">${icon('key', { size: 17 })}Go to sign in</a>
-        <a class="link-rule" href="#/rules">How the Circle works</a></p>
-      <p class="small muted" style="margin-top:18px">Nothing is emailed to you at any point. If the username and password
-        do not work, ask them to set you a new one — it takes them ten seconds.</p></div>`);
+  // Two kinds of code can arrive here. A SIGN-UP LINK is a 32-character token from signup_links
+  // and carries its own seat; an INVITATION is the older per-person code, which only the preview
+  // backend can still read (on the real one the invitations table is admin-only, so a signed-out
+  // browser learns nothing from it).
+  //
+  // Routed on the shape of the code rather than on the backend, so the link can be tried out in
+  // the preview instead of only existing in production — both stores implement the same two
+  // functions, and a rule that is only ever exercised live is a rule nobody has checked.
+  //
+  // The whole welcome goes ABOVE the form on purpose. Somebody is about to commit $100 a month to
+  // a club they have only heard about in a message, so what they are joining is said before they
+  // are asked to choose a password, not after.
+  if (/^[0-9a-f]{32}$/i.test(String(params.code || '')) || store.mode === 'supabase') {
+    const wrap = el(`<div class="wrap sec"><p class="lede">Opening your invitation…</p></div>`);
+    joinByLink(wrap, { store, token: params.code, go });
+    return wrap;
   }
   const inv = store.invitation(params.code);
   const demo = String(params.code).toUpperCase() === 'DEMO';

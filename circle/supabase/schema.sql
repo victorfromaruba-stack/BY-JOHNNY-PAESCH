@@ -3119,3 +3119,206 @@ revoke all on function quote_redemption(uuid, int, jsonb, text, date, text, uuid
 grant execute on function quote_redemption(uuid, int, jsonb, text, date, text, uuid) to authenticated;
 revoke all on function request_redemption(uuid, date, date, int, int, text, int, boolean, text, text) from public, anon;
 grant execute on function request_redemption(uuid, date, date, int, int, text, int, boolean, text, text) to authenticated;
+
+
+/* ============================================================================
+   THE SIGN-UP LINK
+   Applied live as migration 20260921_signup_links_open_join.
+   ============================================================================ */
+
+-- A sign-up link anyone holding it can use to take a seat.
+--
+-- Victor asked for this after being shown what it costs: until now a person could only get in
+-- because an admin created their row AND handed them a password. This opens that door to whoever
+-- holds the link. The link is the only gate, so it is a secret, it is revocable, and it is
+-- countable — never a guessable path off the public site.
+--
+-- What the link CANNOT do, because the app makes these promises to the people already inside:
+--   * it cannot break the 40-seat cap. The landing page tells strangers the club is capped;
+--     a link that quietly seated a 41st would make that a lie.
+--   * it cannot hand out a role. Everyone who arrives this way is a plain member. Treasurer,
+--     planner, comms and admin stay in admin_add_member's gift.
+--   * it cannot make a robot. `bot` is not a parameter here.
+--   * it cannot be read back. anon may CALL these two functions and may not SELECT the table:
+--     a readable signup_links is a list of live keys to the club.
+-- Every arrival writes an audit row naming the link it came through, so the Desk can see who
+-- walked in and kill the link.
+
+create table if not exists signup_links (
+  id          uuid primary key default gen_random_uuid(),
+  token       text not null unique,
+  label       text,                                   -- "the WhatsApp group, September"
+  created_by  uuid not null references members(id),
+  created_at  timestamptz not null default now(),
+  expires_at  timestamptz,                            -- null: never expires
+  max_uses    int,                                    -- null: no ceiling of its own (the seat cap still holds)
+  uses        int not null default 0,
+  revoked_at  timestamptz,
+  constraint signup_links_max_uses_positive check (max_uses is null or max_uses > 0)
+);
+
+alter table signup_links enable row level security;
+revoke all on signup_links from anon, authenticated;
+drop policy if exists signup_links_read on signup_links;
+create policy signup_links_read on signup_links for select to authenticated
+  using ((select has_role('admin')));
+grant select on signup_links to authenticated;
+
+/**
+ * What a stranger holding the link is allowed to be told, before they are anybody.
+ *
+ * Deliberately narrow. It answers "is this link real, and what am I joining" — the club's name,
+ * the levels and what a seat costs, how many seats are taken. It never returns a member's name,
+ * the Reserve, the ledger, or the token of any other link.
+ */
+create or replace function signup_link_info(p_token text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare l signup_links; s settings; taken int;
+begin
+  select * into l from signup_links where token = p_token;
+  select * into s from settings where id = 1;
+  if l.id is null then return jsonb_build_object('ok', false, 'reason', 'unknown'); end if;
+  if l.revoked_at is not null then return jsonb_build_object('ok', false, 'reason', 'revoked'); end if;
+  if l.expires_at is not null and l.expires_at < now() then
+    return jsonb_build_object('ok', false, 'reason', 'expired');
+  end if;
+  if l.max_uses is not null and l.uses >= l.max_uses then
+    return jsonb_build_object('ok', false, 'reason', 'used_up');
+  end if;
+  select count(*) into taken from members where status in ('active','paused') and not bot;
+  if taken >= s.member_cap then return jsonb_build_object('ok', false, 'reason', 'full'); end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'clubName', s.club_name,
+    'seatsTaken', taken,
+    'memberCap', s.member_cap,
+    'foundingSeats', s.founding_seats,
+    'wouldBeFounding', (select count(*) from members where not bot) < s.founding_seats,
+    'tiers', s.tiers,
+    'serviceRate', s.service_rate,
+    'pointsPerDollar', s.points_per_dollar,
+    'exitFeeUsd', s.exit_fee_usd,
+    'rulesVersion', s.rules_version,
+    'invitedBy', (select name from members where id = l.created_by));
+end $$;
+
+/**
+ * Take a seat. Callable by a signed-out browser — that is the whole point, and the reason every
+ * guard above is restated here rather than trusted to the caller.
+ *
+ * The auth.users insert mirrors admin_set_login exactly, including the eight token columns that
+ * must be '' and never NULL: GoTrue scans them into a Go string and a NULL fails the scan, which
+ * shows up as "Database error querying schema" on every later sign-in rather than here.
+ */
+create or replace function join_with_link(
+  p_token text, p_name text, p_username text, p_password text,
+  p_monthly_usd int default 100, p_phone text default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare l signup_links; s settings; m members; u text; e text; v_uid uuid; taken int;
+begin
+  select * into l from signup_links where token = p_token for update;
+  if l.id is null then raise exception 'That link is not valid'; end if;
+  if l.revoked_at is not null then raise exception 'That link has been turned off'; end if;
+  if l.expires_at is not null and l.expires_at < now() then raise exception 'That link has expired'; end if;
+  if l.max_uses is not null and l.uses >= l.max_uses then raise exception 'That link has been used already'; end if;
+
+  select * into s from settings where id = 1;
+  select count(*) into taken from members where status in ('active','paused') and not bot;
+  if taken >= s.member_cap then raise exception 'The Circle is capped at % Insiders', s.member_cap; end if;
+
+  if coalesce(trim(p_name), '') = '' then raise exception 'Your name is needed for the card'; end if;
+  u := lower(trim(p_username));
+  if not valid_username(u) then
+    raise exception 'A username is 3 to 30 characters, letters and numbers, and may contain . _ or -';
+  end if;
+  if length(coalesce(p_password, '')) < 12 then raise exception 'That password is too short — twelve characters at least'; end if;
+  if exists (select 1 from members where lower(username) = u) then
+    raise exception 'Someone already uses the username %', u;
+  end if;
+  if p_monthly_usd is null or not exists (
+       select 1 from jsonb_array_elements(s.tiers) t where (t->>'monthlyUsd')::int = p_monthly_usd) then
+    raise exception 'Pick one of the levels the Circle offers';
+  end if;
+
+  e := u || '@members.hunto.aw';
+  if exists (select 1 from auth.users where lower(email) = e) then
+    raise exception 'Someone already uses the username %', u;
+  end if;
+
+  v_uid := gen_random_uuid();
+  insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+                          raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+                          confirmation_token, recovery_token, email_change_token_new, email_change,
+                          email_change_token_current, phone_change, phone_change_token, reauthentication_token)
+  values ('00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated', e,
+          extensions.crypt(p_password, extensions.gen_salt('bf')), now(),
+          '{"provider":"email","providers":["email"]}'::jsonb,
+          jsonb_build_object('sub', v_uid::text, 'email', e, 'email_verified', true, 'phone_verified', false),
+          now(), now(), '', '', '', '', '', '', '', '');
+  insert into auth.identities (id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at)
+  values (gen_random_uuid(), v_uid, v_uid::text, 'email',
+          jsonb_build_object('sub', v_uid::text, 'email', e, 'email_verified', true, 'phone_verified', false),
+          now(), now(), now());
+
+  -- roles is hard-coded, not a parameter. A link can seat a member and nothing else.
+  -- must_change_password is false: they chose this password themselves a second ago.
+  insert into members(email, name, phone, username, auth_user_id, monthly_usd, roles, status,
+                      founding, card_code, must_change_password, bot, sponsor_id)
+  values (e, trim(p_name), nullif(trim(p_phone), ''), u, v_uid, p_monthly_usd,
+          '{member}'::member_role[], 'active',
+          (select count(*) from members where not bot) < s.founding_seats,
+          upper(substr(md5(random()::text), 1, 6)), false, false, l.created_by)
+  returning * into m;
+
+  insert into rules_acceptances(member_id, version) values (m.id, s.rules_version)
+    on conflict do nothing;
+
+  update signup_links set uses = uses + 1 where id = l.id;
+
+  perform log_audit('member.join_link','member', m.id::text,
+                    jsonb_build_object('name', m.name, 'monthlyUsd', m.monthly_usd,
+                                       'linkId', l.id, 'linkLabel', l.label));
+  return jsonb_build_object('memberId', m.id, 'username', u, 'email', e, 'name', m.name);
+end $$;
+
+revoke all on function signup_link_info(text) from public;
+revoke all on function join_with_link(text, text, text, text, int, text) from public;
+grant execute on function signup_link_info(text) to anon, authenticated;
+grant execute on function join_with_link(text, text, text, text, int, text) to anon, authenticated;
+
+/** Make a link. Admin only — handing out a way into the club is not a Desk errand. */
+create or replace function create_signup_link(p_label text default null, p_expires_at timestamptz default null,
+                                              p_max_uses int default null)
+returns signup_links language plpgsql security definer set search_path = public as $$
+declare l signup_links;
+begin
+  if not has_role('admin') then raise exception 'Only an admin can make a sign-up link'; end if;
+  -- 16 random bytes as hex: 128 bits, URL-safe with nothing to escape, and no base64 padding
+  -- to strip out of something that ends up in a WhatsApp message.
+  insert into signup_links(token, label, created_by, expires_at, max_uses)
+  values (encode(extensions.gen_random_bytes(16), 'hex'),
+          nullif(trim(p_label), ''), current_member_id(), p_expires_at, p_max_uses)
+  returning * into l;
+  perform log_audit('signup_link.create','signup_link', l.id::text,
+                    jsonb_build_object('label', l.label, 'expiresAt', l.expires_at, 'maxUses', l.max_uses));
+  return l;
+end $$;
+
+/** Turn one off. Irreversible on purpose: make a new one rather than reviving a leaked key. */
+create or replace function revoke_signup_link(p_id uuid)
+returns signup_links language plpgsql security definer set search_path = public as $$
+declare l signup_links;
+begin
+  if not has_role('admin') then raise exception 'Only an admin can turn a sign-up link off'; end if;
+  update signup_links set revoked_at = now() where id = p_id and revoked_at is null returning * into l;
+  if l.id is null then select * into l from signup_links where id = p_id; end if;
+  if l.id is null then raise exception 'No such link'; end if;
+  perform log_audit('signup_link.revoke','signup_link', l.id::text, jsonb_build_object('label', l.label));
+  return l;
+end $$;
+
+revoke all on function create_signup_link(text, timestamptz, int) from public, anon;
+revoke all on function revoke_signup_link(uuid) from public, anon;
+grant execute on function create_signup_link(text, timestamptz, int) to authenticated;
+grant execute on function revoke_signup_link(uuid) to authenticated;

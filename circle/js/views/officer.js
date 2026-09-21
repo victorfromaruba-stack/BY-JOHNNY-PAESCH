@@ -1182,6 +1182,22 @@ export function settings({ store, go }) {
 
       ${isAdmin ? `<div data-pane="people">
       <div class="panel" style="margin-top:20px">
+        <h2>The sign-up link</h2>
+        <p class="small muted" style="margin-top:6px">Whoever opens one of these can take a seat themselves — they choose
+          their own username and password, and you never send one. The seat cap still holds and everyone who arrives this
+          way is a plain Insider. Send it to a person, not a group, and turn it off the moment it has done its job.</p>
+        ${(store.signupLinks?.() || []).filter(l => !l.revokedAt).length
+          ? `<ul class="ledger" style="margin-top:var(--s-3)">${(store.signupLinks() || []).filter(l => !l.revokedAt).map(l => `<li>
+              <div><b>${escapeHtml(l.label || 'Untitled link')}</b>
+                <span class="small muted">used <b class="num">${l.uses || 0}</b>${l.maxUses ? ` of <b class="num">${l.maxUses}</b>` : ' times'}${l.expiresAt ? ` · until ${escapeHtml(fmtDay(l.expiresAt))}` : ''}</span></div>
+              <div class="row" style="gap:6px">
+                <button class="btn ghost sm" data-copy-link="${escapeHtml(l.token)}">${icon('clipboard', { size: 15 })}Copy</button>
+                <button class="btn ghost sm" data-kill-link="${escapeHtml(l.id)}">Turn off</button></div></li>`).join('')}</ul>`
+          : `<p class="small muted" style="margin-top:10px">None open. Nobody can let themselves in right now.</p>`}
+        <button class="btn block" id="new-link" style="margin-top:var(--s-3)">${icon('plus', { size: 16 })}Make a sign-up link</button>
+      </div>
+
+      <div class="panel">
         <h2>Insiders · <b class="num">${store.members.length}</b></h2>
         <p class="small muted" style="margin-top:6px">Add someone, then Give a login. Nothing is emailed to anybody.</p>
         ${isAdmin ? `<button class="btn block" id="add-member" style="margin-top:var(--s-3)">${icon('plus', { size: 16 })}Add an Insider</button>` : ''}
@@ -1280,6 +1296,57 @@ export function settings({ store, go }) {
   });
   // Adding an Insider, roles and all. This is the path that means nobody ever has to open
   // the table editor: name, email, level, what they do — and a message to send them.
+  // The sign-up link. What is copied is the whole URL, never the token on its own: a token pasted
+  // into a chat is something nobody can open, and the person would come back to ask.
+  const linkUrl = (token) => `${location.origin}${location.pathname}#/join/${token}`;
+  wrap.querySelector('#new-link')?.addEventListener('click', async () => {
+    const out = await sheet({ title: 'Make a sign-up link', render: (body, close) => {
+      body.innerHTML = `
+        <p class="sheet-text">Anyone who opens this can take a seat — they pick their own username and password and
+          are in straight away. Give it a name you will recognise later, and set a limit unless you mean it to stay open.</p>
+        <label class="field"><span>What is it for</span>
+          <input name="label" required maxlength="60" placeholder="For Marcus"></label>
+        <label class="field"><span>How many people may use it</span>
+          <input name="maxUses" type="number" min="1" max="40" inputmode="numeric" value="1">
+          <span class="hint">Leave it at <b class="num">1</b> for one person. Clear it to let it stay open.</span></label>
+        <label class="field"><span>Stop working after</span>
+          <input name="days" type="number" min="1" max="90" inputmode="numeric" value="7">
+          <span class="hint">Days from now. Clear it for no expiry.</span></label>
+        <div class="sheet-actions"><button type="button" class="btn block" data-ok>Make the link</button></div>`;
+      body.querySelector('[data-ok]').addEventListener('click', () => {
+        const v = (n) => body.querySelector(`[name=${n}]`).value.trim();
+        if (!v('label')) { toast('Give it a name so you know what it was for.', { kind: 'bad' }); return; }
+        const days = Number(v('days'));
+        close({ label: v('label'), maxUses: Number(v('maxUses')) || null,
+                expiresAt: days > 0 ? new Date(Date.now() + days * 864e5).toISOString() : null });
+      });
+    } });
+    if (!out) return;
+    try {
+      const l = await store.createSignupLink(out);
+      await copyText(linkUrl(l.token));
+      toast('Link made, and it is on your clipboard. Send it to one person.');
+    } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
+  });
+  wrap.addEventListener('click', async (e) => {
+    const copy = e.target.closest('[data-copy-link]');
+    if (copy) {
+      await copyText(linkUrl(copy.dataset.copyLink));
+      toast('On your clipboard.');
+      return;
+    }
+    const kill = e.target.closest('[data-kill-link]');
+    if (!kill) return;
+    const ok = await confirmDialog({
+      title: 'Turn this link off?',
+      message: 'Anyone still holding it will not be able to join. Nobody who already joined is affected, and this cannot be undone — make a new link rather than reviving one that got out.',
+      confirmText: 'Turn it off', danger: true,
+    });
+    if (!ok) return;
+    try { await store.revokeSignupLink(kill.dataset.killLink); toast('That link is closed.'); }
+    catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
+  });
+
   wrap.querySelector('#add-member')?.addEventListener('click', async () => {
     const ROLES = [
       { id: 'member', label: 'Insider', note: 'Contributes and books. Everyone has this.' },

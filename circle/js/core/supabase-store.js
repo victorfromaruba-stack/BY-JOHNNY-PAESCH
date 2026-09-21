@@ -75,7 +75,7 @@ export class SupabaseStore extends Store {
   async reload() {
     const tables = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'pledges', 'looks', 'announcements', 'audit', 'invitations', 'month_closes', 'promo_deferrals', 'room_types', 'watches', 'deals',
       'standings', 'crews', 'crew_members', 'crew_messages', 'moments', 'moment_reactions',
-      'badge_catalog', 'member_badges'];
+      'badge_catalog', 'member_badges', 'signup_links'];
     // members comes from a view that leaves out auth_user_id and the officer's private notes;
     // it is security_invoker, so the members_read policy still decides which rows come back.
     // standing_v answers for everybody — months held, a rank and a list of badges, and nothing
@@ -113,6 +113,10 @@ export class SupabaseStore extends Store {
     this.state.crewMessages = this.state.crew_messages || this.state.crewMessages || [];
     this.state.momentReactions = this.state.moment_reactions || this.state.momentReactions || [];
     this.state.badgeCatalog = this.state.badge_catalog || this.state.badgeCatalog || [];
+    // Empty for everyone but an admin — signup_links is grant-select to authenticated and then
+    // RLS-gated to admin, so a plain member's fetch succeeds and returns nothing rather than
+    // erroring. The Desk panel is the only reader.
+    this.state.signupLinks = this.state.signup_links || this.state.signupLinks || [];
     this.state.memberBadges = this.state.member_badges || this.state.memberBadges || [];
     // The database calls them from_date/to_date because `from` and `to` are awkward in SQL;
     // the rest of the app calls them from/to. Bridge it here rather than everywhere else.
@@ -303,6 +307,35 @@ export class SupabaseStore extends Store {
   async pauseMember(id, untilMonth) { return this.rpc('set_my_status', { p_status: 'paused', p_paused_until: untilMonth }); }
   async resumeMember() { return this.rpc('set_my_status', { p_status: 'active' }); }
   async leaveMember() { return this.rpc('set_my_status', { p_status: 'left' }); }
+  // ---------- the sign-up link ----------
+  //
+  // A person holding the link is nobody yet, so these two go straight to the database rather
+  // than through rpc(): rpc() reloads the whole store afterwards, and signed out that only
+  // reloads the stranger's empty copy of it, which is a wasted round trip on a phone.
+  /** What a stranger holding the link may be told. Returns { ok:false, reason } rather than
+   *  throwing, because "this link expired" is an answer to show them, not an error. */
+  async signupLinkInfo(token) {
+    const { data, error } = await this.sb.rpc('signup_link_info', { p_token: String(token || '') });
+    if (error) throw new Error(error.message);
+    return data || { ok: false, reason: 'unknown' };
+  }
+  /** Take a seat, then sign in as the person who just took it. They chose the password a second
+   *  ago, so there is nothing to hand over and nothing to force them to change. */
+  async joinWithLink(token, { name, username, password, monthlyUsd = 100, phone = '' }) {
+    const { data, error } = await this.sb.rpc('join_with_link', {
+      p_token: String(token || ''), p_name: name, p_username: username, p_password: password,
+      p_monthly_usd: Number(monthlyUsd), p_phone: phone || null });
+    if (error) throw new Error(error.message);
+    await this.signInWithUsername(data.username, password);
+    return data;
+  }
+  /** Admin only, both here and in SQL. signup_links is readable by an admin and by nobody else:
+   *  a readable table of live tokens is a list of keys to the club. */
+  async createSignupLink({ label = '', expiresAt = null, maxUses = null } = {}) {
+    return this.rpc('create_signup_link', { p_label: label || null, p_expires_at: expiresAt, p_max_uses: maxUses });
+  }
+  async revokeSignupLink(id) { return this.rpc('revoke_signup_link', { p_id: id }); }
+
   async createInvitation({ email = '', name = '', sponsorId, monthlyUsd = 100 }) {
     const code = `${(name || email || 'IN').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'IN'}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
     const { error } = await this.sb.from('invitations').insert({ code, email, name, sponsor_id: sponsorId, monthly_usd: monthlyUsd });

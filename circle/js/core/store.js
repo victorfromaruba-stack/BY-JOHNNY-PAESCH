@@ -5,7 +5,7 @@
 
 import { uid, nowIso, sum, monthKey, fmtMonth, nightsBetween, safeUrl, arubaDate } from './util.js';
 import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, fromPoints, seatPoints, pointsPerMonth, hotelOwedUsd } from './money.js';
-import { initialsOf, refFor } from './vocab.js';
+import { VOCAB, initialsOf, refFor } from './vocab.js';
 import { standingFrom, rankFor, RANKS, effectiveTier } from './standing.js';
 import { sameName } from './names.js';
 import { shrinkImage, blobToDataUrl } from './image.js';
@@ -16,7 +16,7 @@ export const OPEN_REDEMPTION = [REDEMPTION_STATUS.requested, REDEMPTION_STATUS.q
 export const LEDGER_KIND = Object.freeze({ earn: 'earn', bonus: 'bonus', streak: 'streak', founding: 'founding', burn: 'burn', refund: 'refund', adjust: 'adjust', expire: 'expire', reverse: 'reverse', badge: 'badge' });
 export const PROMO_KINDS = [LEDGER_KIND.bonus, LEDGER_KIND.streak, LEDGER_KIND.founding];
 export const ROLES = Object.freeze(['member', 'treasurer', 'deputy', 'planner', 'comms', 'admin']);
-export const COLLECTIONS = ['members', 'badgeCatalog', 'memberBadges', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes', 'pledges', 'looks', 'standings', 'crews', 'crewMembers', 'crewMessages', 'moments', 'momentReactions'];
+export const COLLECTIONS = ['members', 'badgeCatalog', 'memberBadges', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes', 'pledges', 'looks', 'standings', 'crews', 'crewMembers', 'crewMessages', 'moments', 'momentReactions', 'signupLinks'];
 /**
  * A complete, empty state. Every adapter starts from this — a missing collection is not a
  * missing feature, it is `[...undefined]` the first time any screen asks for it, which is
@@ -969,6 +969,87 @@ export class Store {
     return inv;
   }
   invitation(code) { return this.state.invitations.find(i => i.code.toUpperCase() === String(code).toUpperCase() && !i.acceptedMemberId) || null; }
+
+  // ---------- the sign-up link ----------
+  //
+  // The twin of signup_link_info / join_with_link in schema.sql. Every guard below exists there
+  // too and must keep agreeing: the preview is where a rule gets tried out, and a preview that
+  // lets something through the server refuses teaches the wrong rule.
+  signupLinks() { return this.state.signupLinks || []; }
+  signupLink(token) { return this.signupLinks().find(l => l.token === String(token)) || null; }
+  /** Reasons, not throws: "this link expired" is something to show a stranger, not an error. */
+  signupLinkInfo(token) {
+    const l = this.signupLink(token);
+    const s = this.settings;
+    const taken = this.people().filter(m => ['active', 'paused'].includes(m.status) && !m.bot).length;
+    if (!l) return { ok: false, reason: 'unknown' };
+    if (l.revokedAt) return { ok: false, reason: 'revoked' };
+    if (l.expiresAt && new Date(l.expiresAt) < new Date()) return { ok: false, reason: 'expired' };
+    if (l.maxUses != null && (l.uses || 0) >= l.maxUses) return { ok: false, reason: 'used_up' };
+    if (taken >= s.memberCap) return { ok: false, reason: 'full' };
+    return { ok: true, clubName: s.clubName || VOCAB.clubName, seatsTaken: taken, memberCap: s.memberCap,
+      foundingSeats: s.foundingSeats, wouldBeFounding: this.people().filter(m => !m.bot).length < s.foundingSeats,
+      tiers: s.tiers, serviceRate: s.serviceRate, pointsPerDollar: s.pointsPerDollar,
+      exitFeeUsd: s.exitFeeUsd, rulesVersion: s.rulesVersion,
+      invitedBy: this.member(l.createdBy)?.name || null };
+  }
+  async joinWithLink(token, { name, username, password, monthlyUsd = 100, phone = '' }) {
+    const info = this.signupLinkInfo(token);
+    if (!info.ok) throw new Error({ unknown: 'That link is not valid', revoked: 'That link has been turned off',
+      expired: 'That link has expired', used_up: 'That link has been used already',
+      full: `The Circle is capped at ${this.settings.memberCap} Insiders` }[info.reason] || 'That link is not valid');
+    const u = String(username || '').trim().toLowerCase();
+    if (!String(name || '').trim()) throw new Error('Your name is needed for the card');
+    if (!/^[a-z0-9][a-z0-9._-]{1,28}[a-z0-9]$/.test(u)) {
+      throw new Error('A username is 3 to 30 characters, letters and numbers, and may contain . _ or -');
+    }
+    if (String(password || '').length < 12) throw new Error('That password is too short — twelve characters at least');
+    if (this.state.members.some(m => (m.username || '').toLowerCase() === u)) {
+      throw new Error(`Someone already uses the username ${u}`);
+    }
+    if (!(this.settings.tiers || []).some(t => Number(t.monthlyUsd) === Number(monthlyUsd))) {
+      throw new Error('Pick one of the levels the Circle offers');
+    }
+    const l = this.signupLink(token);
+    // roles is written here, never taken from the caller: a link seats a member and nothing else.
+    const m = {
+      id: uid('mem'), name: String(name).trim(), email: `${u}@members.hunto.aw`, phone: phone || '',
+      username: u, roles: ['member'], status: 'active', monthlyUsd: Number(monthlyUsd),
+      hue: Math.floor(Math.random() * 360), home: '', title: '', joinedAt: nowIso(), sponsorId: l.createdBy || null,
+      founding: this.people().filter(x => !x.bot).length < this.settings.foundingSeats,
+      cardCode: Math.random().toString(36).slice(2, 8).toUpperCase(),
+      mustChangePassword: false, bot: false, household: [], preferences: {},
+      standingOrder: false, showOnRollcall: false, dreamStayId: this.arubaStays()[0]?.id || null, notes: '',
+    };
+    this.state.members.push(m);
+    l.uses = (l.uses || 0) + 1;
+    this.state.rulesAcceptances.push({ memberId: m.id, version: this.settings.rulesVersion, at: nowIso() });
+    this.log(m.id, 'member.join_link', 'member', m.id, { name: m.name, monthlyUsd: m.monthlyUsd, linkId: l.id, linkLabel: l.label });
+    await this.commit('members', 'signupLinks');
+    await this.setPasswordFor(m.id, password);
+    await this.signIn(m.id);
+    return { memberId: m.id, username: u, email: m.email, name: m.name };
+  }
+  async createSignupLink({ label = '', expiresAt = null, maxUses = null } = {}) {
+    if (!this.hasRole('admin')) throw new Error('Only an admin can make a sign-up link');
+    const l = { id: uid('lnk'), token: [...crypto.getRandomValues(new Uint8Array(16))]
+                  .map(b => b.toString(16).padStart(2, '0')).join(''),
+                label: String(label || '').trim() || null, createdBy: this.me?.id || null,
+                createdAt: nowIso(), expiresAt, maxUses, uses: 0, revokedAt: null };
+    this.state.signupLinks.push(l);
+    this.log(this.me?.id, 'signup_link.create', 'signup_link', l.id, { label: l.label, expiresAt, maxUses });
+    await this.commit('signupLinks');
+    return l;
+  }
+  async revokeSignupLink(id) {
+    if (!this.hasRole('admin')) throw new Error('Only an admin can turn a sign-up link off');
+    const l = this.signupLinks().find(x => x.id === id);
+    if (!l) throw new Error('No such link');
+    l.revokedAt ||= nowIso();
+    this.log(this.me?.id, 'signup_link.revoke', 'signup_link', l.id, { label: l.label });
+    await this.commit('signupLinks');
+    return l;
+  }
   async acceptInvitation(code, { name, email = '', phone = '', monthlyUsd, household = [], preferences = {}, standingOrder = false, showOnRollcall = false }) {
     const inv = this.invitation(code); const isDemo = String(code).toUpperCase() === 'DEMO';
     if (!inv && !isDemo) throw new Error('This invitation code is not valid or was already used');
