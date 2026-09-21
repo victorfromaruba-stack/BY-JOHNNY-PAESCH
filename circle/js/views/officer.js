@@ -1182,7 +1182,7 @@ export function settings({ store, go }) {
 
       ${isAdmin ? `<div data-pane="people">
       <div class="panel" style="margin-top:20px">
-        <h2>The sign-up link</h2>
+        <h2>Invitation links</h2>
         <p class="small muted" style="margin-top:6px">Whoever opens one of these can take a seat themselves — they choose
           their own username and password, and you never send one. The seat cap still holds and everyone who arrives this
           way is a plain Insider. Send it to a person, not a group, and turn it off the moment it has done its job.</p>
@@ -1194,7 +1194,7 @@ export function settings({ store, go }) {
                 <button class="btn ghost sm" data-copy-link="${escapeHtml(l.token)}">${icon('clipboard', { size: 15 })}Copy</button>
                 <button class="btn ghost sm" data-kill-link="${escapeHtml(l.id)}">Turn off</button></div></li>`).join('')}</ul>`
           : `<p class="small muted" style="margin-top:10px">None open. Nobody can let themselves in right now.</p>`}
-        <button class="btn block" id="new-link" style="margin-top:var(--s-3)">${icon('plus', { size: 16 })}Make a sign-up link</button>
+        <button class="btn block" id="new-link" style="margin-top:var(--s-3)">${icon('plus', { size: 16 })}Write an invitation</button>
       </div>
 
       <div class="panel">
@@ -1296,11 +1296,11 @@ export function settings({ store, go }) {
   });
   // Adding an Insider, roles and all. This is the path that means nobody ever has to open
   // the table editor: name, email, level, what they do — and a message to send them.
-  // The sign-up link. What is copied is the whole URL, never the token on its own: a token pasted
+  // The invitation link. What is copied is the whole URL, never the token on its own: a token pasted
   // into a chat is something nobody can open, and the person would come back to ask.
   const linkUrl = (token) => `${location.origin}${location.pathname}#/join/${token}`;
   wrap.querySelector('#new-link')?.addEventListener('click', async () => {
-    const out = await sheet({ title: 'Make a sign-up link', render: (body, close) => {
+    const out = await sheet({ title: 'Write an invitation', render: (body, close) => {
       body.innerHTML = `
         <p class="sheet-text">Anyone who opens this can take a seat — they pick their own username and password and
           are in straight away. Give it a name you will recognise later, and set a limit unless you mean it to stay open.</p>
@@ -1312,7 +1312,7 @@ export function settings({ store, go }) {
         <label class="field"><span>Stop working after</span>
           <input name="days" type="number" min="1" max="90" inputmode="numeric" value="7">
           <span class="hint">Days from now. Clear it for no expiry.</span></label>
-        <div class="sheet-actions"><button type="button" class="btn block" data-ok>Make the link</button></div>`;
+        <div class="sheet-actions"><button type="button" class="btn block" data-ok>Write it</button></div>`;
       body.querySelector('[data-ok]').addEventListener('click', () => {
         const v = (n) => body.querySelector(`[name=${n}]`).value.trim();
         if (!v('label')) { toast('Give it a name so you know what it was for.', { kind: 'bad' }); return; }
@@ -1325,7 +1325,7 @@ export function settings({ store, go }) {
     try {
       const l = await store.createSignupLink(out);
       await copyText(linkUrl(l.token));
-      toast('Link made, and it is on your clipboard. Send it to one person.');
+      toast('Invitation written, and it is on your clipboard. Send it to one person.');
     } catch (err) { toast(err.message, { kind: 'bad', timeout: 7000 }); }
   });
   wrap.addEventListener('click', async (e) => {

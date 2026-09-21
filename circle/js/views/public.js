@@ -799,6 +799,28 @@ async function joinByLink(wrap, { store, token, go }) {
     });
   };
   draw();
+
+  // The moment of being invited, said once, over the page rather than instead of it. Victor asked
+  // for this: someone should feel a door was opened for them rather than land on a form.
+  //
+  // What it deliberately does NOT say, and the reason is not squeamishness — a browser has
+  // already called this site malicious once: no countdown, no "claim your seat now", no "you have
+  // won", no urgency of any kind. Those are the words a scam page uses, and a page that asks for
+  // a password is judged, by people and by filters, on how much it sounds like one. Everything
+  // printed here is something the link itself establishes: who wrote it, which club, what a seat is.
+  await sheet({ title: 'You are invited', render: (body, close) => {
+    body.innerHTML = `
+      <p class="sheet-text">${info.invitedBy
+        ? `<b>${escapeHtml(info.invitedBy)}</b> has invited you to <b>${escapeHtml(info.clubName)}</b>.`
+        : `You have been invited to <b>${escapeHtml(info.clubName)}</b>.`}
+        A private travel club in Aruba — <b class="num">${info.memberCap}</b> seats, by invitation only,
+        and one of them is being held for you.</p>
+      <p class="sheet-text">${info.wouldBeFounding
+        ? 'You would be a Founding Insider, and that stays on your card for good. ' : ''}Have a read of what it is,
+        pick the level that suits you, and take your seat.</p>
+      <div class="sheet-actions"><button type="button" class="btn block" data-ok>Open my invitation</button></div>`;
+    body.querySelector('[data-ok]').addEventListener('click', () => close(true));
+  } });
 }
 
 export function join({ store, params, go }) {
