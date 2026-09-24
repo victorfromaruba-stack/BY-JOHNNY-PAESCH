@@ -233,10 +233,6 @@ function ctx(current) {
 
 function render(current = router?.current) {
   if (!current) return;
-  // A cover belongs to one screen. Clear it before every paint so the running head cannot be
-  // left transparent over a route that has no picture under it — the view that wants a cover
-  // sets this again on its way in.
-  delete document.body.dataset.cover;
   const { route, params } = current;
   // A member never sees the brochure or the sign-in form: those two are for a stranger, and
   // Home is where a member's own day starts. `replace`, so Back does not bounce off them.
@@ -261,11 +257,17 @@ function render(current = router?.current) {
     router.go('/set-password', { replace: true }); return;
   }
   if (route.roles && !store.hasRole(...route.roles, 'admin')) {
+    delete document.body.dataset.cover;
     app.replaceChildren(pub.denied(ctx(current)));
     return;
   }
   const paint = () => {
     disposer?.(); disposer = null;
+    // A cover belongs to one screen. Cleared inside the paint, not before the transition: a
+    // transition that is skipped by the next navigation still runs its paint, so a Home paint
+    // could otherwise land after the clear for the next screen and leave the running head
+    // transparent over a page with no picture under it.
+    delete document.body.dataset.cover;
     let out;
     try { out = route.view(ctx(current)); }
     catch (err) {
@@ -304,7 +306,13 @@ function render(current = router?.current) {
   const smooth = typeof document.startViewTransition === 'function'
     && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   if (!smooth) { paint(); return; }
-  try { document.startViewTransition(paint); }
+  try {
+    // A transition overtaken by the next navigation rejects `ready` with "Transition was
+    // skipped". Its paint still runs, so there is nothing to recover — only noise to silence.
+    const vt = document.startViewTransition(paint);
+    vt.ready?.catch(() => {});
+    vt.finished?.catch(() => {});
+  }
   catch { paint(); }
 }
 
