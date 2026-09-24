@@ -144,14 +144,14 @@ export function photoCredit(stay) {
     // house rule asks for the difference between a picture of the place and a picture near it.
     const a = areaPhotoFor(stay); if (!a) return null;
     return {
-      text: `${a.what} — not a photograph of the hotel. Photograph by ${a.author}, ${a.license}, via Wikimedia Commons.`,
-      html: `${escapeHtml(a.what)} &mdash; not a photograph of the hotel. Photograph by ${ext(a.page, a.author)}, ${ext(a.licenseUrl, a.license)}, via Wikimedia Commons.`,
+      text: `${a.what} — not the hotel. Photo ${a.author}, ${a.license}, Wikimedia Commons.`,
+      html: `${escapeHtml(a.what)} &mdash; not the hotel. Photo ${ext(a.page, a.author)}, ${ext(a.licenseUrl, a.license)}, Wikimedia Commons.`,
     };
   }
   if (c.author) {
     return {
-      text: `${c.what}. Photograph by ${c.author}, ${c.license}, via Wikimedia Commons.`,
-      html: `${escapeHtml(c.what)}. Photograph by ${ext(c.page, c.author)}, ${ext(c.licenseUrl, c.license)}, via Wikimedia Commons.`,
+      text: `${c.what}. Photo ${c.author}, ${c.license}, Wikimedia Commons.`,
+      html: `${escapeHtml(c.what)}. Photo ${ext(c.page, c.author)}, ${ext(c.licenseUrl, c.license)}, Wikimedia Commons.`,
     };
   }
   return {
@@ -304,7 +304,7 @@ export function landing({ store, go }) {
       <div class="hero-gauge enter" style="--d:180ms">
         <div id="gauge-slot">${blind ? `<p class="eyebrow">${icon('shield', { size: 14 })}Proof of reserves</p>
           <p class="small muted" style="margin-top:4px">Every point is backed by money in a Reserve account that is checked against the bank
-          and published inside the Circle. Sign in to see the current figure.</p>` : ''}</div>
+          and published inside the Circle. Sign in to see the current figure.</p>` : `<p class="eyebrow">${icon('shield', { size: 14 })}Proof of reserves</p>`}</div>
         <div class="hero-facts">
           <div><p class="eyebrow">${icon('users', { size: 14 })}Seats</p>
             <p>${blind ? `<b class="num">${s.memberCap}</b> in all · by invitation only` : `<b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of <b class="num">${s.memberCap}</b> taken · by invitation only`}</p></div>

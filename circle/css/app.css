@@ -308,14 +308,28 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-
 .ledger .what { display: grid; gap: 3px; min-width: 0; }
 .ledger .what b { font-weight: 600; font-size: var(--t-body); }
 .ledger .meta { font-size: var(--t-fine); color: var(--ink-2); }
+.ledger .what .meta b { font-size: inherit; font-weight: 500; }
 .ledger .delta { font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
 .ledger .delta b { font-weight: 500; }
 .ledger .delta small { color: var(--ink-2); }
+/* Beside, as a statement: the figure on the right with its dollar line under it. Only for lists
+   whose figures are one short pair — a column narrow enough that the description keeps its line. */
+.ledger.side li { grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s-4); align-items: start; }
+.ledger.side .delta { flex-direction: column; align-items: flex-end; gap: 3px; }
+.ledger.side .delta b { font-size: var(--t-body); }
+.ledger.side .delta small { font-size: var(--t-fine); }
 /* The last row of a column that adds up. A rule above it and a heavier figure is how a total
    has been set since before anyone typeset one on a screen, and on the Pool it is the
    difference between a list of amounts and a sum a member can check. */
 .ledger li.sum { border-top: 1px solid var(--ink-3); margin-top: 2px; }
 .ledger li.sum .delta b { font-weight: 600; }
+/* The priced nights on a stay page: a bill in a box, the one boxed block in that section. */
+.receipt { padding: var(--s-1) var(--s-4); border: 1px solid var(--hairline); border-radius: var(--r-card); background: var(--surface); }
+.receipt .ledger li.sum { border-top-color: var(--ink); }
+.receipt .ledger li:has(+ li.sum) { border-bottom: 0; }
+.receipt .ledger li.sum .what > b, .receipt .ledger li.sum .delta > b { font-size: var(--t-lede); }
+.receipt .ledger li.short .delta b { color: var(--ink); }
+.receipt .ledger li.covered b { display: inline-flex; align-items: center; gap: 6px; color: var(--good-text); font-weight: 500; }
 
 /* ---------- forms ---------- */
 .field { display: grid; gap: 6px; margin-bottom: 14px; }
@@ -357,11 +371,19 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .ring-wrap .ring-center { position: absolute; display: grid; justify-items: center; gap: 1px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .ring-wrap .ring-center b { font-size: var(--t-lede); font-weight: 500; }
 .ring-wrap .ring-center small { font-size: var(--t-folio); color: var(--ink-2); letter-spacing: .06em; text-transform: uppercase; }
-.gauge { display: flex; align-items: center; gap: 12px; }
-.gauge svg { flex: none; }
-.gauge .g-read { display: grid; gap: 2px; font-size: var(--t-fine); }
-.gauge .g-read b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--t-small); font-weight: 500; }
-.gauge .g-read span { color: var(--ink-2); }
+.gauge { display: grid; gap: var(--s-1); }
+.gauge .g-fig { font-size: var(--t-fig); font-weight: 500; line-height: 1.1; letter-spacing: -.02em; }
+.gauge.full .g-fig { font-size: var(--t-fig-lg); letter-spacing: -.03em; }
+.gauge .g-cap { font-size: var(--t-fine); color: var(--ink-2); }
+.gauge .g-cap .num { color: var(--ink); font-weight: 500; }
+.gauge .g-bar { height: 6px; margin-top: var(--s-2); border-radius: var(--r-pill); background: var(--well); overflow: hidden; }
+.gauge .g-bar span { display: block; height: 100%; background: var(--good); border-radius: inherit; }
+.gauge .g-rows { list-style: none; margin: var(--s-2) 0 0; padding: 0; }
+.gauge .g-rows li { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-3); padding: var(--s-2) 0; border-bottom: 1px solid var(--hairline-soft); font-size: var(--t-small); color: var(--ink-2); }
+.gauge .g-rows li:last-child { border-bottom: 0; padding-bottom: 0; }
+.gauge .g-rows li > span { min-width: 0; }
+.gauge .g-rows small { display: block; margin-top: 2px; font-size: var(--t-fine); }
+.gauge .g-rows .num { color: var(--ink); font-weight: 500; white-space: nowrap; }
 
 /* member card — type scales with the card's own width, so the same object works at 132px or 480px.
    A quiet object: one finish, the name in the serif, the contours barely there, no sheen — a
@@ -549,7 +571,8 @@ body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-
 .hero-cover .btn.ghost { color: var(--on-photo); border-color: rgba(255, 255, 255, .52); background: rgba(255, 255, 255, .10); }
 .hero-cover .btn.ghost:active { background: rgba(255, 255, 255, .24); }
 .hero-gauge { display: grid; gap: var(--s-4); margin-top: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--hairline); }
-.hero-facts { display: flex; gap: var(--s-5); flex-wrap: wrap; }
+.hero-gauge #gauge-slot > .eyebrow + .gauge { margin-top: var(--s-2); }
+.hero-facts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4); padding-top: var(--s-4); border-top: 1px solid var(--hairline-soft); }
 .hero-facts p:not(.eyebrow) { font-size: var(--t-small); color: var(--ink-2); margin-top: 3px; }
 .hero-facts b { color: var(--ink); font-size: var(--t-body); }
 .hero-facts .eyebrow { display: inline-flex; align-items: center; gap: 5px; }
@@ -1284,7 +1307,7 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
   font-variant-numeric: tabular-nums; font-size: var(--t-folio); letter-spacing: .04em; opacity: .92; }
 .cover-plate .deck { margin-top: 12px; font-size: var(--t-head); line-height: 1.12; max-width: 18ch; }
 .cover-plate + .credit { margin-top: 8px; }
-.plate-acts { margin-top: 14px; }
+.plate-acts { margin: 14px 0 var(--s-4); }
 /* Under the running head. The pull-up is gated on the attribute, not the value, so the head
    going solid on scroll changes a colour and never the layout — a masthead that jumped 48px
    the first time a thumb moved would be worse than the seam it fixes. */
