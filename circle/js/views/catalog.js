@@ -768,7 +768,7 @@ export function stayDetail({ store, params, go, query = {} }) {
       qSlot.innerHTML = `
         ${q.ok ? `<div class="receipt" style="margin-top:4px">
           <ul class="ledger side">
-            <li><span class="what"><b>The room</b><span class="meta">${N(q.nights)} night${q.nights > 1 ? 's' : ''}</span></span><span class="delta"><b>${escapeHtml(fmtPoints(q.basePoints))}</b></span></li>
+            <li><span class="what"><b>The room</b></span><span class="delta"><b>${escapeHtml(fmtPoints(q.basePoints))}</b></span></li>
             <li><span class="what"><b>The Circle’s ${N('15%')}</b><span class="meta">for finding it and booking it</span></span><span class="delta"><b>${escapeHtml(fmtPoints(q.servicePoints))}</b></span></li>
             <li class="sum"><span class="what"><b>All in</b><span class="meta">${N(usd(q.points / q.nights))} a night on average</span></span><span class="delta"><b>${escapeHtml(fmtPoints(q.points))}</b><small>${escapeHtml(usd(q.points))}</small></span></li>
             ${short
