@@ -934,9 +934,12 @@ const JOBS = [
   { roles: ['admin', 'treasurer'], label: 'Settings', href: '#/settings' },
 ];
 // Every screen that has no tab, one visible row from the name in the bar.
-const DOORS = [
+const PRIMARY_DOORS = [
   ['#/card', 'Your card'], ['#/pay', 'Send a contribution'], ['#/ledger', 'Your ledger'],
-  ['#/requests', 'Everything you have asked for'], ['#/watching', 'What you are watching'],
+  ['#/requests', 'Everything you have asked for'],
+];
+const SECONDARY_DOORS = [
+  ['#/watching', 'What you are watching'],
   ['#/pool', 'The Pool'], ['#/cruises', 'Cruises and trips'], ['#/rules', 'How it works'],
 ];
 
@@ -953,7 +956,11 @@ function doorList(store) {
       return row(j.href, j.label, due.reduce((n, w) => n + (w.count ?? 1), 0));
     }).join('');
   }
-  return `<ul class="job-list" id="doors">${officer}${DOORS.map(([h, l]) => row(h, l)).join('')}</ul>`;
+  return `<ul class="job-list" id="doors">${officer}${PRIMARY_DOORS.map(([h, l]) => row(h, l)).join('')}</ul>
+    <details class="fineprint door-more">
+      <summary>More around the Circle <span class="num">${SECONDARY_DOORS.length}</span></summary>
+      <ul class="job-list">${SECONDARY_DOORS.map(([h, l]) => row(h, l)).join('')}</ul>
+    </details>`;
 }
 
 /**
