@@ -312,15 +312,17 @@ export function stays({ store, go, query = {} }) {
  * text on a screen whose whole job is to make somebody want to go somewhere, while twelve of
  * those places had a full licensed photograph sitting on disk and not one of them drew it.
  *
- * Two to the column, from the 400px thumb set. The grid is a grid inside the 430px column, NOT
- * a width query — the app has no layout breakpoints and this does not add one.
+ * One large plate at a time in a horizontal rail, with the next one left visibly peeking in.
+ * Twenty-three plates in a two-column stack made the index three screens tall and reduced the
+ * photographs to thumbnails. The rail keeps every place one swipe away, gives the pictures room
+ * to do their job, and gets the page back to the weeks that are actually open.
  *
  * A place whose only picture is its beach says so on the plate, because a beach standing in for
  * a building is the picture the house rule is about. A place with no picture at all keeps the
  * drawn plate it already had; nothing here invents one.
  */
 function plateIndex(stays) {
-  const grid = el('<div class="plate-index"></div>');
+  const grid = el(`<div class="plate-index" role="region" aria-label="${stays.length} more places on the island"></div>`);
   for (const st of stays) {
     const src = thumbPhotoFor(st);
     const area = photoKind(st) === 'area' ? areaPhotoFor(st) : null;
