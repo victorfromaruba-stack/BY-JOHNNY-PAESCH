@@ -3,13 +3,12 @@ import { escapeHtml, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDa
 import { RANKS, nextRank } from '../core/standing.js';
 import { VOCAB, tierName, refFor } from '../core/vocab.js';
 import { splitContribution, tierFor, fromPoints, seatPoints, pointsPerMonth } from '../core/money.js';
-import { memberCard, poolGauge, rankCrest, ring, tierLadder, badgeMark, badgeRow } from '../ui/pieces.js';
-import { treeSvg } from '../ui/art.js';
+import { memberCard, tierLadder, badgeMark, badgeRow } from '../ui/pieces.js';
 import { toast, sheet, confirmDialog, setBusy, countUp, statusLabel, avatar } from '../ui/components.js';
 import { dropWhen } from './deals.js';
 import { photoFor, photoCredit, photoKind, areaPhotoFor } from './public.js';
 import { postCard, postcardSheet, cheersLine } from './postcards.js';
-import { sparkline, columns, tableFor } from '../ui/charts.js';
+import { columns, tableFor } from '../ui/charts.js';
 import { waLink, TEMPLATES, copyText, shareText } from '../core/share.js';
 import { icon } from '../ui/icons.js';
 import { shiftMonth } from '../core/store.js';
@@ -406,62 +405,35 @@ export function home({ store, go, refresh }) {
     }
   }
 
-  // 7 — the ledger, last five lines
-  const recent = store.ledgerFor(me.id).slice(0, 5);
-  body.appendChild(el(`<div class="panel">
-      <h2>Your ledger</h2>
-      <ul class="ledger" style="margin-top:10px">${recent.map(l => ledgerRow(l, s)).join('') || '<li><span class="what"><b>No lines yet</b><span class="meta">Your first confirmed contribution will appear here with its split.</span></span></li>'}</ul>
-      <a class="link-rule" href="#/ledger">All of it</a>
-    </div>`));
-
-  // 8 — standing, roll call, coverage, the note from Ian
+  // 7 — the rest of the paper, one row per fact. The crest, the ring and the gauge each
+  // spent a screen saying a number the member can read in a line, and every one of them already
+  // has a page. Home keeps the figure and the way through.
+  const last = store.ledgerFor(me.id)[0];
   const myStanding = store.standingOf(me.id);
   const nextUp = nextRank(myStanding?.monthsHeld ?? 0);
   const toGo = nextUp ? nextUp.months - (myStanding?.monthsHeld ?? 0) : 0;
-  const standing = el(`<div class="rule-block">
-      <p class="eyebrow">${icon('crown')}Your standing</p>
-      <div id="crest-slot" style="margin-top:10px"></div>
-      <p class="small muted" style="margin-top:8px">${nextUp ? `${num(toGo)} more month${toGo === 1 ? '' : 's'} to ${escapeHtml(nextUp.name)}.` : 'Nothing above this one.'} ${escapeHtml(RANKS[myStanding?.rankIndex ?? 0].unlocks)}</p>
-      <hr class="rule" style="margin:14px 0">
-      <div class="row" style="gap:11px;margin-top:10px;align-items:flex-start;flex-wrap:nowrap">
-        <span style="flex:none;margin-top:-4px">${treeSvg(VOCAB.tierLean[me.monthlyUsd], { size: 30 })}</span>
-        <div style="min-width:0"><b>${escapeHtml(tierName(me.monthlyUsd))}</b> · ${num(fmtUsd2(me.monthlyUsd))} a month
-        <br><span class="small muted">${figs(fmtPointsUsd(store.lifetime(me.id).balance, s.pointsPerDollar))} held${me.founding ? ` · ${escapeHtml(VOCAB.founding)}` : ''}</span></div>
-      </div>
-      <p class="small" style="margin-top:14px">${num(streak)} consecutive contribution${streak === 1 ? '' : 's'}${next ? ` · ${num(next - streak)} more to the ${num(next)}-month bonus of ${num(fmtPoints(s.streakBonuses[next]))}` : ''}.</p>
-      <div style="margin-top:12px">${sparkSlot()}</div>
-      <a class="link-rule" href="#/profile">Your corner</a>
-    </div>`);
-  body.appendChild(standing);
-  {
-    // The crest escapes its sub line, so the count goes in flat and comes back in the mono here:
-    // "8 months in the Circle" sitting in the sans, one line under a mono figure, was the one
-    // number on this panel reading as a word.
-    const monthsHeld = myStanding?.monthsHeld ?? 0;
-    const months = `month${monthsHeld === 1 ? '' : 's'} in the Circle`;
-    const crest = rankCrest(myStanding, { size: 54, sub: `${monthsHeld} ${months}` });
-    const subLine = crest.querySelector('.small.muted');
-    if (subLine) subLine.innerHTML = `${num(monthsHeld)} ${escapeHtml(months)}`;
-    standing.querySelector('#crest-slot')?.replaceChildren(crest);
-  }
-  {
-    const series = store.balanceSeries(me.id).map(p => p.points);
-    standing.querySelector('.spark-slot')?.replaceChildren(sparkline(series.length ? series : [0, 0], { width: 340, height: 46 }));
-  }
-  const roll = el(`<div class="rule-block">
-      <p class="eyebrow">${icon('users')}This month in the Circle</p>
-      <div class="row" style="gap:14px;margin-top:12px;align-items:center">
-        <span id="rollcall"></span>
-        <div class="small">${num(t.confirmedThisMonth)} of ${num(t.expectedThisMonth)} contributions confirmed for ${escapeHtml(fmtMonth(month))}.
-        <br><span class="muted">Names stay private unless an Insider opts in.</span></div>
-      </div>
-      <a class="link-rule" href="#/circle">Everyone</a></div>`);
-  body.appendChild(roll);
-  roll.querySelector('#rollcall').replaceChildren(ring({ total: t.expectedThisMonth, filled: t.confirmedThisMonth, size: 76 }));
-  const cov = el(`<div class="rule-block"><p class="eyebrow">${icon('shield')}Proof of reserves</p><div id="cov" style="margin-top:12px"></div>
-      <a class="link-rule" href="#/pool">The whole Pool</a></div>`);
-  cov.querySelector('#cov').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, liabilityUsd: t.liabilityUsd, configured: t.accountsConfigured }));
-  body.appendChild(cov);
+  const monthsHeld = myStanding?.monthsHeld ?? 0;
+  const rank = RANKS[myStanding?.rankIndex ?? 0];
+  const lastFig = last ? `${last.points > 0 ? '+' : ''}${Math.round(last.points).toLocaleString('en-US')}` : '';
+  body.appendChild(el(`<div class="rule-block">
+      <p class="eyebrow">On your paper</p>
+      <a class="index-row" href="#/ledger">
+        <span class="name">Statement<span class="beach">${last ? `${escapeHtml(KIND_LABEL[last.kind] || last.kind)} · ${escapeHtml(fmtDay(last.at))}` : 'Your first confirmed contribution will appear here'}</span></span>
+        <span class="from">${last ? `<b class="${last.points > 0 ? 'pos' : 'neg'}">${escapeHtml(lastFig)}</b>` : ''}</span>
+      </a>
+      <a class="index-row" href="#/profile">
+        <span class="name">${escapeHtml(rank.name)}<span class="beach">month${monthsHeld === 1 ? '' : 's'} in the Circle${nextUp ? ` · ${toGo} to ${escapeHtml(nextUp.name)}` : ''} · ${escapeHtml(tierName(me.monthlyUsd))}</span></span>
+        <span class="from"><b>${monthsHeld}</b></span>
+      </a>
+      <a class="index-row" href="#/circle">
+        <span class="name">This month<span class="beach">${escapeHtml(fmtMonth(month))} · names stay private</span></span>
+        <span class="from"><b>${t.confirmedThisMonth}</b> of ${t.expectedThisMonth}</span>
+      </a>
+      <a class="index-row" href="#/pool">
+        <span class="name">The Pool<span class="beach">${t.verified?.at ? `checked ${escapeHtml(fmtDay(t.verified.at))}` : 'backing every point'}</span></span>
+        <span class="from"><b>${escapeHtml(fmtPct(t.coverage))}</b></span>
+      </a>
+    </div>`));
   // The Voice's note reads as a note: set as a pull quote, in his words, signed.
   if (note) body.appendChild(el(`<div class="rule-block"><p class="eyebrow">${icon('inbox')}From the Voice</p>
       <blockquote class="pull"><b>${escapeHtml(note.title)}</b><br>${escapeHtml(note.body.slice(0, 180))}${note.body.length > 180 ? '…' : ''}
@@ -523,8 +495,6 @@ export async function goalSheet({ store }) {
   });
 }
 
-const sparkSlot = () => '<div class="spark-slot"></div>';
-
 function ledgerRow(l, s) {
   const positive = l.points > 0;
   return `<li><span class="what"><b>${figs(l.note)}</b>
@@ -582,7 +552,7 @@ export function pay({ store, go }) {
   // `confirmedAt` is a redemption's field, and the panel that used to sit below asked for it by
   // that name, so the date it promised has never once printed on either backend.
   const dateline = settled
-    ? `${num(fmtUsd2(landed?.amountUsd ?? landed?.expectedUsd ?? me.monthlyUsd))} landed · confirmed by ${escapeHtml(landed?.reviewedBy ? banker(landed.reviewedBy) : 'the Banker')}${landed?.reviewedAt ? ` ${escapeHtml(fmtDay(landed.reviewedAt))}` : ''} · next due ${escapeHtml(dueOn(s, month))}`
+    ? `${num(fmtUsd2(landed?.amountUsd ?? landed?.expectedUsd ?? me.monthlyUsd))} landed · confirmed by ${escapeHtml(landed?.reviewedBy ? banker(landed.reviewedBy) : 'the Banker')}${landed?.reviewedAt ? ` ${escapeHtml(fmtDay(landed.reviewedAt))}` : ''}`
     : pending
       ? `${num(fmtUsd2(pending.expectedUsd))} · marked as sent ${escapeHtml(fmtDay(pending.submittedAt))} · awaiting the Banker`
       : `${num(fmtUsd2(me.monthlyUsd))} · ${escapeHtml(fmtAfl2(me.monthlyUsd, s.awgPerUsd))} · becomes ${num(fmtPoints(sp.points))} · all of it to the Reserve`;
@@ -599,6 +569,14 @@ export function pay({ store, go }) {
            with the rest of the confirmation. What is left is worth saying once, so it is said
            once, on a rule rather than in a box. -->
       ${settled ? `<p class="thanks"><span lang="pap" class="pap">${escapeHtml(VOCAB.pap.thanks[0])}</span> · ${escapeHtml(VOCAB.pap.thanks[1])}</p>
+
+      <div class="rule-block">
+        <p class="eyebrow">Next contribution</p>
+        <h2>${escapeHtml(dueOn(s, month))}</h2>
+        <p class="dateline">${num(fmtUsd2(me.monthlyUsd))} · becomes ${num(fmtPoints(sp.points))}</p>
+        <div class="copyline" style="margin-top:12px"><code class="num">${escapeHtml(refFor(me, shiftMonth(month, 1)))}</code><button type="button" class="btn ghost sm" data-copy="${escapeHtml(refFor(me, shiftMonth(month, 1)))}">Copy</button></div>
+        <p class="small muted" style="margin-top:8px">Nothing to send until then. The reference is the one a standing order already carries, with next month on the end.</p>
+      </div>
 
       <details class="fineprint" style="margin-top:16px">
         <summary>Send something extra</summary>

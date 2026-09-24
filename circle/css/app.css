@@ -1204,6 +1204,7 @@ p.stamp { white-space: normal; }
 /* The drop, on the home screen: the names land now, the price waits for the hour. */
 .board-tease .big-line { font-family: var(--font-display); font-weight: 400; font-size: var(--t-head); letter-spacing: -.012em; line-height: 1.12; margin-top: 8px; }
 .index-row .from b { color: var(--ink); font-weight: 500; font-size: var(--t-small); }
+.index-row .from b.pos { color: var(--good-text); }
 /* A place with no week open carries no number — only the verb. It should read as a quieter row
    than one with a real price, without looking broken or disabled. */
 .index-row .from.ask { display: inline-flex; align-items: center; justify-content: flex-end; gap: 2px; color: var(--ink-3); font-family: var(--font-body); }
