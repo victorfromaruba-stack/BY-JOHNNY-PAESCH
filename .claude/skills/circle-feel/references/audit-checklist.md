@@ -364,6 +364,25 @@ view's own markup with a real stay and looking at it. Do not "fix" the preview b
 seed crews to a booking: the only one Sasha has is the Ritz week the Desk DECLINED, and having
 the demo tell a false story to make a feature look good is the thing this app does not do.
 
+## Re-baselined 24 Sept, the statement pass (390px)
+
+Proof of reserves is a figure, a bar and labelled lines instead of the bowl and one run-on
+sentence (landing, Home, the Pool — same facts, same reconciliation wording). The Home ledger
+shows three lines with the figure on the right (`.ledger.side`, also on `/ledger`); a stay page
+prices the chosen nights as a boxed receipt (`.receipt`). A running head left transparent over
+`/stays` after a skipped view transition is fixed in `app.js`, and skipped transitions no longer
+log an error.
+
+| route | before (member / admin) | after | note |
+|---|---|---|---|
+| `/home` | 3.8 / — | 3.5 / 3.9 | errors on `/` 1 → 0 |
+| `/stays` | 5.9, first figure 88 | 5.9, 176 | the 88 was the count in the eyebrow, which repeated the dateline; the first price did not move |
+| `/stays/:id` | 4.6 | 4.8 / 5.1 | the receipt is taller than the paragraph it replaced |
+| `/ledger` | 5.6 | 5.3 / 5.0 | |
+
+No overflow, no errors, zero small targets, both roles; every route reachable. Interaction sweep
+on `/ /home /stays /stays/:id /pool /ledger`: 199 controls, 2 roles, every one did something.
+
 Open, and deliberately not built: the per-tier grounds that would tint each member's whole app,
 the season wash, and `coverPath` on a crew — reserved in `schema.sql` as `cover_path`,
 initialised by `createCrew`, written nowhere and read nowhere.
