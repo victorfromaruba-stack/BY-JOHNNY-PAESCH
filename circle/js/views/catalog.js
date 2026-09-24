@@ -145,7 +145,7 @@ export function stays({ store, go, query = {} }) {
   const matchFor = (d) => watches.map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <header class="masthead">
-        <p class="eyebrow">${icon('trend')}The board · <span class="num" id="count">…</span></p>
+        <p class="eyebrow">${icon('trend')}The board</p>
         <h1>Cheapest a night, <em class="ac">first</em>.</h1>
         <p class="dateline" id="asof">Looking at what owners have open…</p>
         <div class="small muted" id="reach" hidden></div>
@@ -196,7 +196,7 @@ export function stays({ store, go, query = {} }) {
   // always agree, which is the point of a board.
   const FIRST = 9;
   const coverSlot = wrap.querySelector('#cover'), dealsSlot = wrap.querySelector('#deals'), soonSlot = wrap.querySelector('#soon');
-  const count = wrap.querySelector('#count'), asof = wrap.querySelector('#asof');
+  const asof = wrap.querySelector('#asof');
   const reach = wrap.querySelector('#reach'), colophon = wrap.querySelector('#colophon');
   let drafts = [];
   let loading = true;
@@ -213,7 +213,6 @@ export function stays({ store, go, query = {} }) {
     const ranked = [...posted, ...drafts].sort(byNight);
     const folioOf = new Map(ranked.map((d, i) => [d.id, i + 1]));
     const all = ranked;
-    count.textContent = `${ranked.length} open`;
     asof.innerHTML = res ? datelineOf(res, ranked.length, lastSeenOf(ranked)) : 'Looking at what owners have open at the places we stay…';
     const note2 = res ? reachNote(res) : '';
     reach.hidden = !note2;
@@ -730,7 +729,7 @@ export function stayDetail({ store, params, go, query = {} }) {
     const dOut = cameFrom && Date.parse(cameFrom.from) >= Date.parse(dToday) ? cameFrom.to : iso(soon.getTime() + Math.max(1, stay.minNights || 1) * 864e5);
     wrap.querySelector('#pricing').innerHTML = `
       <h2>What your nights cost</h2>
-      <p class="small muted" style="margin-top:6px">From <b class="num">${escapeHtml(fmtPoints(fromPoints(stay, s)))}</b> a night. Put your dates in and it prices those exact nights — the same arithmetic the Desk quotes from; the Ask below carries them.</p>
+      <p class="small muted" style="margin-top:6px">From <b class="num">${escapeHtml(fmtPoints(fromPoints(stay, s)))}</b> a night. Your dates, priced the way the Desk quotes them.</p>
       <div class="ask-dates" style="margin-top:14px">
         <label class="ask-tile"><span class="k">Check in</span><b data-dm="q-in"></b><em><span data-wd="q-in"></span> · <span data-yr="q-in"></span></em>
           <input type="date" id="q-in" value="${escapeHtml(dIn)}" min="${escapeHtml(dToday)}" aria-label="Check in"></label>
@@ -763,15 +762,21 @@ export function stayDetail({ store, params, go, query = {} }) {
       // The docked Ask carries these dates (and the week they came from) and shows the figure.
       askPath = `/book/${stay.id}?from=${ci}&to=${co}${pinned && pinned.from === ci && pinned.to === co ? (pinned.draft ? (safeUrl(pinned.sourceUrl) ? `&src=${encodeURIComponent(pinned.sourceUrl)}&srcLabel=VakayMood` : '') : `&deal=${encodeURIComponent(pinned.id)}`) : ''}`;
       askFig.textContent = q.ok ? fmtPoints(q.points) : `from ${fmtPoints(fromPoints(stay, s))} a night`;
+      // A receipt: the room, the Circle's share, the total, then what the member's points do
+      // to it — each on its own line with its figure on the right, the way a bill is read.
+      const usd = (p) => fmtUsd2(p / s.pointsPerDollar);
       qSlot.innerHTML = `
-        <div class="notice${q.ok ? '' : ' warn'}" style="margin-top:4px">
-          ${q.ok ? `<b>${N(fmtPoints(q.points))} for ${N(q.nights)} night${q.nights > 1 ? 's' : ''}</b>
-            <p class="small">${N(fmtUsd2(q.points / s.pointsPerDollar))} all in — ${N(fmtUsd2(q.points / s.pointsPerDollar / q.nights))} a night on average.
-            ${N(fmtPoints(q.basePoints))} is the room and ${N(fmtPoints(q.servicePoints))} is the Circle's ${N('15%')}.
-            ${short ? `You are ${N(fmtPoints(short))} short — a top-up of ${N(fmtUsd2(short / s.pointsPerDollar))} in cash, at face value.` : 'Covered by the points you hold.'}</p>`
-          : `<b>${escapeHtml(stay.name)} wants ${N(q.minNights)} nights for those dates</b>
-            <p class="small">Most resorts ask for longer over Christmas and Carnival. Move a date, or ask anyway and Victor will tell you what he can get.</p>`}
-        </div>
+        ${q.ok ? `<div class="receipt" style="margin-top:4px">
+          <ul class="ledger side">
+            <li><span class="what"><b>The room</b><span class="meta">${N(q.nights)} night${q.nights > 1 ? 's' : ''}</span></span><span class="delta"><b>${escapeHtml(fmtPoints(q.basePoints))}</b></span></li>
+            <li><span class="what"><b>The Circle’s ${N('15%')}</b><span class="meta">for finding it and booking it</span></span><span class="delta"><b>${escapeHtml(fmtPoints(q.servicePoints))}</b></span></li>
+            <li class="sum"><span class="what"><b>All in</b><span class="meta">${N(usd(q.points / q.nights))} a night on average</span></span><span class="delta"><b>${escapeHtml(fmtPoints(q.points))}</b><small>${escapeHtml(usd(q.points))}</small></span></li>
+            ${short
+              ? `<li class="short"><span class="what"><b>You are short</b><span class="meta">a cash top-up at face value closes it</span></span><span class="delta"><b>${escapeHtml(fmtPoints(short))}</b><small>${escapeHtml(usd(short))}</small></span></li>`
+              : `<li class="covered"><span class="what"><b>${icon('checkCircle', { size: 16 })} Covered by the points you hold</b></span></li>`}
+          </ul></div>`
+          : `<div class="notice warn" style="margin-top:4px"><b>${escapeHtml(stay.name)} wants ${N(q.minNights)} nights for those dates</b>
+            <p class="small">Most resorts ask for longer over Christmas and Carnival. Move a date, or ask anyway and Victor will tell you what he can get.</p></div>`}
         ${q.ok ? versusRule(versusPublic(q.retailUsd, q.points / s.pointsPerDollar), `for ${q.nights} night${q.nights > 1 ? 's' : ''}`) : ''}
         <p class="small muted" style="margin-top:10px">${stay.taxesIncluded ? 'Taxes and breakfast are already in this.' : 'Room, taxes, service charge and resort fee are all in this.'} Victor's binding quote is usually better.</p>`;
     };
@@ -793,7 +798,7 @@ export function stayDetail({ store, params, go, query = {} }) {
     const N = (v) => `<b class="num">${escapeHtml(v)}</b>`;
     wrap.querySelector('#pricing').insertAdjacentHTML('beforeend', `<p class="small muted" style="margin-top:12px">You hold ${N(fmtPoints(avail))} — ${canCover >= min
         ? `enough for ${N(Math.min(canCover, 14))} ${unit}${canCover === 1 ? '' : 's'} here.`
-        : `${N(gapUsd)} short of ${isTrip ? `a ${unit}` : `the ${N(min)}-night minimum`}${mineRow && mineRow.months > 0 ? `, about ${N(mineRow.months)} more month${mineRow.months === 1 ? '' : 's'} at your level` : ''}. Ask anyway: Victor quotes it, and ${N(gapUsd)} as a cash top-up closes the gap.`}
+        : `${N(gapUsd)} short of ${isTrip ? `a ${unit}` : `the ${N(min)}-night minimum`}${mineRow && mineRow.months > 0 ? `, about ${N(mineRow.months)} more month${mineRow.months === 1 ? '' : 's'} at your level` : ''}. Ask anyway — a top-up closes the gap.`}
       ${escapeHtml(tierName(me.monthlyUsd))} can hold ${N(tier.holds)} open request${tier.holds > 1 ? 's' : ''} and book ${N(tier.windowMonths)} months ahead.</p>`);
   }
   wrap.querySelector('#share')?.addEventListener('click', () => shareText({

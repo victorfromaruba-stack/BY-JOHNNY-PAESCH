@@ -233,7 +233,7 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
   // the middle of a card whose other prices are mono. Everything interpolated is escaped here,
   // because the line below prints this without escaping it.
   const why = draft
-    ? `Owner’s week on VakayMood${deal.sleeps ? ` · sleeps <b class="num">${escapeHtml(String(deal.sleeps))}</b>` : ''}${deal.usdNightly ? ` · the owner asks <b class="num">${escapeHtml(fmtUsd2(deal.usdNightly))}</b> a night` : ''}`
+    ? `Owner’s week${deal.sleeps ? ` · sleeps <b class="num">${escapeHtml(String(deal.sleeps))}</b>` : ''}${deal.usdNightly ? ` · the owner asks <b class="num">${escapeHtml(fmtUsd2(deal.usdNightly))}</b> a night` : ''}`
     : `${escapeHtml((SOURCES[deal.source] || SOURCES.other).label)}${who ? ` · found by ${escapeHtml(who)}` : ''}${deal.note ? ` · ${escapeHtml(deal.note)}` : ''}`;
   const node = el(`<article class="cover${photo ? '' : ' plate'}${match ? ' matched' : ''}" data-deal="${escapeHtml(deal.id)}">
       <a class="cover-shot" href="${placeHrefFor(deal, stay)}" aria-label="${escapeHtml(stay?.name || 'The place')}: the rooms, the map and this week">
@@ -242,7 +242,7 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
         <span class="eyebrow cover-no">No. ${folio}${match ? ` · ${icon('bellRing', { size: 13 })}You asked for this` : ''}</span>
         <h2>${escapeHtml(deal.title || stay?.name || 'A deal')}</h2>
         <span class="cover-price"><span class="num">${escapeHtml(usdNight(deal, s.pointsPerDollar))}</span><small>a night · all in</small></span>
-        <span class="mono">${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'} · <b>${escapeHtml(fmtPoints(deal.pointsTotal))} pts</b> all in · ${escapeHtml(pointsUsd(deal.pointsTotal, s.pointsPerDollar))}</span>
+        <span class="mono">${escapeHtml(shortRange(deal.from, deal.to))} · ${deal.nights}&nbsp;night${deal.nights === 1 ? '' : 's'} · <b>${escapeHtml(fmtPoints(deal.pointsTotal))}</b> · ${escapeHtml(pointsUsd(deal.pointsTotal, s.pointsPerDollar))}</span>
         ${soon ? `<p class="soon">${icon('zap', { size: 15 })}${escapeHtml(soon)}</p>` : ''}
         <p class="why">${why} · <span class="stamp${stamp.feed ? ' feed' : ''}">${escapeHtml(stamp.text)}</span></p>
         ${ageLine(stamp)}
