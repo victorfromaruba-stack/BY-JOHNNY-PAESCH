@@ -283,11 +283,8 @@ export function home({ store, go, refresh }) {
       goalPanel.innerHTML = `
         <p class="eyebrow">${icon('target')}What you are saving for</p>
         <h2 style="margin-top:8px">Pick something and watch it come closer</h2>
-        <p class="small muted" style="margin-top:8px">Every contribution moves a bar instead of a number. Choose a place and how many nights, and the app works out how many months it takes at your level — and what would get you there sooner.</p>
-        <div class="stack tight" style="margin-top:14px">
-          <p><button type="button" class="link-rule" id="set-goal">Choose one</button></p>
-          <p><a class="link-rule" href="#/stays">Look at the places</a></p>
-        </div>`;
+        <p class="small muted" style="margin-top:6px">Choose a place and how many nights; every contribution moves a bar, and the app says how many months it takes at your level.</p>
+        <p style="margin-top:4px"><button type="button" class="link-rule" id="set-goal">Choose one</button></p>`;
       return;
     }
     const pct = Math.round(g.pct * 100);
@@ -406,11 +403,12 @@ export function home({ store, go, refresh }) {
     }
   }
 
-  // 7 — the ledger, last five lines
-  const recent = store.ledgerFor(me.id).slice(0, 5);
-  body.appendChild(el(`<div class="panel">
-      <h2>Your ledger</h2>
-      <ul class="ledger" style="margin-top:10px">${recent.map(l => ledgerRow(l, s)).join('') || '<li><span class="what"><b>No lines yet</b><span class="meta">Your first confirmed contribution will appear here with its split.</span></span></li>'}</ul>
+  // 7 — the ledger, last three lines, set as a statement: what on the left, the figure on the
+  // right. The statement itself is one tap away; three lines is enough to see the last one land.
+  const recent = store.ledgerFor(me.id).slice(0, 3);
+  body.appendChild(el(`<div class="rule-block">
+      <p class="eyebrow">${icon('receipt')}Your ledger</p>
+      <ul class="ledger side" style="margin-top:6px">${recent.map(l => ledgerRow(l, s)).join('') || '<li><span class="what"><b>No lines yet</b><span class="meta">Your first confirmed contribution will appear here with its split.</span></span></li>'}</ul>
       <a class="link-rule" href="#/ledger">All of it</a>
     </div>`));
 
@@ -450,9 +448,9 @@ export function home({ store, go, refresh }) {
   }
   const roll = el(`<div class="rule-block">
       <p class="eyebrow">${icon('users')}This month in the Circle</p>
-      <div class="row" style="gap:14px;margin-top:12px;align-items:center">
-        <span id="rollcall"></span>
-        <div class="small">${num(t.confirmedThisMonth)} of ${num(t.expectedThisMonth)} contributions confirmed for ${escapeHtml(fmtMonth(month))}.
+      <div class="row" style="gap:16px;margin-top:12px;align-items:center;flex-wrap:nowrap">
+        <span id="rollcall" style="flex:none"></span>
+        <div class="small" style="flex:1;min-width:0">${num(t.confirmedThisMonth)} of ${num(t.expectedThisMonth)} contributions confirmed for ${escapeHtml(fmtMonth(month))}.
         <br><span class="muted">Names stay private unless an Insider opts in.</span></div>
       </div>
       <a class="link-rule" href="#/circle">Everyone</a></div>`);
@@ -713,7 +711,7 @@ export function ledger({ store, params }) {
 
       <div class="panel" style="margin-top:20px">
         <h2>Points, line by line</h2>
-        <ul class="ledger" style="margin-top:10px" id="rows"></ul>
+        <ul class="ledger side" style="margin-top:10px" id="rows"></ul>
         <button class="btn ghost block" id="rows-more" type="button" style="margin-top:12px" hidden></button>
       </div>
 
