@@ -312,17 +312,20 @@ export function stays({ store, go, query = {} }) {
  * text on a screen whose whole job is to make somebody want to go somewhere, while twelve of
  * those places had a full licensed photograph sitting on disk and not one of them drew it.
  *
- * Two to the column on a phone, three on the desktop sheet, from the same 400px thumb set —
- * three across 560px renders them at 178px, which is crisper than the phone's 173px and costs
- * nothing extra on the wire. The column count is the stylesheet's business; this file does not
- * measure anything.
+ * One large plate at a time in a horizontal rail on a phone, with the next one left visibly
+ * peeking in. Twenty-three plates in a two-column stack made the index three screens tall and
+ * reduced the photographs to thumbnails. The rail keeps every place one swipe away, gives the
+ * pictures room to do their job, and gets the page back to the weeks that are actually open.
+ * On a computer the same plates become three to the row and stop scrolling, because a rail whose
+ * scrollbar is hidden cannot be driven with a mouse. The column count is the stylesheet's
+ * business; this file does not measure anything.
  *
  * A place whose only picture is its beach says so on the plate, because a beach standing in for
  * a building is the picture the house rule is about. A place with no picture at all keeps the
  * drawn plate it already had; nothing here invents one.
  */
 function plateIndex(stays) {
-  const grid = el('<div class="plate-index"></div>');
+  const grid = el(`<div class="plate-index" role="region" aria-label="${stays.length} more places on the island"></div>`);
   for (const st of stays) {
     const src = thumbPhotoFor(st);
     const area = photoKind(st) === 'area' ? areaPhotoFor(st) : null;

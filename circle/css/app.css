@@ -957,6 +957,14 @@ button.badge-card { cursor: pointer; font: inherit; color: inherit; }
   border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform var(--dur-fast) var(--ease-out); }
 .fineprint[open] > summary::before { transform: rotate(45deg); }
 .fineprint > p { max-width: 62ch; margin-bottom: 6px; }
+/* Profile opens on the four things a member uses in a normal month. The less-frequent doors
+   remain one tap away without pushing the level control below a wall of navigation. */
+.door-more { border-top: 1px solid var(--hairline-soft); margin-top: 0; }
+.door-more > summary { width: 100%; justify-content: space-between; font-family: var(--font-body);
+  font-size: var(--t-small); color: var(--ink-2); }
+.door-more > summary::before { order: 3; margin-left: auto; }
+.door-more > summary .num { font-size: var(--t-folio); color: var(--ink-3); }
+.door-more > .job-list { padding-bottom: var(--s-2); }
 
 
 /* The hero video sits over the still that already painted, and only becomes visible once it can
@@ -1361,17 +1369,25 @@ body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: va
 /* The first group opens under the running head, not a fifth of a screen below it. */
 .listing > .board-group:first-of-type { margin-top: var(--s-3); }
 
-/* THE PRINTED INDEX — the places, two to the column on a phone and three on the sheet (see the
-   breakpoint at the foot of this file). The 3-up is deliberate and it is about bytes, not taste:
-   the thumbs served are 400px, so three across a 560px measure render at 178px — CRISPER than
-   the phone's 173px, from the same files. A 2-up desktop grid would render them at 272px and
-   reinstate the megabytes the phone cannot afford. The whole plate is the tap target, so it
-   clears 44px many times over without a single rule about hit areas. */
-.plate-index { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4) var(--s-3); margin-top: var(--s-4); }
+/* THE PRINTED INDEX — the places, as a horizontal contact sheet on a phone.
+   The next plate peeks into the column so the swipe is visible without an instruction. This
+   turns a three-screen thumbnail grid into one deliberate photographic row while every card
+   remains a full tap target and a keyboard stop.
+   Above the breakpoint at the foot of this file it becomes three to the row and stops scrolling:
+   a rail with its scrollbar hidden is swipeable with a thumb and effectively unreachable with a
+   mouse, and there is room for the whole index at once. The 3-up is also about bytes — the thumbs
+   served are 400px, so three across a 560px measure render at 178px, crisper than the phone gets
+   from the same files, where a 2-up would render them at 272px. */
+.plate-index { display: grid; grid-auto-flow: column; grid-auto-columns: 74%; gap: var(--s-3);
+  margin: var(--gut) calc(-1 * var(--gut)) 0; padding: 0 var(--gut) var(--s-3);
+  overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--gut); scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.plate-index::-webkit-scrollbar { display: none; }
 /* align-content: start, or the plate stretches to the tallest cell in its row and shares the
    spare height out between the name and the area line — so two plates side by side set their
    own type at two different rhythms and the grid reads as hand-placed. */
-.place-plate { display: grid; align-content: start; gap: 2px; text-decoration: none; color: inherit; min-width: 0; }
+.place-plate { display: grid; align-content: start; gap: 2px; text-decoration: none; color: inherit;
+  min-width: 0; scroll-snap-align: start; }
 .place-plate .shot { display: block; aspect-ratio: 3 / 2; overflow: hidden; background: var(--well); position: relative; }
 .place-plate .shot img, .place-plate .shot .scene, .place-plate .shot .scene svg { width: 100%; height: 100%; object-fit: cover; display: block; }
 .place-plate .pn { margin-top: 8px; font-size: var(--t-small); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
@@ -1655,7 +1671,8 @@ button.link-rule { background: none; border: 0; cursor: pointer; }
   /* THE PRINTED INDEX, three to the sheet. This is about bytes, not taste: the thumbs served are
      400px, so three across a 560px measure render at 178px — crisper than the phone's 173px from
      the same files. A 2-up desktop grid would render them at 272px and reinstate the megabytes. */
-  .plate-index { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .plate-index { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr));
+                 overflow-x: visible; scroll-snap-type: none; margin-inline: 0; padding-inline: 0; }
   .badge-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }  /* the file's one auto-fill grid reflows on its own; set the floor deliberately */
 
   /* The landing's strip stops being a sideways scroller. It is fed exactly five cards, so a plain
