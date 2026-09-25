@@ -238,6 +238,13 @@ function render(current = router?.current) {
   // sets this again on its way in.
   delete document.body.dataset.cover;
   const { route, params } = current;
+  // THE WORKING SCREENS. The Desk's three lanes, the Banker's inbox, the settings tables and the
+  // roster of forty Insiders are the four places where 560px of measure is the constraint rather
+  // than the right answer — they are worked in, not read. Above the breakpoint they take a wider
+  // sheet; below it this attribute does nothing at all, because only the query reads it. The
+  // reading screens keep the 66-character measure, which is the whole point of the column.
+  const WORKED = ['/desk', '/bank', '/settings', '/circle'];
+  document.body.dataset.wide = WORKED.includes('/' + String(route.path).split('/')[1]) ? 'work' : '';
   // A member never sees the brochure or the sign-in form: those two are for a stranger, and
   // Home is where a member's own day starts. `replace`, so Back does not bounce off them.
   if (store.me && (route.path === '/' || route.path === '/sign-in')) { router.go('/home', { replace: true }); return; }
@@ -291,6 +298,12 @@ function render(current = router?.current) {
     document.title = `${route.title} · ${VOCAB.clubName}`;
     if (liveRegion) liveRegion.textContent = route.title;
     updateChrome(current);
+    // replaceChildren destroys whatever had focus, so after every navigation focus fell to <body>
+    // and the next Tab restarted at the top of the document. Invisible with a thumb; the most
+    // noticeable keyboard defect on a computer. #app already carries tabindex="-1" and the skip
+    // link already focuses it. The dialog guard stops this stealing focus from an open sheet, and
+    // preventScroll stops it fighting the scrollTo on the next line.
+    if (!document.querySelector('dialog[open]')) app.focus({ preventScroll: true });
     // This used to read `if (!location.hash.includes('#/stays/') || true)` — the `|| true` made
     // the test dead code, so it always scrolled anyway. Say what it does.
     window.scrollTo({ top: 0, behavior: 'auto' });
@@ -318,10 +331,17 @@ function mountChrome() {
     </div>`;
 
   const nav = document.getElementById('botnav');
-  nav.innerHTML = `<ul id="botnav-list"></ul>`;
+  // Three lists, not one. On a phone only the first is visible — the other two are display: none
+  // in the base stylesheet — and above the breakpoint the bar becomes a rail in the sheet's
+  // margin, where there is room for the rooms Home keeps behind it. Nothing new appears on a
+  // computer: every one of these is already reachable from Home or from Profile on the phone.
+  nav.innerHTML = `<ul id="botnav-list"></ul>
+    <div class="rail-group" id="rail-yours"><span class="rail-head">Yours</span><ul id="rail-more"></ul></div>
+    <div class="rail-group" id="rail-desk"><span class="rail-head">The Desk</span><ul id="rail-desk-more"></ul></div>`;
   // Tapping the tab you are already on takes you back to the top of it, as a phone's own tab
-  // bars do. The list is rewritten on every route; the handler sits on the list itself.
-  document.getElementById('botnav-list').addEventListener('click', (e) => {
+  // bars do. Delegated from the nav itself so it serves all three lists, each of which is
+  // rewritten on every route.
+  nav.addEventListener('click', (e) => {
     const a = e.target.closest('a');
     if (!a || a.getAttribute('aria-current') !== 'page') return;
     e.preventDefault();
@@ -357,6 +377,32 @@ const TAB_ROOTS = ['/home', '/stays', '/cruises', '/postcards', '/crews', '/circ
 // The screens with no tab of their own go up to Home, and the Home tab lights under them: Home
 // is where the doors to Send, the statement, the card, the requests and the Pool live.
 const HOME_ROOTS = ['/pay', '/ledger', '/card', '/requests', '/watching', '/pool', '/rules', '/profile', '/desk', '/bank', '/settings'];
+
+// THE RAIL'S SECOND AND THIRD GROUPS. Only ever seen above the breakpoint, where the tab bar is a
+// rail in the sheet's margin and there is room for the rooms Home keeps behind it. NAV_OFF and
+// NAV_ON above are deliberately untouched: the phone keeps its five, and the reasoning recorded
+// there still holds. Labels are set in the mono face, uppercase, in a 124px track — about
+// fourteen characters — so every one of these is ten or fewer. Nothing here is new: each is
+// already reachable from Home or from the door list at the top of Profile.
+const RAIL_YOURS = [
+  { path: '/pay', label: 'Send money', icon: 'banknote' },
+  { path: '/ledger', label: 'Statement', icon: 'receipt' },
+  { path: '/card', label: 'Your card', icon: 'idCard' },
+  { path: '/requests', label: 'Your asks', icon: 'bookmark' },
+  { path: '/watching', label: 'Watching', icon: 'eye' },
+  { path: '/pool', label: 'The pool', icon: 'droplet' },
+  { path: '/rules', label: 'The rules', icon: 'scale' },
+  { path: '/profile', label: 'Your seat', icon: 'user' },
+  // Cruises keeps a tab of its own until Postcards takes the slot; it only needs a rail row when
+  // it has lost one, or the same destination would be printed twice.
+  { path: '/cruises', label: 'Cruises', icon: 'compass', onlyWhenPostcardsOn: true },
+];
+// Gated exactly as the router gates them, or the rail advertises a screen the router will deny.
+const RAIL_DESK = [
+  { path: '/desk', label: 'The desk', icon: 'clipboard', roles: ['planner', 'comms', 'admin'] },
+  { path: '/bank', label: 'The bank', icon: 'inbox', roles: ['treasurer', 'deputy'] },
+  { path: '/settings', label: 'Settings', icon: 'sliders', roles: ['admin', 'treasurer'] },
+];
 
 // A detail route belongs to the tab it was opened from: open a cruise and the bar should still
 // say Cruises. Comparing the whole path meant every /stays/:id, /cruises/:id and /trips/:id left
@@ -445,6 +491,25 @@ function updateChrome(current) {
       <span class="botnav-ico">${icon(n.icon, { size: 22, stroke: 1.6 })}${count ? `<span class="nav-dot" aria-hidden="true"></span>` : ''}</span>
       ${escapeHtml(n.label)}${count ? `<span class="sr-only">, ${count} new</span>` : ''}</a></li>`;
   }).join('') : '';
+
+  // The rail's two extra groups. Same aria-current test as the bar — a rail picks its current
+  // item the same way a bar does. Both are display: none below the breakpoint, so this is markup
+  // a phone carries and never shows; it costs one pass over thirteen rows.
+  const railRow = (n) => `<li><a href="#${n.path}"${navRoot(path) === n.path ? ' aria-current="page"' : ''}>
+      <span class="botnav-ico">${icon(n.icon, { size: 18, stroke: 1.6 })}</span>${escapeHtml(n.label)}</a></li>`;
+  const can = (n) => !n.roles || (() => { try { return store.hasRole(...n.roles); } catch { return false; } })();
+  const more = document.getElementById('rail-more');
+  const deskMore = document.getElementById('rail-desk-more');
+  const deskGroup = document.getElementById('rail-desk');
+  if (more) {
+    more.innerHTML = me ? RAIL_YOURS.filter(n => !n.onlyWhenPostcardsOn || postcardsOn()).map(railRow).join('') : '';
+  }
+  if (deskMore && deskGroup) {
+    const mine = me ? RAIL_DESK.filter(can) : [];
+    deskMore.innerHTML = mine.map(railRow).join('');
+    // A member with no officer role gets no eyebrow either, rather than a heading over nothing.
+    deskGroup.hidden = !mine.length;
+  }
 }
 
 boot().catch((err) => {

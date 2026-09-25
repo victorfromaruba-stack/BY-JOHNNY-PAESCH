@@ -312,8 +312,10 @@ export function stays({ store, go, query = {} }) {
  * text on a screen whose whole job is to make somebody want to go somewhere, while twelve of
  * those places had a full licensed photograph sitting on disk and not one of them drew it.
  *
- * Two to the column, from the 400px thumb set. The grid is a grid inside the 430px column, NOT
- * a width query — the app has no layout breakpoints and this does not add one.
+ * Two to the column on a phone, three on the desktop sheet, from the same 400px thumb set —
+ * three across 560px renders them at 178px, which is crisper than the phone's 173px and costs
+ * nothing extra on the wire. The column count is the stylesheet's business; this file does not
+ * measure anything.
  *
  * A place whose only picture is its beach says so on the plate, because a beach standing in for
  * a building is the picture the house rule is about. A place with no picture at all keeps the

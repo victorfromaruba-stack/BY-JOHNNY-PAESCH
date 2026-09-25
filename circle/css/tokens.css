@@ -81,7 +81,14 @@
   --h-bar: 48px; --h-nav: 52px; --inset-top: env(safe-area-inset-top, 0px); --inset-bottom: env(safe-area-inset-bottom, 0px); --kb: 0px;
   --dur-fast: 200ms; --dur-split: 500ms; --dur-water: 700ms; --dur-odo: 900ms; --dur-flip: 600ms;
   --ease-out: cubic-bezier(.2,.8,.2,1);
+  /* THE COLUMN, and the two literals that have to be hand-copied to follow it. A media query
+     cannot read a custom property, so 431 (the frame query, app.css:21) and 900 (the one layout
+     breakpoint, at the END of app.css) are written out in full there. If --wrap moves, they move. */
   --wrap: 430px;
+  /* The page gutter and the bleed unit, split off from --s-4 so the gutter can grow at width
+     without moving panel, card or sheet-body padding — those share --s-4 and must stay 16px at
+     every width. It resolves to --s-4 here, so every phone value is byte-identical to before. */
+  --gut: var(--s-4);
 }
 /* The dark set. These two blocks must stay character-for-character identical: the media
    query covers the viewer's system setting, the selector list covers an explicit choice
@@ -115,7 +122,16 @@
 /* .field-night joins this list rather than repeating the palette: a route-level block of dark
    stock takes the night tokens wholesale, so there is exactly one dark palette in this file and
    a screen either sits on it or does not. */
+/* html joins the list because above the breakpoint the tab bar becomes a transparent rail sitting
+   on the body's own --well: with only .botnav in night, the rail would paint dark-palette ink on
+   the light well and the navigation would effectively disappear on this one route. Custom
+   properties inherit from html, so naming html sends the whole page — rail, sheet and table — to
+   night together. It joins THIS list only, never the prefers-color-scheme block above: that
+   block's job is the viewer's system setting, and the card is dark whatever the viewer prefers,
+   which is exactly why this explicit list exists. The two blocks' palette declarations stay
+   character-for-character identical; their selectors differ by construction. */
 :root[data-theme="dark"], .nocturne, .field-night,
+html:has(.nocturne-page),
 body:has(.nocturne-page) .topbar, body:has(.nocturne-page) .botnav {
   color-scheme: dark;
   --ground: #0B1220; --surface: #131C2B; --raised: #1B2637; --well: #0F1727;

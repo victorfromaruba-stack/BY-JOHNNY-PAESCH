@@ -1,6 +1,10 @@
 #!/usr/bin/env node
-// Measure the things that actually decide whether the app feels finished — on a phone.
+// Measure the things that actually decide whether the app feels finished.
 // Usage: node audit.mjs [--role member|admin] [--width 390]
+//
+// 390 is the reference phone and the width that may never regress. 1280 and 1440 are the desktop
+// sheet (one layout breakpoint, at the foot of css/app.css); 768 deliberately still gets the
+// phone column plus the laptop frame, which is correct and should stay.
 //
 // Per route and width it prints (the first six columns are the old table, unchanged):
 //   ovf        the document is wider than the window
@@ -25,7 +29,12 @@ import { dirname, resolve } from 'node:path';
 
 const arg = (n, d) => { const i = process.argv.indexOf(n); return i > -1 ? process.argv[i + 1] : d; };
 const role = arg('--role', 'admin');
-const widths = arg('--width') ? [Number(arg('--width'))] : [390, 768, 1440];
+// Three families, not one: the phone, the in-between that still gets the phone column, and the
+// desktop sheet. The last needs a real laptop height or the breakpoint's min-height: 600 keeps it
+// on the phone layout and the sweep measures nothing new.
+const PHONE = 390;
+const widths = arg('--width') ? [Number(arg('--width'))] : [PHONE, 768, 1280, 1440];
+const heightFor = (w) => (w < 500 ? 844 : 900);
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP_JS = resolve(process.env.CIRCLE_ROOT || resolve(HERE, '../../../..'), 'circle/js/app.js');
 
@@ -191,7 +200,7 @@ async function crawl(crawlRole, width = 390) {
 // ---------- the sweep ----------
 const byWidth = {};
 for (const width of widths) {
-  const height = width < 500 ? 844 : 900;
+  const height = heightFor(width);
   const { b, p, errors } = await open({ width, height, role });
   const rows = [];
   for (const route of ROUTES) {
@@ -251,15 +260,19 @@ for (const crawlRole of ['member', 'admin']) {
   } catch (e) { console.log(`as ${crawlRole}: crawl failed — ${String(e.message).slice(0, 140)}`); }
 }
 
-// ---------- §3: the laptop shows the phone ----------
-// The wider windows must agree with the phone on overflow and small taps at every route. The
-// first-figure position is compared only between the wider windows themselves: they are 900 tall
-// and the column is 430 wide there, so a line wraps differently than at 390 by 844 and the same
-// figure sits a few pixels lower; that is the phone layout, not a laptop one.
-if (byWidth[390] && widths.length > 1) {
-  const base = Object.fromEntries(byWidth[390].map(r => [r.route, r]));
-  const wide = widths.filter(x => x !== 390);
-  const wideBase = wide.length > 1 ? Object.fromEntries(byWidth[wide[0]].map(r => [r.route, r])) : null;
+// ---------- §3: the desktop may not cost the phone anything ----------
+// The app has one layout breakpoint now, so the wide rows are SUPPOSED to differ from the phone
+// in height, in where the first figure sits and in how many columns a grid has. Two things are
+// not supposed to differ, because they are Victor's own house rules and they hold at every
+// width: nothing may overflow sideways, and nothing interactive may be under 44px.
+//
+// And one thing that is easy to get wrong and expensive to discover: a desktop layout must not
+// INVENT CONTENT. Nothing appears on a computer that a phone never sees, so the amount of text
+// in <main> has to be equal at both widths, route for route. That is the cheap check that
+// catches a panel, a stat or a filler card that only exists because there was room for it.
+if (byWidth[PHONE] && widths.length > 1) {
+  const base = Object.fromEntries(byWidth[PHONE].map(r => [r.route, r]));
+  const wide = widths.filter(x => x !== PHONE);
   const differ = [];
   for (const w of wide) {
     for (const r of byWidth[w]) {
@@ -267,11 +280,10 @@ if (byWidth[390] && widths.length > 1) {
       const why = [];
       if (r.overflow !== b0.overflow) why.push('ovf');
       if (r.smallTargets !== b0.smallTargets) why.push(`small-tap ${b0.smallTargets}→${r.smallTargets}`);
-      const w0 = wideBase && w !== wide[0] ? wideBase[r.route] : null;
-      if (w0 && r.firstFigure !== w0.firstFigure) why.push(`to-1st-fig ${w0.firstFigure ?? '-'}@${wide[0]}→${r.firstFigure ?? '-'}`);
+      if (r.chars != null && b0.chars != null && r.chars !== b0.chars) why.push(`chars ${b0.chars}→${r.chars}`);
       if (why.length) differ.push(`${r.route} @${w}: ${why.join(', ')}`);
     }
   }
-  console.log('\n=== phone-only ===');
-  console.log(differ.length ? `${differ.length} row(s) differ from the phone:\n   ${differ.join('\n   ')}` : 'phone-only: same at all widths');
+  console.log('\n=== the phone pays nothing ===');
+  console.log(differ.length ? `${differ.length} row(s) cost the phone something:\n   ${differ.join('\n   ')}` : 'no overflow, no small taps, and the same text at every width');
 }

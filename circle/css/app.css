@@ -4,20 +4,30 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 * { -webkit-tap-highlight-color: transparent; }
-/* The page is a phone column, everywhere. The body is capped at --wrap and centred; on a laptop
-   window it sits on the well with a hairline round it, and a phone in portrait never sees the
-   frame. `clip`, not `hidden`: clip makes no scroll container, so the sticky top bar keeps
-   working, and iOS stops panning sideways. Anything positioned fixed is outside the body's
-   flow and must carry the same cap (.botnav, .toasts, dialog.sheet do) or it spans the window. */
+/* The page is a phone column up to 900px, and a sheet on a page above it. BELOW the breakpoint
+   the body IS the 430px column, centred, sitting on the well with a hairline round it, and a
+   phone in portrait never sees the frame. ABOVE it — see the block at the END of this file — the
+   body becomes the page and .topbar and main carry the sheet themselves.
+   `clip`, not `hidden`: clip makes no scroll container, so the sticky top bar keeps working, and
+   iOS stops panning sideways. Do not change it at either width. Anything positioned fixed is
+   outside the body's flow and must be told its width on BOTH sides of the breakpoint — .botnav,
+   .toasts and dialog.sheet all are — or it spans the window at one of them. */
 html { -webkit-text-size-adjust: 100%; overflow-x: clip;
        scroll-padding-top: calc(var(--h-bar) + var(--inset-top) + var(--s-2)); }
 body {
-  margin: 0; max-width: var(--wrap); margin-inline: auto; min-height: 100dvh;
+  /* position: relative is a bug fix, not a desktop change. body was static and `overflow: clip`
+     creates no containing block, so .skip's containing block was the initial containing block:
+     on focus at left/top 0 it landed at the window's origin, outside the centred body box, and
+     body's own overflow-x: clip then ate it — the skip link has never been visible. This does
+     NOT capture .botnav, .toasts or dialog.sheet: relative is not a containing block for fixed. */
+  margin: 0; position: relative; max-width: var(--wrap); margin-inline: auto; min-height: 100dvh;
   background: var(--ground); color: var(--ink);
   font-family: var(--font-body); font-size: var(--t-body); line-height: 1.5; letter-spacing: 0;
   -webkit-font-smoothing: antialiased; overflow-x: clip; font-synthesis-weight: none;
 }
-/* The table under the sheet: the only min-width query in the file, and it holds no layout. */
+/* The table under the sheet, up to the breakpoint: this query holds no layout, and the one that
+   does is at the END of this file. Four literals live between them — 430 (--wrap), 431 (here),
+   900 and 600 — and a media query cannot read a custom property, so 431 moves with --wrap by hand. */
 @media (min-width: 431px) and (min-height: 500px) {
   html { background: var(--well); }
   body { outline: 1px solid var(--hairline); }
@@ -69,7 +79,7 @@ a, button, summary, label, [role=button], .listing-row, .index-row, .choice, .ch
 .pts::before { content: "✦ "; color: var(--ink-2); }
 
 /* ---------- shell ---------- */
-.wrap { width: 100%; max-width: var(--wrap); margin-inline: auto; padding-inline: var(--s-4); }
+.wrap { width: 100%; max-width: var(--wrap); margin-inline: auto; padding-inline: var(--gut); }
 .skip { position: absolute; left: -9999px; background: var(--ink); color: var(--on-ink); padding: 10px 16px; z-index: 200; }
 .skip:focus { left: 0; top: 0; }
 /* The running head: the wordmark or the way up on the left, who you are on the right. It runs
@@ -129,6 +139,11 @@ main:focus { outline: none; }
 /* Where you are: ink, and the same 2px rule the masthead carries. */
 .botnav a[aria-current="page"] { color: var(--ink); }
 .botnav a[aria-current="page"]::before { content: ""; position: absolute; top: -1px; left: 28%; right: 28%; height: 2px; background: var(--ink); }
+/* The rail's second and third groups exist in the markup at every width and are shown only by
+   the breakpoint at the foot of this file. Declared none HERE rather than relying on them being
+   empty: empty is correct by accident, and stops being correct the first time something writes
+   into one. */
+.botnav .rail-group { display: none; }
 
 /* ---------- buttons ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--h-touch);
@@ -558,7 +573,7 @@ body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-
 /* The places, as a strip a thumb swipes: it bleeds to the column's edge and pads itself back by
    the gutter, so the first card sits on the measure and the last one shows it is not the last. */
 .horizon { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(252px, 1fr); gap: var(--s-4); overflow-x: auto; overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity; margin-inline: calc(-1 * var(--s-4)); padding: 2px var(--s-4) 10px; scroll-padding-inline: var(--s-4); }
+  scroll-snap-type: x proximity; margin-inline: calc(-1 * var(--gut)); padding: 2px var(--gut) 10px; scroll-padding-inline: var(--gut); }
 .horizon::after { content: ""; width: 1px; }
 .horizon > * { scroll-snap-align: start; }
 
@@ -577,8 +592,10 @@ body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-
 .spark { overflow: visible; }
 
 /* ---------- sheets, toasts, timeline ---------- */
-/* A sheet rises from the foot of the screen, the width of the column, on a laptop as on a phone.
-   It is outside the body's flow, so it carries the column's cap itself. */
+/* A sheet rises from the foot of the screen, the width of the column. It is outside the body's
+   flow, so it carries the column's cap itself — and because it is in the top layer it inherits
+   nothing, so the breakpoint at the foot of this file has to restate its width by hand, where it
+   becomes a centred card instead of a bottom sheet. */
 dialog.sheet { width: min(100%, var(--wrap)); max-width: 100%; max-height: 90dvh; margin: auto auto 0; padding: 0;
                border: 0; border-top: 1px solid var(--hairline); border-radius: 12px 12px 0 0;
                background: var(--surface); color: var(--ink); overflow: hidden; }
@@ -1142,7 +1159,7 @@ p.stamp { white-space: normal; }
 /* The cover: one photograph, whole, and the story under it. Nothing is printed on the picture —
    a number stamped on a photograph is the grammar of a deal site, not of a club — so the folio,
    the title and the price all sit in the body, the price as a figure on a caption line. */
-.cover { display: block; margin-inline: calc(-1 * var(--s-4)); background: transparent; color: inherit; text-decoration: none; }
+.cover { display: block; margin-inline: calc(-1 * var(--gut)); background: transparent; color: inherit; text-decoration: none; }
 .cover .cover-shot { display: block; position: relative; aspect-ratio: 3 / 2; background: var(--well); overflow: hidden; }
 .cover .cover-shot img, .cover .cover-shot .scene, .cover .cover-shot .scene svg { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cover .cover-shot .strip-tag { top: 14px; right: 14px; left: auto; bottom: auto; }
@@ -1150,7 +1167,7 @@ p.stamp { white-space: normal; }
 .cover .cover-price { display: flex; align-items: baseline; gap: var(--s-2); margin-top: var(--s-2); color: var(--ink); font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero;
   font-size: var(--t-fig); font-weight: 500; letter-spacing: -.02em; line-height: 1; }
 .cover .cover-price small { font-family: var(--font-mono); font-size: var(--t-folio); font-weight: 400; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
-.cover .cover-body { padding: var(--s-4) var(--s-4) var(--s-5); }
+.cover .cover-body { padding: var(--gut) var(--gut) var(--s-5); }
 .cover .cover-body h2 { font-size: var(--t-head); }
 .cover .cover-body .mono { display: block; margin-top: 8px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--t-fine); color: var(--ink-2); white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
 .cover .cover-body .why { margin-top: 8px; font-size: var(--t-small); color: var(--ink-2); }
@@ -1187,7 +1204,7 @@ p.stamp { white-space: normal; }
 .listing-row .price-col.teased .all { color: var(--ink-2); font-family: var(--font-body); letter-spacing: 0; text-transform: none; }
 .listing-row .price-col .all { display: block; margin-top: 5px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--t-folio); color: var(--ink-3); }
 /* The week you asked for, or the one you tapped through on: a tint that reaches the column edge. */
-.listing-row.asked, .listing-row.picked { background: var(--raised); margin-inline: calc(-1 * var(--s-4)); padding-inline: var(--s-4); }
+.listing-row.asked, .listing-row.picked { background: var(--raised); margin-inline: calc(-1 * var(--gut)); padding-inline: var(--gut); }
 /* A row in a printed list does not shrink when pressed; it dims. */
 .listing-row:active { opacity: .6; transition: opacity 60ms var(--ease-out); }
 /* The row is the anchor and the officer's buttons are its sibling, under it, on their own rule. */
@@ -1222,7 +1239,7 @@ p.stamp { white-space: normal; }
 /* The one thing a member came to do, riding above the tab bar while the page is long and settling
    into the flow at its end. Sticky, not fixed: it never covers the foot text and needs no JS. */
 .act-bar { position: sticky; bottom: calc(var(--h-nav) + var(--inset-bottom) + var(--kb)); z-index: 5;
-           margin-inline: calc(-1 * var(--s-4)); padding: var(--s-2) var(--s-4) var(--s-3);
+           margin-inline: calc(-1 * var(--gut)); padding: var(--s-2) var(--gut) var(--s-3);
            background: var(--ground); border-top: 1px solid var(--hairline); display: grid; gap: var(--s-2); }
 body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom) + var(--kb)); }
 .act-bar .btn { width: 100%; }
@@ -1247,11 +1264,11 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 
 /* A page hero with the place set on it: the picture edge to edge on a phone, the name at its
    foot on a scrim in the photo tokens. The stay page is the one screen that opens this way. */
-.hero-place { position: relative; margin: calc(-1 * var(--s-6)) calc(-1 * var(--s-4)) 0; background: var(--well); overflow: hidden; border-radius: 0; aspect-ratio: 5 / 6; }
+.hero-place { position: relative; margin: calc(-1 * var(--s-6)) calc(-1 * var(--gut)) 0; background: var(--well); overflow: hidden; border-radius: 0; aspect-ratio: 5 / 6; }
 .hero-place img, .hero-place .scene, .hero-place .scene svg { width: 100%; height: 100%; object-fit: cover; display: block; }
 .hero-place .strip-tag { top: 14px; left: 14px; right: auto; bottom: auto; }
 /* Every line of copy sits under at least .6 of scrim, or a white facade eats the eyebrow. */
-.hero-place .on { position: absolute; z-index: 1; inset: auto 0 0 0; padding: 96px var(--s-4) 18px; margin: 0;
+.hero-place .on { position: absolute; z-index: 1; inset: auto 0 0 0; padding: 96px var(--gut) 18px; margin: 0;
   background: linear-gradient(to top, var(--scrim) 0%, var(--scrim) 40%, var(--scrim-soft) 72%, transparent 100%); color: var(--on-photo); }
 .hero-place .on .eyebrow { color: var(--on-photo); opacity: 1; white-space: normal; overflow-wrap: anywhere; }
 .hero-place .on h1 { color: var(--on-photo); margin-top: 6px; font-size: var(--t-masthead); line-height: 1; text-wrap: balance; max-width: 12ch; }
@@ -1268,10 +1285,10 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
    rendered the balance in --ink against the dark scrim — dark ink on a dark photograph, the
    one figure on the screen that has to be readable — because .num sets a face and a variant
    but no colour, and inherited the page's. The wildcard below is the guard. */
-.cover-plate { position: relative; margin: calc(-1 * var(--s-6)) calc(-1 * var(--s-4)) 0; background: var(--well); overflow: hidden; aspect-ratio: 4 / 5; }
+.cover-plate { position: relative; margin: calc(-1 * var(--s-6)) calc(-1 * var(--gut)) 0; background: var(--well); overflow: hidden; aspect-ratio: 4 / 5; }
 .cover-plate img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cover-plate .strip-tag { top: 14px; left: 14px; right: auto; bottom: auto; }
-.cover-plate .on { position: absolute; z-index: 1; inset: auto 0 0 0; margin: 0; padding: 112px var(--s-4) 20px;
+.cover-plate .on { position: absolute; z-index: 1; inset: auto 0 0 0; margin: 0; padding: 112px var(--gut) 20px;
   background: linear-gradient(to top, var(--scrim) 0%, var(--scrim) 42%, var(--scrim-soft) 74%, transparent 100%); }
 .cover-plate .on, .cover-plate .on * { color: var(--on-photo); }
 .cover-plate .on .eyebrow { opacity: 1; white-space: normal; overflow-wrap: anywhere; }
@@ -1304,7 +1321,7 @@ body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: va
    own padding resumes under it, so the photograph is the top of the card rather than a tile
    sitting inside it. */
 .crew-card.has-shot { padding-top: 0; overflow: hidden; }
-.crew-card .crew-shot { display: block; position: relative; margin: 0 calc(-1 * var(--s-4)) var(--s-3);
+.crew-card .crew-shot { display: block; position: relative; margin: 0 calc(-1 * var(--gut)) var(--s-3);
   aspect-ratio: 3 / 1; overflow: hidden; background: var(--well); }
 .crew-card .crew-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .crew-card .crew-note { position: absolute; left: 10px; bottom: 10px; padding: 3px 7px; border-radius: var(--r-chip);
@@ -1314,8 +1331,8 @@ body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: va
    one sheet of grey. It takes the whole night palette by joining the nocturne selector list in
    tokens.css; nothing is redefined here but the ground it paints and the bleed to the column's
    edge. Used on the roster, which is the club rather than the member. */
-.field-night { background: var(--ground); color: var(--ink); margin-inline: calc(-1 * var(--s-4));
-  padding: var(--s-4) var(--s-4) var(--s-5); }
+.field-night { background: var(--ground); color: var(--ink); margin-inline: calc(-1 * var(--gut));
+  padding: var(--gut) var(--gut) var(--s-5); }
 .field-night .field-head { font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .08em;
   text-transform: uppercase; color: var(--ink-2); margin-bottom: var(--s-3); }
 .field-night .field-head b { color: var(--gilt); font-weight: 500; }
@@ -1344,10 +1361,12 @@ body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: va
 /* The first group opens under the running head, not a fifth of a screen below it. */
 .listing > .board-group:first-of-type { margin-top: var(--s-3); }
 
-/* THE PRINTED INDEX — the places, two to the column.
-   A grid INSIDE the 430px column, never a width query: this app has no layout breakpoints and
-   this does not add one. The whole plate is the tap target, so it clears 44px many times over
-   without a single rule about hit areas. */
+/* THE PRINTED INDEX — the places, two to the column on a phone and three on the sheet (see the
+   breakpoint at the foot of this file). The 3-up is deliberate and it is about bytes, not taste:
+   the thumbs served are 400px, so three across a 560px measure render at 178px — CRISPER than
+   the phone's 173px, from the same files. A 2-up desktop grid would render them at 272px and
+   reinstate the megabytes the phone cannot afford. The whole plate is the tap target, so it
+   clears 44px many times over without a single rule about hit areas. */
 .plate-index { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4) var(--s-3); margin-top: var(--s-4); }
 /* align-content: start, or the plate stretches to the tallest cell in its row and shares the
    spare height out between the name and the area line — so two plates side by side set their
@@ -1379,7 +1398,7 @@ body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: va
 .rooms .room-head .meta { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--t-fine); color: var(--ink-2); }
 .rooms .room .small { margin-top: 6px; max-width: 62ch; }
 .rooms .room .btn { margin-top: 10px; }
-.gallery.big { margin-inline: calc(-1 * var(--s-4)); padding-inline: var(--s-4); scroll-padding-inline: var(--s-4); }
+.gallery.big { margin-inline: calc(-1 * var(--gut)); padding-inline: var(--gut); scroll-padding-inline: var(--gut); }
 .gallery.big .gallery-tile { width: min(78vw, 300px); height: auto; aspect-ratio: 3 / 2; scroll-snap-align: start; position: relative; }
 .gallery.big .gallery-tile:only-child { width: min(100%, 520px); }
 .gallery .tile-tag { position: absolute; left: 10px; top: 10px; font-family: var(--font-mono); font-size: var(--t-folio); font-weight: 400; letter-spacing: .08em; text-transform: uppercase; color: var(--on-photo); background: var(--scrim); padding: 4px 8px; border-radius: var(--r-chip); }
@@ -1439,9 +1458,14 @@ body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: va
 /* ---------- postcards ----------
    A photograph whole, nothing printed on it, and the facts under it in mono. The frame is the
    page, not a box: a figure with a hairline between it and the next, bled edge to edge on a
-   phone like the board's cover, and from 900px the picture sits beside its body the way the
-   board's No. 1 does. Tokens only, so both themes come for free; no shadow anywhere; teal
-   nowhere, because here it would mean money. */
+   phone like the board's cover. This once promised that from 900px the picture would sit beside
+   its body; no rule ever implemented it, and the breakpoint declines to. That sentence assumed a
+   900px COLUMN, not a 900px viewport: at 560px of content, picture-beside-body gives a 300px
+   picture and a 244px caption, which is a 29-character measure — worse than the feed has now.
+   What it does instead is take one rhythm above the breakpoint, 16/9, so every card is the same
+   band regardless of its own --w/--h; the detail page keeps the picture's true ratio. Side by
+   side needs a wider column than this app has. Tokens only, so both themes come for free; no
+   shadow anywhere; teal nowhere, because here it would mean money. */
 .postcard { margin: 0; padding-block: var(--s-4); }
 .postcard-list > .postcard + .postcard { border-top: 1px solid var(--hairline-soft); }
 .postcard-list > .thread-day + .postcard { padding-top: var(--s-2); }
@@ -1452,7 +1476,7 @@ body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: va
 .postcard-shot.tall { aspect-ratio: 4 / 5; }
 .postcard-shot.wide { aspect-ratio: 2 / 1; }
 /* The picture bleeds to the column's edges like the board's cover; the body keeps the text column. */
-.postcard-list .postcard-shot, .postcard.full .postcard-shot { margin-inline: calc(-1 * var(--s-4)); }
+.postcard-list .postcard-shot, .postcard.full .postcard-shot { margin-inline: calc(-1 * var(--gut)); }
 /* On Home a postcard is a compact 3:2 frame. */
 .postcard.compact .postcard-shot { aspect-ratio: 3 / 2; }
 .postcard-shot img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity var(--dur-water) var(--ease-out); }
@@ -1506,3 +1530,235 @@ button.link-rule { background: none; border: 0; cursor: pointer; }
    the browser's default button face made "Tell the group" light-on-light. The padding gives the
    tap its 44px and the negative margins hand the height straight back, so the toast does not grow. */
 .toast .undo { background: none; border: 0; padding: 12px 4px; margin: -12px 0 -12px 6px; min-height: 44px; text-underline-offset: 4px; }
+
+/* ==========================================================================================
+   THE SHEET AND ITS MARGIN — the one layout breakpoint in this file.
+
+   The Circle is read in the hand and 390px is still the width every change is judged at. But a
+   phone column on a monitor is a phone column on a monitor, and the reading measure was never
+   right even on the phone: 398px of content sets about 47 characters of Instrument Sans at 16px,
+   where a paperback sets 65. So above this breakpoint the column grows to 560px of text — 66
+   characters — and the body stops being the column and becomes the page it stands on.
+
+   WHY 900 / 600. 900 was already chosen by this file (see the .postcard comment): 900 less the
+   200px rail leaves 700 for the column region, which seats a 608px sheet with 46px of table each
+   side. The height clause keeps a phone in landscape (932x430) on the phone layout, where a
+   200px rail would eat a fifth of the window — it mirrors the intent of the min-height: 500px on
+   the frame query at the top of the file.
+
+   WHY THIS BLOCK IS LAST. Media queries carry NO specificity. Placed anywhere but the end of the
+   file this loses on source order to roughly sixty of its own declarations while the :root tokens
+   still win — a 608px bar out of register with the column, no sheet background, a 727px hero.
+   That failure looks like the design being wrong rather than the placement being wrong. It stays
+   last. The type scale, the space scale, the radii and the palette are NOT touched: 44px of
+   Instrument Serif across 560px is a masthead, and across 1100px it would not be.
+   ========================================================================================== */
+@media (min-width: 900px) and (min-height: 600px) {
+  :root {
+    --wrap: 608px;          /* 560px of text + 24px of gutter each side */
+    --gut: var(--s-5);      /* 24px. Only the gutter and the bleeds move; panel and card padding stay 16px. */
+    --rail: 200px;          /* a third of the column — the printed proportion for a marginal note */
+    --h-nav: 0px;           /* the bottom bar's footprint, retired in one declaration */
+    --h-bar: 56px;
+  }
+  /* The body stops being the column and becomes the page. Deliberately NOT a grid: a grid item's
+     sticky containing block is its own grid area, so .topbar in an auto row would have no slack
+     and would stop sticking on every route. */
+  body { max-width: none; margin-inline: 0; padding-left: var(--rail); background: var(--well); outline: 0; }
+  /* The sheet. border-inline, not outline — an outline would also draw a line across the foot of
+     a 5,000px page. The bar's own border-bottom becomes the sheet's top rule. */
+  .topbar, main { width: 100%; max-width: var(--wrap); margin-inline: auto;
+                  background: var(--ground); border-inline: 1px solid var(--hairline); }
+  main { min-height: calc(100dvh - var(--h-bar) - 1px); }  /* the 1px is the top bar's own rule */
+  /* body is position: relative, so the containing block is body's PADDING box: its left edge is
+     x=0 and its width still includes the 200px padding-left, so the rail width is added back. */
+  .skip:focus { left: calc(var(--rail) + max(0px, (100% - var(--rail) - var(--wrap)) / 2)); }
+
+  /* THE RAIL. The tab bar, restyled in place — it keeps the class, because seven rules across
+     this file and tokens.css gate on `.botnav` by name, the print sheet already hides it, and the
+     audit's reachability crawl is scoped to #botnav. A rail under a new class breaks all of them.
+     100%, not 100vw: for a fixed element a percentage resolves against the initial containing
+     block, which excludes a classic scrollbar; 100vw includes it and would sit the rail ~8px out
+     of register on Windows. The offset puts the rail flush against the column, not the window, so
+     it reads as the sheet's margin rather than as a sidebar. */
+  .botnav { inset: 0 auto 0 max(0px, calc((100% - var(--rail) - var(--wrap)) / 2));
+            width: var(--rail); max-width: none; margin-inline: 0;
+            background: transparent; border-top: 0; overflow-y: auto;
+            padding-block: var(--s-5) calc(var(--s-5) + var(--inset-bottom)); }
+  .botnav ul { display: grid; gap: 1px; }
+  .botnav li { display: block; }
+  /* min-height restated explicitly: --h-nav is 0 here, and it was the one thing giving these
+     rows their height. */
+  .botnav a { grid-template-columns: 18px minmax(0, 1fr); gap: 10px; justify-items: start;
+              align-content: center; text-align: left; min-height: 44px; padding: 8px var(--gut);
+              font-family: var(--font-mono); font-size: var(--t-fine); letter-spacing: .06em; text-transform: uppercase; }
+  .botnav a svg { width: 18px; height: 18px; }
+  /* The masthead's own 2px ink rule, turned through ninety degrees. Ink, never teal. */
+  .botnav a[aria-current="page"]::before { top: 6px; bottom: 6px; left: var(--s-3); right: auto; width: 2px; height: auto; }
+  /* THE SECOND GROUP: the rooms the phone keeps behind Home. One step down and one step quieter,
+     under a mono eyebrow — without the hierarchy the rail is a sixteen-item site map at one
+     weight, which is the admin-dashboard tell. */
+  .botnav .rail-group { display: block; border-top: 1px solid var(--hairline-soft);
+                        margin-top: var(--s-4); padding-top: var(--s-4); }
+  .botnav .rail-head { display: block; padding: 0 var(--gut) var(--s-2); font-family: var(--font-mono);
+                       font-size: var(--t-folio); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+  .botnav .rail-group a { font-size: var(--t-folio); color: var(--ink-3); }
+  .botnav .rail-group a[aria-current="page"] { color: var(--ink); }
+}
+
+/* ---------- above the breakpoint, continued: overlays ---------- */
+/* A sheet is in the top layer, so it inherits nothing from the column and must be told its width
+   by hand — the 430px cap near the top of this file is one of four independent copies of that
+   number, and this is the second. `margin: auto` in place of `margin: auto auto 0` is the one
+   change that unpins it from the window's bottom edge: a bottom sheet is a phone idiom, and on a
+   computer it reads as a phone idiom. Four corners at --r-card, not the 12px above: 12px was
+   chosen because the bottom two corners are off-screen, and a 12px radius on a fully visible box
+   is the consumer-app tell the tokens file warns about. */
+@media (min-width: 900px) and (min-height: 600px) {
+  dialog.sheet { width: min(calc(100vw - 2 * var(--s-7)), 560px); margin: auto;
+                 max-height: min(84dvh, 760px); border: 1px solid var(--hairline); border-radius: var(--r-card); }
+  dialog.sheet.tall { width: min(calc(100vw - 2 * var(--s-7)), 820px); height: auto;
+                      max-height: min(88dvh, 900px); border: 1px solid var(--hairline); border-radius: var(--r-card); }
+  dialog.sheet.tall .sheet-head { padding-top: var(--s-4); }  /* --inset-top is 0 on a computer */
+  /* The actions become a row ending at the sheet's right padding line. No markup change is needed
+     for the order: confirmDialog already writes cancel first, so the negative lands left and the
+     filled action right. .sheet-body's padding is deliberately NOT touched — .sheet-actions'
+     sticky offset and its three negative margins are arithmetic against exactly that value. */
+  .sheet-actions { grid-auto-flow: column; grid-auto-columns: max-content; justify-content: end; align-items: center; }
+  .sheet-actions .btn { width: auto; }
+  .sheet-actions .link-rule { justify-self: auto; }
+
+  /* Both offsets must be restated: `body:has(.botnav:not([hidden])) .toasts` is far more specific
+     than `.toasts` and still matches — the rail IS .botnav — so with --h-nav at 0 it would win at
+     12px off the window's floor. This works because the base rule keeps `margin-inline: auto`:
+     left 200, right 0, width 608 and auto margins centre it on the column. Leave that alone.
+     A corner toast is the conventional move and would be wrong: the eye is on the column, and
+     that is where a message about the member's money belongs. */
+  .toasts, body:has(.botnav:not([hidden])) .toasts {
+    left: var(--rail); right: 0; width: min(var(--wrap), calc(100% - var(--rail)));
+    bottom: calc(var(--s-6) + var(--inset-bottom)); }
+}
+
+/* ---------- above the breakpoint, continued: ratios, grids and the figures ---------- */
+/* Every frame takes the ratio its source files already are, so nothing is upscaled and nothing is
+   a screen and a half of photograph before one fact. */
+@media (min-width: 900px) and (min-height: 600px) {
+  .hero-place { aspect-ratio: 3 / 2; }             /* 5/6 would be 727px tall at 606 wide */
+  .hero-place .on h1 { max-width: 20ch; }          /* the 12ch cap was drawn for a 358px column */
+  .cover-plate { aspect-ratio: 4 / 3; }            /* 606x455. 4/5 would be 758px before one figure. */
+  .postcard-list .postcard-shot { aspect-ratio: 16 / 9; }  /* the feed takes one rhythm; /postcards/:id keeps the picture's true ratio */
+  /* The card is the one component already width-native, and it still breaks: every cqw clamp has
+     a ceiling, so past about 356px of card width the small print stops growing and a 560px plate
+     carries 9px type. Cap it and centre it. */
+  .card-flip, .card-obj { max-width: 380px; margin-inline: auto; }
+
+  /* THE PRINTED INDEX, three to the sheet. This is about bytes, not taste: the thumbs served are
+     400px, so three across a 560px measure render at 178px — crisper than the phone's 173px from
+     the same files. A 2-up desktop grid would render them at 272px and reinstate the megabytes. */
+  .plate-index { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .badge-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }  /* the file's one auto-fill grid reflows on its own; set the floor deliberately */
+
+  /* The landing's strip stops being a sideways scroller. It is fed exactly five cards, so a plain
+     two-column grid would end on a half-width orphan: the odd last child spans both columns and
+     reads as a deliberate wide lead instead. */
+  .horizon { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr));
+             overflow-x: visible; scroll-snap-type: none; margin-inline: 0; padding-inline: 0; }
+  .horizon::after { display: none; }
+  .horizon > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+
+  .gallery.big { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+                 overflow-x: visible; scroll-snap-type: none; margin-inline: 0; padding-inline: 0; }
+  .gallery.big .gallery-tile, .gallery.big .gallery-tile:only-child { width: auto; }
+  /* The ask form's room gallery has its own far more specific tile width, which beats the line
+     above at any placement — without this the cells would be 275px holding a 220px tile. */
+  .ask .ask-rooms .gallery.big .gallery-tile { width: auto; }
+
+  /* One declaration, and only this one. Do NOT add `.segmented > button { flex: 1 1 auto }`: the
+     `.segmented.even > button` rule above is more specific and beats it, and .even is exactly the
+     Desk, Circle and Profile strips it would be meant to rescue. What stops these scrolling is
+     the extra 160px of column — and the hidden scrollbar above, which makes an off-edge tab
+     unreachable with a mouse, stops mattering once nothing overflows. */
+  .segmented { overflow-x: visible; }
+
+  /* THE FIGURES. The tick size is in viewBox units and the only chart drawn at 340 is rendered at
+     560 here — a factor of 1.65, which would print the apparatus larger than the body text. */
+  .chart-tick { font-size: 6px; }
+  .chart-grid-line { stroke-width: .6; }
+  /* The sparkline is authored 340x46 with height as a presentation attribute, so at its default
+     preserveAspectRatio the scale is min(558/340, 46/46) = 1 and it has been drawing 340px wide
+     with ~109px of dead space each side inside its panel. Cap the width and it renders at exactly
+     the authored scale, left-aligned. NOT `height: auto`, which would fill 558 and thicken every
+     stroke by 1.64x. */
+  .spark { max-width: 340px; }
+  .island-wrap svg { max-height: 320px; }  /* max-height: 60vw computes to 864px at a 1440 window and binds nothing */
+}
+
+/* ---------- above the breakpoint, continued: the statement, the tables ---------- */
+@media (min-width: 900px) and (min-height: 600px) {
+  /* THE LEDGER BECOMES A PRINTED STATEMENT. It stacks on the phone only because a 122px nowrap
+     balance column left the description 188px; at 560px it leaves 438px. The two min-widths are
+     the point: .delta is a flex row holding the points and the running balance, so
+     justify-content alone right-aligns the PAIR and +20,000 and +1,200 then start at different x
+     — which is not what tabular-nums is for. A floor on each child plus text-align: right makes
+     both figures align down the page as columns.
+     This rule also serves the Pool's Reserve sum, a quote on /requests/:id and Home's savings
+     panel, so it lives inside the query only — or all four regress on the phone. */
+  .ledger li { grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s-4); align-items: baseline; }
+  .ledger .delta { justify-content: flex-end; }
+  .ledger .delta b { min-width: 7ch; text-align: right; }
+  .ledger .delta small { min-width: 8ch; text-align: right; }
+
+  /* The sideways scroll is inert once the column is wider than the widest table. */
+  .tablewrap { overflow-x: visible; }
+  .bands td.num { width: auto; margin-right: var(--s-6); }
+  /* State, points and the three buttons on one line instead of two. A small win, and the honest
+     limit of this direction: 560px still cannot hold a real four-column roster of forty members. */
+  .people-table td:last-child { display: inline-block; margin-top: 0; vertical-align: middle; }
+}
+
+/* ---------- the cursor ----------
+   The app's first hover rules, and they sit behind BOTH conditions, never one. The house position
+   elsewhere in this file — "there is no hover in this file: the phone has none" — is what Victor's
+   instruction reverses, but a real phone reports hover: none, so the sticky-hover-after-tap
+   failure the press-only policy exists to prevent cannot come back. Nothing here animates or
+   transitions, which is why this block needs no reduced-motion guard; the grouped :active
+   selector above is untouched, and the press is still the phone's one state. */
+@media (min-width: 900px) and (min-height: 600px) and (hover: hover) {
+  .listing-row:hover, .index-row:hover { background: var(--raised);
+    margin-inline: calc(-1 * var(--gut)); padding-inline: var(--gut); }
+  .crew-card:hover, .stay-card:hover, .choice:hover, .badge-card:not([disabled]):hover,
+  .botnav a:hover, .segmented > button:not([aria-pressed="true"]):hover { background: var(--raised); }
+  .place-plate:hover .shot, .gallery-tile:hover { opacity: .9; }
+}
+/* Outside every query, because it is harmless on a phone and correct everywhere: the whole-row
+   and whole-card links get the pointer from the user agent because they happen to be anchors,
+   by accident rather than by rule, and anything that later becomes a <div> or <button> row loses
+   it silently. */
+.listing-row, .index-row, .stay-card, .crew-card, .place-plate, .deal, .job-list a { cursor: pointer; }
+
+/* ---------- the working screens ----------
+   Four screens are worked in rather than read: the Desk's lanes, the Banker's inbox, the settings
+   tables, and the roster of forty Insiders. A 560px measure is the right answer for prose and the
+   wrong one for a table with three buttons on every row — the judged direction says so plainly in
+   its own weaknesses, and this is the fix it names: a wider measure on those four routes only,
+   not a different shell for the whole club. Everything else keeps 66 characters.
+   This needs its own breakpoint because 880 of sheet plus 200 of rail needs the window to hold
+   it; below 1180 the working screens simply stay on the reading measure. */
+@media (min-width: 1180px) and (min-height: 600px) {
+  body[data-wide="work"] { --wrap: 880px; }
+  /* The roster becomes a real table at last: name, state, points and the three buttons on one
+     row. Restated rather than inherited, because the stacked-block rules above are what the
+     phone needs and they are more specific than a token change. */
+  body[data-wide="work"] .people-table,
+  body[data-wide="work"] .people-table tbody { display: table; width: 100%; }
+  body[data-wide="work"] .people-table tr { display: table-row; padding: 0; }
+  body[data-wide="work"] .people-table td { display: table-cell; padding: var(--s-3) var(--s-2);
+    border-bottom: 1px solid var(--hairline-soft); vertical-align: middle; }
+  body[data-wide="work"] .people-table td[data-k] { margin-right: 0; }
+  body[data-wide="work"] .people-table td:last-child { display: table-cell; white-space: nowrap; text-align: right; }
+  body[data-wide="work"] .people-table tr:last-child td { border-bottom: 0; }
+  /* The Desk's lanes sit side by side instead of stacking, which is the whole reason Victor
+     wanted a computer. Two columns, not three: three lanes of request cards in 880px gives 280px
+     a lane, which is narrower than the phone. */
+  body[data-wide="work"] .lanes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-6); align-items: start; }
+}

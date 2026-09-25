@@ -728,14 +728,26 @@ different signature.
 
 ## Notes on the build
 
-- **The phone is the only page.** The Circle is read in the hand, so the stylesheet has no
-  layout breakpoints at all: one column of 430px (the widest iPhone), one type scale, one
-  set of spacing steps. A laptop shows that same column, centred on a darker ground with a
-  hairline around it — nothing widens, nothing gains a second column, and nothing appears on
-  a laptop that a phone never sees. The only `@media` rules left in `css/app.css` are the
-  eight that respect reduced motion, the print sheet, the frame that draws the table under
-  the column above 430px, and the one that stops the rubber band inside an installed app.
-  If you are tempted to add a breakpoint, move the thing into the column instead.
+- **The phone is the reference page, and the stylesheet has exactly one layout breakpoint.**
+  The Circle is read in the hand, so 390px is the width every change is judged at and the one
+  that may never regress: no horizontal overflow on any route, nothing interactive under 44px
+  in either dimension, one type scale, one set of spacing steps. `--wrap` is 430px there and
+  the body *is* the column. From 900px wide and 600px tall — and only there — the body becomes
+  the page, `--wrap` becomes 608px, and the tab bar restyles in place as a 200px rail in the
+  sheet's margin. 608 is not a round number: 560px of text is 66 characters of Instrument Sans
+  at 16px, where today's 398px sets 47. The column was below the comfortable measure, not at
+  it, which is what licenses widening it and also what stops it at 608 rather than 1100 — at
+  1100 the type scale itself would have to change. Four routes that are *worked in* rather than
+  read (`/desk`, `/bank`, `/settings`, `/circle`) take 880px from 1180px up, via
+  `body[data-wide="work"]`; everything else keeps the reading measure.
+  Nothing appears on a laptop that a phone never sees: `main.innerText.length` is equal at both
+  widths on every route, and `audit.mjs` asserts it. Anything fixed to the viewport — the tab
+  bar, the toasts, a sheet — sits outside the body's flow and must be told its width explicitly
+  on **both** sides of the breakpoint, or it spans the window at one of them. The breakpoint is
+  written at the end of `css/app.css`, and it must stay last: media queries carry no specificity,
+  so anywhere else it loses on source order to sixty of its own declarations. A media query
+  cannot read a custom property, so 431 (the frame query) and 900 are hand-copied and there is a
+  comment beside `--wrap` saying so.
 - The top bar is a running head: the wordmark on a tab root, otherwise the way up to the
   parent route. The five tabs are always there when signed in. Everything not in the bar is
   reached from Home or from the door list at the top of Profile.
