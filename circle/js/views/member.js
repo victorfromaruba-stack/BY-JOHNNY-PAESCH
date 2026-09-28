@@ -931,6 +931,7 @@ const JOBS = [
 const PRIMARY_DOORS = [
   ['#/card', 'Your card'], ['#/pay', 'Send a contribution'], ['#/ledger', 'Your ledger'],
   ['#/requests', 'Everything you have asked for'],
+  ['#/san', 'The SAN'],
 ];
 const SECONDARY_DOORS = [
   ['#/watching', 'What you are watching'],
@@ -950,7 +951,14 @@ function doorList(store) {
       return row(j.href, j.label, due.reduce((n, w) => n + (w.count ?? 1), 0));
     }).join('');
   }
-  return `<ul class="job-list" id="doors">${officer}${PRIMARY_DOORS.map(([h, l]) => row(h, l)).join('')}</ul>
+  const sanWaiting = (() => {
+    try {
+      const r = store.currentSan?.();
+      if (!r || r.organizerId !== store.me?.id) return 0;
+      return store.sanPending(r.id).length;
+    } catch { return 0; }
+  })();
+  return `<ul class="job-list" id="doors">${officer}${PRIMARY_DOORS.map(([h, l]) => row(h, l, h === '#/san' ? sanWaiting : 0)).join('')}</ul>
     <details class="fineprint door-more">
       <summary>More around the Circle <span class="num">${SECONDARY_DOORS.length}</span></summary>
       <ul class="job-list">${SECONDARY_DOORS.map(([h, l]) => row(h, l)).join('')}</ul>

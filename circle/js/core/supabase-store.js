@@ -75,7 +75,8 @@ export class SupabaseStore extends Store {
   async reload() {
     const tables = ['members', 'contributions', 'ledger', 'stays', 'redemptions', 'pledges', 'looks', 'announcements', 'audit', 'invitations', 'month_closes', 'promo_deferrals', 'room_types', 'watches', 'deals',
       'standings', 'crews', 'crew_members', 'crew_messages', 'moments', 'moment_reactions',
-      'badge_catalog', 'member_badges', 'signup_links', 'dinners', 'dinner_guests'];
+      'badge_catalog', 'member_badges', 'signup_links', 'dinners', 'dinner_guests',
+      'san_rounds', 'san_seats', 'san_requests'];
     // members comes from a view that leaves out auth_user_id and the officer's private notes;
     // it is security_invoker, so the members_read policy still decides which rows come back.
     // standing_v answers for everybody — months held, a rank and a list of badges, and nothing
@@ -118,6 +119,9 @@ export class SupabaseStore extends Store {
     // erroring. The Desk panel is the only reader.
     this.state.signupLinks = this.state.signup_links || this.state.signupLinks || [];
     this.state.dinnerGuests = this.state.dinner_guests || this.state.dinnerGuests || [];
+    this.state.sanRounds = this.state.san_rounds || this.state.sanRounds || [];
+    this.state.sanSeats = this.state.san_seats || this.state.sanSeats || [];
+    this.state.sanRequests = this.state.san_requests || this.state.sanRequests || [];
     this.state.memberBadges = this.state.member_badges || this.state.memberBadges || [];
     // The database calls them from_date/to_date because `from` and `to` are awkward in SQL;
     // the rest of the app calls them from/to. Bridge it here rather than everywhere else.
@@ -526,6 +530,20 @@ export class SupabaseStore extends Store {
     return d ? { ...d, from: d.fromDate, to: d.toDate } : d;
   }
   async retireDeal(id, _actorId, reason = '') { return this.rpc('retire_deal', { p_id: id, p_reason: reason }); }
+
+  // ---------- the SAN ----------
+  // Rules live in SQL. Marking a month paid does not write the ledger.
+  async openSan(hands) {
+    const id = await this.rpc('open_san', { p_hands: hands });
+    return this.sanRound(id);
+  }
+  async requestSanHand(roundId, hand) {
+    const id = await this.rpc('request_san_hand', { p_round: roundId, p_hand: hand });
+    return (this.state.sanRequests || []).find(r => r.id === id) || { id };
+  }
+  async withdrawSanRequest(id) { await this.rpc('withdraw_san_request', { p_id: id }); }
+  async confirmSanRequest(id) { await this.rpc('confirm_san_request', { p_id: id }); }
+  async markSanHandPaid(roundId, hand) { await this.rpc('mark_san_hand_paid', { p_round: roundId, p_hand: hand }); }
 
   // ---------- crews ----------
   // These are ordinary table writes: row-level security decides who may do what, so there is
