@@ -40,7 +40,7 @@ const SHEET_TRIGGERS = [
   'Add room photographs',                                        // officer: roomPhotosSheet
   'Start a crew', 'Rename', 'Add someone',                        // crews
   'Watch for something',                                         // deals: addWatchSheet
-  'Choose one', 'Change',                                         // member: goalSheet
+  'Choose what you are saving for', 'Change what you are saving for', // member: goalSheet
   'Put the Circle on your home screen', 'Pause for a few months',      // member: install, pause
   'Send a postcard',                                             // postcards
   'Money came in', 'See the screenshot', 'A different amount arrived', // officer: bank
