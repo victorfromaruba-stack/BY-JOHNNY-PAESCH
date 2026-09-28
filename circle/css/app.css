@@ -496,17 +496,15 @@ tr.best td:last-child { border-radius: 0 var(--r-chip) var(--r-chip) 0; }
    nothing") and made a private club's first screen read like a dashboard. Photography leads,
    type sits on it, the figures come after. */
 .hero-sec { padding-top: 0; }
-/* On a phone the photograph is the first screen, whole: the promise sits at its foot and the
-   figures come after, the way every luxury frame the team looked at opens. */
-.hero-cover { position: relative; display: grid; margin: 0; overflow: hidden;
-  background: var(--well); min-height: calc(100svh - var(--h-bar) - var(--inset-top)); }
+/* The first screen is one frame: the photograph, then the cover line on the paper. 17rem is the
+   title, the promise and the one action, so they share the viewport with the picture and the
+   colophon begins on the next. Nothing is set into the photograph. */
+.hero-cover { position: relative; display: block; margin: 0; overflow: hidden;
+  background: var(--well); min-height: calc(100svh - var(--h-bar) - var(--inset-top) - 17rem); }
 /* A signed-in member has the tab bar over the foot of the screen; the hero ends above it. */
-body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-bar) - var(--h-nav) - var(--inset-top) - var(--inset-bottom)); }
-/* The photograph and the copy share one grid cell, so the promise sits IN the picture. A grid
-   item will not shrink below its content's intrinsic width unless told to, and the portrait file
-   is 880px wide — which without the two minimums pushes the whole section past the column. */
-.hero-cover img { grid-area: 1 / 1; width: 100%; height: 100%; object-fit: cover; object-position: center 46%;
-  display: block; min-width: 0; min-height: 0; }
+body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-bar) - var(--h-nav) - var(--inset-top) - var(--inset-bottom) - 17rem); }
+.hero-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 46%;
+  display: block; }
 /* The copy rides the bottom of the frame on its own scrim, and keeps the page's measure by
    carrying a .wrap inside it rather than being padded by hand. */
 .hero-cover .on { grid-area: 1 / 1; align-self: end; position: relative; z-index: 1; width: 100%; margin: 0; color: var(--on-photo);
@@ -519,6 +517,18 @@ body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-
   font-family: var(--font-mono); font-size: var(--t-fine); line-height: 1.4; color: var(--ink-2); max-width: 60ch; }
 .colophon { margin-top: var(--s-3); max-width: 42ch; font-family: var(--font-mono); font-size: var(--t-fine);
   line-height: 1.55; color: var(--ink-2); }
+/* The cover line, on the paper, one step past the masthead so it reads as print. The step is
+   the body size added to the masthead token — still the scale, not a new one. */
+.hero-after { padding-top: var(--s-5); }
+.hero-after h1 { font-size: calc(var(--t-masthead) + var(--t-body)); line-height: .92; letter-spacing: -.02em; max-width: 14ch; }
+.hero-after .lede { margin-top: var(--s-3); max-width: 36ch; }
+.hero-after .row { margin-top: var(--s-4); }
+.hero-after > h1, .hero-after > .lede, .hero-after > .row { animation: enter-to-rest var(--dur-water) var(--ease-out) backwards; }
+.hero-after > .lede { animation-delay: 90ms; }
+.hero-after > .row { animation-delay: 180ms; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-after > h1, .hero-after > .lede, .hero-after > .row { animation: none; }
+}
 .hero-credit svg { width: 14px; height: 14px; flex: none; margin-top: 2px; }
 /* One filled action and one ruled link, never two boxes of equal weight. */
 .link-rule { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 2px; font-size: var(--t-small); font-weight: 500;
@@ -587,6 +597,10 @@ body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-
 .stay-card.look h3 { font-family: var(--font-display); font-weight: 400; font-size: var(--t-head); line-height: 1.05; }
 .horizon::after { content: ""; width: 1px; }
 .horizon > * { scroll-snap-align: start; }
+/* One place, printed large, then the others as lines. The strip used to be five equal cards. */
+.look-lead .stay-card.look .strip { aspect-ratio: 4 / 5; margin-inline: calc(-1 * var(--gut)); }
+.look-lead .stay-card.look .body { padding: var(--s-4) 0 0; }
+.look-lead + .index { margin-top: var(--s-5); }
 
 /* ---------- charts ---------- */
 .chart { position: relative; }
@@ -898,12 +912,10 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
    carries its aspect ratio so the page does not jump while they load. */
 /* A strip is a strip: 5/2, so it reads as a breath between sections without costing a quarter
    of a screen three times over (16/9 at 390px was 219px each). */
-.band { position: relative; margin: 0 auto; width: 100%; max-width: var(--wrap); aspect-ratio: 5 / 2;
-  overflow: hidden; background: var(--raised); }
-.band img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.band figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px var(--s-4) 18px;
-  color: var(--on-photo); font-size: var(--t-body); letter-spacing: -.01em;
-  background: linear-gradient(to top, var(--scrim), transparent); }
+.band { position: relative; margin: 0 auto; width: 100%; max-width: var(--wrap); background: transparent; }
+.band img { width: 100%; aspect-ratio: 5 / 2; height: auto; object-fit: cover; display: block; background: var(--raised); }
+.band figcaption { position: static; padding: var(--s-3) var(--gut) 0; color: var(--ink-2);
+  font-family: var(--font-mono); font-size: var(--t-fine); letter-spacing: .02em; background: none; }
 
 /* Four seasons as one swipe — the same gesture as the places above, bled to the column edge.
    (No template renders it today.) */
@@ -1180,8 +1192,27 @@ p.stamp { white-space: normal; }
    a number stamped on a photograph is the grammar of a deal site, not of a club — so the folio,
    the title and the price all sit in the body, the price as a figure on a caption line. */
 .cover { display: block; margin-inline: calc(-1 * var(--gut)); background: transparent; color: inherit; text-decoration: none; }
-.cover .cover-shot { display: block; position: relative; aspect-ratio: 3 / 2; background: var(--well); overflow: hidden; }
-.cover .cover-shot img, .cover .cover-shot .scene, .cover .cover-shot .scene svg { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover .cover-shot, .board-page #lead .cover-shot { display: block; position: relative; aspect-ratio: 3 / 2; background: var(--well); overflow: hidden; }
+.cover .cover-shot img, .cover .cover-shot .scene, .cover .cover-shot .scene svg,
+.board-page #lead .cover-shot img, .board-page #lead .cover-shot .scene, .board-page #lead .cover-shot .scene svg { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* The board opens on the photograph. The masthead and the price sit under it, in the column. */
+.board-page:has(#lead:not(:empty)) { padding-top: 0; }
+.board-page #lead:empty { display: none; }
+.board-page #lead .cover-shot { aspect-ratio: 4 / 5; margin-inline: calc(-1 * var(--gut)); }
+.board-page #lead:not(:empty) + .masthead { margin-top: var(--s-5); }
+.board-page .masthead h1 { font-size: calc(var(--t-masthead) + var(--t-body)); line-height: .92; letter-spacing: -.02em; }
+.board-page .masthead { animation: enter-to-rest var(--dur-water) var(--ease-out) backwards; }
+.open-num { display: flex; align-items: baseline; gap: var(--s-2); margin-top: var(--s-3);
+  font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+.open-num .num { font-size: var(--t-fig-lg); font-weight: 500; letter-spacing: -.02em; text-transform: none; color: var(--ink); line-height: 1; }
+.lead-story .btn.block { width: auto; }
+.board-page #lead .cover-shot:active { opacity: .86; }
+.lead-story:empty { display: none; }
+.lead-story:not(:empty) { margin-top: var(--s-4); }
+@media (prefers-reduced-motion: reduce) {
+  .board-page .masthead { animation: none; }
+  .board-page #lead .cover-shot:active { opacity: 1; }
+}
 .cover .cover-shot .strip-tag { top: 14px; right: 14px; left: auto; bottom: auto; }
 .cover .cover-no { display: block; margin-bottom: var(--s-2); }
 .cover .cover-price { display: flex; align-items: baseline; gap: var(--s-2); margin-top: var(--s-2); color: var(--ink); font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero;
@@ -1246,7 +1277,7 @@ p.stamp { white-space: normal; }
 .index-row .from.ask { display: inline-flex; align-items: center; justify-content: flex-end; gap: 2px; color: var(--ink-3); font-family: var(--font-body); }
 .index-row .from.ask svg { width: 15px; height: 15px; }
 .quiet-index .index-row .name { font-weight: 400; }
-.index-row:active { background: var(--raised); }
+.index-row:active { background: var(--raised); opacity: .6; transition: opacity 60ms var(--ease-out); }
 .running-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin-top: var(--s-6); padding-bottom: var(--s-2); border-bottom: 1px solid var(--hairline); }
 /* The heading keeps its line; the eyebrow gives way and drops under it when the row is short. */
 .running-head h2 { font-size: var(--t-head); flex: 0 0 auto; }
@@ -1280,7 +1311,7 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
 .pull b { font-style: normal; font-weight: 400; }
 .pull cite { display: block; font-family: var(--font-body); font-style: normal; font-size: var(--t-fine); color: var(--ink-2); margin-top: 6px; }
 /* Reduced motion: a row does not press. */
-@media (prefers-reduced-motion: reduce) { .listing-row:active { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .listing-row:active, .index-row:active { opacity: 1; } }
 
 /* A page hero with the place set on it: the picture edge to edge on a phone, the name at its
    foot on a scrim in the photo tokens. The stay page is the one screen that opens this way. */
@@ -1305,7 +1336,12 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
    rendered the balance in --ink against the dark scrim — dark ink on a dark photograph, the
    one figure on the screen that has to be readable — because .num sets a face and a variant
    but no colour, and inherited the page's. The wildcard below is the guard. */
-.cover-plate { position: relative; margin: calc(-1 * var(--s-6)) calc(-1 * var(--gut)) 0; background: var(--well); overflow: hidden; aspect-ratio: 4 / 5; }
+.cover-plate { position: relative; margin: calc(-1 * var(--s-6)) calc(-1 * var(--gut)) 0; background: var(--well); overflow: hidden; aspect-ratio: auto;
+  /* The first screen is the photograph. The one action sits just under it, on the page, so a
+     dark button is not lost in the scrim. --h-nav is the tab bar; on a computer it is 0 and
+     the query at the end of this file hands the plate back its 4/3 frame. */
+  /* Leave the cover line and the one action on the same screen as the photograph. */
+  height: calc(100svh - var(--h-nav) - var(--h-bar) - var(--s-8) - var(--h-touch) - var(--inset-top) - var(--inset-bottom)); }
 .cover-plate img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cover-plate .strip-tag { top: 14px; left: 14px; right: auto; bottom: auto; }
 .cover-plate .on { position: absolute; z-index: 1; inset: auto 0 0 0; margin: 0; padding: 112px var(--gut) 20px;
@@ -1321,7 +1357,9 @@ body:not(:has(.botnav:not([hidden]))) .act-bar { bottom: calc(var(--inset-bottom
   font-variant-numeric: tabular-nums; font-size: var(--t-folio); letter-spacing: .04em; opacity: .92; }
 .cover-plate .deck { margin-top: 12px; font-size: var(--t-head); line-height: 1.12; max-width: 18ch; }
 .cover-plate + .credit { margin-top: 8px; }
-.plate-acts { margin-top: 14px; }
+.plate-kicker { margin-top: var(--s-4); }
+.plate-deck { margin-top: var(--s-2); font-size: var(--t-masthead); line-height: .96; letter-spacing: -.02em; max-width: 16ch; }
+.plate-acts { margin-top: var(--s-3); }
 /* Under the running head. The pull-up is gated on the attribute, not the value, so the head
    going solid on scroll changes a colour and never the layout — a masthead that jumped 48px
    the first time a thumb moved would be worse than the seam it fixes. */
@@ -1390,7 +1428,7 @@ body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: va
    mouse, and there is room for the whole index at once. The 3-up is also about bytes — the thumbs
    served are 400px, so three across a 560px measure render at 178px, crisper than the phone gets
    from the same files, where a 2-up would render them at 272px. */
-.plate-index { display: grid; grid-auto-flow: column; grid-auto-columns: 74%; gap: var(--s-3);
+.plate-index { display: grid; grid-auto-flow: column; grid-auto-columns: 86%; gap: var(--s-3);
   margin: var(--gut) calc(-1 * var(--gut)) 0; padding: 0 var(--gut) var(--s-3);
   overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory;
   scroll-padding-inline: var(--gut); scrollbar-width: none; -webkit-overflow-scrolling: touch; }
@@ -1402,7 +1440,7 @@ body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: va
   min-width: 0; scroll-snap-align: start; }
 .place-plate .shot { display: block; aspect-ratio: 3 / 2; overflow: hidden; background: var(--well); position: relative; }
 .place-plate .shot img, .place-plate .shot .scene, .place-plate .shot .scene svg { width: 100%; height: 100%; object-fit: cover; display: block; }
-.place-plate .pn { margin-top: 8px; font-size: var(--t-small); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.place-plate .pn { margin-top: 8px; font-family: var(--font-display); font-weight: 400; font-size: var(--t-lede); line-height: 1.15; overflow-wrap: anywhere; }
 .place-plate .pa, .place-plate .pnote { font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .04em; color: var(--ink-2); }
 /* Said on the plate, not only in the title attribute: at this size a beach reads as the hotel
    unless the picture says otherwise, and that is the one thing the house rule is about. */
@@ -1477,9 +1515,11 @@ body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: va
 .stamp.aged { opacity: .72; font-style: italic; }
 
 /* A photograph settles into its frame rather than appearing. */
-@keyframes settle { from { transform: scale(1.04); } to { transform: none; } }
-.hero-cover img, .hero-place img, .cover-shot img { animation: settle 1400ms var(--ease-out) both; }
-@media (prefers-reduced-motion: reduce) { .hero-cover img, .hero-place img, .cover-shot img { animation: none; } }
+@keyframes settle { from { opacity: 0; transform: scale(1.04); } }
+.hero-cover img, .hero-place img, .cover-shot img, .cover-plate img { animation: settle var(--dur-water) var(--ease-out) backwards; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-cover img, .hero-place img, .cover-shot img, .cover-plate img { animation: none; }
+}
 /* The rank crest is drawn inline in the text colour, so it survives both themes. */
 .rank-crest svg { display: block; flex: none; }
 
@@ -1673,7 +1713,9 @@ button.link-rule { background: none; border: 0; cursor: pointer; }
 @media (min-width: 900px) and (min-height: 600px) {
   .hero-place { aspect-ratio: 3 / 2; }             /* 5/6 would be 727px tall at 606 wide */
   .hero-place .on h1 { max-width: 20ch; }          /* the 12ch cap was drawn for a 358px column */
-  .cover-plate { aspect-ratio: 4 / 3; }            /* 606x455. 4/5 would be 758px before one figure. */
+  .cover-plate { aspect-ratio: 4 / 3; height: auto; } /* 606x455. A viewport-tall plate here is a screen of photograph before the column is read. */
+  .board-page #lead .cover-shot { aspect-ratio: 3 / 2; }
+  .look-lead .stay-card.look .strip { aspect-ratio: 3 / 2; }
   .postcard-list .postcard-shot { aspect-ratio: 16 / 9; }  /* the feed takes one rhythm; /postcards/:id keeps the picture's true ratio */
   /* The card is the one component already width-native, and it still breaks: every cqw clamp has
      a ceiling, so past about 356px of card width the small print stops growing and a 560px plate
@@ -1683,6 +1725,7 @@ button.link-rule { background: none; border: 0; cursor: pointer; }
   /* THE PRINTED INDEX, three to the sheet. This is about bytes, not taste: the thumbs served are
      400px, so three across a 560px measure render at 178px — crisper than the phone's 173px from
      the same files. A 2-up desktop grid would render them at 272px and reinstate the megabytes. */
+  .place-plate .shot { aspect-ratio: 3 / 2; }
   .plate-index { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr));
                  overflow-x: visible; scroll-snap-type: none; margin-inline: 0; padding-inline: 0; }
   .badge-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }  /* the file's one auto-fill grid reflows on its own; set the floor deliberately */

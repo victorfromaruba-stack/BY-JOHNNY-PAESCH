@@ -275,31 +275,20 @@ export function landing({ store, go }) {
   const featured = ['stay_oceanclub', 'stay_surfclub', 'stay_divi', 'stay_renaissance', 'trip_japan'].map(id => store.stayLike(id)).filter(Boolean);
 
   wrap.appendChild(el(`<section class="sec hero-sec">
-      <figure class="hero-cover enter">
-        <!-- One tall still, and only one: the page is a phone column at every width, so there is
-             no wide viewport left for a wide file to belong to. A photograph of the mood, not of
-             a room — the rooms are on the stay pages.
-             The inline placement is transitional: app.css still carries the placement on the
-             .hero-cover picture selector, and the picture element it named is gone. It comes
-             off the moment that selector becomes .hero-cover img. Without it the photograph
-             takes a second grid row and the promise sits above the picture, not in it. -->
-        <img src="assets/hero-tall.jpg" width="880" height="1100" style="grid-area:1/1;min-width:0;min-height:0" alt="A windswept fofoti tree leaning over calm water at first light" fetchpriority="high" decoding="async">
-        <figcaption class="on"><div class="wrap">
-          <h1 style="max-width:16ch">A private travel circle <em class="ac">in Aruba</em>.</h1>
-          <p class="lede" style="margin-top:14px">Put in a hundred dollars a month. Take it out as hotel, at cost, with people you know.</p>
-          <!-- The masthead pairing: one filled action and one link-rule beside it, on one line.
-               At 390 the column inside the photograph is 358px, and the two labels the spec
-               settled on measure 174 + 16 + 141 — they fit with room to spare only without a
-               glyph in the button. With the key icon the button was 203 and the pair came to
-               360, two pixels over, so .row wrapped and the button sat alone with 156px of
-               hero beside it. The words are the invitation; the key was decoration. -->
-          <div class="row">
-            <a class="btn" href="#/sign-in">I have an invitation</a>
-            <a class="link-rule" href="#/rules">How the Circle works</a>
-          </div>
-        </div></figcaption>
+      <figure class="hero-cover">
+        <!-- The first screen is the photograph and nothing else. The promise is set under it,
+             on the paper, at the size a cover line is printed — not as a caption burned into
+             the picture, and not as a black button sitting on the sand. -->
+        <img src="assets/hero-tall.jpg" width="880" height="1100" alt="A windswept fofoti tree leaning over calm water at first light" fetchpriority="high" decoding="async">
       </figure>
-      <div class="wrap"><p class="hero-credit">The west coast. Every place is on this water, or ten minutes from it.</p>
+      <div class="wrap hero-after">
+        <h1>A private travel circle <em class="ac">in Aruba</em>.</h1>
+        <p class="lede">Put in a hundred dollars a month. Take it out as hotel, at cost, with people you know.</p>
+        <div class="row">
+          <a class="btn" href="#/sign-in">I have an invitation</a>
+          <a class="link-rule" href="#/rules">How the Circle works</a>
+        </div>
+      <p class="hero-credit">The west coast. Every place is on this water, or ten minutes from it.</p>
       <p class="colophon">${blind ? `<b class="num">${s.memberCap}</b> seats, by invitation` : `<b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of <b class="num">${s.memberCap}</b> seats taken`} · ${(() => {
         const places = store.stays.filter(x => x.kind !== 'trip' && x.active !== false).length;
         const cruises = store.stays.filter(x => x.kind === 'trip' && x.cruise && x.active !== false).length;
@@ -318,11 +307,33 @@ export function landing({ store, go }) {
       <div class="sec-head"><h2>Where the points go</h2>
       <p>The Circle’s own rate, with the taxes and the resort fee already in it. Ask Victor. He books it in your name.</p>
       <a class="link-rule" href="${blind ? '#/sign-in' : '#/stays'}">${blind ? 'Sign in to see them all' : 'See what is open'}</a></div>
-      <div class="horizon" id="horizon"></div></div></section>`);
+      <div class="look-lead" id="horizon"></div>
+      <div class="index" id="horizon-rest"></div></div></section>`);
   const hz = horizon.querySelector('#horizon');
+  const restEl = horizon.querySelector('#horizon-rest');
   // Signed out, every one of these opened a password form with no explanation — someone was
   // browsing hotels and got a login screen. Send them somewhere deliberate instead.
-  featured.forEach(st => hz.appendChild(stayCard(st, { store, href: blind ? '#/sign-in' : null, look: true })));
+  // One plate, then quiet lines. Five equal cards was a shop window.
+  const [leadStay, ...restStays] = featured;
+  const hrefFor = (st) => (blind ? '#/sign-in' : `#/${st.kind === 'trip' ? 'trips' : 'stays'}/${st.id}`);
+  if (leadStay) {
+    const card = stayCard(leadStay, { store, href: hrefFor(leadStay), look: true });
+    // The beach tag is a caption printed on the picture. The line under the name says the
+    // same thing, and the picture stays clear.
+    if (card.querySelector('.strip-tag')) {
+      card.querySelector('.strip-tag').remove();
+      const where = card.querySelector('.where');
+      if (where && !/not the hotel/.test(where.textContent || '')) where.append(' · the beach, not the hotel');
+    }
+    hz.appendChild(card);
+  }
+  const ppd = s.pointsPerDollar || 100;
+  for (const st of restStays) {
+    const per = unitPoints(st, s);
+    restEl.appendChild(el(`<a class="index-row" href="${escapeHtml(hrefFor(st))}">
+      <span class="name">${escapeHtml(st.name)}<span class="meta"><span class="beach">${escapeHtml(st.area)}${st.country !== 'Aruba' ? `, ${escapeHtml(st.country)}` : ''}</span></span></span>
+      <span class="from"><b class="num">${escapeHtml(fmtUsd(per / ppd))}</b></span></a>`));
+  }
   wrap.appendChild(horizon);
 
   // Where the money goes. Nothing is taken on the way in; the Circle is paid on the room.

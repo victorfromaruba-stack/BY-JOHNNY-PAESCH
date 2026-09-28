@@ -143,10 +143,12 @@ export function stays({ store, go, query = {} }) {
   const watching = store.watchesFor(me.id).length;
   const watches = store.watchesFor(me.id);
   const matchFor = (d) => watches.map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
-  const wrap = el(`<div><section class="sec"><div class="wrap">
+  const wrap = el(`<div><section class="sec board-page"><div class="wrap">
+      <div id="lead"></div>
       <header class="masthead">
         <p class="eyebrow">The board · <span class="num" id="count">…</span></p>
         <h1>What is <em class="ac">open</em>.</h1>
+        <p class="open-num"><b class="num" id="open-fig">…</b><span id="open-unit"></span></p>
         <p class="dateline">Cheapest a night, first. <span id="asof">Looking at what owners have open…</span></p>
         <button type="button" class="link-rule no-print" id="tell-board">Send this to the group</button>
         <div class="small muted" id="reach" hidden></div>
@@ -154,9 +156,9 @@ export function stays({ store, go, query = {} }) {
         ${canEdit ? `<div class="row no-print"><button class="btn sm" id="paste">${icon('copy', { size: 16 })}Paste a listing</button>
           <button class="btn ghost sm" id="post">${icon('plus', { size: 16 })}By hand</button></div>` : ''}
       </header>
+      <div id="cover" class="lead-story"></div>
       <div id="board"></div>
       <div id="mine"></div>
-      <div id="cover" style="margin-top:22px"></div>
       <div id="soon"></div>
       <div id="deals"></div>
       <div id="places"></div>
@@ -215,6 +217,18 @@ export function stays({ store, go, query = {} }) {
     const folioOf = new Map(ranked.map((d, i) => [d.id, i + 1]));
     const all = ranked;
     count.textContent = `${ranked.length} open`;
+    const fig = wrap.querySelector('#open-fig');
+    const unit = wrap.querySelector('#open-unit');
+    if (fig && unit) {
+      if (ranked.length) {
+        fig.textContent = usdNight(ranked[0], s.pointsPerDollar);
+        unit.textContent = 'a night';
+      } else {
+        const places = store.arubaStays().filter(st => st.active !== false && st.kind !== 'trip').length;
+        fig.textContent = String(places);
+        unit.textContent = places === 1 ? 'place' : 'places';
+      }
+    }
     asof.innerHTML = res ? datelineOf(res, ranked.length, lastSeenOf(ranked)) : 'Looking at what owners have open at the places we stay…';
     const note2 = res ? reachNote(res) : '';
     reach.hidden = !note2;
@@ -238,7 +252,29 @@ export function stays({ store, go, query = {} }) {
     paintSoon(ranked, folioOf);
     coverSlot.replaceChildren();
     dealsSlot.replaceChildren();
-    if (all.length) coverSlot.appendChild(dealCover(all[0], { store, canEdit, match: matchFor(all[0]), folio: 1 }));
+    const leadSlot = wrap.querySelector('#lead');
+    leadSlot.replaceChildren();
+    if (all.length) {
+      const node = dealCover(all[0], { store, canEdit, match: matchFor(all[0]), folio: 1 });
+      // The photograph leads the page. The folio, the name and the price stay in the body,
+      // under the masthead — nothing is printed on the picture.
+      const shot = node.querySelector('.cover-shot');
+      if (shot) leadSlot.appendChild(shot);
+      coverSlot.appendChild(node);
+    } else {
+      // Nothing is on the board. The page still opens on a real photograph and one number —
+      // a place the club actually stays, not a card of two hotels side by side.
+      const list = store.arubaStays().filter(st => st.active !== false);
+      const real = (st) => photoKind(st) === 'own' || photoKind(st) === 'bundled';
+      const st = list.find(x => x.house && real(x)) || list.find(real) || list.find(x => photoFor(x));
+      const src = st && photoFor(st);
+      if (src) {
+        const area = photoKind(st) === 'area';
+        leadSlot.appendChild(el(`<a class="cover-shot" href="#/stays/${escapeHtml(st.id)}" aria-label="${escapeHtml(st.name)}">
+          <img src="${escapeHtml(src)}" alt="${escapeHtml(area ? `${st.area}, the beach at ${st.name}` : st.name)}" fetchpriority="high" decoding="async">
+        </a>`));
+      }
+    }
     const rest = all.slice(1);
     if (rest.length) {
       dealsSlot.appendChild(el(`<div class="running-head"><h2>The other <b class="num">${rest.length}</b></h2><p class="eyebrow">cheapest a night first</p></div>`));
@@ -673,7 +709,7 @@ export function stayDetail({ store, params, go, query = {} }) {
     const posted = store.liveDeals().filter(d => d.stayId === stay.id);
     if (resort || posted.length) {
       const panel = el(`<section class="panel" style="margin-top:22px" id="open-now">
-        <div><p class="eyebrow">${icon('trend')}Open right now</p>
+        <div><p class="eyebrow">Open right now</p>
           <h2 style="margin-top:6px" id="open-h"></h2>
           <p class="small muted" id="open-sub" style="margin-top:6px"></p>
           <div id="open-retry" hidden></div></div>

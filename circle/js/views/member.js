@@ -65,15 +65,15 @@ export function home({ store, go, refresh }) {
   // is the evidence, not the headline.
   const book = store.canBookNow(me.id);
   const head = !book
-    ? { eyebrow: '', h1: 'Your corner of the Circle', cta: `<a class="btn" href="#/stays">${icon('bed', { size: 17 })}See what is open</a>` }
+    ? { eyebrow: '', h1: 'Your corner of the Circle', cta: `<a class="btn" href="#/stays">See what is open</a>` }
     : book.can
       ? { eyebrow: 'What you can book today',
           h1Html: `${book.nights}${book.capped ? '+' : ''} night${book.nights === 1 ? '' : 's'} at <em class="ac">${escapeHtml(book.stay.name)}</em>`,
-          cta: `<a class="btn" href="#/book/${escapeHtml(book.stay.id)}">${icon('send', { size: 17 })}Ask for these dates</a>
+          cta: `<a class="btn" href="#/book/${escapeHtml(book.stay.id)}">Ask for these dates</a>
                 <a class="link-rule" href="#/stays">Other places</a>` }
       : { eyebrow: 'The first thing within reach',
           h1Html: `${book.nights} night${book.nights === 1 ? '' : 's'} at <em class="ac">${escapeHtml(book.stay.name)}</em>`,
-          cta: `<a class="btn" href="#/pay">${icon('arrowUp', { size: 17 })}Send a contribution</a>
+          cta: `<a class="btn" href="#/pay">Send a contribution</a>
                 <a class="link-rule" href="#/stays">Other places</a>` };
   // THE COVER PLATE.
   //
@@ -99,16 +99,15 @@ export function home({ store, go, refresh }) {
   wrap.querySelector('#masthead').innerHTML = plateSrc
     ? `<figure class="cover-plate">
         <img src="${escapeHtml(plateSrc)}" alt="${escapeHtml(plateArea ? `${plateArea.area}, the beach at ${plateStay.name}` : plateStay.name)}"${plateCredit ? ` title="${escapeHtml(plateCredit.text)}"` : ''} fetchpriority="high" decoding="async">
-        ${plateArea ? `<span class="strip-tag">${escapeHtml(plateArea.area)} · the beach</span>` : ''}
         <figcaption class="on">
-          <p class="eyebrow">${welcome}</p>
           <b class="plate-fig num" id="avail">0</b>
           <span class="plate-sub" id="avail-usd"></span>
-          <h1 class="deck">${head.h1Html || escapeHtml(head.h1)}</h1>
         </figcaption>
       </figure>
-      ${plateCredit ? `<p class="credit tiny muted">${plateCredit.html}</p>` : ''}
-      <div class="row no-print plate-acts">${head.cta}</div>`
+      <p class="eyebrow plate-kicker">${welcome}</p>
+      <h1 class="plate-deck">${head.h1Html || escapeHtml(head.h1)}</h1>
+      <div class="row no-print plate-acts">${head.cta}</div>
+      ${plateCredit ? `<p class="credit tiny muted">${plateCredit.html}</p>` : ''}`
     : `<div class="masthead">
       <p class="eyebrow">${welcome}</p>
       <h1>${head.h1Html || escapeHtml(head.h1)}</h1>
@@ -385,7 +384,7 @@ export function home({ store, go, refresh }) {
     if (sv.trips) {
       const good = sv.savedUsd > 0;
       body.appendChild(el(`<div class="panel">
-        <p class="eyebrow">${icon('trend')}What the Circle has saved you</p>
+        <p class="eyebrow">What the Circle has saved you</p>
         <p class="big-figure num" style="color:${good ? 'var(--good-text)' : 'var(--ink)'}">${escapeHtml(fmtUsd2(Math.abs(sv.savedUsd)))}</p>
         <p class="small muted" style="margin-top:4px">${good
           ? `across ${num(sv.trips)} booking${sv.trips === 1 ? '' : 's'} — ${figs(fmtUsd2(sv.publicUsd))} of hotel for ${figs(fmtUsd2(sv.oursUsd))}, ${num(`${sv.pct}%`)} off the public rate`
