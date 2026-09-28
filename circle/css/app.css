@@ -502,6 +502,8 @@ body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-
 /* The caption sits under the photograph, as captions do, in the mono. */
 .hero-credit { display: flex; align-items: flex-start; gap: 6px; margin-top: var(--s-3);
   font-family: var(--font-mono); font-size: var(--t-fine); line-height: 1.4; color: var(--ink-2); max-width: 60ch; }
+.colophon { margin-top: var(--s-3); max-width: 42ch; font-family: var(--font-mono); font-size: var(--t-fine);
+  line-height: 1.55; color: var(--ink-2); }
 .hero-credit svg { width: 14px; height: 14px; flex: none; margin-top: 2px; }
 /* One filled action and one ruled link, never two boxes of equal weight. */
 .link-rule { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 2px; font-size: var(--t-small); font-weight: 500;
@@ -557,8 +559,15 @@ body:has(.botnav:not([hidden])) .hero-cover { min-height: calc(100svh - var(--h-
 
 /* The places, as a strip a thumb swipes: it bleeds to the column's edge and pads itself back by
    the gutter, so the first card sits on the measure and the last one shows it is not the last. */
-.horizon { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(252px, 1fr); gap: var(--s-4); overflow-x: auto; overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity; margin-inline: calc(-1 * var(--s-4)); padding: 2px var(--s-4) 10px; scroll-padding-inline: var(--s-4); }
+.horizon { display: grid; grid-auto-flow: column; grid-auto-columns: 78%; gap: var(--s-4); overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory; margin-inline: calc(-1 * var(--s-4)); padding: 2px var(--s-4) 10px; scroll-padding-inline: var(--s-4);
+  scrollbar-width: none; }
+.horizon::-webkit-scrollbar { display: none; }
+/* A lookbook plate, not a booking card: no box, a portrait, the name in the voice used for titles. */
+.stay-card.look { background: transparent; border: 0; border-radius: 0; scroll-snap-align: start; }
+.stay-card.look .strip { aspect-ratio: 3 / 4; }
+.stay-card.look .body { padding: var(--s-3) 0 0; gap: 4px; }
+.stay-card.look h3 { font-family: var(--font-display); font-weight: 400; font-size: var(--t-head); line-height: 1.05; }
 .horizon::after { content: ""; width: 1px; }
 .horizon > * { scroll-snap-align: start; }
 
@@ -1110,7 +1119,7 @@ input.switch[type="checkbox"]:checked { background-color: var(--ink); }
 /* A beach photograph standing in for a place with none of its own says which beach it is, on the picture. */
 .strip-tag { position: absolute; left: 10px; bottom: 10px; z-index: 2; padding: 4px 8px; border-radius: var(--r-chip);
   font-family: var(--font-mono); font-size: var(--t-folio); font-weight: 400; letter-spacing: .08em; text-transform: uppercase; color: var(--on-photo);
-  background: var(--scrim); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); pointer-events: none; }
+  background: var(--scrim); pointer-events: none; }
 .place-thumb .strip-tag { padding: 3px 7px; left: 6px; bottom: 6px; }
 .place-thumb .strip-tag { display: none; }
 .deal.in-place .deal-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 8px; }
@@ -1141,6 +1150,7 @@ input.switch[type="checkbox"]:checked { background-color: var(--ink); }
    sentence is the shape this app keeps being told it has too much of. */
 .thanks { margin-top: var(--s-5); font-family: var(--font-display); font-size: var(--t-lede); line-height: 1.25; color: var(--ink); }
 .masthead .row.no-print { margin-top: 12px; }
+.masthead > .link-rule { margin-top: var(--s-2); }
 /* A provenance mark: who or what saw it, and when. The same mono as the ledger's "by Vishnu". */
 .stamp { font-family: var(--font-mono); font-size: var(--t-folio); letter-spacing: .04em; color: var(--ink-2); white-space: nowrap; }
 /* A stamp that is a paragraph of its own — a colophon at the foot of the board — is a sentence

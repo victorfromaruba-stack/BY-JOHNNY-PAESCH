@@ -2,7 +2,7 @@
 import { escapeHtml, html, raw, fmtUsd, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDay, fmtPct, initials } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, projectPoints, fromPoints, seatPoints, unitPoints, pointsPerMonth, monthsToAfford } from '../core/money.js';
-import { poolGauge, memberCard, ring, tierLadder } from '../ui/pieces.js';
+import { memberCard, ring, tierLadder } from '../ui/pieces.js';
 import { sceneSvg, plateHtml, starSvg } from '../ui/art.js';
 import { toast, setBusy, sheet, avatar } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
@@ -222,7 +222,7 @@ export function sourceLine(stay) {
  * hotel showed a different number on the landing page and in the catalog, and neither was
  * labelled.
  */
-export function stayCard(stay, { store, href = null, footer = '' } = {}) {
+export function stayCard(stay, { store, href = null, footer = '', look = false } = {}) {
   // store.settings, not the defaults. Without it the whole catalog priced itself off
   // DEFAULT_SETTINGS and silently ignored every rate Victor edits in the Desk — so the number
   // on the card and the number in the quote could disagree, which is the one thing a price
@@ -236,14 +236,14 @@ export function stayCard(stay, { store, href = null, footer = '' } = {}) {
   // centimetres above this line. Saying it twice is the kind of thing that makes a page feel
   // machine-assembled, so the body line drops it and keeps only what the plate does not say.
   const plated = !photoFor(stay) && stay.kind !== 'trip';
-  const node = el(`<a class="stay-card" href="${escapeHtml(href || `#/${stay.kind === 'trip' ? 'trips' : 'stays'}/${stay.id}`)}">
+  const node = el(`<a class="stay-card${look ? ' look' : ''}" href="${escapeHtml(href || `#/${stay.kind === 'trip' ? 'trips' : 'stays'}/${stay.id}`)}">
       <span class="strip"><span class="duo"></span>${photoFor(stay) || stay.kind === 'trip' ? '' : '<span class="ph-note">no photograph yet</span>'}</span>
       <span class="body">
         <h3>${escapeHtml(stay.name)}</h3>
         <span class="where">${plated ? '' : `${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}`}${stay.kind === 'trip' ? `${plated ? '' : ' · '}${stay.nights} nights` : plated ? (stay.onSand ? 'On the sand' : 'Across the road') : stay.onSand ? ' · on the sand' : ' · across the road'}</span>
         <span class="price"><b class="num">${escapeHtml(fmtUsd(per / ppd))}</b><small>${escapeHtml(stay.kind === 'trip' ? `a ${stay.cruise ? 'cabin' : 'seat'} · ${fmtPoints(per)}` : `from, a night · ${fmtPoints(per)}`)}</small></span>
-        <span class="flags">${stay.house ? '<span class="tag house">Where we stay</span>' : ''}${(stay.features || []).slice(0, stay.house ? 2 : 3).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</span>
-        ${sourceLine(stay)}
+        ${look ? '' : `<span class="flags">${stay.house ? '<span class="tag house">Where we stay</span>' : ''}${(stay.features || []).slice(0, stay.house ? 2 : 3).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</span>
+        ${sourceLine(stay)}`}
         ${footer}
       </span></a>`);
   node.querySelector('.strip').prepend(stayStrip(stay));
@@ -267,7 +267,6 @@ function band(src, alt, line) {
 
 export function landing({ store, go }) {
   const s = store.settings;
-  const t = store.treasury();
   // Signed out on the real backend, row-level security hands this browser nothing — so the
   // seat count is 0 and coverage is unverifiable, neither of which is true. Say what we
   // cannot see instead of publishing a number we did not read.
@@ -300,26 +299,14 @@ export function landing({ store, go }) {
           </div>
         </div></figcaption>
       </figure>
-      <div class="wrap"><p class="hero-credit enter" style="--d:120ms">${icon('mapPin', { size: 14 })}The west coast — every place on the list is on this water or ten minutes from it.</p>
-      <div class="hero-gauge enter" style="--d:180ms">
-        <div id="gauge-slot">${blind ? `<p class="eyebrow">${icon('shield', { size: 14 })}Proof of reserves</p>
-          <p class="small muted" style="margin-top:4px">Every point is backed by money in a Reserve account that is checked against the bank
-          and published inside the Circle. Sign in to see the current figure.</p>` : ''}</div>
-        <div class="hero-facts">
-          <div><p class="eyebrow">${icon('users', { size: 14 })}Seats</p>
-            <p>${blind ? `<b class="num">${s.memberCap}</b> in all · by invitation only` : `<b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of <b class="num">${s.memberCap}</b> taken · by invitation only`}</p></div>
-          <div><p class="eyebrow">${icon('bed', { size: 14 })}On the list</p>
-            <p>${(() => {
-              const places = store.stays.filter(x => x.kind !== 'trip' && x.active !== false).length;
-              const cruises = store.stays.filter(x => x.kind === 'trip' && x.cruise && x.active !== false).length;
-              const trips = store.stays.filter(x => x.kind === 'trip' && !x.cruise && x.active !== false).length;
-              return [`<b class="num">${places}</b> places`, cruises ? `<b class="num">${cruises}</b> cruise${cruises === 1 ? '' : 's'}` : '', trips ? `<b class="num">${trips}</b> trip${trips === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
-            })()}</p></div>
-        </div>
-      </div>
+      <div class="wrap"><p class="hero-credit">The west coast. Every place is on this water, or ten minutes from it.</p>
+      <p class="colophon">${blind ? `<b class="num">${s.memberCap}</b> seats, by invitation` : `<b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of <b class="num">${s.memberCap}</b> seats taken`} · ${(() => {
+        const places = store.stays.filter(x => x.kind !== 'trip' && x.active !== false).length;
+        const cruises = store.stays.filter(x => x.kind === 'trip' && x.cruise && x.active !== false).length;
+        const trips = store.stays.filter(x => x.kind === 'trip' && !x.cruise && x.active !== false).length;
+        return [`<b class="num">${places}</b> places`, cruises ? `<b class="num">${cruises}</b> cruise${cruises === 1 ? '' : 's'}` : '', trips ? `<b class="num">${trips}</b> trip${trips === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
+      })()}. The reserve is checked against the bank and published inside.</p>
     </div></section>`));
-
-  if (!blind) wrap.querySelector('#gauge-slot').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, liabilityUsd: t.liabilityUsd, configured: t.accountsConfigured, size: 'full' }));
 
   wrap.appendChild(el(`<section class="sec statement"><div class="wrap">
       <p>This is not a business, and it is not open to the public.
@@ -329,14 +316,13 @@ export function landing({ store, go }) {
   // Horizon — the dream, before the ledger
   const horizon = el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><h2>Where the points go</h2>
-      <p>The best deals on the market at the places on the island the Circle can get, and the cruises and trips Victor and Ian put together. Every price is the Circle’s all-in rate — taxes, levies and resort fees included.</p>
-      <p class="small muted" style="margin-top:8px">These are where we actually end up. See a deal, ask Victor, he books it in your name — nobody books anything themselves.</p>
+      <p>The Circle’s own rate, with the taxes and the resort fee already in it. Ask Victor. He books it in your name.</p>
       <a class="link-rule" href="${blind ? '#/sign-in' : '#/stays'}">${blind ? 'Sign in to see them all' : 'See what is open'}</a></div>
       <div class="horizon" id="horizon"></div></div></section>`);
   const hz = horizon.querySelector('#horizon');
   // Signed out, every one of these opened a password form with no explanation — someone was
   // browsing hotels and got a login screen. Send them somewhere deliberate instead.
-  featured.forEach(st => hz.appendChild(stayCard(st, { store, href: blind ? '#/sign-in' : null })));
+  featured.forEach(st => hz.appendChild(stayCard(st, { store, href: blind ? '#/sign-in' : null, look: true })));
   wrap.appendChild(horizon);
 
   // Where the money goes. Nothing is taken on the way in; the Circle is paid on the room.

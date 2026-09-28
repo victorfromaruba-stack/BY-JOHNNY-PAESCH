@@ -14,6 +14,7 @@ import { VOCAB } from '../core/vocab.js';
 import { quoteStay, fromPoints, seatPoints, isCruise } from '../core/money.js';
 import { icon } from '../ui/icons.js';
 import { toast, sheet, confirmDialog, setBusy, avatar } from '../ui/components.js';
+import { appHash, shareText, weekForGroup } from '../core/share.js';
 import { stayStrip, thumbFor, beachMark, photoFor, photoKind, photoCredit, thumbPhotoFor, areaPhotoFor } from './public.js';
 import { sameName, nameWithin } from '../core/names.js';
 
@@ -227,6 +228,7 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
   const credit = kind === 'area' ? photoCredit(stay) : null;
   const stamp = stampFor(deal, store);
   const soon = soonLabel(deal.from);
+  const teased = typeof store.teased === 'function' && store.teased(deal);
   const who = store.member?.(deal.postedBy)?.name.split(' ')[0];
   // Built as HTML, not text, so the two figures in it can sit in the mono face like every other
   // figure in the app — an owner's asking price is money, and it was reading in the body face in
@@ -253,9 +255,10 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
              cover is the louder of the two. Same grammar, same words, the all-in in the mono face
              so nobody taps to find out what it costs. The Desk's own buttons sit under it. -->
         <div class="row">
-          <a class="btn block" href="${askHrefFor(deal)}">${icon('send', { size: 16 })}<span>Ask Victor</span><span aria-hidden="true">·</span><b class="num">${escapeHtml(fmtPoints(deal.pointsTotal))}</b></a>
+          <a class="btn block" href="${askHrefFor(deal)}"><span>Ask Victor</span><span aria-hidden="true">·</span><b class="num">${escapeHtml(fmtPoints(deal.pointsTotal))}</b></a>
           ${canEdit ? deskActs(deal) : ''}
         </div>
+        ${teased ? '' : '<button type="button" class="link-rule" data-tell>Tell the group</button>'}
       </div>
     </article>`);
   const shot = node.querySelector('.cover-shot');
@@ -269,6 +272,21 @@ export function dealCover(deal, { store, canEdit = false, match = null, folio = 
   const art = stayStrip(stay);
   art.querySelector('.strip-tag')?.remove();
   shot.prepend(art);
+  node.querySelector('[data-tell]')?.addEventListener('click', () => {
+    const seg = stay?.kind === 'trip' ? (isCruise(stay) ? 'cruises' : 'trips') : 'stays';
+    const q = new URLSearchParams({ from: deal.from, to: deal.to, deal: deal.id });
+    shareText({
+      title: stay?.name || 'A week',
+      text: weekForGroup({
+        name: stay?.name || deal.title,
+        when: shortRange(deal.from, deal.to),
+        nights: deal.nights,
+        price: usdNight(deal, s.pointsPerDollar),
+        points: fmtPoints(deal.pointsTotal),
+      }),
+      url: appHash(`/${seg}/${deal.stayId}?${q}`),
+    });
+  });
   return node;
 }
 

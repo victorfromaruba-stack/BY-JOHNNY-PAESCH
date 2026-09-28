@@ -280,16 +280,11 @@ export function home({ store, go, refresh }) {
   const drawGoal = () => {
     const g = store.goalFor(me.id);
     if (!g) {
-      goalPanel.innerHTML = `
-        <p class="eyebrow">${icon('target')}What you are saving for</p>
-        <h2 style="margin-top:8px">Pick something and watch it come closer</h2>
-        <p class="small muted" style="margin-top:8px">Every contribution moves a bar instead of a number. Choose a place and how many nights, and the app works out how many months it takes at your level — and what would get you there sooner.</p>
-        <div class="stack tight" style="margin-top:14px">
-          <p><button type="button" class="link-rule" id="set-goal">Choose one</button></p>
-          <p><a class="link-rule" href="#/stays">Look at the places</a></p>
-        </div>`;
+      goalPanel.className = 'rule-block';
+      goalPanel.innerHTML = `<button type="button" class="link-rule" id="set-goal">Choose what you are saving for</button>`;
       return;
     }
+    goalPanel.className = 'panel';
     const pct = Math.round(g.pct * 100);
     const others = g.ways.filter(w => !w.mine && w.months < g.months);
     goalPanel.innerHTML = `

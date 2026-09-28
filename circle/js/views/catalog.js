@@ -7,10 +7,10 @@ import { stayCard, stayStrip, photoFor, photoCredit, seedIdOf, thumbPhotoFor, ph
 import { roomPhotosFor, roomsOf, roomPhotoSheet, galleryStrip } from './rooms.js';
 import { PLACES } from '../data/places.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
-import { shareText } from '../core/share.js';
+import { shareText, appHash, boardForGroup } from '../core/share.js';
 import { icon } from '../ui/icons.js';
 import { routeSvg, islandSvg } from '../ui/art.js';
-import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, dropWhen, SOURCES } from './deals.js';
+import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, dropWhen, SOURCES, shortRange, usdNight } from './deals.js';
 import { openWeeks, resortForStay, bedroomsOf } from './live.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -145,9 +145,10 @@ export function stays({ store, go, query = {} }) {
   const matchFor = (d) => watches.map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <header class="masthead">
-        <p class="eyebrow">${icon('trend')}The board · <span class="num" id="count">…</span></p>
-        <h1>Cheapest a night, <em class="ac">first</em>.</h1>
-        <p class="dateline" id="asof">Looking at what owners have open…</p>
+        <p class="eyebrow">The board · <span class="num" id="count">…</span></p>
+        <h1>What is <em class="ac">open</em>.</h1>
+        <p class="dateline">Cheapest a night, first. <span id="asof">Looking at what owners have open…</span></p>
+        <button type="button" class="link-rule no-print" id="tell-board">Send this to the group</button>
         <div class="small muted" id="reach" hidden></div>
         <div class="small" id="no-interval" hidden></div>
         ${canEdit ? `<div class="row no-print"><button class="btn sm" id="paste">${icon('copy', { size: 16 })}Paste a listing</button>
@@ -256,6 +257,15 @@ export function stays({ store, go, query = {} }) {
   wrap.addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-open"]')) load(); });
   wrap.querySelector('#post')?.addEventListener('click', () => postDealSheet({ store }));
   wrap.querySelector('#paste')?.addEventListener('click', () => pasteListingSheet({ store }));
+  wrap.querySelector('#tell-board')?.addEventListener('click', () => {
+    const ranked = [...posted, ...drafts].filter(d => !isTeased(d)).sort(byNight).slice(0, 5);
+    if (!ranked.length) { toast('Nothing open to send yet.'); return; }
+    const lines = ranked.map((d, i) => {
+      const name = store.stay(d.stayId)?.name || d.title || 'A place';
+      return `${i + 1}. ${name} · ${shortRange(d.from, d.to)} · ${usdNight(d, s.pointsPerDollar)} a night`;
+    });
+    shareText({ title: 'What is open', text: boardForGroup(lines), url: appHash('/stays') });
+  });
   wrap.addEventListener('click', (e) => { if (e.target.closest('#paste-interval')) pasteListingSheet({ store }); });
   // Shared to the app from the phone (a Getaway copied off Interval, a RedWeek listing): the
   // share landed the text in sessionStorage on the way in, and the paste sheet opens on it.
