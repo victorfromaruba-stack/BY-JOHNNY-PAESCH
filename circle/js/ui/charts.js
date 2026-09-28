@@ -53,7 +53,12 @@ export function columns(data, { series = [], height = 180, width = 520, unit = '
   // grid: 4 hairlines + baseline
   for (let i = 0; i <= 4; i++) {
     const v = (max / 4) * i; const yy = y(v);
-    svg.appendChild(el('line', { x1: padL, x2: width - padR, y1: yy, y2: yy, stroke: i === 0 ? 'var(--chart-axis)' : 'var(--chart-grid)', 'stroke-width': 1 }));
+    // The class is conditional on purpose. The stylesheet's .chart-grid-line rule sets a stroke,
+    // and a CSS stroke beats a presentation attribute — so a blanket class would recolour the
+    // baseline, which is deliberately --chart-axis, at every width. With the two names split, the
+    // rule says exactly what the attribute already said, nothing changes on the phone, and
+    // stroke-width becomes reachable from the breakpoint for the first time.
+    svg.appendChild(el('line', { x1: padL, x2: width - padR, y1: yy, y2: yy, class: i === 0 ? 'chart-axis-line' : 'chart-grid-line', stroke: i === 0 ? 'var(--chart-axis)' : 'var(--chart-grid)', 'stroke-width': 1 }));
     svg.appendChild(el('text', { x: padL - 8, y: yy + 4, 'text-anchor': 'end', class: 'chart-tick' }, [compact(v)]));
   }
   const nSeries = Math.max(1, data[0]?.values.length || 1);

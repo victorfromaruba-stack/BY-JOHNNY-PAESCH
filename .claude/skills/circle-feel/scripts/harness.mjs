@@ -4,7 +4,10 @@ import { execFileSync } from 'node:child_process';
 export const LOCAL = `export const CONFIG = { backend: 'local', supabaseUrl: '', supabaseKey: '' };`;
 export const ROUTES = ['/', '/home', '/stays', '/stays/stay_surfclub', '/cruises', '/cruises/trip_cruise_abc', '/trips/trip_japan',
   '/postcards', '/requests', '/pay', '/ledger', '/pool', '/circle', '/crews', '/watching',
-  '/card', '/profile', '/rules', '/desk', '/bank', '/settings', '/sign-in'];
+  '/card', '/profile', '/rules', '/desk', '/bank', '/settings', '/sign-in',
+  // The ask form is the app's most important screen and it was not in this list, so no baseline
+  // ever measured it at any width.
+  '/book/stay_surfclub'];
 const FONT_DIR = process.env.CIRCLE_FONTS || '/tmp/claude-0/-home-user-BY-JOHNNY-PAESCH/84807211-e7d2-5336-9e3f-7549cf10be4d/scratchpad';
 async function fontShim(p) {
   const { existsSync, readFileSync } = await import('node:fs');
@@ -34,9 +37,16 @@ export async function applyInsets(p, insets) {
  *  touch: true makes the page a touch device (hasTouch + isMobile) when width < 500, so
  *  focus-on-open and double-tap behaviour are measured as a phone would show them.
  *  insets: { top, bottom } in px sets --inset-top / --inset-bottom on <html>, re-applied by go(). */
-export async function open({ width = 1280, height = 900, role = 'admin', scale = 1, touch = false, insets = null } = {}) {
+export async function open({ width = 390, height = 844, role = 'admin', scale = 1, touch = null, insets = null } = {}) {
   const b = await chromium.launch();
-  const phone = touch && width < 500;
+  // The default is the PHONE, not a laptop. It used to be 1280, so every ad-hoc probe in this
+  // project was measuring a desktop window and nobody noticed while the layout was the same at
+  // every width. The phone is the thing that must not regress, so it is what you get when you do
+  // not say. And `touch` now defaults to "whatever this width really is" rather than false: with
+  // a hover block in the stylesheet, measuring the phone as a mouse-capable device would report a
+  // hover-only affordance as working when a real phone can never reach it. Pass touch: true or
+  // false to force it — a wide touch device is expressible now, which it was not before.
+  const phone = touch == null ? width < 500 : touch;
   const p = await b.newPage({ viewport: { width, height }, deviceScaleFactor: scale,
     ...(phone ? { hasTouch: true, isMobile: true } : {}) });
   p.__huntoInsets = insets;

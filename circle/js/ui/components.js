@@ -138,7 +138,18 @@ export function sheet({ title, render, tall = false }) {
       || body.querySelector('.sheet-actions :is(button, a.btn):not([data-close]):not([disabled])')
       || body.querySelector('.sheet-actions [data-close]')
       || dlg.querySelector('[data-close]');
-    action?.focus({ preventScroll: true });
+    /* The one width branch in the whole app, and it stays this narrow. Every reason above is
+       about a soft keyboard or a thumb, and on a computer there is neither: a person who opens a
+       sheet with a field in it means to type. So above the breakpoint, and ONLY when the body
+       actually holds a text field, the first field takes focus instead. The picker sheets are all
+       buttons and find nothing here, so they are unaffected at every width.
+       These two numbers are hand-copied from the media query at the foot of app.css — a media
+       query cannot read a custom property and JS cannot read a media query's text. If one moves,
+       the other moves. */
+    const wide = window.matchMedia?.('(min-width: 900px) and (min-height: 600px)').matches;
+    const field = wide && body.querySelector(
+      'input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea, select');
+    (field || action)?.focus({ preventScroll: true });
   });
 }
 

@@ -110,7 +110,11 @@ For anything the catalogue does not already judge, five questions settle most ca
 
 1. **Does it need a cursor?** Eighteen of the sixty-seven judged have their whole effect on
    `:hover` or `mousemove`. On a phone they do not degrade, they do nothing — and they fail
-   silently, which is worse than failing loudly. The phone is the only layout here.
+   silently, which is worse than failing loudly. The phone is the layout that must work. A cursor
+   effect may now exist above the breakpoint, inside
+   `@media (min-width: 900px) and (min-height: 600px) and (hover: hover)` — both conditions,
+   never one — but only if the phone loses nothing by its absence. A hover that carries
+   information a phone cannot reach is still dead on arrival.
 2. **Does it put anything on a photograph?** Nothing is printed on a photograph in this app, and
    the photograph is the app's main evidence that a week is real. A fake light source laid over a
    real photograph of first light is the visual form of asserting a fact the app has not
@@ -203,12 +207,12 @@ one.
   style, so every child fades up to the opacity it was already assigned. That is what
   `@keyframes enter-to-rest` is for.
 
-**A port may add a reduced-motion `@media` and must never add a width one.** There is exactly one
-`min-width` query in `app.css` — the laptop frame, which holds no layout, only a background and an
-outline, and says so in its own comment. Everything else is reduced-motion guards, the print
-sheet and a display-mode rule. Take the value the phone would get and drop the variant. And the
+**A port may add a reduced-motion `@media`, and may now carry ONE width variant — the app's own.**
+`app.css` has one layout breakpoint, `(min-width: 900px) and (min-height: 600px)`, at the end of
+the file. A port that wants a width variant must declare what it does on each side of it, and the
+phone side must be the value the phone gets today. It may not introduce a second width. And the
 standing constraints apply whatever the source did: transform and opacity only, `--r-pill`
-untouched, 44px minimum in both dimensions, no horizontal overflow at 390.
+untouched, 44px minimum in both dimensions, no horizontal overflow at 390px or at 1440px.
 
 Put the CSS **beside the thing it decorates**, not in a "borrowed" block at the bottom. A rule
 next to its subject gets read by the next person who touches that screen; a quarantine block gets

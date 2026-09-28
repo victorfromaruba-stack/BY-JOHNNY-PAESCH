@@ -245,11 +245,10 @@ For a layer that is *purely* decorative, `display: none` on the container is the
 drops the elements as well as the motion, and it cannot leak a fill-mode state. So the check in
 §9 is "confirm it is not animating", not "confirm `animation-name` reads `none`".
 
-This adds a reduced-motion `@media` rule to `app.css`, and that is the *only* kind a port may
-add. Everything else in the file is a reduced-motion guard, the print sheet, a display-mode rule,
-or the laptop frame — the file's one `min-width` query, which holds no layout at all, only a
-background and an outline, and says so in its own comment. **A port that wants a width breakpoint
-is a port that does not belong** — there is one layout, the phone.
+This adds a reduced-motion `@media` rule to `app.css`. A port may also use the app's one width
+breakpoint, `(min-width: 900px) and (min-height: 600px)` at the foot of the file, and must say
+what it does on each side of it. It may not introduce a second width, and the phone side must be
+the value the phone gets today.
 
 ## 8. Wiring it into the markup
 

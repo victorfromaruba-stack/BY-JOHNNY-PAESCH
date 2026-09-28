@@ -85,7 +85,7 @@ const HOUSE = [
     ['aurora-background', 'background-beams', 'background-beams-with-collision', 'background-lines',
       'background-boxes', 'meteors', 'shooting-stars', 'vortex', 'wavy-background', 'sparkles',
       'canvas-reveal-effect']],
-  ['WRONG FOR THIS APP', 'the whole effect is on :hover or mousemove, and the phone is the only layout here — it does not degrade, it does nothing',
+  ['WRONG FOR THIS APP', 'the whole effect is on :hover or mousemove. It may live above the breakpoint, inside @media (min-width: 900px) and (min-height: 600px) and (hover: hover) — both conditions, never one — but only if the phone loses nothing by its absence: on a phone it does not degrade, it does nothing',
     ['3d-card', '3d-pin', 'direction-aware-hover', 'wobble-card', 'following-pointer',
       'animated-tooltip', 'text-hover-effect', 'text-reveal-card', 'svg-mask-effect',
       'card-hover-effect', 'floating-dock', 'evervault-card', 'focus-cards', 'file-upload',
@@ -724,7 +724,7 @@ function render(a, { source = true } = {}) {
   const darks = withVariant(/^dark$/);
   const hovers = withVariant(/^(hover|group-hover)/);
   if (responsive.length) variantNotes.push(['width breakpoints', responsive,
-    'the stylesheet has no width breakpoints on purpose — the phone is the only layout. Take the value the phone would get and drop the variant.']);
+    'this app has ONE layout breakpoint, (min-width: 900px) and (min-height: 600px), at the foot of css/app.css. A port may use it, and must say what it does on each side: the phone side is the value the phone gets today. It may not introduce a second width.']);
   if (darks.length) variantNotes.push(['dark: variants', darks,
     'dark mode here is tokens.css redefining tokens, not a second set of rules. Use a token and both themes follow.']);
   if (hovers.length) variantNotes.push(['hover variants', hovers,

@@ -220,9 +220,10 @@ over it.
 
 And the standing constraints a port inherits whatever bucket it came from: colours from
 `tokens.css` only — no Tailwind palette values, no new hex; `--r-pill` untouched; 44px minimum in
-both dimensions; no horizontal overflow at 390px; **no width breakpoint** — `app.css` has exactly
-one `min-width` query, the laptop frame, and it holds no layout at all, only a background and an
-outline; transform and opacity only. The licence permits the port (unlimited end products,
+both dimensions; no horizontal overflow at 390px or at the desktop width the audit uses; **one
+width breakpoint only** — the app's own, `(min-width: 900px) and (min-height: 600px)` at the foot
+of `app.css`, and a port that uses it must state its behaviour on both sides; transform and
+opacity only. The licence permits the port (unlimited end products,
 modification, derivative works; no redistributing the source files and no reselling), and it does
 not demand credit — but this codebase records where every photograph and every price came from,
 so a ported effect records its slug and the date it was fetched in a comment above the CSS, for
