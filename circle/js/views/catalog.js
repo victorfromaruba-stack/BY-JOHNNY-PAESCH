@@ -144,8 +144,9 @@ export function stays({ store, go, query = {} }) {
   const watches = store.watchesFor(me.id);
   const matchFor = (d) => watches.map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
   const wrap = el(`<div><section class="sec board-page"><div class="wrap">
-      <div id="lead"></div>
-      <header class="masthead">
+      <div class="instrument" id="board-lens">
+      <div id="lead" class="shot"></div>
+      <header class="masthead read">
         <p class="eyebrow">The board · <span class="num" id="count">…</span></p>
         <h1>What is <em class="ac">open</em>.</h1>
         <p class="open-num"><b class="num" id="open-fig">…</b><span id="open-unit"></span></p>
@@ -156,6 +157,7 @@ export function stays({ store, go, query = {} }) {
         ${canEdit ? `<div class="row no-print"><button class="btn sm" id="paste">${icon('copy', { size: 16 })}Paste a listing</button>
           <button class="btn ghost sm" id="post">${icon('plus', { size: 16 })}By hand</button></div>` : ''}
       </header>
+      </div>
       <div id="cover" class="lead-story"></div>
       <div id="board"></div>
       <div id="mine"></div>

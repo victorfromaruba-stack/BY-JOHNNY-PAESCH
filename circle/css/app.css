@@ -104,6 +104,8 @@ body:has(.botnav:not([hidden])) main { padding-bottom: calc(var(--h-nav) + var(-
 main:focus { outline: none; }
 /* Sections are separated by a rule, not by air. */
 .sec { padding-block: var(--s-6); }
+/* The lens is the first screen. A 32px pad above it is a strip of empty ground over the photograph. */
+.sec:has(.instrument) { padding-top: 0; }
 .sec + .sec { border-top: 1px solid var(--hairline); }
 /* A section head is a stack: eyebrow, title, sentence. An action that sat beside the title sits
    under the sentence as a ruled link; nothing shares a line with a heading. */
@@ -1374,6 +1376,52 @@ body[data-cover="on"] .topbar .brand, body[data-cover="on"] .topbar .brand b,
 body[data-cover="on"] .topbar a, body[data-cover="on"] .topbar .back { color: var(--on-photo); }
 @media (prefers-reduced-motion: reduce) { body[data-cover] .topbar { transition: none; } }
 
+/* ---------- the lens ---------- */
+/* The first screen is one frame. The photograph fills it. The reading sits on the paper, which
+   cuts the lower left and leaves a strip of the same picture running down the right. That strip
+   is the asymmetry: a caption under a full-width photograph is a website, and this is the thing
+   that replaced it. Nothing is printed on the photograph — the type is on --ground, and the 2px
+   rule is the paper's edge, not a line across the picture.
+   Motion is the photograph settling and the lines of type arriving in order, on --dur-water.
+   The keyframes are ours: a slightly deeper settle than the shared one, reconstructed for this
+   frame, not taken from a registry. */
+.instrument { display: grid; grid-template-columns: minmax(0, 1fr) 22%; grid-template-rows: minmax(160px, 1fr) auto;
+  min-height: calc(100svh - var(--h-bar) - var(--inset-top) - var(--inset-bottom)); background: var(--well); }
+body:has(.botnav:not([hidden])) .instrument {
+  min-height: calc(100svh - var(--h-bar) - var(--h-nav) - var(--inset-top) - var(--inset-bottom)); }
+.wrap .instrument { margin-inline: calc(-1 * var(--gut)); }
+.instrument .shot { grid-column: 1 / -1; grid-row: 1 / -1; position: relative; overflow: hidden; margin: 0; min-height: 0; background: var(--well); }
+.instrument .shot img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: cover; object-position: center 40%; }
+.board-page .instrument #lead .cover-shot { position: absolute; inset: 0; display: block; aspect-ratio: auto; height: auto; margin: 0; background: transparent; }
+.instrument .read { grid-column: 1; grid-row: 2; position: relative; z-index: 1; min-width: 0; background: var(--ground);
+  border-top: 2px solid var(--ink); border-bottom: 0; padding: var(--s-4) var(--gut) var(--s-4); }
+.board-page .instrument #lead:not(:empty) + .masthead { margin-top: 0; }
+.board-page .instrument .masthead { animation: none; }
+.instrument:has(#lead:empty) { display: block; min-height: 0; margin-inline: 0; background: transparent; }
+.instrument:has(#lead:empty) .masthead { border-top: 0; border-bottom: 2px solid var(--ink); background: transparent; padding-inline: 0; }
+.instrument .read h1 { margin-top: var(--s-2); font-size: var(--t-masthead); line-height: .96; letter-spacing: -.02em; }
+.instrument .read .lede { margin-top: var(--s-3); max-width: 36ch; }
+.instrument .read .row { margin-top: var(--s-4); }
+.instrument .read > .link-rule { margin-top: var(--s-2); }
+/* The balance is points the member holds. Teal is that fact, and it is the only teal on the frame. */
+.lens-fig { margin-top: var(--s-3); }
+.lens-fig .num { font-size: var(--t-fig-lg); font-weight: 500; letter-spacing: -.02em; line-height: 1; }
+.home-lens .lens-fig .num { color: var(--good-text); }
+.lens-sub { margin-top: var(--s-2); font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--t-folio); letter-spacing: .04em; color: var(--ink-2); }
+.instrument + .credit { margin-top: var(--s-3); }
+@keyframes lens { from { opacity: 0; transform: scale(1.08); } }
+.instrument .shot img { animation: lens var(--dur-water) var(--ease-out) backwards; }
+.instrument .read > * { animation: enter-to-rest var(--dur-water) var(--ease-out) backwards; }
+.instrument .read > :nth-child(2) { animation-delay: 80ms; }
+.instrument .read > :nth-child(3) { animation-delay: 160ms; }
+.instrument .read > :nth-child(4) { animation-delay: 240ms; }
+.instrument .read > :nth-child(5) { animation-delay: 320ms; }
+.instrument .shot a:active img { opacity: .86; }
+@media (prefers-reduced-motion: reduce) {
+  .instrument .shot img, .instrument .read > * { animation: none; }
+  .instrument .shot a:active img { opacity: 1; }
+}
+
 /* A CREW LEADS WITH WHERE IT IS GOING. The picture bleeds to the panel's edges and the card's
    own padding resumes under it, so the photograph is the top of the card rather than a tile
    sitting inside it. */
@@ -1713,6 +1761,8 @@ button.link-rule { background: none; border: 0; cursor: pointer; }
   .hero-place { aspect-ratio: 3 / 2; }             /* 5/6 would be 727px tall at 606 wide */
   .hero-place .on h1 { max-width: 20ch; }          /* the 12ch cap was drawn for a 358px column */
   .cover-plate { aspect-ratio: 4 / 3; height: auto; } /* 606x455. A viewport-tall plate here is a screen of photograph before the column is read. */
+  /* The lens stays a cut, not a caption, but it stops being a full viewport: the column is read, not stood inside. */
+  .instrument, body:has(.botnav:not([hidden])) .instrument { min-height: 0; grid-template-rows: minmax(280px, 42vh) auto; }
   .board-page #lead .cover-shot { aspect-ratio: 3 / 2; }
   .look-lead .stay-card.look .strip { aspect-ratio: 3 / 2; }
   .postcard-list .postcard-shot { aspect-ratio: 16 / 9; }  /* the feed takes one rhythm; /postcards/:id keeps the picture's true ratio */

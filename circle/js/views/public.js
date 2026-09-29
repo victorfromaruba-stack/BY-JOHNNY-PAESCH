@@ -275,20 +275,28 @@ export function landing({ store, go }) {
   const wrap = el('<div></div>');
   const featured = ['stay_oceanclub', 'stay_surfclub', 'stay_divi', 'stay_renaissance', 'trip_japan'].map(id => store.stayLike(id)).filter(Boolean);
 
+  const seats = blind
+    ? `<b class="num">${s.memberCap}</b> seats`
+    : `<b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of <b class="num">${s.memberCap}</b>`;
   wrap.appendChild(el(`<section class="sec hero-sec">
-      <figure class="hero-cover">
-        <!-- The first screen is the photograph and nothing else. The promise is set under it,
-             on the paper, at the size a cover line is printed — not as a caption burned into
-             the picture, and not as a black button sitting on the sand. -->
-        <img src="assets/hero-tall.jpg" width="880" height="1100" alt="A windswept fofoti tree leaning over calm water at first light" fetchpriority="high" decoding="async">
-      </figure>
-      <div class="wrap hero-after">
-        <h1>A private travel circle <em class="ac">in Aruba</em>.</h1>
-        <p class="lede">Put in a hundred dollars a month. Take it out as hotel, at cost, with people you know.</p>
-        <div class="row">
-          <a class="btn" href="#/sign-in">I have an invitation</a>
-          <a class="link-rule" href="#/rules">How the Circle works</a>
+      <!-- One frame, not a banner with a caption under it. The photograph fills the frame; the
+           promise sits on the paper, which cuts the lower left and leaves the picture running
+           down the right. Nothing is set into the photograph. -->
+      <div class="instrument">
+        <figure class="shot">
+          <img src="assets/hero-tall.jpg" width="880" height="1100" alt="A windswept fofoti tree leaning over calm water at first light" fetchpriority="high" decoding="async">
+        </figure>
+        <div class="read">
+          <p class="eyebrow">${seats} · by invitation</p>
+          <h1>A private travel circle <em class="ac">in Aruba</em>.</h1>
+          <p class="lede">Put in a hundred dollars a month. Take it out as hotel, at cost, with people you know.</p>
+          <div class="row">
+            <a class="btn" href="#/sign-in">I have an invitation</a>
+            <a class="link-rule" href="#/rules">How the Circle works</a>
+          </div>
         </div>
+      </div>
+      <div class="wrap hero-after">
       <p class="hero-credit">The west coast. Every place is on this water, or ten minutes from it.</p>
       <p class="colophon">${blind ? `<b class="num">${s.memberCap}</b> seats, by invitation` : `<b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of <b class="num">${s.memberCap}</b> seats taken`} · ${(() => {
         const places = store.stays.filter(x => x.kind !== 'trip' && x.active !== false).length;

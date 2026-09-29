@@ -75,38 +75,35 @@ export function home({ store, go, refresh }) {
           h1Html: `${book.nights} night${book.nights === 1 ? '' : 's'} at <em class="ac">${escapeHtml(book.stay.name)}</em>`,
           cta: `<a class="btn" href="#/pay">Send a contribution</a>
                 <a class="link-rule" href="#/stays">Other places</a>` };
-  // THE COVER PLATE.
+  // THE LENS.
   //
-  // The screen forty members open was 0% picture. The club owns 251 photographs — 12 licensed
-  // property shots, 113 rooms, the beaches — and spent every one of them on a stay page three
-  // taps down, so Home named a hotel in 44px of serif and showed nothing of it. A magazine that
-  // composed its pages and never sent the plates to press.
-  //
-  // So the plate prints the place the member can book today, full-bleed, and the money goes ON
-  // the picture as the cover price: the balance at --t-fig-lg, the largest figure anywhere in
-  // the member app, with the headline demoted to a deck beneath it. It is not larger than that
-  // on purpose — Geist Mono is monospaced, so a seven-figure balance at 76px measures 400px
-  // against a 358px column and would push the phone sideways.
-  //
-  // No photograph, no plate. The old masthead is kept verbatim for that case, because a screen
-  // that invents a picture of a place somebody is about to spend points on is the one thing
-  // this app must never do.
+  // Home used to be a photograph with the balance burned into it and a normal title underneath.
+  // The picture stays — it is the place the points can reach — and the reading moves onto the
+  // paper, which cuts the lower left of the same frame. The balance is the instrument figure,
+  // in teal, because it is points the member actually holds. No photograph, no lens: the old
+  // masthead stays, because a screen that invents a picture of a place somebody is about to
+  // spend points on is the one thing this app must never do.
   const plateStay = book?.stay || null;
   const plateSrc = plateStay ? photoFor(plateStay) : null;
   const plateCredit = plateSrc ? photoCredit(plateStay) : null;
   const plateArea = plateSrc && photoKind(plateStay) === 'area' ? areaPhotoFor(plateStay) : null;
-  const welcome = `<span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span>, ${escapeHtml(me.name.split(' ')[0])}${head.eyebrow ? ` · ${escapeHtml(head.eyebrow)}` : ''}`;
+  const named = `<span lang="pap" class="pap">${escapeHtml(VOCAB.pap.welcome[0])}</span>, ${escapeHtml(me.name.split(' ')[0])}`;
+  // On the lens the nights line already says what today can buy. Repeating it in the eyebrow
+  // costs a line of the frame the figure needs.
+  const welcome = head.eyebrow ? `${named} · ${escapeHtml(head.eyebrow)}` : named;
   wrap.querySelector('#masthead').innerHTML = plateSrc
-    ? `<figure class="cover-plate">
-        <img src="${escapeHtml(plateSrc)}" alt="${escapeHtml(plateArea ? `${plateArea.area}, the beach at ${plateStay.name}` : plateStay.name)}"${plateCredit ? ` title="${escapeHtml(plateCredit.text)}"` : ''} fetchpriority="high" decoding="async">
-        <figcaption class="on">
-          <b class="plate-fig num" id="avail">0</b>
-          <span class="plate-sub" id="avail-usd"></span>
-        </figcaption>
-      </figure>
-      <p class="eyebrow plate-kicker">${welcome}</p>
-      <h1 class="plate-deck">${head.h1Html || escapeHtml(head.h1)}</h1>
-      <div class="row no-print plate-acts">${head.cta}</div>
+    ? `<div class="instrument home-lens">
+        <figure class="shot">
+          <img src="${escapeHtml(plateSrc)}" alt="${escapeHtml(plateArea ? `${plateArea.area}, the beach at ${plateStay.name}` : plateStay.name)}"${plateCredit ? ` title="${escapeHtml(plateCredit.text)}"` : ''} fetchpriority="high" decoding="async">
+        </figure>
+        <div class="read">
+          <p class="eyebrow">${named}</p>
+          <h1>${head.h1Html || escapeHtml(head.h1)}</h1>
+          <p class="lens-fig"><b class="num" id="avail">0</b></p>
+          <p class="lens-sub" id="avail-usd"></p>
+          <div class="row no-print">${head.cta}</div>
+        </div>
+      </div>
       ${plateCredit ? `<p class="credit tiny muted">${plateCredit.html}</p>` : ''}`
     : `<div class="masthead">
       <p class="eyebrow">${welcome}</p>
@@ -114,23 +111,6 @@ export function home({ store, go, refresh }) {
       <p class="dateline"><b class="num" id="avail">0</b> <span id="avail-usd"></span></p>
       <div class="row no-print">${head.cta}</div>
     </div>`;
-  // The cover runs up behind the running head, so the screen opens on the picture instead of on
-  // a slab of chrome above it. The head gives up its ground only while the picture is actually
-  // behind it — the moment the plate has scrolled past, it takes the ground back, because pale
-  // type over whatever happens to be underneath is not legible. An observer rather than a scroll
-  // handler: it fires twice in a journey down the page, not on every frame. If the browser has
-  // no IntersectionObserver the head simply stays solid, which is the old behaviour and fine.
-  if (plateSrc) {
-    document.body.dataset.cover = 'on';
-    const plateEl = wrap.querySelector('.cover-plate');
-    if (plateEl && 'IntersectionObserver' in window) {
-      const io = new IntersectionObserver(([e]) => {
-        if (!plateEl.isConnected) { io.disconnect(); return; }
-        document.body.dataset.cover = e.isIntersecting ? 'on' : 'off';
-      }, { rootMargin: '-56px 0px 0px 0px' });
-      io.observe(plateEl);
-    }
-  }
   const top = el(`<div class="rule-block">
       <div id="balbar"></div>
       <div class="row no-print">
