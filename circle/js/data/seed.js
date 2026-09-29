@@ -38,6 +38,21 @@ const PEOPLE = [
   { id: 'mem_sharon', name: 'Sharon Kock', roles: ['member'], tier: 100, since: '2026-01', hue: 172, home: 'Noord', founding: true, story: ['lapsed'], dream: 'stay_voco' },
 ];
 
+/**
+ * The preview's one password. Seeded usernames used to have no hash at all, so every
+ * sign-in on the local backend failed — the form was a lock with nothing behind it.
+ * This is not a way into the real Circle: Supabase holds those passwords, and this
+ * string is only written into the browser snapshot the seed builds. It is printed on
+ * the sign-in screen when the backend is local, and nowhere else.
+ */
+export const LOCAL_DEMO_PASSWORD = 'circle-demo-2026';
+const LOCAL_DEMO_CREDENTIAL = Object.freeze({
+  hash: '/8WkxgjRHIfq9Fhn5rbAsejH+vUOY73qUWP9okYhgkQ=',
+  salt: 'l7HUaByEsN+mm/6xMRCvoA==',
+  iterations: 210000,
+  algo: 'PBKDF2-SHA256',
+});
+
 export function seed(now = new Date('2026-09-05T14:20:00Z')) {
   const rand = rng(20260905);
   const settings = {
@@ -354,5 +369,9 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
     { momentId: 'mom_3', memberId: 'mem_sasha', emoji: 'cheers', at: '2026-09-04T17:00:00Z' },
   ];
 
-  return { version: 2, seededAt: iso(now), settings, members, contributions, ledger, stays, roomTypes, watches: [], deals: [], looks: [], redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, crews, crewMembers, crewMessages, badgeCatalog, memberBadges, moments, momentReactions, session: null };
+  // One hash for every seeded person, including the officers. A wrong password still fails;
+  // there is no bypass that accepts anything typed. mustChangePassword stays unset so the
+  // preview opens on Home instead of demanding a replacement for a password we just printed.
+  const credentials = Object.fromEntries(members.map(m => [m.id, { ...LOCAL_DEMO_CREDENTIAL, setAt: iso(now) }]));
+  return { version: 3, seededAt: iso(now), settings, members, credentials, contributions, ledger, stays, roomTypes, watches: [], deals: [], looks: [], redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, crews, crewMembers, crewMessages, badgeCatalog, memberBadges, moments, momentReactions, session: null };
 }

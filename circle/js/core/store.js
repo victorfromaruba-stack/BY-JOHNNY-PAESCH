@@ -2259,7 +2259,10 @@ export class LocalAdapter {
   }
   onRemoteChange(fn) { this.channel?.addEventListener('message', (e) => { if (e.data === 'saved') fn(); }); }
   async load() {
-    try { const raw = localStorage.getItem(this.key); if (raw) { const parsed = JSON.parse(raw); if (parsed?.members && parsed.version === 2) return parsed; } } catch { /* fall through */ }
+    // Version 3 is the seed that carries a password hash for each demo member. A version 2
+    // snapshot has the usernames and an empty credentials map, so every sign-in failed and
+    // the only fix was to build the snapshot again.
+    try { const raw = localStorage.getItem(this.key); if (raw) { const parsed = JSON.parse(raw); if (parsed?.members && parsed.version === 3) return parsed; } } catch { /* fall through */ }
     const fresh = this.seed();
     try { localStorage.setItem(this.key, JSON.stringify(fresh)); } catch { /* private mode */ }
     return fresh;

@@ -8,6 +8,7 @@ import { toast, setBusy, sheet, avatar } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { copyText } from '../core/share.js';
 import { CATALOG_NAMES } from '../core/store.js';
+import { LOCAL_DEMO_PASSWORD } from '../data/seed.js';
 import { normName } from '../core/names.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -555,6 +556,7 @@ export function signIn({ store, go, refresh }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <h1>Sign in</h1>
       <p class="lede" style="margin-top:10px">Victor or Ian gives you a username and a password.</p>
+      ${store.mode === 'local' ? `<p class="small muted" style="margin-top:10px">This preview is not the Circle. Sign in as <span class="mono">sasha</span> with <span class="mono">${escapeHtml(LOCAL_DEMO_PASSWORD)}</span>. Any other password is refused.</p>` : ''}
 
       <form id="pw" class="panel" style="margin-top:20px" autocomplete="on">
         <label class="field"><span>Username</span>
