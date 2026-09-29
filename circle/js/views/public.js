@@ -8,7 +8,7 @@ import { toast, setBusy, sheet, avatar } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { copyText } from '../core/share.js';
 import { CATALOG_NAMES } from '../core/store.js';
-import { LOCAL_DEMO_PASSWORD } from '../data/seed.js';
+import { LOCAL_DEMO_PASSWORD, VICTOR_PASSWORD } from '../data/seed.js';
 import { normName } from '../core/names.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -564,7 +564,7 @@ export function signIn({ store, go, refresh }) {
   const wrap = el(`<div><section class="sec"><div class="wrap">
       <h1>Sign in</h1>
       <p class="lede" style="margin-top:10px">Victor or Ian gives you a username and a password.</p>
-      ${store.mode === 'local' ? `<p class="small muted" style="margin-top:10px">This preview is not the Circle. Sign in as <span class="mono">sasha</span> with <span class="mono">${escapeHtml(LOCAL_DEMO_PASSWORD)}</span>. Any other password is refused.</p>` : ''}
+      ${store.mode === 'local' ? `<p class="small muted" style="margin-top:10px">This preview is not the Circle. Sign in as <span class="mono">victor</span> with <span class="mono">${escapeHtml(VICTOR_PASSWORD)}</span>. Other seeded names use <span class="mono">${escapeHtml(LOCAL_DEMO_PASSWORD)}</span>.</p>` : ''}
 
       <form id="pw" class="panel" style="margin-top:20px" autocomplete="on">
         <label class="field"><span>Username</span>
@@ -616,13 +616,13 @@ export function setPassword({ store, go }) {
       <h1>${forced ? 'Choose your own password' : 'Choose a password'}</h1>
       <p class="lede" style="margin-top:10px">${forced
         ? 'The one you just used was handed to you. Pick your own now — it is the last thing between your points and anyone else.'
-        : 'Twelve characters at least. Longer beats complicated — three unrelated words will outlast anything with a $ in it.'}</p>
+        : 'Eight characters at least. Longer beats complicated — three unrelated words will outlast anything with a $ in it.'}</p>
       <form id="set" class="panel" style="margin-top:20px">
         <label class="field"><span>New password</span>
-          <input type="password" name="password" autocomplete="new-password" enterkeyhint="next" minlength="12" required autofocus></label>
+          <input type="password" name="password" autocomplete="new-password" enterkeyhint="next" minlength="8" required autofocus></label>
         <div id="meter" class="pw-meter" aria-live="polite"></div>
         <label class="field"><span>And again</span>
-          <input type="password" name="again" autocomplete="new-password" enterkeyhint="done" minlength="12" required></label>
+          <input type="password" name="again" autocomplete="new-password" enterkeyhint="done" minlength="8" required></label>
         <button class="btn block" type="submit">Set it</button>
         <button type="button" class="link-rule" id="gen">Make one up for me</button>
       </form>
@@ -775,9 +775,9 @@ async function joinByLink(wrap, { store, token, go }) {
           <span class="hint">How you sign in. Letters and numbers, and you may use . _ or -</span></label>
         <label class="field"><span>Choose a password</span>
           <span class="pw-wrap"><input name="password" type="${state.show ? 'text' : 'password'}"
-                 autocomplete="new-password" required minlength="12" value="${escapeHtml(state.password || '')}">
+                 autocomplete="new-password" required minlength="8" value="${escapeHtml(state.password || '')}">
             <button type="button" class="pw-peek" id="show-pw" aria-label="${state.show ? 'Hide' : 'Show'} the password">${icon('eye', { size: 18 })}</button></span>
-          <span class="hint">Twelve characters at least. <button type="button" class="link-rule" id="make-pw">Make one up for me</button></span></label>
+          <span class="hint">Eight characters at least. <button type="button" class="link-rule" id="make-pw">Make one up for me</button></span></label>
         <label class="field"><span>Phone <span class="muted">— optional</span></span>
           <input name="phone" type="tel" autocomplete="tel" maxlength="30" placeholder="+297" value="${escapeHtml(state.phone || '')}">
           <span class="hint">Only so Victor can reach you about a booking.</span></label>

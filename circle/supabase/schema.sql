@@ -627,7 +627,7 @@ begin
   if not valid_username(u) then
     raise exception 'A username is 3 to 30 characters, letters and numbers, and may contain . _ or -';
   end if;
-  if length(coalesce(p_password, '')) < 12 then raise exception 'That password is too short — twelve characters at least'; end if;
+  if length(coalesce(p_password, '')) < 8 then raise exception 'That password is too short — eight characters at least'; end if;
   if exists (select 1 from members where lower(username) = u and id <> p_member) then
     raise exception 'Someone else already uses the username %', u;
   end if;
@@ -3232,7 +3232,7 @@ begin
   if not valid_username(u) then
     raise exception 'A username is 3 to 30 characters, letters and numbers, and may contain . _ or -';
   end if;
-  if length(coalesce(p_password, '')) < 12 then raise exception 'That password is too short — twelve characters at least'; end if;
+  if length(coalesce(p_password, '')) < 8 then raise exception 'That password is too short — eight characters at least'; end if;
   if exists (select 1 from members where lower(username) = u) then
     raise exception 'Someone already uses the username %', u;
   end if;

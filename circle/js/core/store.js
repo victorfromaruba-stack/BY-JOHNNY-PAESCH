@@ -145,7 +145,7 @@ export class Store {
   async setPasswordFor(memberId, password) {
     const { hashPassword, passwordStrength } = await import('./passwords.js');
     const s = passwordStrength(password);
-    if (!s.ok) throw new Error('Use at least twelve characters');
+    if (!s.ok) throw new Error('Use at least eight characters');
     this.credentials()[memberId] = { ...(await hashPassword(password)), setAt: nowIso() };
     this.log(memberId, 'auth.password_set', 'member', memberId, {});
     await this.commit('credentials');
@@ -169,7 +169,7 @@ export class Store {
     if (!this.hasRole('admin')) throw new Error('Only an admin can hand out a login');
     const u = String(username || '').trim().toLowerCase();
     if (!/^[a-z0-9][a-z0-9._-]{1,28}[a-z0-9]$/.test(u)) throw new Error('A username is 3 to 30 characters, letters and numbers, and may contain . _ or -');
-    if (String(password || '').length < 12) throw new Error('That password is too short — twelve characters at least');
+    if (String(password || '').length < 8) throw new Error('That password is too short — eight characters at least');
     const clash = this.state.members.find(x => x.id !== memberId && (x.username || '').toLowerCase() === u);
     if (clash) throw new Error(`Someone else already uses the username ${u}`);
     await this.setPasswordFor(memberId, password);
@@ -1250,7 +1250,7 @@ export class Store {
     if (!/^[a-z0-9][a-z0-9._-]{1,28}[a-z0-9]$/.test(u)) {
       throw new Error('A username is 3 to 30 characters, letters and numbers, and may contain . _ or -');
     }
-    if (String(password || '').length < 12) throw new Error('That password is too short — twelve characters at least');
+    if (String(password || '').length < 8) throw new Error('That password is too short — eight characters at least');
     if (this.state.members.some(m => (m.username || '').toLowerCase() === u)) {
       throw new Error(`Someone already uses the username ${u}`);
     }
@@ -2259,10 +2259,9 @@ export class LocalAdapter {
   }
   onRemoteChange(fn) { this.channel?.addEventListener('message', (e) => { if (e.data === 'saved') fn(); }); }
   async load() {
-    // Version 3 is the seed that carries a password hash for each demo member. A version 2
-    // snapshot has the usernames and an empty credentials map, so every sign-in failed and
-    // the only fix was to build the snapshot again.
-    try { const raw = localStorage.getItem(this.key); if (raw) { const parsed = JSON.parse(raw); if (parsed?.members && parsed.version === 3) return parsed; } } catch { /* fall through */ }
+    // Version 4 gives Victor the temporary password he asked for. Older snapshots keep the
+    // previous hash, so a browser that already opened the preview would still refuse it.
+    try { const raw = localStorage.getItem(this.key); if (raw) { const parsed = JSON.parse(raw); if (parsed?.members && parsed.version === 4) return parsed; } } catch { /* fall through */ }
     const fresh = this.seed();
     try { localStorage.setItem(this.key, JSON.stringify(fresh)); } catch { /* private mode */ }
     return fresh;

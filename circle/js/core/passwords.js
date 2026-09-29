@@ -43,8 +43,8 @@ export function passwordStrength(pw) {
   if (!s) return { score: 0, label: '', ok: false };
   const classes = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter(re => re.test(s)).length;
   const bits = Math.round(s.length * Math.log2(10 + classes * 16));
-  const ok = s.length >= 12;
-  const label = !ok ? 'Too short — twelve characters at least'
+  const ok = s.length >= 8;
+  const label = !ok ? 'Too short — eight characters at least'
     : bits < 60 ? 'Workable, but a longer one would be better'
     : bits < 80 ? 'Good' : 'Strong';
   return { score: Math.min(1, bits / 90), label, ok, bits };

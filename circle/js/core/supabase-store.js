@@ -251,7 +251,7 @@ export class SupabaseStore extends Store {
   }
   /** Change your own password. Supabase requires a live session, which is the proof it is you. */
   async setPassword(password) {
-    if (String(password).length < 12) throw new Error('Use at least twelve characters');
+    if (String(password).length < 8) throw new Error('Use at least eight characters');
     const { error } = await this.sb.auth.updateUser({ password });
     if (error) throw new Error(this.authMessage(error));
     await this.rpc('password_changed', {});
@@ -294,7 +294,7 @@ export class SupabaseStore extends Store {
     if (/email not confirmed/i.test(m)) return 'Your email is not confirmed yet — open the link Ian sent you first.';
     if (/rate limit|too many/i.test(m)) return 'Too many tries. Wait a minute and go again.';
     if (/should be different/i.test(m)) return 'That is the password you already had. Pick a different one.';
-    if (/weak|at least/i.test(m)) return 'That password is too easy. Use at least twelve characters.';
+    if (/weak|at least/i.test(m)) return 'That password is too easy. Use at least eight characters.';
     if (/failed to fetch|network/i.test(m)) return 'Could not reach the Circle. Check your connection and try again.';
     return m || 'Something went wrong signing you in.';
   }

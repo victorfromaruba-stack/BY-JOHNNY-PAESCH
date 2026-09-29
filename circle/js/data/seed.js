@@ -52,6 +52,14 @@ const LOCAL_DEMO_CREDENTIAL = Object.freeze({
   iterations: 210000,
   algo: 'PBKDF2-SHA256',
 });
+/** Victor's temporary sign-in, the one he asked to use for now. Preview only. */
+export const VICTOR_PASSWORD = 'aruba123';
+const VICTOR_CREDENTIAL = Object.freeze({
+  hash: 'ra0xzb0PAzavGrpuH1YRzDUcsSsewrYTdflEamMa8XU=',
+  salt: 'MoPpYlpBBKQbyQwMCfG2dg==',
+  iterations: 210000,
+  algo: 'PBKDF2-SHA256',
+});
 
 export function seed(now = new Date('2026-09-05T14:20:00Z')) {
   const rand = rng(20260905);
@@ -372,6 +380,9 @@ export function seed(now = new Date('2026-09-05T14:20:00Z')) {
   // One hash for every seeded person, including the officers. A wrong password still fails;
   // there is no bypass that accepts anything typed. mustChangePassword stays unset so the
   // preview opens on Home instead of demanding a replacement for a password we just printed.
-  const credentials = Object.fromEntries(members.map(m => [m.id, { ...LOCAL_DEMO_CREDENTIAL, setAt: iso(now) }]));
-  return { version: 3, seededAt: iso(now), settings, members, credentials, contributions, ledger, stays, roomTypes, watches: [], deals: [], looks: [], redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, crews, crewMembers, crewMessages, badgeCatalog, memberBadges, moments, momentReactions, session: null };
+  const credentials = Object.fromEntries(members.map(m => [m.id, {
+    ...(m.id === 'mem_victor' ? VICTOR_CREDENTIAL : LOCAL_DEMO_CREDENTIAL),
+    setAt: iso(now),
+  }]));
+  return { version: 4, seededAt: iso(now), settings, members, credentials, contributions, ledger, stays, roomTypes, watches: [], deals: [], looks: [], redemptions, announcements, audit, invitations: [], monthCloses, promoDeferrals, rulesAcceptances, crews, crewMembers, crewMessages, badgeCatalog, memberBadges, moments, momentReactions, session: null };
 }
