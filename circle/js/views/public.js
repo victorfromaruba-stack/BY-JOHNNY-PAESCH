@@ -2,7 +2,7 @@
 import { escapeHtml, html, raw, fmtUsd, fmtUsd2, fmtAfl2, fmtPoints, fmtPointsUsd, pointsUsd, fmtDay, fmtPct, initials } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
 import { splitContribution, tierFor, projectPoints, fromPoints, seatPoints, unitPoints, pointsPerMonth, monthsToAfford } from '../core/money.js';
-import { poolGauge, memberCard, ring, tierLadder } from '../ui/pieces.js';
+import { memberCard, ring, tierLadder } from '../ui/pieces.js';
 import { sceneSvg, plateHtml, starSvg } from '../ui/art.js';
 import { toast, setBusy, sheet, avatar } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
@@ -222,7 +222,7 @@ export function sourceLine(stay) {
  * hotel showed a different number on the landing page and in the catalog, and neither was
  * labelled.
  */
-export function stayCard(stay, { store, href = null, footer = '' } = {}) {
+export function stayCard(stay, { store, href = null, footer = '', look = false } = {}) {
   // store.settings, not the defaults. Without it the whole catalog priced itself off
   // DEFAULT_SETTINGS and silently ignored every rate Victor edits in the Desk — so the number
   // on the card and the number in the quote could disagree, which is the one thing a price
@@ -236,14 +236,14 @@ export function stayCard(stay, { store, href = null, footer = '' } = {}) {
   // centimetres above this line. Saying it twice is the kind of thing that makes a page feel
   // machine-assembled, so the body line drops it and keeps only what the plate does not say.
   const plated = !photoFor(stay) && stay.kind !== 'trip';
-  const node = el(`<a class="stay-card" href="${escapeHtml(href || `#/${stay.kind === 'trip' ? 'trips' : 'stays'}/${stay.id}`)}">
+  const node = el(`<a class="stay-card${look ? ' look' : ''}" href="${escapeHtml(href || `#/${stay.kind === 'trip' ? 'trips' : 'stays'}/${stay.id}`)}">
       <span class="strip"><span class="duo"></span>${photoFor(stay) || stay.kind === 'trip' ? '' : '<span class="ph-note">no photograph yet</span>'}</span>
       <span class="body">
         <h3>${escapeHtml(stay.name)}</h3>
         <span class="where">${plated ? '' : `${escapeHtml(stay.area)}${stay.country !== 'Aruba' ? `, ${escapeHtml(stay.country)}` : ''}`}${stay.kind === 'trip' ? `${plated ? '' : ' · '}${stay.nights} nights` : plated ? (stay.onSand ? 'On the sand' : 'Across the road') : stay.onSand ? ' · on the sand' : ' · across the road'}</span>
         <span class="price"><b class="num">${escapeHtml(fmtUsd(per / ppd))}</b><small>${escapeHtml(stay.kind === 'trip' ? `a ${stay.cruise ? 'cabin' : 'seat'} · ${fmtPoints(per)}` : `from, a night · ${fmtPoints(per)}`)}</small></span>
-        <span class="flags">${stay.house ? '<span class="tag house">Where we stay</span>' : ''}${(stay.features || []).slice(0, stay.house ? 2 : 3).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</span>
-        ${sourceLine(stay)}
+        ${look ? '' : `<span class="flags">${stay.house ? '<span class="tag house">Where we stay</span>' : ''}${(stay.features || []).slice(0, stay.house ? 2 : 3).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</span>
+        ${sourceLine(stay)}`}
         ${footer}
       </span></a>`);
   node.querySelector('.strip').prepend(stayStrip(stay));
@@ -267,7 +267,6 @@ function band(src, alt, line) {
 
 export function landing({ store, go }) {
   const s = store.settings;
-  const t = store.treasury();
   // Signed out on the real backend, row-level security hands this browser nothing — so the
   // seat count is 0 and coverage is unverifiable, neither of which is true. Say what we
   // cannot see instead of publishing a number we did not read.
@@ -276,50 +275,27 @@ export function landing({ store, go }) {
   const featured = ['stay_oceanclub', 'stay_surfclub', 'stay_divi', 'stay_renaissance', 'trip_japan'].map(id => store.stayLike(id)).filter(Boolean);
 
   wrap.appendChild(el(`<section class="sec hero-sec">
-      <figure class="hero-cover enter">
-        <!-- One tall still, and only one: the page is a phone column at every width, so there is
-             no wide viewport left for a wide file to belong to. A photograph of the mood, not of
-             a room — the rooms are on the stay pages.
-             The inline placement is transitional: app.css still carries the placement on the
-             .hero-cover picture selector, and the picture element it named is gone. It comes
-             off the moment that selector becomes .hero-cover img. Without it the photograph
-             takes a second grid row and the promise sits above the picture, not in it. -->
-        <img src="assets/hero-tall.jpg" width="880" height="1100" style="grid-area:1/1;min-width:0;min-height:0" alt="A windswept fofoti tree leaning over calm water at first light" fetchpriority="high" decoding="async">
-        <figcaption class="on"><div class="wrap">
-          <h1 style="max-width:16ch">A private travel circle <em class="ac">in Aruba</em>.</h1>
-          <p class="lede" style="margin-top:14px">Put in a hundred dollars a month. Take it out as hotel, at cost, with people you know.</p>
-          <!-- The masthead pairing: one filled action and one link-rule beside it, on one line.
-               At 390 the column inside the photograph is 358px, and the two labels the spec
-               settled on measure 174 + 16 + 141 — they fit with room to spare only without a
-               glyph in the button. With the key icon the button was 203 and the pair came to
-               360, two pixels over, so .row wrapped and the button sat alone with 156px of
-               hero beside it. The words are the invitation; the key was decoration. -->
-          <div class="row">
-            <a class="btn" href="#/sign-in">I have an invitation</a>
-            <a class="link-rule" href="#/rules">How the Circle works</a>
-          </div>
-        </div></figcaption>
+      <figure class="hero-cover">
+        <!-- The first screen is the photograph and nothing else. The promise is set under it,
+             on the paper, at the size a cover line is printed — not as a caption burned into
+             the picture, and not as a black button sitting on the sand. -->
+        <img src="assets/hero-tall.jpg" width="880" height="1100" alt="A windswept fofoti tree leaning over calm water at first light" fetchpriority="high" decoding="async">
       </figure>
-      <div class="wrap"><p class="hero-credit enter" style="--d:120ms">${icon('mapPin', { size: 14 })}The west coast — every place on the list is on this water or ten minutes from it.</p>
-      <div class="hero-gauge enter" style="--d:180ms">
-        <div id="gauge-slot">${blind ? `<p class="eyebrow">${icon('shield', { size: 14 })}Proof of reserves</p>
-          <p class="small muted" style="margin-top:4px">Every point is backed by money in a Reserve account that is checked against the bank
-          and published inside the Circle. Sign in to see the current figure.</p>` : ''}</div>
-        <div class="hero-facts">
-          <div><p class="eyebrow">${icon('users', { size: 14 })}Seats</p>
-            <p>${blind ? `<b class="num">${s.memberCap}</b> in all · by invitation only` : `<b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of <b class="num">${s.memberCap}</b> taken · by invitation only`}</p></div>
-          <div><p class="eyebrow">${icon('bed', { size: 14 })}On the list</p>
-            <p>${(() => {
-              const places = store.stays.filter(x => x.kind !== 'trip' && x.active !== false).length;
-              const cruises = store.stays.filter(x => x.kind === 'trip' && x.cruise && x.active !== false).length;
-              const trips = store.stays.filter(x => x.kind === 'trip' && !x.cruise && x.active !== false).length;
-              return [`<b class="num">${places}</b> places`, cruises ? `<b class="num">${cruises}</b> cruise${cruises === 1 ? '' : 's'}` : '', trips ? `<b class="num">${trips}</b> trip${trips === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
-            })()}</p></div>
+      <div class="wrap hero-after">
+        <h1>A private travel circle <em class="ac">in Aruba</em>.</h1>
+        <p class="lede">Put in a hundred dollars a month. Take it out as hotel, at cost, with people you know.</p>
+        <div class="row">
+          <a class="btn" href="#/sign-in">I have an invitation</a>
+          <a class="link-rule" href="#/rules">How the Circle works</a>
         </div>
-      </div>
+      <p class="hero-credit">The west coast. Every place is on this water, or ten minutes from it.</p>
+      <p class="colophon">${blind ? `<b class="num">${s.memberCap}</b> seats, by invitation` : `<b class="num">${escapeHtml(String(store.activeMembers().length))}</b> of <b class="num">${s.memberCap}</b> seats taken`} · ${(() => {
+        const places = store.stays.filter(x => x.kind !== 'trip' && x.active !== false).length;
+        const cruises = store.stays.filter(x => x.kind === 'trip' && x.cruise && x.active !== false).length;
+        const trips = store.stays.filter(x => x.kind === 'trip' && !x.cruise && x.active !== false).length;
+        return [`<b class="num">${places}</b> places`, cruises ? `<b class="num">${cruises}</b> cruise${cruises === 1 ? '' : 's'}` : '', trips ? `<b class="num">${trips}</b> trip${trips === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
+      })()}. The reserve is checked against the bank and published inside.</p>
     </div></section>`));
-
-  if (!blind) wrap.querySelector('#gauge-slot').appendChild(poolGauge({ coverage: t.coverage, reserveUsd: t.reserveUsd, outstandingPoints: t.outstandingPoints, verifiedAt: t.verified?.at, verifiedVarianceUsd: t.verifiedVarianceUsd, liabilityUsd: t.liabilityUsd, configured: t.accountsConfigured, size: 'full' }));
 
   wrap.appendChild(el(`<section class="sec statement"><div class="wrap">
       <p>This is not a business, and it is not open to the public.
@@ -329,14 +305,35 @@ export function landing({ store, go }) {
   // Horizon — the dream, before the ledger
   const horizon = el(`<section class="sec"><div class="wrap">
       <div class="sec-head"><h2>Where the points go</h2>
-      <p>The best deals on the market at the places on the island the Circle can get, and the cruises and trips Victor and Ian put together. Every price is the Circle’s all-in rate — taxes, levies and resort fees included.</p>
-      <p class="small muted" style="margin-top:8px">These are where we actually end up. See a deal, ask Victor, he books it in your name — nobody books anything themselves.</p>
+      <p>The Circle’s own rate, with the taxes and the resort fee already in it. Ask Victor. He books it in your name.</p>
       <a class="link-rule" href="${blind ? '#/sign-in' : '#/stays'}">${blind ? 'Sign in to see them all' : 'See what is open'}</a></div>
-      <div class="horizon" id="horizon"></div></div></section>`);
+      <div class="look-lead" id="horizon"></div>
+      <div class="index" id="horizon-rest"></div></div></section>`);
   const hz = horizon.querySelector('#horizon');
+  const restEl = horizon.querySelector('#horizon-rest');
   // Signed out, every one of these opened a password form with no explanation — someone was
   // browsing hotels and got a login screen. Send them somewhere deliberate instead.
-  featured.forEach(st => hz.appendChild(stayCard(st, { store, href: blind ? '#/sign-in' : null })));
+  // One plate, then quiet lines. Five equal cards was a shop window.
+  const [leadStay, ...restStays] = featured;
+  const hrefFor = (st) => (blind ? '#/sign-in' : `#/${st.kind === 'trip' ? 'trips' : 'stays'}/${st.id}`);
+  if (leadStay) {
+    const card = stayCard(leadStay, { store, href: hrefFor(leadStay), look: true });
+    // The beach tag is a caption printed on the picture. The line under the name says the
+    // same thing, and the picture stays clear.
+    if (card.querySelector('.strip-tag')) {
+      card.querySelector('.strip-tag').remove();
+      const where = card.querySelector('.where');
+      if (where && !/not the hotel/.test(where.textContent || '')) where.append(' · the beach, not the hotel');
+    }
+    hz.appendChild(card);
+  }
+  const ppd = s.pointsPerDollar || 100;
+  for (const st of restStays) {
+    const per = unitPoints(st, s);
+    restEl.appendChild(el(`<a class="index-row" href="${escapeHtml(hrefFor(st))}">
+      <span class="name">${escapeHtml(st.name)}<span class="meta"><span class="beach">${escapeHtml(st.area)}${st.country !== 'Aruba' ? `, ${escapeHtml(st.country)}` : ''}</span></span></span>
+      <span class="from"><b class="num">${escapeHtml(fmtUsd(per / ppd))}</b></span></a>`));
+  }
   wrap.appendChild(horizon);
 
   // Where the money goes. Nothing is taken on the way in; the Circle is paid on the room.

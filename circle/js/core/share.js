@@ -11,6 +11,25 @@ export async function shareText({ title, text, url }) {
   window.open(waShareLink(url ? `${text}\n${url}` : text), '_blank', 'noopener');
   return 'whatsapp';
 }
+/** A hash route as a link someone can paste into the group and open on their phone. */
+export function appHash(path) {
+  const base = location.href.replace(/#.*$/, '');
+  const hash = path.startsWith('#') ? path : `#${path.startsWith('/') ? path : `/${path}`}`;
+  return base + hash;
+}
+
+/** One week, in the words a person would actually send. The link is passed separately to shareText. */
+export function weekForGroup({ name, when, nights, price, points }) {
+  const stay = [when, nights ? `${nights} night${nights === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
+  const money = [price ? `${price} a night, all in` : '', points || ''].filter(Boolean).join(' · ');
+  return [name, stay, money].filter(Boolean).join('\n');
+}
+
+/** The top of the board, short enough for a group chat. */
+export function boardForGroup(lines) {
+  return ['What is open — cheapest a night, first.', '', ...lines].join('\n');
+}
+
 export async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
 }

@@ -16,6 +16,7 @@ import * as officer from './views/officer.js';
 import * as dealsView from './views/deals.js';
 import * as crewsView from './views/crews.js';
 import * as postcards from './views/postcards.js';
+import * as sanView from './views/san.js';
 import { icon } from './ui/icons.js';
 
 const ROUTES = [
@@ -30,6 +31,7 @@ const ROUTES = [
   { path: '/ledger/:month', view: member.ledger, title: 'Statement', auth: true },
   { path: '/card', view: member.card, title: 'Your card', auth: true },
   { path: '/profile', view: member.profile, title: 'Your profile', auth: true },
+  { path: '/san', view: sanView.san, title: 'The SAN', auth: true },
   { path: '/stays', view: catalog.stays, title: 'Stays', auth: true },
   { path: '/stays/:id', view: catalog.stayDetail, title: 'Stay', auth: true },
   { path: '/cruises', view: catalog.cruises, title: 'Cruises', auth: true },
@@ -376,7 +378,7 @@ const NAV = () => (postcardsOn() ? NAV_ON : NAV_OFF);
 const TAB_ROOTS = ['/home', '/stays', '/cruises', '/postcards', '/crews', '/circle'];
 // The screens with no tab of their own go up to Home, and the Home tab lights under them: Home
 // is where the doors to Send, the statement, the card, the requests and the Pool live.
-const HOME_ROOTS = ['/pay', '/ledger', '/card', '/requests', '/watching', '/pool', '/rules', '/profile', '/desk', '/bank', '/settings'];
+const HOME_ROOTS = ['/pay', '/ledger', '/card', '/requests', '/watching', '/pool', '/rules', '/profile', '/san', '/desk', '/bank', '/settings'];
 
 // THE RAIL'S SECOND AND THIRD GROUPS. Only ever seen above the breakpoint, where the tab bar is a
 // rail in the sheet's margin and there is room for the rooms Home keeps behind it. NAV_OFF and

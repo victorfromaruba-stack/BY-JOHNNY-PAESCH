@@ -19,6 +19,7 @@ const APP_SHELL = [
   './js/ui/pieces.js', './js/ui/qr.js', './js/ui/qrcode.js', './js/ui/theme.js', './js/ui/wallet.js',
   './js/views/catalog.js', './js/views/crews.js', './js/views/deals.js', './js/views/live.js',
   './js/views/member.js', './js/views/officer.js', './js/views/postcards.js', './js/views/public.js',
+  './js/views/san.js',
   './js/views/rooms.js', './assets/hero-tall.jpg'
 ];
 

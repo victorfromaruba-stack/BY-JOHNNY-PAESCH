@@ -7,10 +7,10 @@ import { stayCard, stayStrip, photoFor, photoCredit, seedIdOf, thumbPhotoFor, ph
 import { roomPhotosFor, roomsOf, roomPhotoSheet, galleryStrip } from './rooms.js';
 import { PLACES } from '../data/places.js';
 import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/components.js';
-import { shareText } from '../core/share.js';
+import { shareText, appHash, boardForGroup } from '../core/share.js';
 import { icon } from '../ui/icons.js';
 import { routeSvg, islandSvg } from '../ui/art.js';
-import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, dropWhen, SOURCES } from './deals.js';
+import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, dropWhen, SOURCES, shortRange, usdNight } from './deals.js';
 import { openWeeks, resortForStay, bedroomsOf } from './live.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -143,19 +143,22 @@ export function stays({ store, go, query = {} }) {
   const watching = store.watchesFor(me.id).length;
   const watches = store.watchesFor(me.id);
   const matchFor = (d) => watches.map(w => store.dealMatchesWatch(d, w)).find(Boolean) || null;
-  const wrap = el(`<div><section class="sec"><div class="wrap">
+  const wrap = el(`<div><section class="sec board-page"><div class="wrap">
+      <div id="lead"></div>
       <header class="masthead">
-        <p class="eyebrow">${icon('trend')}The board · <span class="num" id="count">…</span></p>
-        <h1>Cheapest a night, <em class="ac">first</em>.</h1>
-        <p class="dateline" id="asof">Looking at what owners have open…</p>
+        <p class="eyebrow">The board · <span class="num" id="count">…</span></p>
+        <h1>What is <em class="ac">open</em>.</h1>
+        <p class="open-num"><b class="num" id="open-fig">…</b><span id="open-unit"></span></p>
+        <p class="dateline">Cheapest a night, first. <span id="asof">Looking at what owners have open…</span></p>
+        <button type="button" class="link-rule no-print" id="tell-board">Send this to the group</button>
         <div class="small muted" id="reach" hidden></div>
         <div class="small" id="no-interval" hidden></div>
         ${canEdit ? `<div class="row no-print"><button class="btn sm" id="paste">${icon('copy', { size: 16 })}Paste a listing</button>
           <button class="btn ghost sm" id="post">${icon('plus', { size: 16 })}By hand</button></div>` : ''}
       </header>
+      <div id="cover" class="lead-story"></div>
       <div id="board"></div>
       <div id="mine"></div>
-      <div id="cover" style="margin-top:22px"></div>
       <div id="soon"></div>
       <div id="deals"></div>
       <div id="places"></div>
@@ -214,6 +217,18 @@ export function stays({ store, go, query = {} }) {
     const folioOf = new Map(ranked.map((d, i) => [d.id, i + 1]));
     const all = ranked;
     count.textContent = `${ranked.length} open`;
+    const fig = wrap.querySelector('#open-fig');
+    const unit = wrap.querySelector('#open-unit');
+    if (fig && unit) {
+      if (ranked.length) {
+        fig.textContent = usdNight(ranked[0], s.pointsPerDollar);
+        unit.textContent = 'a night';
+      } else {
+        const places = store.arubaStays().filter(st => st.active !== false && st.kind !== 'trip').length;
+        fig.textContent = String(places);
+        unit.textContent = places === 1 ? 'place' : 'places';
+      }
+    }
     asof.innerHTML = res ? datelineOf(res, ranked.length, lastSeenOf(ranked)) : 'Looking at what owners have open at the places we stay…';
     const note2 = res ? reachNote(res) : '';
     reach.hidden = !note2;
@@ -237,7 +252,29 @@ export function stays({ store, go, query = {} }) {
     paintSoon(ranked, folioOf);
     coverSlot.replaceChildren();
     dealsSlot.replaceChildren();
-    if (all.length) coverSlot.appendChild(dealCover(all[0], { store, canEdit, match: matchFor(all[0]), folio: 1 }));
+    const leadSlot = wrap.querySelector('#lead');
+    leadSlot.replaceChildren();
+    if (all.length) {
+      const node = dealCover(all[0], { store, canEdit, match: matchFor(all[0]), folio: 1 });
+      // The photograph leads the page. The folio, the name and the price stay in the body,
+      // under the masthead — nothing is printed on the picture.
+      const shot = node.querySelector('.cover-shot');
+      if (shot) leadSlot.appendChild(shot);
+      coverSlot.appendChild(node);
+    } else {
+      // Nothing is on the board. The page still opens on a real photograph and one number —
+      // a place the club actually stays, not a card of two hotels side by side.
+      const list = store.arubaStays().filter(st => st.active !== false);
+      const real = (st) => photoKind(st) === 'own' || photoKind(st) === 'bundled';
+      const st = list.find(x => x.house && real(x)) || list.find(real) || list.find(x => photoFor(x));
+      const src = st && photoFor(st);
+      if (src) {
+        const area = photoKind(st) === 'area';
+        leadSlot.appendChild(el(`<a class="cover-shot" href="#/stays/${escapeHtml(st.id)}" aria-label="${escapeHtml(st.name)}">
+          <img src="${escapeHtml(src)}" alt="${escapeHtml(area ? `${st.area}, the beach at ${st.name}` : st.name)}" fetchpriority="high" decoding="async">
+        </a>`));
+      }
+    }
     const rest = all.slice(1);
     if (rest.length) {
       dealsSlot.appendChild(el(`<div class="running-head"><h2>The other <b class="num">${rest.length}</b></h2><p class="eyebrow">cheapest a night first</p></div>`));
@@ -256,6 +293,15 @@ export function stays({ store, go, query = {} }) {
   wrap.addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-open"]')) load(); });
   wrap.querySelector('#post')?.addEventListener('click', () => postDealSheet({ store }));
   wrap.querySelector('#paste')?.addEventListener('click', () => pasteListingSheet({ store }));
+  wrap.querySelector('#tell-board')?.addEventListener('click', () => {
+    const ranked = [...posted, ...drafts].filter(d => !isTeased(d)).sort(byNight).slice(0, 5);
+    if (!ranked.length) { toast('Nothing open to send yet.'); return; }
+    const lines = ranked.map((d, i) => {
+      const name = store.stay(d.stayId)?.name || d.title || 'A place';
+      return `${i + 1}. ${name} · ${shortRange(d.from, d.to)} · ${usdNight(d, s.pointsPerDollar)} a night`;
+    });
+    shareText({ title: 'What is open', text: boardForGroup(lines), url: appHash('/stays') });
+  });
   wrap.addEventListener('click', (e) => { if (e.target.closest('#paste-interval')) pasteListingSheet({ store }); });
   // Shared to the app from the phone (a Getaway copied off Interval, a RedWeek listing): the
   // share landed the text in sessionStorage on the way in, and the paste sheet opens on it.
@@ -663,7 +709,7 @@ export function stayDetail({ store, params, go, query = {} }) {
     const posted = store.liveDeals().filter(d => d.stayId === stay.id);
     if (resort || posted.length) {
       const panel = el(`<section class="panel" style="margin-top:22px" id="open-now">
-        <div><p class="eyebrow">${icon('trend')}Open right now</p>
+        <div><p class="eyebrow">Open right now</p>
           <h2 style="margin-top:6px" id="open-h"></h2>
           <p class="small muted" id="open-sub" style="margin-top:6px"></p>
           <div id="open-retry" hidden></div></div>

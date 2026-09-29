@@ -108,9 +108,12 @@ export const fmtPoints = (n) => `✦ ${intFmt.format(Math.round(Number(n) || 0))
 export const fmtPointsUsd = (n, ppd = 100) => `✦ ${intFmt.format(Math.round(Number(n) || 0))} (${usdFmtCents.format((Number(n) || 0) / ppd)})`;
 export const pointsUsd = (n, ppd = 100) => usdFmtCents.format((Number(n) || 0) / ppd);
 export const fmtUsd2 = (n) => usdFmtCents.format(Number(n) || 0);
-/** Aruban florin, written the local way: Afl. 268,50 */
+/** Aruban florin, written the local way: Afl. 268,50 — dollars converted at the peg. */
 export const fmtAfl2 = (usd, rate = 1.79) =>
   `Afl. ${new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((Number(usd) || 0) * rate)}`;
+/** An amount that is already florin, not dollars. Afl. 250,00 */
+export const fmtFlorin = (awg) =>
+  `Afl. ${new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(awg) || 0)}`;
 export const fmtDay = (iso) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 export const fmtDayTime = (iso) => (iso ? `${fmtDay(iso)} ${new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : '—');
 export const fmtPct = (n, dp = 1) => `${(Number(n) * 100).toFixed(dp)}%`;

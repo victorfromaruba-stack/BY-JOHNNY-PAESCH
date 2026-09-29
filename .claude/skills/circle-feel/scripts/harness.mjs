@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 export const LOCAL = `export const CONFIG = { backend: 'local', supabaseUrl: '', supabaseKey: '' };`;
 export const ROUTES = ['/', '/home', '/stays', '/stays/stay_surfclub', '/cruises', '/cruises/trip_cruise_abc', '/trips/trip_japan',
   '/postcards', '/requests', '/pay', '/ledger', '/pool', '/circle', '/crews', '/watching',
-  '/card', '/profile', '/rules', '/desk', '/bank', '/settings', '/sign-in',
+  '/card', '/profile', '/rules', '/san', '/desk', '/bank', '/settings', '/sign-in',
   // The ask form is the app's most important screen and it was not in this list, so no baseline
   // ever measured it at any width.
   '/book/stay_surfclub'];

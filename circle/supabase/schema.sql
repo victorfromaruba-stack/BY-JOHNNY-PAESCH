@@ -3335,3 +3335,250 @@ alter table signup_links add column if not exists member_id uuid references memb
    20260921_dinners_a_table_anyone_can_join. Deliberately NOT a stay and NOT a redemption —
    those exist to move points, and no points move here. max_seats null means no limit, which is
    the point: a table is not a hotel room. */
+
+-- =====================================================================
+--  The SAN — one rotating round. Not the Circle's 40 seats, not points,
+--  not the Reserve. 250 florin a month from each person. The pot is
+--  hands × 250 and is fixed when the round opens. The opener is month 1.
+--  One person per month. When every month has a person, nobody else joins.
+--  Marking a month paid records a handover. It does not write the ledger.
+-- =====================================================================
+
+create table if not exists san_rounds (
+  id            uuid primary key default gen_random_uuid(),
+  organizer_id  uuid not null references members(id),
+  hands         int not null check (hands between 2 and 120),
+  monthly_awg   int not null default 250 check (monthly_awg = 250),
+  opened_at     timestamptz not null default now(),
+  started_at    timestamptz
+);
+
+create table if not exists san_seats (
+  id           uuid primary key default gen_random_uuid(),
+  round_id     uuid not null references san_rounds(id) on delete cascade,
+  hand         int not null check (hand >= 1),
+  member_id    uuid references members(id),
+  confirmed_at timestamptz,
+  paid_at      timestamptz,
+  paid_by      uuid references members(id),
+  unique (round_id, hand)
+);
+create unique index if not exists san_seats_one_member
+  on san_seats (round_id, member_id) where member_id is not null;
+create index if not exists san_seats_round on san_seats (round_id, hand);
+
+create table if not exists san_requests (
+  id         uuid primary key default gen_random_uuid(),
+  round_id   uuid not null references san_rounds(id) on delete cascade,
+  member_id  uuid not null references members(id),
+  hand       int not null check (hand >= 2),
+  status     text not null default 'pending' check (status in ('pending', 'confirmed', 'declined', 'withdrawn')),
+  created_at timestamptz not null default now(),
+  decided_at timestamptz,
+  decided_by uuid references members(id)
+);
+create unique index if not exists san_requests_one_pending
+  on san_requests (round_id, member_id) where status = 'pending';
+create index if not exists san_requests_round on san_requests (round_id, status);
+
+alter table san_rounds   enable row level security;
+alter table san_seats    enable row level security;
+alter table san_requests enable row level security;
+
+drop policy if exists san_rounds_read on san_rounds;
+create policy san_rounds_read on san_rounds for select to authenticated
+  using (current_member_id() is not null);
+drop policy if exists san_seats_read on san_seats;
+create policy san_seats_read on san_seats for select to authenticated
+  using (current_member_id() is not null);
+drop policy if exists san_requests_read on san_requests;
+create policy san_requests_read on san_requests for select to authenticated
+  using (current_member_id() is not null);
+
+revoke all on san_rounds, san_seats, san_requests from public, anon, authenticated;
+grant select on san_rounds, san_seats, san_requests to authenticated;
+
+-- A round is settled when every month has been marked paid. Anything else is still open,
+-- and there is only one open round. 120 is how long one round may run, not the club's seat cap.
+create or replace function san_round_open(p_round uuid default null)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from san_rounds sr
+    where (p_round is null or sr.id <> p_round)
+      and not coalesce((
+        select count(*) = sr.hands and count(*) > 0 and count(paid_at) = count(*)
+        from san_seats ss where ss.round_id = sr.id
+      ), false)
+  )
+$$;
+
+create or replace function open_san(p_hands int)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare me uuid; r uuid; h int;
+begin
+  perform pg_advisory_xact_lock(872341);
+  me := current_member_id();
+  if me is null or not exists (select 1 from members where id = me and status in ('active', 'paused')) then
+    raise exception 'Only a member of the Circle can join a round.';
+  end if;
+  if p_hands is null or p_hands < 2 or p_hands > 120 then
+    raise exception 'Name between 2 and 120 months for this round.';
+  end if;
+  if san_round_open() then
+    raise exception 'A round is already open';
+  end if;
+
+  insert into san_rounds (organizer_id, hands, monthly_awg)
+  values (me, p_hands, 250)
+  returning id into r;
+
+  insert into san_seats (round_id, hand, member_id, confirmed_at)
+  values (r, 1, me, now());
+  for h in 2..p_hands loop
+    insert into san_seats (round_id, hand) values (r, h);
+  end loop;
+
+  perform log_audit('san.open', 'san_round', r::text,
+    jsonb_build_object('hands', p_hands, 'monthlyAwg', 250));
+  return r;
+end $$;
+
+create or replace function request_san_hand(p_round uuid, p_hand int)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare me uuid; rd san_rounds; seat san_seats; req uuid;
+begin
+  me := current_member_id();
+  if me is null or not exists (select 1 from members where id = me and status in ('active', 'paused')) then
+    raise exception 'Only a member of the Circle can join a round.';
+  end if;
+  select * into rd from san_rounds where id = p_round for update;
+  if not found then raise exception 'No such round'; end if;
+  if rd.started_at is not null
+     or not exists (select 1 from san_seats where round_id = rd.id and member_id is null) then
+    raise exception 'This round is full. Nobody else can join it.';
+  end if;
+  if p_hand = 1 then
+    raise exception 'Month 1 belongs to the person who opened the round';
+  end if;
+  if p_hand is null or p_hand < 2 or p_hand > rd.hands then
+    raise exception 'That month is not in this round';
+  end if;
+  select * into seat from san_seats where round_id = rd.id and hand = p_hand for update;
+  if not found then raise exception 'That month is not in this round'; end if;
+  if seat.member_id is not null then raise exception 'That month is already taken'; end if;
+  if exists (select 1 from san_seats where round_id = rd.id and member_id = me) then
+    raise exception 'You already hold a month in this round';
+  end if;
+  if exists (select 1 from san_requests where round_id = rd.id and member_id = me and status = 'pending') then
+    raise exception 'You already have a request in. Withdraw it before asking for another month.';
+  end if;
+
+  insert into san_requests (round_id, member_id, hand, status)
+  values (rd.id, me, p_hand, 'pending')
+  returning id into req;
+  perform log_audit('san.request', 'san_request', req::text,
+    jsonb_build_object('hand', p_hand, 'round', rd.id));
+  return req;
+end $$;
+
+create or replace function withdraw_san_request(p_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare me uuid; req san_requests;
+begin
+  me := current_member_id();
+  if me is null or not exists (select 1 from members where id = me and status in ('active', 'paused')) then
+    raise exception 'Only a member of the Circle can join a round.';
+  end if;
+  select * into req from san_requests where id = p_id for update;
+  if not found then raise exception 'No such request'; end if;
+  if req.member_id <> me then raise exception 'That request is not yours'; end if;
+  if req.status <> 'pending' then raise exception 'That request is no longer open'; end if;
+  update san_requests set status = 'withdrawn', decided_at = now(), decided_by = me where id = req.id;
+  perform log_audit('san.withdraw', 'san_request', req.id::text, jsonb_build_object('hand', req.hand));
+end $$;
+
+create or replace function confirm_san_request(p_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare me uuid; req san_requests; rd san_rounds; seat san_seats;
+begin
+  me := current_member_id();
+  if me is null or not exists (select 1 from members where id = me and status in ('active', 'paused')) then
+    raise exception 'Only a member of the Circle can join a round.';
+  end if;
+  select * into req from san_requests where id = p_id for update;
+  if not found then raise exception 'No such request'; end if;
+  if req.status <> 'pending' then raise exception 'That request is no longer open'; end if;
+  select * into rd from san_rounds where id = req.round_id for update;
+  if not found then raise exception 'No such round'; end if;
+  if rd.organizer_id <> me then raise exception 'Only the organizer confirms a month'; end if;
+  if rd.started_at is not null
+     or not exists (select 1 from san_seats where round_id = rd.id and member_id is null) then
+    raise exception 'This round is full. Nobody else can join it.';
+  end if;
+  if req.hand < 2 then raise exception 'Month 1 belongs to the person who opened the round'; end if;
+  select * into seat from san_seats where round_id = rd.id and hand = req.hand for update;
+  if not found then raise exception 'That month is not in this round'; end if;
+  if seat.member_id is not null then raise exception 'That month is already taken'; end if;
+  if exists (select 1 from san_seats where round_id = rd.id and member_id = req.member_id) then
+    raise exception 'That person already holds a month in this round';
+  end if;
+
+  update san_seats set member_id = req.member_id, confirmed_at = now() where id = seat.id;
+  update san_requests
+     set status = 'confirmed', decided_at = now(), decided_by = me
+   where id = req.id;
+  update san_requests
+     set status = 'declined', decided_at = now(), decided_by = me
+   where round_id = rd.id and status = 'pending'
+     and (hand = req.hand or member_id = req.member_id);
+
+  if not exists (select 1 from san_seats where round_id = rd.id and member_id is null) then
+    update san_rounds set started_at = now() where id = rd.id and started_at is null;
+  end if;
+  perform log_audit('san.confirm', 'san_request', req.id::text,
+    jsonb_build_object('hand', req.hand, 'memberId', req.member_id));
+end $$;
+
+-- A confirmation that the pot was handed over. No ledger row, no points.
+create or replace function mark_san_hand_paid(p_round uuid, p_hand int)
+returns void language plpgsql security definer set search_path = public as $$
+declare me uuid; rd san_rounds; seat san_seats;
+begin
+  me := current_member_id();
+  if me is null or not exists (select 1 from members where id = me and status in ('active', 'paused')) then
+    raise exception 'Only a member of the Circle can join a round.';
+  end if;
+  select * into rd from san_rounds where id = p_round for update;
+  if not found then raise exception 'No such round'; end if;
+  if rd.started_at is null
+     or exists (select 1 from san_seats where round_id = rd.id and member_id is null) then
+    raise exception 'The round has not started. Every month needs a person first.';
+  end if;
+  if me <> rd.organizer_id and not has_role('treasurer', 'deputy', 'admin') then
+    raise exception 'Only the organizer or the Banker can mark a month paid';
+  end if;
+  select * into seat from san_seats where round_id = rd.id and hand = p_hand for update;
+  if not found then raise exception 'That month is not in this round'; end if;
+  if exists (select 1 from san_seats earlier
+              where earlier.round_id = rd.id and earlier.hand < p_hand and earlier.paid_at is null) then
+    raise exception 'Mark the months in order';
+  end if;
+  if seat.member_id is null then raise exception 'That month has nobody in it'; end if;
+  if seat.paid_at is not null then raise exception 'That month is already marked paid'; end if;
+  update san_seats set paid_at = now(), paid_by = me where id = seat.id;
+  perform log_audit('san.paid', 'san_seat', seat.id::text,
+    jsonb_build_object('hand', p_hand, 'memberId', seat.member_id));
+end $$;
+
+revoke all on function san_round_open(uuid) from public, anon;
+revoke all on function open_san(int) from public, anon;
+revoke all on function request_san_hand(uuid, int) from public, anon;
+revoke all on function withdraw_san_request(uuid) from public, anon;
+revoke all on function confirm_san_request(uuid) from public, anon;
+revoke all on function mark_san_hand_paid(uuid, int) from public, anon;
+grant execute on function san_round_open(uuid) to authenticated;
+grant execute on function open_san(int) to authenticated;
+grant execute on function request_san_hand(uuid, int) to authenticated;
+grant execute on function withdraw_san_request(uuid) to authenticated;
+grant execute on function confirm_san_request(uuid) to authenticated;
+grant execute on function mark_san_hand_paid(uuid, int) to authenticated;

@@ -16,7 +16,15 @@ export const OPEN_REDEMPTION = [REDEMPTION_STATUS.requested, REDEMPTION_STATUS.q
 export const LEDGER_KIND = Object.freeze({ earn: 'earn', bonus: 'bonus', streak: 'streak', founding: 'founding', burn: 'burn', refund: 'refund', adjust: 'adjust', expire: 'expire', reverse: 'reverse', badge: 'badge' });
 export const PROMO_KINDS = [LEDGER_KIND.bonus, LEDGER_KIND.streak, LEDGER_KIND.founding];
 export const ROLES = Object.freeze(['member', 'treasurer', 'deputy', 'planner', 'comms', 'admin']);
-export const COLLECTIONS = ['members', 'badgeCatalog', 'memberBadges', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes', 'pledges', 'looks', 'standings', 'crews', 'crewMembers', 'crewMessages', 'moments', 'momentReactions', 'signupLinks', 'dinners', 'dinnerGuests'];
+/**
+ * A SAN is one rotating round: 250 florin from each person, each month, and the pot
+ * (hands × 250) goes to one person once. These three numbers are the rule. The same
+ * figures and the same sentences are in schema.sql. This is not the Circle's 40 seats.
+ */
+export const SAN_MONTHLY_AWG = 250;
+export const SAN_MIN_HANDS = 2;
+export const SAN_MAX_HANDS = 120;
+export const COLLECTIONS = ['members', 'badgeCatalog', 'memberBadges', 'contributions', 'ledger', 'stays', 'redemptions', 'announcements', 'audit', 'invitations', 'monthCloses', 'promoDeferrals', 'rulesAcceptances', 'watches', 'deals', 'roomTypes', 'pledges', 'looks', 'standings', 'crews', 'crewMembers', 'crewMessages', 'moments', 'momentReactions', 'signupLinks', 'dinners', 'dinnerGuests', 'sanRounds', 'sanSeats', 'sanRequests'];
 /**
  * A complete, empty state. Every adapter starts from this — a missing collection is not a
  * missing feature, it is `[...undefined]` the first time any screen asks for it, which is
@@ -1034,6 +1042,171 @@ export class Store {
     this.state.dinnerGuests = (this.state.dinnerGuests || []).filter(g => !(g.dinnerId === id && g.memberId === me.id));
     await this.commit('dinnerGuests');
     return true;
+  }
+
+  // ---------- the SAN ----------
+  //
+  // A rotating savings round among people who are already in the Circle. It is not a
+  // membership, not points, and not the Reserve. 250 florin a month from each person.
+  // The person whose month it is receives the pot once: hands × 250. The pot is fixed
+  // when the round opens. Nobody joins after every month has a person.
+  //
+  // The opener is month 1, always. One person per later month, confirmed by the opener.
+  // Marking a month paid records that the pot was handed over. It does not mint points
+  // and it does not write the ledger. The same sentences are raised by schema.sql.
+  sanRounds() {
+    return (this.state.sanRounds || []).slice().sort((a, b) => String(a.openedAt).localeCompare(String(b.openedAt)));
+  }
+  sanRound(id) { return (this.state.sanRounds || []).find(r => r.id === id) || null; }
+  sanSeats(roundId) {
+    return (this.state.sanSeats || []).filter(s => s.roundId === roundId).slice().sort((a, b) => a.hand - b.hand);
+  }
+  sanRequests(roundId) {
+    return (this.state.sanRequests || []).filter(r => r.roundId === roundId)
+      .slice().sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  }
+  sanPending(roundId) { return this.sanRequests(roundId).filter(r => r.status === 'pending'); }
+  /** Every month has been marked paid. A settled round is finished; it does not take new people. */
+  sanSettled(round) {
+    if (!round) return false;
+    const seats = this.sanSeats(round.id);
+    return seats.length === round.hands && seats.length > 0 && seats.every(s => s.paidAt);
+  }
+  /** The round on the screen: the one that still has a month to mark, if any. */
+  currentSan() {
+    const open = this.sanRounds().filter(r => !this.sanSettled(r));
+    return open.length ? open[open.length - 1] : null;
+  }
+  sanFull(round) {
+    if (!round) return false;
+    const seats = this.sanSeats(round.id);
+    return seats.length === round.hands && seats.every(s => s.memberId);
+  }
+  /** The calendar exists only once every month has a person. */
+  sanStarted(round) { return !!(round?.startedAt) && this.sanFull(round); }
+  sanPotAwg(round) { return (Number(round?.hands) || 0) * (Number(round?.monthlyAwg) || SAN_MONTHLY_AWG); }
+  /** Whose month is next. Null until the round has started, and null once every month is marked. */
+  sanNextHand(round) {
+    if (!this.sanStarted(round)) return null;
+    return this.sanSeats(round.id).find(s => !s.paidAt) || null;
+  }
+  _sanMember() {
+    const me = this.me;
+    if (!me || !['active', 'paused'].includes(me.status)) throw new Error('Only a member of the Circle can join a round.');
+    return me;
+  }
+  _sanHands(n) {
+    const hands = Number(n);
+    if (!Number.isInteger(hands) || hands < SAN_MIN_HANDS || hands > SAN_MAX_HANDS) {
+      throw new Error('Name between 2 and 120 months for this round.');
+    }
+    return hands;
+  }
+  async openSan(hands) {
+    const me = this._sanMember();
+    const n = this._sanHands(hands);
+    if (this.currentSan()) throw new Error('A round is already open');
+    const round = {
+      id: uid('san'), organizerId: me.id, hands: n, monthlyAwg: SAN_MONTHLY_AWG,
+      openedAt: nowIso(), startedAt: null,
+    };
+    const seats = [{
+      id: uid('seat'), roundId: round.id, hand: 1, memberId: me.id,
+      confirmedAt: nowIso(), paidAt: null, paidBy: null,
+    }];
+    for (let hand = 2; hand <= n; hand++) {
+      seats.push({ id: uid('seat'), roundId: round.id, hand, memberId: null, confirmedAt: null, paidAt: null, paidBy: null });
+    }
+    (this.state.sanRounds ||= []).push(round);
+    (this.state.sanSeats ||= []).push(...seats);
+    this.log(me.id, 'san.open', 'san_round', round.id, { hands: n, monthlyAwg: SAN_MONTHLY_AWG });
+    await this.commit('san');
+    return round;
+  }
+  async requestSanHand(roundId, hand) {
+    const me = this._sanMember();
+    const round = this.sanRound(roundId);
+    if (!round) throw new Error('No such round');
+    if (round.startedAt || this.sanFull(round)) throw new Error('This round is full. Nobody else can join it.');
+    const n = Number(hand);
+    if (n === 1) throw new Error('Month 1 belongs to the person who opened the round');
+    if (!Number.isInteger(n) || n < 2 || n > round.hands) throw new Error('That month is not in this round');
+    const seat = this.sanSeats(round.id).find(s => s.hand === n);
+    if (!seat) throw new Error('That month is not in this round');
+    if (seat.memberId) throw new Error('That month is already taken');
+    if (this.sanSeats(round.id).some(s => s.memberId === me.id)) throw new Error('You already hold a month in this round');
+    if (this.sanPending(round.id).some(r => r.memberId === me.id)) {
+      throw new Error('You already have a request in. Withdraw it before asking for another month.');
+    }
+    const req = {
+      id: uid('sreq'), roundId: round.id, memberId: me.id, hand: n, status: 'pending',
+      createdAt: nowIso(), decidedAt: null, decidedBy: null,
+    };
+    (this.state.sanRequests ||= []).push(req);
+    this.log(me.id, 'san.request', 'san_request', req.id, { hand: n, round: round.id });
+    await this.commit('san');
+    return req;
+  }
+  async withdrawSanRequest(id) {
+    const me = this._sanMember();
+    const req = (this.state.sanRequests || []).find(r => r.id === id);
+    if (!req) throw new Error('No such request');
+    if (req.memberId !== me.id) throw new Error('That request is not yours');
+    if (req.status !== 'pending') throw new Error('That request is no longer open');
+    req.status = 'withdrawn'; req.decidedAt = nowIso(); req.decidedBy = me.id;
+    this.log(me.id, 'san.withdraw', 'san_request', req.id, { hand: req.hand });
+    await this.commit('san');
+    return req;
+  }
+  async confirmSanRequest(id) {
+    const me = this._sanMember();
+    const req = (this.state.sanRequests || []).find(r => r.id === id);
+    if (!req) throw new Error('No such request');
+    if (req.status !== 'pending') throw new Error('That request is no longer open');
+    const round = this.sanRound(req.roundId);
+    if (!round) throw new Error('No such round');
+    if (round.organizerId !== me.id) throw new Error('Only the organizer confirms a month');
+    if (round.startedAt || this.sanFull(round)) throw new Error('This round is full. Nobody else can join it.');
+    if (req.hand < 2) throw new Error('Month 1 belongs to the person who opened the round');
+    const seat = this.sanSeats(round.id).find(s => s.hand === req.hand);
+    if (!seat) throw new Error('That month is not in this round');
+    if (seat.memberId) throw new Error('That month is already taken');
+    if (this.sanSeats(round.id).some(s => s.memberId === req.memberId)) {
+      throw new Error('That person already holds a month in this round');
+    }
+    seat.memberId = req.memberId; seat.confirmedAt = nowIso();
+    req.status = 'confirmed'; req.decidedAt = nowIso(); req.decidedBy = me.id;
+    for (const other of this.sanPending(round.id)) {
+      if (other.hand === req.hand || other.memberId === req.memberId) {
+        other.status = 'declined'; other.decidedAt = req.decidedAt; other.decidedBy = me.id;
+      }
+    }
+    if (this.sanFull(round) && !round.startedAt) round.startedAt = nowIso();
+    this.log(me.id, 'san.confirm', 'san_request', req.id, { hand: req.hand, memberId: req.memberId, started: !!round.startedAt });
+    await this.commit('san');
+    return req;
+  }
+  /**
+   * The organizer, or the Banker, records that this month's pot was handed over.
+   * In order. Not a transfer, not points, not a ledger line.
+   */
+  async markSanHandPaid(roundId, hand) {
+    const me = this._sanMember();
+    const round = this.sanRound(roundId);
+    if (!round) throw new Error('No such round');
+    if (!this.sanStarted(round)) throw new Error('The round has not started. Every month needs a person first.');
+    if (round.organizerId !== me.id && !this.canBank()) throw new Error('Only the organizer or the Banker can mark a month paid');
+    const n = Number(hand);
+    const seats = this.sanSeats(round.id);
+    const seat = seats.find(s => s.hand === n);
+    if (!seat) throw new Error('That month is not in this round');
+    if (seats.some(s => s.hand < n && !s.paidAt)) throw new Error('Mark the months in order');
+    if (!seat.memberId) throw new Error('That month has nobody in it');
+    if (seat.paidAt) throw new Error('That month is already marked paid');
+    seat.paidAt = nowIso(); seat.paidBy = me.id;
+    this.log(me.id, 'san.paid', 'san_seat', seat.id, { hand: n, memberId: seat.memberId });
+    await this.commit('san');
+    return seat;
   }
 
   // ---------- the sign-up link ----------
