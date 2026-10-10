@@ -94,3 +94,28 @@ test('signed in, one table down after a good load: kept, flagged, not fatal', as
   assert.ok(store.partial.includes('deals'), 'the member is told which table is stale');
   assert.equal(store.publicOnly, false, 'and is still not treated as a stranger');
 });
+
+// God's Eye View: the pass comes from the gev-pass function. A member must be told plainly
+// when it is not set up, rather than "try again" forever.
+const invoking = (result) => ({ ...stubClient(), functions: { invoke: async () => result } });
+const httpError = (status, body) => ({ data: null, error: { context: { status, json: async () => body } } });
+
+test('god’s eye: a pass comes back as its url', async () => {
+  const store = newStore(invoking({ data: { url: 'https://x.example/__gate?t=a.b' }, error: null }));
+  assert.deepEqual(await store.godsEyePass(), { url: 'https://x.example/__gate?t=a.b' });
+});
+
+test('god’s eye: a function that is not deployed reads as not switched on', async () => {
+  const store = newStore(invoking(httpError(404, { code: 'NOT_FOUND' })));
+  await assert.rejects(store.godsEyePass(), /not switched on yet/);
+});
+
+test('god’s eye: the function’s own refusal is what the member reads', async () => {
+  const store = newStore(invoking(httpError(403, { error: 'God’s Eye View is for active Insiders.' })));
+  await assert.rejects(store.godsEyePass(), /for active Insiders/);
+});
+
+test('god’s eye: an unreachable server gets a plain sentence', async () => {
+  const store = newStore(invoking({ data: null, error: { message: 'Failed to send a request' } }));
+  await assert.rejects(store.godsEyePass(), /could not hand out a pass/);
+});

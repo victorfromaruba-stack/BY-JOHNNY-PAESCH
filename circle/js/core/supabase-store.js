@@ -275,7 +275,9 @@ export class SupabaseStore extends Store {
       // The function's own sentence when it has one ("not switched on yet", "for active
       // Insiders"), a plain one when the server could not be reached at all.
       let said = '';
-      try { said = (await error.context?.json?.())?.error || ''; } catch { /* not JSON */ }
+      // 404: the function has not been deployed yet, which is the same thing to a member.
+      if (error.context?.status === 404) said = 'God’s Eye View is not switched on yet.';
+      else try { said = (await error.context?.json?.())?.error || ''; } catch { /* not JSON */ }
       throw new Error(said || 'The Circle could not hand out a pass just now. Try again in a minute.');
     }
     if (!data?.url) throw new Error('The pass came back empty. Tell Ian.');
