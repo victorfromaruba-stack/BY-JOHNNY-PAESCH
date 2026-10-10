@@ -29,6 +29,16 @@ const PASS_SECONDS = 120;
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'content-type': 'application/json' } });
 
+/** The project's public key: a new-style publishable key if the runtime lists one, else the legacy anon key. */
+function publicKey(): string {
+  try {
+    const keys = JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS') ?? '{}');
+    const first = keys.default ?? Object.values(keys)[0];
+    if (typeof first === 'string' && first) return first;
+  } catch { /* not set, or not JSON */ }
+  return Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+}
+
 const b64url = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
@@ -42,13 +52,17 @@ Deno.serve(async (req) => {
     return json({ error: 'God’s Eye View is not switched on yet.' }, 503);
   }
 
-  // The caller is the member: their own token decides who this pass is for.
+  // The caller is the member: their own token decides who this pass is for. Two clients, on
+  // purpose. The one that checks the token carries no headers of its own: given a global
+  // authorization header as well, getUser(token) refused every member. The one that reads the
+  // members table carries the member's token, so row-level security sees them.
   const auth = req.headers.get('authorization') ?? '';
-  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
-    global: { headers: { authorization: auth } },
-  });
-  const { data: { user } } = await sb.auth.getUser();
+  const token = auth.replace(/^Bearer\s+/i, '');
+  const url = Deno.env.get('SUPABASE_URL')!;
+  const noSession = { persistSession: false, autoRefreshToken: false };
+  const { data: { user } } = await createClient(url, publicKey(), { auth: noSession }).auth.getUser(token);
   if (!user) return json({ error: 'Sign in first.' }, 401);
+  const sb = createClient(url, publicKey(), { global: { headers: { Authorization: `Bearer ${token}` } }, auth: noSession });
   const { data: member } = await sb.from('members').select('id, status').eq('auth_user_id', user.id).maybeSingle();
   if (!member) return json({ error: 'You are not an Insider.' }, 403);
   if (member.status !== 'active') return json({ error: 'God’s Eye View is for active Insiders.' }, 403);
