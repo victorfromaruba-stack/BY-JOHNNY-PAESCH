@@ -1,5 +1,5 @@
 // God's Eye View: a live 3D globe of planes, ships, satellites, earthquakes and public cameras
-// (github.com/bilawalsidhu/gods-eye-view, MIT). It does not run here. It runs on Victor's worker
+// (github.com/bilawalsidhu/gods-eye-view, MIT). It does not run here. It runs on Victor's hq
 // server, on the public internet behind a door that only lets in browsers sent from the Circle
 // (ai-hq: gods-eye/gate.mjs and scripts/install-gods-eye.sh).
 //
