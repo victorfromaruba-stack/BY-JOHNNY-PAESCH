@@ -268,6 +268,19 @@ export class SupabaseStore extends Store {
       throw new Error(`That password is right, but ${this.strandedEmail} is not on the Circle's list. Ask Victor or Ian to add that exact address.`);
     }
   }
+  /** A one-time pass into God's Eye View, signed by the gev-pass function for this member. */
+  async godsEyePass() {
+    const { data, error } = await this.sb.functions.invoke('gev-pass', { body: {} });
+    if (error) {
+      // The function's own sentence when it has one ("not switched on yet", "for active
+      // Insiders"), a plain one when the server could not be reached at all.
+      let said = '';
+      try { said = (await error.context?.json?.())?.error || ''; } catch { /* not JSON */ }
+      throw new Error(said || 'The Circle could not hand out a pass just now. Try again in a minute.');
+    }
+    if (!data?.url) throw new Error('The pass came back empty. Tell Ian.');
+    return data;
+  }
   /** Send the reset email. Deliberately silent about whether the address is one of ours. */
   async sendPasswordReset(email) {
     const { error } = await this.sb.auth.resetPasswordForEmail(String(email).trim().toLowerCase(), { redirectTo: this.authRedirect });
