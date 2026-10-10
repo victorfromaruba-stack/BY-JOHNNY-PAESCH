@@ -1,16 +1,16 @@
 // Hands a signed-in, active Insider a pass into God's Eye View.
 //
 // God's Eye View (a live 3D globe of planes, ships, satellites and cameras) runs on Victor's
-// worker server and is on the public internet, but behind a door: ai-hq's gods-eye/gate.mjs.
+// hq server and is on the public internet, but behind a door: ai-hq's gods-eye/gate.mjs.
 // The door lets a browser in when it brings a pass this function signed. A pass is good for
 // two minutes and one use; the door then gives that browser a cookie for 14 days.
 //
 // Why a function and not a link: the link would sit in this public repository and anyone could
-// use it. The secret that signs passes lives here and on the worker, nowhere else.
+// use it. The secret that signs passes lives here and on hq, nowhere else.
 //
 // Deploy:  supabase functions deploy gev-pass
-// Secrets: supabase secrets set GEV_GATE_SECRET=<the value in /etc/ai-hq/gods-eye.env on the worker> \
-//            GEV_URL=https://worker.<tailnet>.ts.net:10000
+// Secrets: supabase secrets set GEV_GATE_SECRET=<the value in /etc/ai-hq/gods-eye.env on hq> \
+//            GEV_URL=https://hq.<tailnet>.ts.net:10000
 // Until both are set, it answers 503 and the app says God's Eye View is not switched on yet.
 //
 // The token format is the door's contract, so it is written out here and in gate.mjs:
