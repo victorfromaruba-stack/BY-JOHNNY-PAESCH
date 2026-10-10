@@ -2231,6 +2231,15 @@ export class Store {
     return w?.url ? { url: w.url, token: w.token || '' } : null;
   }
 
+  /**
+   * A one-time pass into God's Eye View, as { url }. Only the club's server can sign one (the
+   * gev-pass function, with a secret this browser never sees), so the preview says so plainly
+   * rather than pretending. SupabaseStore overrides this.
+   */
+  async godsEyePass() {
+    throw new Error('God’s Eye View opens from the real Circle, not the preview.');
+  }
+
   // ---------- settings ----------
   async updateSettings(patch, actorId) { Object.assign(this.state.settings, patch); this.log(actorId, 'settings.update', 'settings', 'settings', patch); await this.commit('settings'); }
 
