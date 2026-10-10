@@ -17,6 +17,7 @@ import * as dealsView from './views/deals.js';
 import * as crewsView from './views/crews.js';
 import * as postcards from './views/postcards.js';
 import * as sanView from './views/san.js';
+import * as eyeView from './views/eye.js';
 import { icon } from './ui/icons.js';
 
 const ROUTES = [
@@ -32,6 +33,7 @@ const ROUTES = [
   { path: '/card', view: member.card, title: 'Your card', auth: true },
   { path: '/profile', view: member.profile, title: 'Your profile', auth: true },
   { path: '/san', view: sanView.san, title: 'The SAN', auth: true },
+  { path: '/eye', view: eyeView.eye, title: 'God’s Eye View', auth: true },
   { path: '/stays', view: catalog.stays, title: 'Stays', auth: true },
   { path: '/stays/:id', view: catalog.stayDetail, title: 'Stay', auth: true },
   { path: '/cruises', view: catalog.cruises, title: 'Cruises', auth: true },
@@ -378,7 +380,7 @@ const NAV = () => (postcardsOn() ? NAV_ON : NAV_OFF);
 const TAB_ROOTS = ['/home', '/stays', '/cruises', '/postcards', '/crews', '/circle'];
 // The screens with no tab of their own go up to Home, and the Home tab lights under them: Home
 // is where the doors to Send, the statement, the card, the requests and the Pool live.
-const HOME_ROOTS = ['/pay', '/ledger', '/card', '/requests', '/watching', '/pool', '/rules', '/profile', '/san', '/desk', '/bank', '/settings'];
+const HOME_ROOTS = ['/pay', '/ledger', '/card', '/requests', '/watching', '/pool', '/rules', '/profile', '/san', '/eye', '/desk', '/bank', '/settings'];
 
 // THE RAIL'S SECOND AND THIRD GROUPS. Only ever seen above the breakpoint, where the tab bar is a
 // rail in the sheet's margin and there is room for the rooms Home keeps behind it. NAV_OFF and
@@ -394,6 +396,7 @@ const RAIL_YOURS = [
   { path: '/watching', label: 'Watching', icon: 'eye' },
   { path: '/pool', label: 'The pool', icon: 'droplet' },
   { path: '/rules', label: 'The rules', icon: 'scale' },
+  { path: '/eye', label: 'God’s eye', icon: 'target' },
   { path: '/profile', label: 'Your seat', icon: 'user' },
   // Cruises keeps a tab of its own until Postcards takes the slot; it only needs a rail row when
   // it has lost one, or the same destination would be printed twice.

@@ -932,6 +932,7 @@ const PRIMARY_DOORS = [
   ['#/card', 'Your card'], ['#/pay', 'Send a contribution'], ['#/ledger', 'Your ledger'],
   ['#/requests', 'Everything you have asked for'],
   ['#/san', 'The SAN'],
+  ['#/eye', 'God’s Eye View'],
 ];
 const SECONDARY_DOORS = [
   ['#/watching', 'What you are watching'],
