@@ -1,1 +1,3 @@
-Temporary: the God's Eye View installer for Victor's server (from ai-hq main). Deleted after use.
+Temporary: installers for Victor's machines (from ai-hq main). Deleted after use.
+  go.sh    → God's Eye View on the server (gev.tgz)
+  scope.sh → telescope relay on the laptop (scope.tgz)
