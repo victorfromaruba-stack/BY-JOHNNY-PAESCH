@@ -3,6 +3,6 @@
 set -euo pipefail
 mkdir -p /opt/gods-eye-setup && cd /opt/gods-eye-setup
 curl -fsSL https://raw.githubusercontent.com/victorfromaruba-stack/BY-JOHNNY-PAESCH/gev-installer/gev.tgz -o gev.tgz
-echo "90967cc0b9d3e08987e56b711c5bb56d06c4b19664cf96836d475ed532c1a907  gev.tgz" | sha256sum -c
+echo "adda2f726cdeb0c78c22f725eddd91df45370a5b938e44a77ca66f336c6798a4  gev.tgz" | sha256sum -c
 tar -xzf gev.tgz
 exec bash scripts/install-gods-eye.sh </dev/tty
