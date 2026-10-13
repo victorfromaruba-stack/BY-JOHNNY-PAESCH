@@ -8,6 +8,6 @@ if [ "$(id -u)" != 0 ]; then
 fi
 mkdir -p /opt/gods-eye-setup && cd /opt/gods-eye-setup
 curl -fsSL https://raw.githubusercontent.com/victorfromaruba-stack/BY-JOHNNY-PAESCH/gev-installer/gev.tgz -o gev.tgz
-echo "4be742cff4c0b562cb1b1e640331011d252d95bcc8a3b54201b4941ca87c0fda  gev.tgz" | sha256sum -c
+echo "d8134f81bfc9184e8c2b7a30aaedab25c63c637a22d43270ce73c84874ac4af8  gev.tgz" | sha256sum -c
 tar -xzf gev.tgz
 exec bash scripts/install-gods-eye.sh </dev/tty
