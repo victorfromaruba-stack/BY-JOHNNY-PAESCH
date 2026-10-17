@@ -37,15 +37,26 @@ const text = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').rep
  * the whole week in US dollars — Interval quotes weeks, and showing a nightly rate as if it were
  * bookable per night would be a lie the member only discovers at checkout.
  */
-export function parseGetaways(html) {
+export function parseGetaways(html, { includeNearby = false } = {}) {
   const source = String(html || '');
   // Where each resort's group begins, and which resort it is.
   const heads = [...source.matchAll(/class="[^"]*resort_header_row_2\s+([A-Z0-9]{2,6})[^"]*"/g)]
     .map((m) => ({ code: m[1], at: m.index }));
   if (!heads.length) return [];
 
+  // Ask for Aruba and Interval answers with Aruba, then keeps going into "Areas Surrounding
+  // Aruba" — which for this search meant Cancun and three resorts in Mexico. Everything from
+  // `resorts_nearby` onwards is a suggestion, not the place the member asked about, and showing
+  // those as Aruba would be the app telling a member something untrue. Dropped unless asked for.
+  const nearbyFrom = (() => {
+    const m = /id="resorts_nearby"/.exec(source) || /Areas\s+Surrounding/i.exec(source);
+    return m ? m.index : Infinity;
+  })();
+
   const out = [];
   heads.forEach((head, i) => {
+    const nearby = head.at > nearbyFrom;
+    if (nearby && !includeNearby) return;
     const block = source.slice(head.at, i + 1 < heads.length ? heads[i + 1].at : source.length);
     // The name is the alt text on the group's own thumbnail. Every resort has one; only the few
     // with a video also carry it as an aria-label, and the carousel's own buttons are labelled
@@ -72,6 +83,8 @@ export function parseGetaways(html) {
         week,
         // The flag is on the row, not the resort: the same resort can offer both.
         allInclusive: /resortallInclusive_true/.test(row[0]),
+        // True when this came from "areas surrounding" rather than the destination searched.
+        nearby,
       });
     }
   });

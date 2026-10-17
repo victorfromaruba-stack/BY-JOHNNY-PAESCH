@@ -16,14 +16,17 @@ const html = readFileSync(join(HERE, 'fixtures-interval-aruba.html'), 'utf8');
 const weeks = parseGetaways(html);
 
 test('finds the weeks that are really on the page', () => {
-  assert.ok(weeks.length >= 20, `expected a full page of weeks, got ${weeks.length}`);
+  assert.ok(weeks.length >= 10, `expected a page of Aruba weeks, got ${weeks.length}`);
 });
 
 test('every week is tied to a resort code', () => {
   for (const w of weeks) assert.match(w.code, /^[A-Z0-9]{2,6}$/, `bad code on ${JSON.stringify(w)}`);
-  // This search was Aruba; these are the resorts it covered.
   const codes = new Set(weeks.map((w) => w.code));
-  for (const expected of ['CPV', 'AWA', 'LC2']) assert.ok(codes.has(expected), `missing ${expected}`);
+  // The Aruba resorts this search really covered.
+  for (const expected of ['CPV', 'DP1', 'LC2', 'RBK']) assert.ok(codes.has(expected), `missing ${expected}`);
+  // And AWA is AVA Resort Cancun, which came back under "areas surrounding Aruba". Its absence
+  // is the point of the filter, so it is asserted rather than left to chance.
+  assert.ok(!codes.has('AWA'), 'a Cancun resort is being reported as an Aruba result');
 });
 
 test('a price is never shown without the resort it belongs to', () => {
@@ -86,6 +89,22 @@ test('one line per resort for a short board', () => {
     const cheapest = Math.min(...weeks.filter((w) => w.code === b.code).map((w) => w.week));
     assert.equal(b.week, cheapest, `${b.code} is not showing its cheapest week`);
   }
+});
+
+test('a search for Aruba does not quietly return Mexico', () => {
+  // Interval follows the real answer with "Areas Surrounding Aruba", which in this very
+  // fixture means Cancun and three resorts in Mexico. A member asking for Aruba being shown
+  // Cancun is the app saying something untrue, so they are dropped by default.
+  const names = weeks.map((w) => w.resort.toLowerCase()).join(' | ');
+  assert.ok(!/cancun|fives/.test(names), `a suggestion leaked in: ${names.slice(0, 160)}`);
+  for (const w of weeks) assert.equal(w.nearby, false);
+});
+
+test('the suggestions are still there when asked for', () => {
+  const all = parseGetaways(html, { includeNearby: true });
+  assert.ok(all.length > weeks.length, 'includeNearby returned no extra weeks');
+  assert.ok(all.some((w) => w.nearby), 'nothing was marked as nearby');
+  assert.ok(all.filter((w) => !w.nearby).length === weeks.length, 'the destination set changed');
 });
 
 test('month names become dates that sort', () => {
