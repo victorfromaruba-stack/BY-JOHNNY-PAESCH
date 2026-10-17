@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { worthPosting, asDeal, resolveStay, capPerResortMonth, dedupeKey, ourPrice, retailPrice } from './judge.mjs';
+import { worthPosting, implausiblyCheap, asDeal, resolveStay, capPerResortMonth, dedupeKey, ourPrice, retailPrice } from './judge.mjs';
 
 const SURF = 'a1b2c3d4-0000-4000-8000-000000000001';
 const catalog = new Map([[SURF, { id: SURF, name: 'Marriott’s Aruba Surf Club', rate_low_usd: 135, rate_high_usd: 310, rate_peak_usd: 580, retail_usd: 850 }]]);
@@ -94,4 +94,31 @@ test('the same week from two sources is one week', () => {
   const a = { stayId: SURF, from: week.from, to: week.to, unit: 'Studio Queen, Oceanside' };
   const b = { stayId: SURF, from: week.from, to: week.to, unit: 'studio queen oceanside' };
   assert.equal(dedupeKey(a), dedupeKey(b));
+});
+
+// A price can be parsed perfectly and still be impossible. On 17 October 2026 the board
+// offered a week at Barceló Aruba for $71 — roughly $10 a night, at a resort that runs nearer
+// $500 — and RedWeek had already pulled the listing. Every test passed, because they tested
+// the parser, which was right. Nothing asked whether the number could be true.
+test('an impossibly cheap week is a data error, not a find', () => {
+  const cfg = { minNights: 1, mustBeatOurs: false };
+  const barcelo = { taken: false, stayId: 's1', from: '2026-12-19', to: '2026-12-26',
+    nights: 7, usdNightly: 10, usdTotal: 71, source: 'redweek' };
+  assert.equal(worthPosting(barcelo, new Map(), cfg), false, 'the $71 week got through again');
+
+  // And the same figure from Interval, which takes a different path through worthPosting.
+  assert.equal(worthPosting({ ...barcelo, source: 'interval' }, new Map(), cfg), false);
+});
+
+test('a genuinely cheap week still gets through', () => {
+  const cfg = { minNights: 1, mustBeatOurs: false };
+  const real = { taken: false, stayId: 's1', from: '2026-12-19', to: '2026-12-26',
+    nights: 7, usdNightly: 220, usdTotal: 1540, source: 'redweek' };
+  assert.equal(worthPosting(real, new Map(), cfg), true, 'the floor is swallowing real finds');
+});
+
+test('the floor is judged per night, not per stay', () => {
+  // $300 total sounds like plenty until you notice it is a single night.
+  assert.equal(implausiblyCheap({ usdTotal: 300, nights: 1 }, {}), false);
+  assert.equal(implausiblyCheap({ usdTotal: 200, nights: 7 }, {}), true);
 });

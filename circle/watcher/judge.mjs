@@ -68,12 +68,34 @@ export function resolveStay(f, catalog) {
 }
 
 /** Worth telling the Circle about? Prices the find on the way through (`ourPrice`, `retailPrice`, `saves`). */
+/**
+ * Is this price too low to be real?
+ *
+ * Beach-resort weeks do not go for pocket money. Anything under `cfg.minNightly` (default $40
+ * a night) is treated as a broken listing rather than a find. Deliberately generous: the point
+ * is to catch the typo and the parsing accident, not to second-guess a genuinely cheap week.
+ */
+export function implausiblyCheap(f, cfg = {}) {
+  const floor = cfg.minNightly ?? 40;
+  if (!(floor > 0)) return false;
+  const nights = Math.max(1, f.nights || 1);
+  const nightly = f.usdNightly > 0 ? f.usdNightly : (f.usdTotal > 0 ? f.usdTotal / nights : 0);
+  if (!(nightly > 0)) return false;              // unpriced is a different question, handled below
+  return nightly < floor;
+}
+
 export function worthPosting(f, catalog, cfg) {
   if (f.taken) return false;
   if (!f.stayId) return false;                                 // post_deal needs a stay; nothing to be done here
   if (!f.from || !f.to) return false;
   if (cfg.minNights && f.nights < cfg.minNights) return false;
   if (cfg.maxNightly && f.usdNightly > cfg.maxNightly) return false;
+  // A floor, not only a ceiling. On 17 October the board offered a week at Barceló Aruba for
+  // $71 — about $10 a night, where that resort runs nearer $500. The parser was correct; the
+  // listing itself carried a nonsense figure, and nothing asked whether the number could be
+  // true. An implausibly cheap week is a data error, not a bargain, and a member asking Victor
+  // to book one costs him the trust this whole club runs on.
+  if (implausiblyCheap(f, cfg)) return false;
   const stay = catalog?.get(f.stayId);
   const ours = ourPrice(stay, f.from, f.nights || 1);
   if (ours != null) { f.ourPrice = ours; f.saves = f.usdTotal > 0 ? Math.round(ours - f.usdTotal) : null; }
