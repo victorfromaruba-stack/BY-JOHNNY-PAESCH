@@ -4194,3 +4194,187 @@ begin
 end $$;
 revoke all on function reprice_deal(text, int, text, text) from public, anon;
 grant execute on function reprice_deal(text, int, text, text) to authenticated;
+
+
+-- =====================================================================
+--  22 Oct 2026 — the dates a member is looking for, carried by a tap to the watcher.
+--  Same text as migrations/20261022_tap_window.sql, brought forward here as the header asks.
+-- =====================================================================
+-- 22 Oct 2026. Victor, on the Stays page: "Would be nice on the site Circle to add dates we are looking
+-- for. Now it shows for the next week but I'd like to see a month or two in advance."
+--
+-- A member now says which dates they are looking for, and a tap carries them to the watcher, so what
+-- the watcher goes and looks for (RedWeek's listings, an Interval Getaways search) is those dates and
+-- not whatever its default happens to be.
+--
+-- Paste into the SQL editor AFTER 20261022_stay_taps.sql and 20261022_board_freshness.sql (it alters
+-- the table they make and replaces their functions). Safe to run twice.
+--
+--   1. stay_taps.from_date / to_date   nullable. A tap from an older phone carries none; the watcher
+--                                      then looks at its own default. Still a place and a time and now
+--                                      two dates — never a member.
+--   2. record_stay_tap / record_board_tap   take the two dates. Same shape as before: security definer,
+--                                      a member only, never an error on a page load. A second member's
+--                                      dates WIDEN the waiting tap's rather than being dropped, so two
+--                                      people looking at different months are both looked for.
+--   3. take_stay_taps                  hands the dates to the watcher (window_from, window_to).
+--
+-- A window is believed only when it is sane: both ends present, in order, not over, and no longer than
+-- a year; a start in the past is moved to today. Anything else is stored as no window at all, because
+-- a bad pair of dates must never turn into a search or an error.
+
+alter table stay_taps add column if not exists from_date date;
+alter table stay_taps add column if not exists to_date   date;
+
+-- The one place the rule is written. Today is Aruba's day (UTC-4, no daylight time).
+create or replace function clean_tap_window(p_from date, p_to date, out o_from date, out o_to date)
+language plpgsql stable set search_path = public as $$
+declare today date := (now() at time zone 'America/Aruba')::date;
+begin
+  if p_from is null or p_to is null or p_to < p_from or p_to < today then return; end if;
+  o_from := greatest(p_from, today);
+  o_to := least(p_to, o_from + 366);
+end $$;
+revoke all on function clean_tap_window(date, date) from public, anon, authenticated;
+
+-- A member opened a place, looking for these dates. At most one waiting tap per place; a second one
+-- widens it (least/greatest ignore a missing end, so a tap with no dates changes nothing).
+drop function if exists record_stay_tap(uuid);
+create or replace function record_stay_tap(p_stay uuid, p_from date default null, p_to date default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare w record;
+begin
+  if current_member_id() is null then raise exception 'Not a member'; end if;
+  if not exists (select 1 from stays where id = p_stay and active and kind = 'aruba') then return; end if;
+  select * into w from clean_tap_window(p_from, p_to);
+  update stay_taps set from_date = least(from_date, w.o_from), to_date = greatest(to_date, w.o_to)
+    where stay_id = p_stay and taken_at is null;
+  if found then return; end if;
+  insert into stay_taps(stay_id, from_date, to_date) values (p_stay, w.o_from, w.o_to);
+end $$;
+revoke all on function record_stay_tap(uuid, date, date) from public, anon;
+grant execute on function record_stay_tap(uuid, date, date) to authenticated;
+
+-- The Stays LIST opened, looking for these dates. One waiting board tap (the unique index), widened
+-- the same way.
+drop function if exists record_board_tap();
+create or replace function record_board_tap(p_from date default null, p_to date default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare w record;
+begin
+  if current_member_id() is null then raise exception 'Not a member'; end if;
+  select * into w from clean_tap_window(p_from, p_to);
+  update stay_taps set from_date = least(from_date, w.o_from), to_date = greatest(to_date, w.o_to)
+    where stay_id is null and taken_at is null;
+  if found then return; end if;
+  begin
+    insert into stay_taps(stay_id, from_date, to_date) values (null, w.o_from, w.o_to);
+  exception when unique_violation then      -- the other phone got there first: widen theirs
+    update stay_taps set from_date = least(from_date, w.o_from), to_date = greatest(to_date, w.o_to)
+      where stay_id is null and taken_at is null;
+  end;
+end $$;
+revoke all on function record_board_tap(date, date) from public, anon;
+grant execute on function record_board_tap(date, date) to authenticated;
+
+-- The watcher collects what is waiting, dates included. Its columns were (stay, tapped); the return
+-- type changes, so the function is dropped and made again. Named window_* so they cannot be mistaken
+-- for the table's own columns inside the body.
+drop function if exists take_stay_taps();
+create or replace function take_stay_taps()
+returns table (stay uuid, tapped timestamptz, window_from date, window_to date)
+language plpgsql security definer set search_path = public as $$
+begin
+  if not current_is_bot() then raise exception 'Only the watcher collects these'; end if;
+  delete from stay_taps where taken_at < now() - interval '7 days';
+  return query
+    with t as (update stay_taps set taken_at = now() where taken_at is null
+               returning stay_taps.stay_id, stay_taps.tapped_at, stay_taps.from_date, stay_taps.to_date)
+    select t.stay_id, t.tapped_at, t.from_date, t.to_date from t order by t.tapped_at;
+end $$;
+revoke all on function take_stay_taps() from public, anon;
+grant execute on function take_stay_taps() to authenticated;
+
+
+-- =====================================================================
+--  22 Oct 2026 — a source being out pauses the 7-day clock of its rows.
+--  Same text as migrations/20261022_source_outage.sql, brought forward here as the header asks.
+-- =====================================================================
+-- 22 Oct 2026. RedWeek stopped answering this server's address (every request times out). Victor's
+-- decision was to wait, not to route around it. The 7-day rule (20261022_board_freshness.sql) would
+-- then empty the board by itself: a week nobody could see for seven days is a week RedWeek was
+-- unreachable for, and that says nothing about the week.
+--
+-- So a source being out PAUSES the clock of its rows. The watcher writes down when a source stopped
+-- answering and when it answered again; retire_stale_deals() adds the time a row's source was out,
+-- since the row was last seen, to its seven days. Nothing is written to deals.seen_at: the row still
+-- says honestly when it was last seen, and the Stays page prints "RedWeek not reachable since 14:20;
+-- weeks shown as last seen".
+--
+-- Paste into the SQL editor AFTER 20261022_board_freshness.sql. Safe to run twice.
+
+create table if not exists source_outages (
+  id     bigserial primary key,
+  source text not null check (source in ('redweek', 'interval', 'vakaymood')),
+  since  timestamptz not null,           -- the last moment the source was known to answer
+  until  timestamptz,                    -- null while it is still out
+  why    text
+);
+-- One open outage per source, enforced: the watcher reports every pass and must not make a row each time.
+create unique index if not exists source_outages_one_open_idx on source_outages(source) where until is null;
+alter table source_outages enable row level security;
+revoke all on source_outages from anon, authenticated;
+revoke all on sequence source_outages_id_seq from anon, authenticated;
+grant select on source_outages to authenticated;
+drop policy if exists source_outages_read on source_outages;
+create policy source_outages_read on source_outages for select to authenticated
+  using (current_member_id() is not null);
+
+-- The watcher: a source stopped answering. `p_since` is the last time it did (the watcher knows that
+-- from its own reads); never in the future. Already out: nothing changes, the first time stands.
+create or replace function mark_source_unreachable(p_source text, p_since timestamptz default null, p_why text default null)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not current_is_bot() then raise exception 'Only the watcher records this'; end if;
+  insert into source_outages(source, since, why)
+    values (p_source, least(coalesce(p_since, now()), now()), left(nullif(trim(p_why), ''), 200))
+    on conflict (source) where until is null do nothing;
+end $$;
+revoke all on function mark_source_unreachable(text, timestamptz, text) from public, anon;
+grant execute on function mark_source_unreachable(text, timestamptz, text) to authenticated;
+
+-- The watcher: it answered. Closes the open outage, if there is one.
+create or replace function mark_source_reachable(p_source text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not current_is_bot() then raise exception 'Only the watcher records this'; end if;
+  update source_outages set until = now() where source = p_source and until is null;
+end $$;
+revoke all on function mark_source_reachable(text) from public, anon;
+grant execute on function mark_source_reachable(text) to authenticated;
+
+-- How long `p_source` was out between `p_from` and now: what the clock of a row last seen at `p_from`
+-- does not count. An outage that ended before the row was last seen counts for nothing.
+create or replace function outage_paused(p_source text, p_from timestamptz)
+returns interval language sql stable security definer set search_path = public as $$
+  select coalesce(sum(greatest(interval '0', least(coalesce(o.until, now()), now()) - greatest(o.since, p_from))), interval '0')
+  from source_outages o where o.source = p_source
+$$;
+revoke all on function outage_paused(text, timestamptz) from public, anon, authenticated;
+
+-- retire_stale_deals(), the same function as in 20261022_board_freshness.sql with the pause added.
+create or replace function retire_stale_deals(p_days int default 7)
+returns int language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  if not current_is_bot() then raise exception 'Only the watcher takes a week down this way'; end if;
+  if coalesce(p_days, 0) < 1 then raise exception 'Days must be at least one'; end if;
+  update deals set status = 'gone', retired_at = now(), retired_reason = 'not seen for ' || p_days || ' days'
+    where status = 'live' and source in ('redweek', 'interval', 'vakaymood')
+      and coalesce(seen_at, posted_at) + make_interval(days => p_days)
+          + outage_paused(source::text, coalesce(seen_at, posted_at)) < now();
+  get diagnostics n = row_count;
+  return n;
+end $$;
+revoke all on function retire_stale_deals(int) from public, anon;
+grant execute on function retire_stale_deals(int) to authenticated;
