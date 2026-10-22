@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { worthPosting, implausiblyCheap, asDeal, resolveStay, capPerResortMonth, dedupeKey, ourPrice, retailPrice } from './judge.mjs';
+import { worthPosting, implausiblyCheap, implausiblyDear, asDeal, resolveStay, capPerResortMonth, dedupeKey, ourPrice, retailPrice } from './judge.mjs';
 
 const SURF = 'a1b2c3d4-0000-4000-8000-000000000001';
 const catalog = new Map([[SURF, { id: SURF, name: 'Marriott’s Aruba Surf Club', rate_low_usd: 135, rate_high_usd: 310, rate_peak_usd: 580, retail_usd: 850 }]]);
@@ -121,4 +121,30 @@ test('the floor is judged per night, not per stay', () => {
   // $300 total sounds like plenty until you notice it is a single night.
   assert.equal(implausiblyCheap({ usdTotal: 300, nights: 1 }, {}), false);
   assert.equal(implausiblyCheap({ usdTotal: 200, nights: 7 }, {}), true);
+});
+
+// The other half of the same rule. A decimal point lost on a Getaway turns $633 into $63,346; the
+// floor never sees that, and a member quoted $9,000 a night is as wrong as one quoted $10.
+test('an impossibly dear week is a data error too, from either source', () => {
+  const cfg = { minNights: 1, mustBeatOurs: false };
+  const typo = { taken: false, stayId: 's1', from: '2026-12-19', to: '2026-12-26',
+    nights: 7, usdNightly: 9049.43, usdTotal: 63346, source: 'interval' };
+  assert.equal(implausiblyDear(typo, cfg), true);
+  assert.equal(worthPosting(typo, new Map(), cfg), false, 'a $63,346 week got through');
+  assert.equal(worthPosting({ ...typo, source: 'redweek' }, new Map(), cfg), false);
+});
+
+test('the ceiling is generous: a dear real week, and an unpriced one, are not caught by it', () => {
+  const cfg = { minNights: 1, mustBeatOurs: false };
+  const dear = { taken: false, stayId: 's1', from: '2026-12-26', to: '2027-01-02', nights: 7, usdNightly: 1100, usdTotal: 7700, source: 'interval' };
+  assert.equal(implausiblyDear(dear, cfg), false);
+  assert.equal(worthPosting(dear, new Map(), cfg), true);
+  assert.equal(implausiblyDear({ nights: 7 }, cfg), false, 'no price is a different question');
+  assert.equal(implausiblyDear({ usdNightly: 2000, nights: 7 }, { maxPlausibleNightly: 0 }), false, '0 turns it off');
+  assert.equal(implausiblyDear({ usdTotal: 7 * 1501, nights: 7 }, {}), true, 'judged per night from the total when no nightly is given');
+});
+
+test('a find may carry a note about where it was read, and it reaches the board', () => {
+  const f = { source: 'interval', stayId: 's1', from: '2026-12-19', to: '2026-12-26', nights: 7, usdTotal: 633.46, externalId: 'interval:s1:2026-12-19:2026-12-26', seenNote: 'Read off Interval at 14:03' };
+  assert.match(asDeal(f, { pointsPerUsd: 100 }, {}).note, /Read off Interval at 14:03/);
 });

@@ -84,6 +84,23 @@ export function implausiblyCheap(f, cfg = {}) {
   return nightly < floor;
 }
 
+/**
+ * The other half of the floor above: is this price too high to be real?
+ *
+ * A figure can be parsed perfectly and still be impossible in either direction — a decimal point
+ * lost on a Getaway turns $633 into $63,346 — and the floor alone only catches the cheap ones.
+ * The ceiling is an absolute $1,500 a night (cfg.maxPlausibleNightly), which is more than any
+ * Aruba resort charges for a room in the peak of Christmas, so it is there for the typo and the
+ * parsing accident and nothing else. It is judged per night, like the floor.
+ */
+export function implausiblyDear(f, cfg = {}) {
+  const ceiling = cfg.maxPlausibleNightly ?? 1500;
+  if (!(ceiling > 0)) return false;
+  const nights = Math.max(1, f.nights || 1);
+  const nightly = f.usdNightly > 0 ? f.usdNightly : (f.usdTotal > 0 ? f.usdTotal / nights : 0);
+  return nightly > ceiling;
+}
+
 export function worthPosting(f, catalog, cfg) {
   if (f.taken) return false;
   if (!f.stayId) return false;                                 // post_deal needs a stay; nothing to be done here
@@ -96,6 +113,7 @@ export function worthPosting(f, catalog, cfg) {
   // true. An implausibly cheap week is a data error, not a bargain, and a member asking Victor
   // to book one costs him the trust this whole club runs on.
   if (implausiblyCheap(f, cfg)) return false;
+  if (implausiblyDear(f, cfg)) return false;
   const stay = catalog?.get(f.stayId);
   const ours = ourPrice(stay, f.from, f.nights || 1);
   if (ours != null) { f.ourPrice = ours; f.saves = f.usdTotal > 0 ? Math.round(ours - f.usdTotal) : null; }
@@ -168,7 +186,9 @@ export function asDeal(f, cfg, settings = {}) {
       : [place, unit].filter(Boolean).join(' · ') || 'A week that came up',
     note: [unit, f.sleeps ? `sleeps ${f.sleeps}` : '', f.view, f.protected ? 'RedWeek protects the payment' : '',
            pricedByUs ? 'Interval showed no price — this is our own rate for those nights; Victor confirms before he quotes' : '',
-           !pricedByUs && f.saves > 0 ? `${money(f.saves)} under our rate` : ''].filter(Boolean).join(' · '),
+           !pricedByUs && f.saves > 0 ? `${money(f.saves)} under our rate` : '',
+           // Where and when this was read, for a source the watcher read for itself (the Interval scan).
+           f.seenNote || ''].filter(Boolean).join(' · '),
     // The resort's public rate for these nights, so the card's "under the public rate" line is
     // exactly that — not the Circle's own rate dressed up as retail.
     retailUsd: f.retailPrice || null,
