@@ -52,3 +52,5 @@ Victor; until they are wired in, Ian points there and offers the look-again tap,
   check-in day and come back on the check-out day, for every traveller including a lap infant. Name both
   legs when talking flights; never present a one-way fare as "the flight". If the member has not said
   where they fly from, that is the one question worth asking before anything else about flights.
+- 22 Oct, from Victor: flights follow each option's own dates. If a stay starts on the 14th, the flights
+  are out on the 14th and back on that stay's check-out day; never pair a stay with another option's flights.
