@@ -246,7 +246,7 @@ async function passBody(circle, { redweek = true, fromTap = false } = {}, ctx) {
   } else if (!process.env.INTERVAL_USER) {
     log('Interval: no INTERVAL_USER set, skipping');
   } else if (!byHand) {
-    log('Interval: signed into by hand only, never on this timer — run `node index.mjs --once` when you want a look. RedWeek runs every pass.'
+    log('Interval: signed into by hand only, never on this timer — run `node index.mjs --once` when you want a look. RedWeek is read at its two scans a day.'
       + (pace.refusals ? ` (the last attempt was refused, ${refusalsSaid(pace.refusals)})` : ''));
   } else {
     let iv = null;
