@@ -156,6 +156,10 @@ ok(all.includes('VIPSESSION'), `the second host's own session was minted (${all.
 // Refusing to be walked off Interval, the same guard the fetch client has.
 ok(iv.allows('vip.intervalworld.com') && !iv.allows('evil.example'),
    'it will not be sent to a host that is neither Interval nor the configured origin');
+ok(new IntervalBrowser({ username: 'u', password: 'p' }).origin === 'https://vip.intervalworld.com',
+   'by default it signs in at the VIP host, where Victor signs in by hand');
+ok(iv.allows('www.intervalworld.com') && iv.allows('vip.intervalworld.com'),
+   'and the guard still accepts both Interval hosts');
 
 // And the dump reads as the answer rather than the start of another guess.
 const out = await iv.dump(['/web/my/info/benefits/getaways']);

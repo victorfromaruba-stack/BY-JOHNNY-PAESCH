@@ -13,10 +13,12 @@
 // the session actually lands on. Run once with --dump on the VPS and the selectors get
 // finished from that HTML — no password ever leaves the machine.
 
-// Where signing in starts. Where it ENDS is not this — see followTo(). Victor's account is
-// VIP Gold, and Interval serves VIP members from vip.intervalworld.com; the login answer moves
-// the browser there with a line of JavaScript. So this is the front door, not the address.
-const ORIGIN = 'https://www.intervalworld.com';
+// Where signing in starts: the VIP host's own login page, which is where Victor signs in by hand
+// (Victor, 22 Oct 2026, twice: https://vip.intervalworld.com/web/my/auth/loginPage). Starting at
+// www instead meant the session was set on www and the login answer then sent the browser to
+// vip, where JSESSIONID is a different, host-only cookie — so every read there was the signed-out
+// page. Where signing in ENDS is still read off the answer, see followTo().
+const ORIGIN = 'https://vip.intervalworld.com';
 // Only ever Interval. The jar does not scope cookies by domain — it sends what it holds to
 // whatever host it is pointed at, which is what carries the session from www to vip — so the
 // set of hosts it may be pointed at is the thing that has to be closed. A redirect off this
@@ -236,14 +238,17 @@ function decodeEntities(s) {
 }
 
 export class Interval {
-  constructor({ username, password, fetchImpl = fetch } = {}) {
+  constructor({ username, password, fetchImpl = fetch, origin = ORIGIN } = {}) {
     if (!username || !password) throw new Error('Set INTERVAL_USER and INTERVAL_PASS in the environment');
     this.username = username; this.password = password;
     this.jar = jar(); this.fetch = fetchImpl; this.signedIn = false;
     // Where a bare path is resolved against. It starts at the front door and moves to wherever
     // signing in actually puts the session — vip.intervalworld.com, for a VIP account. Asking
     // www for a page the session lives on at vip returns the logged-out page, cheerfully, 200.
-    this.origin = ORIGIN;
+    // frontDoor is where signing in starts, and is a parameter only so a test can start it
+    // somewhere else (a stub, or the old www front door).
+    this.frontDoor = origin;
+    this.origin = origin;
     // Every hop, so a failed pass can be read afterwards without a password and without
     // guessing. Values are never recorded — only cookie NAMES.
     this.trace = [];
@@ -267,8 +272,8 @@ export class Interval {
     finally { clearTimeout(timer); }
     const setCookies = (res.headers.getSetCookie?.() ?? []).map(l => l.split('=')[0].trim());
     this.jar.absorb(res, url);
-    this.trace.push({ method, url: url.replace(ORIGIN, ''), status: res.status,
-      to: (res.headers.get('location') || '').replace(ORIGIN, ''),
+    this.trace.push({ method, url: url.replace(this.frontDoor, ''), status: res.status,
+      to: (res.headers.get('location') || '').replace(this.frontDoor, ''),
       setCookies, jarAfter: this.jar.names() });
     // Follow redirects by hand so cookies are carried across each hop. Bounded, because a site
     // that bounces /a to /b to /a would otherwise recurse until the stack gives out.
@@ -335,7 +340,7 @@ export class Interval {
     // Always begin at the front door. A second sign-in — after a session was lost mid-pass —
     // would otherwise be posted to whatever host the FIRST one ended on, which is not where
     // signing in starts.
-    this.origin = ORIGIN;
+    this.origin = this.frontDoor;
     const pageRes = await this.req('/web/my/auth/loginPage');   // establishes the session cookie
     const loginPage = await pageRes.text();
 
@@ -362,18 +367,18 @@ export class Interval {
       j_username: this.username, j_password: this.password, _spring_security_remember_me: 'on',
     });
     const res = await this.req('/web/my/auth/login', { method: 'POST', body: form.toString(),
-                                                       referer: ORIGIN + '/web/my/auth/loginPage' });
+                                                       referer: this.frontDoor + '/web/my/auth/loginPage' });
     const html = await res.text();
     const landedOn = res.url || '';
     const said = (html.match(/class="[^"]*(?:error|alert|message)[^"]*"[^>]*>\s*([^<]{4,160})/i) || [])[1];
 
     // The login answer does not redirect with a header — it redirects with a line of script,
     // to a host that is not the one we signed in at. Go where it says.
-    const movedTo = followTo(html, landedOn || ORIGIN);
+    const movedTo = followTo(html, landedOn || this.frontDoor);
     let after = null;
     if (movedTo) {
       try {
-        const r2 = await this.followScript(html, landedOn || ORIGIN);
+        const r2 = await this.followScript(html, landedOn || this.frontDoor);
         if (r2) after = await r2.text();
       } catch { /* not being able to follow is not evidence of a good session either */ }
     }
@@ -428,7 +433,7 @@ export class Interval {
       // two runs differ in one thing only: whether there is a session. Comparing a vip page
       // against a www page would have been comparing two different things.
       try {
-        const anon = new Interval({ username: 'x', password: 'x', fetchImpl: this.fetch });
+        const anon = new Interval({ username: 'x', password: 'x', fetchImpl: this.fetch, origin: this.frontDoor });
         anon.origin = this.origin;
         for (const p of [PROBE, ...paths]) {
           const html = await (await anon.req(p)).text();
@@ -443,7 +448,7 @@ export class Interval {
         `  landed on:      ${r.landedOn}`,
         `     (landing here proves nothing — an anonymous caller lands here too)`,
         `  script moved us: ${r.movedTo || '(the answer carried no javascript redirect)'}`,
-        `  now asking:     ${r.origin}${r.origin !== ORIGIN ? '   <-- NOT the host we signed in at' : ''}`,
+        `  now asking:     ${r.origin}${r.origin !== this.frontDoor ? '   <-- NOT the host we signed in at' : ''}`,
         `  probe page:     ${r.probePath} -> ${say(r.probeSays)}`,
         `  login answer:   ${say(r.answerSays)}`,
         `  the site said:  ${r.said || '(nothing)'}`,

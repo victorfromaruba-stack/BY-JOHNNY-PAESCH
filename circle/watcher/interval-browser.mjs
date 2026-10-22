@@ -40,7 +40,11 @@ import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-const ORIGIN = 'https://www.intervalworld.com';
+// The VIP host's own login page: where Victor signs in by hand, and where the session must be
+// set, because JSESSIONID is host-only and the reads (PROBE, the Getaway search) are on vip too.
+// Signing in at www and being sent on to vip left the browser signed out there. Same value as
+// interval.mjs; the two readers are kept in step. HOSTS below still accepts every Interval host.
+const ORIGIN = 'https://vip.intervalworld.com';
 const HOSTS = /(^|\.)intervalworld\.com$/i;
 const PROBE = process.env.INTERVAL_PROBE_PATH || '/web/my/home';
 

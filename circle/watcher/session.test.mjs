@@ -39,6 +39,15 @@ function stub({ cookiesOnLogin, accepts = true, redirectTo = '/web/cs?a=1000', g
 
 const listen = (s) => new Promise(r => s.listen(0, '127.0.0.1', () => r(s.address().port)));
 let failures = 0;
+// Every request goes to a local stub or it throws. A host with no stub must never fall through
+// to the real network: this suite posts logins, and a rewrite that quietly stopped matching (as
+// it would have when the front door moved from www to vip) would send them to Interval itself.
+const toStubs = (map) => (url, opts) => {
+  const u = String(url), host = Object.keys(map).find(h => u.startsWith(h));
+  if (!host) throw new Error(`test tried to reach the real network: ${u.slice(0, 70)}`);
+  return globalThis.fetch(map[host] + u.slice(host.length), opts);
+};
+const VIP_URL = 'https://vip.intervalworld.com', WWW_URL = 'https://www.intervalworld.com';
 const ok = (cond, msg) => { if (!cond) failures++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); };
 
 // --- the page reader, on its own ---------------------------------------------------------
@@ -146,10 +155,11 @@ for (const c of CASES) {
   const s = stub({ cookiesOnLogin: c.cookies, accepts: c.accepts });
   const port = await listen(s);
   const base = `http://127.0.0.1:${port}`;
-  const realFetch = globalThis.fetch;
   const iv = new Interval({ username: 'u', password: 'p' });
-  iv.fetch = (url, opts) => realFetch(String(url).replace('https://www.intervalworld.com', base), opts);
+  ok(iv.origin === VIP_URL, '   it starts at the VIP host, where Victor signs in by hand');
+  iv.fetch = toStubs({ [VIP_URL]: base });
   const r = await iv.attemptSignIn();
+  ok(iv.trace[0].url === '/web/my/auth/loginPage', `   ${c.name}: the first request is the login page on the front door (${iv.trace[0].url})`);
   ok(r.ok === c.expect, `${c.name} -> reports ${r.ok ? 'signed in' : 'not signed in'}`);
   // Whatever the verdict, the trace must be readable and must never carry a cookie value.
   ok(iv.trace.length > 0 && iv.trace.every(t => typeof t.status === 'number'), `   ${c.name}: every hop is recorded`);
@@ -161,9 +171,8 @@ for (const c of CASES) {
 {
   const s = stub({ cookiesOnLogin: ['JSESSIONID=; Path=/; Max-Age=0'], accepts: true });
   const port = await listen(s);
-  const realFetch = globalThis.fetch;
   const iv = new Interval({ username: 'u', password: 'p' });
-  iv.fetch = (url, opts) => realFetch(String(url).replace('https://www.intervalworld.com', `http://127.0.0.1:${port}`), opts);
+  iv.fetch = toStubs({ [VIP_URL]: `http://127.0.0.1:${port}` });
   await iv.attemptSignIn();
   ok(!iv.jar.header().includes('JSESSIONID='), 'a cleared cookie is dropped, not sent back as an empty value');
   s.close();
@@ -206,11 +215,10 @@ for (const c of CASES) {
 
   // The real hostnames go through the client — that is what the host guard sees — and only the
   // transport is redirected to the two stubs. Anything else would be testing a different thing.
-  const realFetch = globalThis.fetch;
-  const iv = new Interval({ username: 'victor', password: 'pw' });
-  iv.fetch = (url, opts) => realFetch(String(url)
-    .replace('https://vip.intervalworld.com', `http://127.0.0.1:${vipPort}`)
-    .replace('https://www.intervalworld.com', `http://127.0.0.1:${wwwPort}`), opts);
+  // The front door is www here on purpose: this is the case where signing in starts on one host
+  // and ends on another, kept on trial in case Interval ever sends a login that way again.
+  const iv = new Interval({ username: 'victor', password: 'pw', origin: WWW_URL });
+  iv.fetch = toStubs({ [VIP_URL]: `http://127.0.0.1:${vipPort}`, [WWW_URL]: `http://127.0.0.1:${wwwPort}` });
   const r = await iv.attemptSignIn();
 
   ok(r.movedTo === 'https://vip.intervalworld.com/web/cs?a=0', `the javascript redirect was noticed (${r.movedTo})`);

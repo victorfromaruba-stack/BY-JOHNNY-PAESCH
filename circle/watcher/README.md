@@ -232,7 +232,8 @@ its tests now say so out loud rather than pretending otherwise.
 
 ### Victor's account is served from a different host
 
-Signing in happens at `www.intervalworld.com`. The answer to the login POST carries **no
+Signing in happens at `vip.intervalworld.com/web/my/auth/loginPage` — the page Victor uses by hand
+(the watcher began at `www.` until 22 Oct 2026, which is why it was never signed in on vip). The answer to the login POST carries **no
 `Location` header** — it carries a script:
 
 ```js
