@@ -562,6 +562,7 @@ export function stayDetail({ store, params, go, query = {} }) {
         </details>`;
       })()}
       ${stay.dealNote ? `<div class="panel flat" style="margin-top:16px"><p class="eyebrow">From Victor</p><p class="small" style="margin-top:8px">${escapeHtml(stay.dealNote)}</p></div>` : ''}
+      <p class="no-print" style="margin-top:var(--s-5)"><a class="link-rule" href="#/concierge?stay=${encodeURIComponent(stay.id)}">Ask Ian about this place</a></p>
       <div class="act-bar"><button type="button" class="btn block" data-act="ask">${icon('send', { size: 17 })}<span>${isTrip ? `Ask for a ${unitWord(stay)}` : 'Ask for these dates'}</span><span aria-hidden="true">·</span><b class="num" id="ask-fig"></b></button></div>
     </div></section></div>`);
   // Opening a place tells the watcher, which re-reads RedWeek for it within a minute; the line

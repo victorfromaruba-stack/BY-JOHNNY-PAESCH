@@ -18,6 +18,7 @@ import * as crewsView from './views/crews.js';
 import * as postcards from './views/postcards.js';
 import * as sanView from './views/san.js';
 import * as eyeView from './views/eye.js';
+import * as conciergeView from './views/concierge.js';
 import { icon } from './ui/icons.js';
 
 const ROUTES = [
@@ -52,6 +53,7 @@ const ROUTES = [
   { path: '/watching', view: dealsView.watching, title: 'What you are watching', auth: true },
   { path: '/postcards', view: postcards.feed, title: 'Postcards', auth: true },
   { path: '/postcards/:id', view: postcards.one, title: 'Postcard', auth: true },
+  { path: '/concierge', view: conciergeView.concierge, title: 'Ask Ian', auth: true },
   { path: '/crews', view: crewsView.crews, title: 'Your crews', auth: true },
   { path: '/crews/:id', view: crewsView.crewDetail, title: 'Crew', auth: true },
   { path: '/circle', view: officer.circle, title: 'The Circle', auth: true },
@@ -380,7 +382,7 @@ const NAV = () => (postcardsOn() ? NAV_ON : NAV_OFF);
 const TAB_ROOTS = ['/home', '/stays', '/cruises', '/postcards', '/crews', '/circle'];
 // The screens with no tab of their own go up to Home, and the Home tab lights under them: Home
 // is where the doors to Send, the statement, the card, the requests and the Pool live.
-const HOME_ROOTS = ['/pay', '/ledger', '/card', '/requests', '/watching', '/pool', '/rules', '/profile', '/san', '/eye', '/desk', '/bank', '/settings'];
+const HOME_ROOTS = ['/pay', '/ledger', '/card', '/requests', '/watching', '/pool', '/rules', '/profile', '/san', '/eye', '/concierge', '/desk', '/bank', '/settings'];
 
 // THE RAIL'S SECOND AND THIRD GROUPS. Only ever seen above the breakpoint, where the tab bar is a
 // rail in the sheet's margin and there is room for the rooms Home keeps behind it. NAV_OFF and
@@ -393,6 +395,7 @@ const RAIL_YOURS = [
   { path: '/ledger', label: 'Statement', icon: 'receipt' },
   { path: '/card', label: 'Your card', icon: 'idCard' },
   { path: '/requests', label: 'Your asks', icon: 'bookmark' },
+  { path: '/concierge', label: 'Ask Ian', icon: 'sparkles' },
   { path: '/watching', label: 'Watching', icon: 'eye' },
   { path: '/pool', label: 'The pool', icon: 'droplet' },
   { path: '/rules', label: 'The rules', icon: 'scale' },

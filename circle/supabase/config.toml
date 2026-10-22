@@ -1,0 +1,6 @@
+# Only what the deploy needs. learnings.md is read at boot, not imported, so the CLI has to be told
+# to ship it; without it Ian runs with no house knowledge (the dry run reports learnings_chars).
+project_id = "cdkopyphjvfxjqhasrae"
+
+[functions.concierge]
+static_files = ["./functions/concierge/learnings.md"]

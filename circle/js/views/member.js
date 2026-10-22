@@ -137,6 +137,7 @@ export function home({ store, go, refresh }) {
         <a class="link-rule" href="#/pay">Send a contribution</a>
         <a class="link-rule" href="#/ledger">Statement</a>
         <a class="link-rule" href="#/card">Your card</a>
+        <a class="link-rule" href="#/concierge">Ask Ian</a>
       </div>
     </div>`);
   body.appendChild(top);

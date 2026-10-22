@@ -1167,6 +1167,29 @@ async function showLogin({ name, username, password }) {
   } });
 }
 
+/**
+ * What members asked Ian, what it read to answer, what it cost, and whether it helped. A table and
+ * nothing more: this is the record the nightly review learns from, opened here so a person can too.
+ */
+async function drawIanLog(store, slot) {
+  try {
+    const { today, turns } = await store.conciergeTurns(40);
+    const usd = (n) => `$${Number(n || 0).toFixed(Number(n) < 1 ? 4 : 2)}`;
+    const fb = (t) => (t.feedback === 1 ? 'helped' : t.feedback === -1 ? `not it${t.feedbackNote ? `: ${t.feedbackNote}` : ''}` : '');
+    slot.innerHTML = `
+      ${today ? `<p class="small" style="margin-top:10px">Today <b class="num">${usd(today.spent_usd)}</b> of <b class="num">${usd(today.ceiling_usd)}</b>
+        over <b class="num">${today.turns}</b> turns, on <span class="mono">${escapeHtml(today.model)}</span>.${today.resting_since ? ` <b>Resting since ${escapeHtml(fmtDayTime(today.resting_since))}.</b>` : ''}</p>` : ''}
+      ${turns.length ? `<table class="people-table" style="margin-top:var(--s-3)"><tbody>${turns.map(t => `<tr>
+          <td><span class="tiny muted">${escapeHtml(fmtDayTime(t.at))} · ${escapeHtml(store.member(t.memberId)?.name.split(' ')[0] || '')}</span><br>
+            <b>${escapeHtml(String(t.prompt || '').slice(0, 140))}</b><br>
+            <span class="small muted">${escapeHtml(String(t.reply || t.error || (t.ok === null ? 'still running, or died' : '')).slice(0, 240))}</span></td>
+          <td data-k="Read" class="tiny mono">${escapeHtml((t.tools || []).map(x => x.name).join(', '))}</td>
+          <td data-k="Cost" class="num">${usd(t.costUsd)}</td>
+          <td data-k="Said" class="small">${escapeHtml(fb(t))}</td></tr>`).join('')}</tbody></table>`
+        : '<p class="small muted" style="margin-top:10px">Nobody has asked Ian anything yet.</p>'}`;
+  } catch (err) { slot.innerHTML = `<p class="small muted" style="margin-top:10px">${escapeHtml(err.message)}</p>`; }
+}
+
 export function settings({ store, go }) {
   const me = store.me, s = store.settings;
   const isAdmin = store.hasRole('admin');
@@ -1273,6 +1296,10 @@ export function settings({ store, go }) {
         </label>
         <p class="tiny muted" style="margin-top:10px">Album: <b class="num">${(store.albumBytes() / 1048576).toFixed(0)} MB</b> of <b class="num">1 GB</b>, of what this app uploaded</p>
       </div>` : ''}
+      <details class="panel" id="ian-fold" style="margin-top:16px">
+        <summary style="cursor:pointer;font-weight:600">Ian, the concierge</summary>
+        <div id="ian-log"><p class="small muted" style="margin-top:10px">Opening…</p></div>
+      </details>
       </div>
 
       ${isAdmin ? `<div data-pane="people">
@@ -1646,5 +1673,6 @@ export function settings({ store, go }) {
       input.click();
     }
   });
+  wrap.querySelector('#ian-fold')?.addEventListener('toggle', (e) => { if (e.target.open) drawIanLog(store, wrap.querySelector('#ian-log')); });
   return wrap;
 }

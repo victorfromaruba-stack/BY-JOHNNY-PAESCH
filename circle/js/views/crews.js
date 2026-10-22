@@ -12,6 +12,7 @@ import { fmtClock } from '../core/util.js';
 import { toast, sheet, confirmDialog, avatar, setBusy } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { thumbPhotoFor, photoKind, photoCredit, areaPhotoFor } from './public.js';
+import { shortRange } from './deals.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 
@@ -45,6 +46,7 @@ export function crews({ store, go }) {
       ${rooms.length
         ? `<button class="btn block" id="new-crew">${icon('plus', { size: 17 })}Start a crew</button>`
         : `<a class="btn block" href="#/stays">${icon('bed', { size: 17 })}Find a room first</a>`}
+      <p style="margin-top:var(--s-3)"><a class="link-rule" href="#/concierge">Plan a trip with Ian</a></p>
       <div id="list" style="margin-top:var(--s-5)"></div>
     </div></section></div>`);
 
@@ -55,7 +57,7 @@ export function crews({ store, go }) {
       <h2>${rooms.length ? 'Start one around a room' : 'A crew starts with a room'}</h2>
       <p class="small muted">${rooms.length
         ? `You have <b class="num">${rooms.length}</b> approved booking${rooms.length === 1 ? '' : 's'} to build one around. Name it whatever you already call yourselves, add the people coming with you, and the thread is yours — nobody else in the Circle can read it, not the Desk, not the Banker.`
-        : 'A crew is the people on a booking, so it needs a booking first. Ask for a room, and once the Desk quotes it and you accept, you can start the crew around it and bring the others in.'}</p>
+        : 'A crew is the people on a trip. Ask for a room and start the crew around it once the Desk approves it — or plan the trip with Ian first, start the crew from the plan, and it joins the booking when you ask for the room.'}</p>
     </div>`));
   }
   for (const c of mine) {
@@ -68,7 +70,8 @@ export function crews({ store, go }) {
     // The place they are actually going leads the card now. The picture is the one the stay
     // already carries, so it is a licensed photograph of the property or of the beach at its
     // door, said in words when it is the beach. A crew with no booking yet gets no picture.
-    const crewStay = (() => { const r = c.redemptionId ? store.redemption(c.redemptionId) : null; return r ? store.stay(r.stayId) : null; })();
+    // A crew born from a plan has a place and dates before it has a booking (Ian can start one).
+    const crewStay = (() => { const r = c.redemptionId ? store.redemption(c.redemptionId) : null; return r ? store.stay(r.stayId) : c.stayId ? store.stay(c.stayId) : null; })();
     const crewShot = crewStay ? thumbPhotoFor(crewStay) : null;
     const crewArea = crewShot && photoKind(crewStay) === 'area' ? areaPhotoFor(crewStay) : null;
     const crewCredit = crewShot ? photoCredit(crewStay) : null;
@@ -83,6 +86,8 @@ export function crews({ store, go }) {
         ${(() => {
           const r = c.redemptionId ? store.redemption(c.redemptionId) : null;
           const st = r ? store.stay(r.stayId) : null;
+          if (!st && crewStay && c.planFrom) return `<p class="small" style="margin-top:6px">${icon('calendar', { size: 14, cls: 'ico-muted' })}
+            ${escapeHtml(crewStay.name)} · planning ${escapeHtml(shortRange(c.planFrom, c.planTo))} · no room asked for yet</p>`;
           if (!st) return '';
           return `<p class="small" style="margin-top:6px">${icon('bed', { size: 14, cls: 'ico-muted' })}
             ${escapeHtml(st.name)} · ${escapeHtml(fmtDay(r.checkIn))}${r.nights ? ` · <b class="num">${r.nights}</b> night${r.nights === 1 ? '' : 's'}` : ''}</p>`;

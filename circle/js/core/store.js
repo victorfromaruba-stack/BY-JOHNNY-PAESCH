@@ -330,12 +330,26 @@ export class Store {
       .sort((a, b) => String(b.checkIn || '').localeCompare(String(a.checkIn || '')));
   }
 
-  async createCrew({ name, about = '', redemptionId = null }) {
+  async createCrew({ name, about = '', redemptionId = null, stayId = null, from = null, to = null }) {
     const me = this.me; if (!me) throw new Error('Sign in first');
     const clean = String(name || '').trim();
     if (clean.length < 2) throw new Error('A circle needs a name');
     if (clean.length > 40) throw new Error('That name is too long — 40 characters at most');
-    if (!redemptionId) throw new Error('Start a circle from a room the Desk has approved — that is what the circle is for');
+    // Victor, 22 Oct 2026: a crew can also be born from a plan — a place and the dates — and is tied
+    // to the booking when its lead asks for that room (requestRedemption). Same rule as create_crew().
+    if (!redemptionId) {
+      if (!stayId || !from || !to) throw new Error('A crew starts from a room the Desk has approved, or from a plan: a place and the dates');
+      if (to <= from) throw new Error('The dates run backwards');
+      if (from < new Date(Date.now() - 4 * 36e5).toISOString().slice(0, 10)) throw new Error('Those dates have passed');
+      if (!this.stay(stayId)) throw new Error('No such place');
+      const c = { id: uid('crw'), name: clean, about: String(about || '').trim() || null, redemptionId: null,
+        stayId, planFrom: from, planTo: to, coverPath: null, createdBy: me.id, createdAt: nowIso(), archivedAt: null };
+      (this.state.crews ||= []).push(c);
+      (this.state.crewMembers ||= []).push({ crewId: c.id, memberId: me.id, role: 'lead', joinedAt: nowIso() });
+      this.log(me.id, 'crew.create', 'crew', c.id, { name: clean, stay: stayId, from, to });
+      await this.commit('crews', 'crewMembers');
+      return c;
+    }
     const r = this.redemption(redemptionId);
     if (!r) throw new Error('No such booking');
     if (r.memberId !== me.id) throw new Error('That booking is not yours');
@@ -1605,6 +1619,10 @@ export class Store {
       status: REDEMPTION_STATUS.requested, requestedAt: nowIso(), decidedBy: null, decidedAt: null, decision: '', heldAt: null, confirmedAt: null, completedAt: null, paidUsd: null, confirmationRef: '',
     };
     this.state.redemptions.push(r);
+    // A crew planned for this place and these dates becomes this booking's crew (link_planned_crew in SQL).
+    const planned = (this.state.crews || []).filter(c => !c.redemptionId && !c.archivedAt && c.createdBy === memberId && c.stayId === stayId
+      && c.planFrom < r.checkOut && c.planTo > r.checkIn).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0];
+    if (planned) planned.redemptionId = r.id;
     this.log(memberId, 'redemption.request', 'redemption', r.id, { stay: stay.name, nights: q.nights, points: q.points });
     await this.commit('redemptions');
     return r;
@@ -2242,6 +2260,11 @@ export class Store {
   async godsEyePass() {
     throw new Error('God’s Eye View opens from the real Circle, not the preview.');
   }
+
+  /** Ian, the concierge, answers from the club's server only (functions/concierge). */
+  async concierge() { throw new Error('Ian answers from the real Circle, not the preview.'); }
+  async conciergeFeedback() { /* nothing to keep in the preview */ }
+  async conciergeTurns() { return { today: null, turns: [] }; }
 
   // ---------- settings ----------
   async updateSettings(patch, actorId) { Object.assign(this.state.settings, patch); this.log(actorId, 'settings.update', 'settings', 'settings', patch); await this.commit('settings'); }

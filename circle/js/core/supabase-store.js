@@ -327,6 +327,30 @@ export class SupabaseStore extends Store {
     if (!data?.url) throw new Error('The pass came back empty. Tell Ian.');
     return data;
   }
+  /** Ask Ian. `lines` is the conversation as [{ role, text }]; the server keeps the last twelve. */
+  async concierge(lines, { stay = null } = {}) {
+    const { data, error } = await this.sb.functions.invoke('concierge', { body: { messages: lines, stay } });
+    if (error) {
+      let said = '';
+      if (error.context?.status === 404) said = 'Ian is not switched on yet.';
+      else try { said = (await error.context?.json?.())?.error || ''; } catch { /* not JSON */ }
+      throw new Error(said || 'Ian could not be reached just now. Try again in a minute.');
+    }
+    return data;
+  }
+  /** "Helped" (1) or "Not it" (-1) on one of your own answers. No reload: nothing on screen depends on it. */
+  async conciergeFeedback(turnId, score, note = '') {
+    const { error } = await this.sb.rpc('feedback_concierge_turn', { p_turn: turnId, p_score: score, p_note: note || null });
+    if (error) throw new Error(error.message);
+  }
+  /** The Desk's view of what Ian has been asked. Admin and Banker only, by row-level security. */
+  async conciergeTurns(limit = 40) {
+    const [{ data, error }, today] = await Promise.all([
+      this.sb.from('concierge_turns').select('*').order('at', { ascending: false }).limit(limit),
+      this.sb.rpc('concierge_today')]);
+    if (error) throw new Error(error.message);
+    return { today: today.data || null, turns: (data || []).map(toCamel) };
+  }
   /** Send the reset email. Deliberately silent about whether the address is one of ours. */
   async sendPasswordReset(email) {
     const { error } = await this.sb.auth.resetPasswordForEmail(String(email).trim().toLowerCase(), { redirectTo: this.authRedirect });
@@ -609,8 +633,10 @@ export class SupabaseStore extends Store {
   // nothing here to enforce twice. The one exception is making a crew, which has to insert the
   // crew and its first lead together — a half-made crew has no lead, and then nobody can add
   // one, which is exactly the hole create_crew() exists to close.
-  async createCrew({ name, about = '', redemptionId = null }) {
-    const id = await this.rpc('create_crew', { p_name: name, p_about: about || null, p_redemption: redemptionId });
+  async createCrew({ name, about = '', redemptionId = null, stayId = null, from = null, to = null }) {
+    // The plan arguments go only when there is a plan, so a database without them still answers the old call.
+    const plan = !redemptionId && stayId ? { p_stay: stayId, p_from: from, p_to: to } : {};
+    const id = await this.rpc('create_crew', { p_name: name, p_about: about || null, p_redemption: redemptionId, ...plan });
     await this.reload();
     return this.crew(id) || { id, name, about };
   }
