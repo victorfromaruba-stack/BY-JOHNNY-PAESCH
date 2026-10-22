@@ -13,6 +13,30 @@ This skill is how weeks get on, how the reader is fixed when a site changes, and
 
 ## The line, and why it is where it is
 
+> **Victor moved the line on 2026-10-22, for one case only.** His words, typed to Muddy after being
+> told in plain terms that the penalty is termination of the VIP Gold membership:
+> 09:40 — *"I want the watch to watch it moment a member clicks on stays."*
+> 09:50 — *"What I want it also scans interval when someone clicks stays."*
+> Recorded in `/root/INBOX.md` (same timestamps) and in the gstack decision ledger,
+> `3b066c79-64dd-4adf-850e-1abaa3602771`, author victor. Written here by Muddy, the way every rule
+> in this operation is written: Victor says it, the file records it, dated and quoted.
+>
+> **So: automated Interval access is allowed ONLY on a member's tap of a stay — never on a timer —
+> under these guardrails, which are part of the permission, not advice:**
+> - sign in on `https://vip.intervalworld.com/web/my/auth/loginPage` as `Tagless`, the way the
+>   17 Oct fixture was obtained (`iv-login.js` / `iv-map.js`, proxy from the locked box); add no new
+>   evasion beyond what that flow already does;
+> - reuse the session (saved storage state, 0600, gitignored); at most **3 sign-ins per day**;
+> - **1 scan per resort per 30 minutes, 10 per hour** overall; later taps inside the window are
+>   served from the last scan;
+> - **full stop** on any captcha, challenge, lock, "unusual activity" page, 403, or 2 refused
+>   sign-ins in a row: write the stop flag, raise the `interval-watcher` card, send Victor one ntfy
+>   push saying it stopped and why; only Victor re-enables it (by deleting the flag). Never retry in
+>   a loop;
+> - when Interval is stopped or capped, the Grab nudge to his phone still fires.
+>
+> Everything below this box is still the rule for anything that is NOT a member's tap.
+
 **Never build, restore, or schedule automated sign-in to Interval or RedWeek. Never work around
 bot management. A block, a challenge, a 403 or a robots.txt disallow is a full stop — not a puzzle.**
 
