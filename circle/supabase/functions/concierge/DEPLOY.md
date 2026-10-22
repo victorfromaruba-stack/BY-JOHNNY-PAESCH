@@ -31,3 +31,18 @@ Settings live in the `settings` row:
   "Ian is resting until tomorrow" and the card goes up on the dashboard.
 
 Check: `deno test -A supabase/functions/concierge/` (unit tests, and both migrations run in PGlite).
+
+## Nightly learning (since 23 Oct 2026)
+
+`learnings.md` grows only through a gate:
+
+- 05:00, openclaw: `premanifest-bot/ianCoach.js` reads yesterday's `concierge_turns` (read-only query
+  endpoint), keeps up to 16 real member questions in `reports/ian/cases.json`, runs the `ian-coach` agent
+  (report + `proposals-<date>.json`) and the `reviewer` agent (`review-<date>.json`).
+- 06:30, root: `nightly.mjs` (root's crontab, log `/var/log/ian-nightly.log`) re-checks the approved
+  lines, replays about 30 questions with `replay.ts` on claude-haiku-5-5 (3 trials each, every check in
+  code, $0.25 cap), and applies the lines only when the pass rate on the shared cases did not drop against
+  the last replay of the deployed file. Then `deno test`, a commit of `learnings.md` alone, and step 2.
+  Eval history: `/root/logs/ian-eval/` (the gate's), copied to `reports/ian/eval-<date>.json`.
+- `node nightly.mjs --dry` says what it would do. `prompt.ts`, `tools.ts` and `compare.ts` proposals are
+  reported for a person; nothing applies them automatically.
