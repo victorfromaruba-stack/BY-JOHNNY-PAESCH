@@ -24,13 +24,19 @@ const keyFor = (store) => `hunto.ian.${store.me?.id || 'anon'}`;
 const load = (store) => { try { return JSON.parse(sessionStorage.getItem(keyFor(store)) || '[]'); } catch { return []; } };
 const save = (store, lines) => { try { sessionStorage.setItem(keyFor(store), JSON.stringify(lines.slice(-KEEP))); } catch { /* private mode */ } };
 
-/** Ian's words: escaped, line breaks kept, and a listing link drawn as a link to its site. */
-function words(text) {
+/**
+ * Ian's words: escaped, line breaks kept, and a listing link drawn as a link to its site. Only an
+ * address a tool gave this turn (the server sends them as `links`) becomes a link; any other address
+ * in the text stays text, so a model can never put a link in front of a member that the board did not.
+ */
+function words(text, links = []) {
+  const ok = new Set(links);
   return escapeHtml(text).replace(/https?:\/\/[^\s<]+[^\s<.,;:)!?]/g, (u) => {
-    const ok = safeUrl(u.replace(/&amp;/g, '&'));
-    if (!ok) return u;
-    let host = ''; try { host = new URL(ok).hostname.replace(/^www\./, ''); } catch { /* not a URL */ }
-    return `<a href="${escapeHtml(ok)}" target="_blank" rel="noopener noreferrer">${escapeHtml(host || 'the listing')} ↗</a>`;
+    const raw = u.replace(/&amp;/g, '&');
+    const safe = ok.has(raw) ? safeUrl(raw) : null;
+    if (!safe) return u;
+    let host = ''; try { host = new URL(safe).hostname.replace(/^www\./, ''); } catch { /* not a URL */ }
+    return `<a href="${escapeHtml(safe)}" target="_blank" rel="noopener noreferrer">${escapeHtml(host || 'the listing')} ↗</a>`;
   }).replace(/\n/g, '<br>');
 }
 
@@ -47,6 +53,10 @@ function cardModel(c, store) {
     if (!who || !crew) return null;
     const first = who.name.split(' ')[0];
     return { head: `Add ${first} to ${crew.name}`, sub: 'They see the crew and its thread from the moment you add them.', button: `Add ${first}` };
+  }
+  if (c.action === 'refresh') {
+    if (!stay) return null;
+    return { head: `Look again at ${stay.name}`, sub: 'The watcher re-reads RedWeek, and Interval within its limits. Ask Ian again in a minute.', button: 'Look again' };
   }
   if (c.action === 'ask_dates') {
     if (!stay) return null;
@@ -82,7 +92,7 @@ export function concierge({ store, go, query = {} }) {
   const bubble = (l, i) => {
     if (l.role === 'user') return `<div class="msg mine"><span class="bubble"><span class="what">${escapeHtml(l.text)}</span></span></div>`;
     if (l.role === 'note') return `<p class="small muted" style="text-align:center">${escapeHtml(l.text)}</p>`;
-    const said = l.text ? `<div class="msg"><span class="bubble"><b class="who">Ian</b><span class="what">${words(l.text)}</span></span></div>` : '';
+    const said = l.text ? `<div class="msg"><span class="bubble"><b class="who">Ian</b><span class="what">${words(l.text, l.links)}</span></span></div>` : '';
     const cards = (l.cards || []).map((c, j) => {
       const m = cardModel(c, store);
       if (!m || c.state === 'no') return '';
@@ -104,7 +114,8 @@ export function concierge({ store, go, query = {} }) {
         ? `<form class="say-row" data-why="${i}" style="margin:0 0 0 4px"><input name="why" maxlength="200" placeholder="What were you after? (optional)" autocomplete="off" enterkeyhint="send">
             <button class="btn ghost sm" type="submit" style="width:auto;border-radius:var(--r-btn);padding:0 var(--s-3)">Send</button></form>`
         : `<div class="row" style="gap:var(--s-4);margin:-2px 0 0 4px"><button type="button" class="link-rule" data-fb="1" data-i="${i}">Helped</button><button type="button" class="link-rule" data-fb="-1" data-i="${i}">Not it</button></div>`;
-    return said + cards + fb;
+    // One answer is one block, so it can be brought into view whole: words, cards and the two taps.
+    return `<div class="ian-turn" data-turn="${i}">${said}${cards}${fb}</div>`;
   };
 
   const draw = () => {
@@ -122,6 +133,18 @@ export function concierge({ store, go, query = {} }) {
     if (busy) thread.insertAdjacentHTML('beforeend', '<div class="msg"><span class="bubble"><b class="who">Ian</b><span class="what muted">Looking…</span></span></div>');
   };
   const toLatest = () => requestAnimationFrame(() => thread.lastElementChild?.scrollIntoView?.({ block: 'end', behavior: 'auto' }));
+  /**
+   * After an answer: the whole of it above the composer, down to Helped / Not it, when it fits on the
+   * screen; when it does not, its first line under the running head, so it is read from the top.
+   * The .ian-turn scroll margins in app.css are what keep it clear of the bar and the composer.
+   */
+  const toAnswer = () => requestAnimationFrame(() => {
+    const turn = [...thread.querySelectorAll('.ian-turn')].at(-1);
+    if (!turn) return toLatest();
+    const top = document.getElementById('topbar')?.getBoundingClientRect().bottom || 0;
+    const floor = wrap.querySelector('.act-bar')?.getBoundingClientRect().top ?? innerHeight;
+    turn.scrollIntoView({ block: turn.getBoundingClientRect().height <= floor - top - 16 ? 'end' : 'start', behavior: 'auto' });
+  });
   draw();
   if (lines.length) toLatest();
 
@@ -140,11 +163,11 @@ export function concierge({ store, go, query = {} }) {
     try {
       const sent = lines.filter(l => l.role === 'user' || l.role === 'assistant').slice(-SEND).map(l => ({ role: l.role, text: l.text || '' }));
       const out = await store.concierge(sent, { stay: stay?.id || null });
-      lines.push({ role: 'assistant', text: out?.reply || '', cards: out?.cards || [], turnId: out?.turn_id || null });
+      lines.push({ role: 'assistant', text: out?.reply || '', cards: out?.cards || [], links: out?.links || [], turnId: out?.turn_id || null });
     } catch (err) {
       lines.push({ role: 'note', text: err.message });
     } finally {
-      busy = false; setBusy(send, false); save(store, lines); draw(); toLatest();
+      busy = false; setBusy(send, false); save(store, lines); draw(); toAnswer();
     }
   });
 
@@ -166,6 +189,8 @@ export function concierge({ store, go, query = {} }) {
     const b = e.target.closest('[data-go]'); if (!b) return;
     const m = cardModel(c, store); if (!m) return;
     if (c.action === 'ask_dates') { location.hash = m.href; return; }
+    // The member's own tap is what spends the watcher's read, never Ian's suggestion of one.
+    if (c.action === 'refresh') { store.noteStayLook?.(c.stay_id); c.state = 'done'; save(store, lines); draw(); toast('Asked. Ask Ian again in a minute.', { kind: 'good' }); return; }
     const yes = await confirmDialog({ title: m.head, message: m.sub || 'Nothing is booked and no points move.', confirmText: m.button });
     if (!yes) return;
     setBusy(b, true);

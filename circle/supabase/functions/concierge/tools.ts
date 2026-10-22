@@ -9,7 +9,7 @@
 // Results are trimmed to ROWS rows and every null is said in words, so "no public rate on file"
 // reaches the model as a sentence rather than as a gap it might fill.
 
-import { cheaperNextDoor, dealFacts, monthsToAfford, seasonEdge, type Deal, type Settings, type Stay } from './compare.ts';
+import { cheaperNextDoor, dealFacts, LOOKS_WRONG, monthsToAfford, seasonEdge, type Deal, type Settings, type Stay } from './compare.ts';
 import { memberContext, personOf } from './redact.ts';
 import { flights } from './flights/index.ts';
 
@@ -35,13 +35,12 @@ export type Data = {
   watches(): Promise<any[]>;
   members(): Promise<{ id: string; name: string; status: string; bot?: boolean }[]>;
   redweekChecks(): Promise<{ stay_id: string; checked_at: string }[] | null>;
-  tap(stay: string): Promise<'asked' | 'off'>;
   memory(): Promise<Record<string, string>>;
   saveMemory(notes: Record<string, string>): Promise<void>;
 };
 
 export type Card = {
-  action: 'create_crew' | 'invite' | 'ask_dates';
+  action: 'create_crew' | 'invite' | 'ask_dates' | 'refresh';
   name: string | null; about: string | null; stay_id: string | null; from: string | null; to: string | null;
   crew_id: string | null; member_id: string | null; deal_id: string | null; redemption_id: string | null;
 };
@@ -72,7 +71,7 @@ export const TOOLS = [
     input_schema: obj({}) },
   { name: 'shared_bookings', description: 'Other Insiders\' bookings that are open for the Circle to chip in to, as the app shows them: place, dates, whose, and points still open.',
     input_schema: obj({}) },
-  { name: 'refresh_redweek', description: 'Ask the watcher to look at a place again, the same as opening it in the app: it re-reads RedWeek\'s public page, and when the Circle\'s Interval weeks there are more than a day old it tells Victor, who signs in to Interval and grabs fresh weeks. The watcher decides under its own limits; say "ask again in a minute".',
+  { name: 'refresh_redweek', description: 'Offer the member a fresh look at a place: puts a button on their screen. When they tap it the watcher re-reads RedWeek\'s public page and checks Interval within its own limits, the same as opening the place in the app. Nothing is read until they tap.',
     input_schema: obj({ stay_id: { type: 'string', description: 'A place id or name' } }) },
   { name: 'flights', description: 'Air fares. Not connected yet. Interval is where the Circle finds flights, cars, cruises and packages, through Victor.',
     input_schema: obj({ from: E('Airport code'), to: E('Airport code'), date: E(DATE), pax: { type: 'integer', description: 'Passengers' } }) },
@@ -122,22 +121,28 @@ async function boardFacts(ctx: Ctx, { stay_id = null, from = null, to = null, so
     .filter(d => !isDay(to) || d.from_date < to)
     .map(d => dealFacts(d, byId.get(d.stay_id), s))
     // A misread price is not the cheapest week: it goes last, flagged, never led with.
-    .sort((a, b) => Number(a.implausible) - Number(b.implausible) || a.per_night_usd - b.per_night_usd || a.from.localeCompare(b.from));
+    .sort((a, b) => Number(!!a.implausible) - Number(!!b.implausible) || a.per_night_usd - b.per_night_usd || a.from.localeCompare(b.from));
   const next = cheaperNextDoor(rows.filter(f => !f.implausible));
   // Interval is the Circle's best source (Victor, 22 Oct). Whether it has anything here is a fact
   // Ian says first, either way.
   const interval = rows.filter(f => f.source === 'interval' && !f.implausible).length;
-  const shown = rows.slice(0, BOARD_ROWS).map(f => ({
+  // A price that cannot be real reaches Ian with no figures at all, so it cannot be quoted.
+  // Twelve real weeks, plus up to three that look wrong, so "nothing looks wrong" is something Ian can know.
+  const wrong = rows.filter(f => f.implausible);
+  const shown = [...rows.filter(f => !f.implausible).slice(0, BOARD_ROWS), ...wrong.slice(0, 3)].map(f => f.implausible ? {
+    deal_id: f.deal_id, stay_id: f.stay_id, place: f.place, source: f.source, from: f.from, to: f.to, nights: f.nights, listing: f.listing,
+    price: LOOKS_WRONG, why: `${f.implausible}: almost certainly a misread listing. Never quote it or offer it as a deal; say Victor checks it.`,
+  } : ({
     ...f,
     owner_ask_per_night_usd: f.owner_ask_per_night_usd ?? (f.source === 'redweek' ? 'no owner ask in the title' : null),
     public_total_usd: f.public_total_usd ?? 'no public rate on file',
     under_public_usd: f.under_public_usd ?? 'cannot compare: no public rate on file',
     seen_days_ago: f.seen_days_ago ?? 'never recorded',
     cheaper_next_door: next[f.deal_id] ?? null,
-    implausible: f.implausible ? 'under $40 a night: almost certainly a misread listing. Never offer it as a deal; say Victor checks it.' : false,
   }));
   return { weeks: shown, total_on_board: rows.length, shown: shown.length, all_in_means: 'the room plus the Circle\'s 15%, what comes off a member\'s points',
     interval_weeks_matching: interval,
+    looks_wrong_on_board: wrong.length,
     ...(source === 'redweek' ? {} : { interval_said: interval ? `${interval} Interval Getaway${interval === 1 ? '' : 's'} on the board for this. Lead with Interval.` : 'Interval has nothing on the board for this place and these dates right now.' }),
     ...(rows.length ? {} : { said: `Nothing on the board matches${source ? ` from ${source === 'interval' ? 'Interval' : 'RedWeek'}` : ''} right now.` }) };
 }
@@ -225,12 +230,13 @@ export async function runTool(name: string, input: any, ctx: Ctx): Promise<unkno
       return { open_to_chip_in: open.slice(0, ROWS), how: 'Chipping in is done on the booking\'s own page in the app.' };
     }
     case 'refresh_redweek': {
+      // The member asks for a fresh read, not Ian: this is a button for them to tap (Victor's watcher,
+      // its caps, and Interval's terms are spent on a person's tap, never on a model's guess).
       const sid = await stayIdOf(ctx, input?.stay_id);
       if (!sid) return { error: `No single place matches "${input?.stay_id}".` };
-      const r = await d.tap(sid).catch(() => 'off' as const);
-      return r === 'asked'
-        ? { asked: true, said: 'The watcher has been asked. It reads RedWeek at most once per place every 15 minutes, and if the Interval weeks here are more than a day old it tells Victor to look on Interval. Ask again in a minute.' }
-        : { asked: false, said: 'A fresh read is not switched on yet. The board\'s rows are as old as they say.' };
+      if (ctx.cards.some(c => c.action === 'refresh' && c.stay_id === sid)) return { shown: true };
+      ctx.cards.push({ action: 'refresh', name: null, about: null, stay_id: sid, from: null, to: null, crew_id: null, member_id: null, deal_id: null, redemption_id: null });
+      return { shown: true, say: 'A "look again" button is on their screen. Nothing is read until they tap it; then ask again in a minute.' };
     }
     case 'flights': return flights(input);
     case 'remember': {
@@ -322,7 +328,6 @@ export function dataFor(sb: any, member: { id: string; name: string; monthly_usd
     watches: () => rows(sb.from('watches').select('member_id, stay_id, from_date, to_date, nights, active').eq('member_id', member.id)),
     members: () => rows(sb.from('members').select('id, name, status, bot')),
     redweekChecks: () => rows(sb.from('redweek_checks').select('stay_id, checked_at')).catch(() => null),
-    tap: async (stay) => { const { error } = await sb.rpc('record_stay_tap', { p_stay: stay }); return error ? 'off' : 'asked'; },
     memory: async () => (await rows(sb.from('concierge_memory').select('notes').eq('member_id', member.id).maybeSingle()))?.notes || {},
     saveMemory: async (notes) => { await rows(sb.from('concierge_memory').upsert({ member_id: member.id, notes, updated_at: now() })); },
   };

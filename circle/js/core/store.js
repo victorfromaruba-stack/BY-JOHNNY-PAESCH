@@ -340,8 +340,15 @@ export class Store {
     if (!redemptionId) {
       if (!stayId || !from || !to) throw new Error('A crew starts from a room the Desk has approved, or from a plan: a place and the dates');
       if (to <= from) throw new Error('The dates run backwards');
-      if (from < new Date(Date.now() - 4 * 36e5).toISOString().slice(0, 10)) throw new Error('Those dates have passed');
+      const today = new Date(Date.now() - 4 * 36e5);
+      if (from < today.toISOString().slice(0, 10)) throw new Error('Those dates have passed');
+      if ((Date.parse(to) - Date.parse(from)) / 864e5 > 14) throw new Error('A plan is at most 14 nights');
+      const far = new Date(today); far.setMonth(far.getMonth() + 18);
+      if (from > far.toISOString().slice(0, 10)) throw new Error('A plan starts within 18 months');
       if (!this.stay(stayId)) throw new Error('No such place');
+      if ((this.state.crews || []).filter(c => c.createdBy === me.id && !c.redemptionId && c.stayId && !c.archivedAt).length >= 3) {
+        throw new Error('You have three crews waiting on a plan already. Ask for a room for one of them first.');
+      }
       const c = { id: uid('crw'), name: clean, about: String(about || '').trim() || null, redemptionId: null,
         stayId, planFrom: from, planTo: to, coverPath: null, createdBy: me.id, createdAt: nowIso(), archivedAt: null };
       (this.state.crews ||= []).push(c);
@@ -352,6 +359,7 @@ export class Store {
     }
     const r = this.redemption(redemptionId);
     if (!r) throw new Error('No such booking');
+    if ((this.state.crews || []).some(c => c.redemptionId === redemptionId)) throw new Error('That booking already has a crew');
     if (r.memberId !== me.id) throw new Error('That booking is not yours');
     if (![REDEMPTION_STATUS.held, REDEMPTION_STATUS.confirmed, REDEMPTION_STATUS.completed].includes(r.status)) {
       throw new Error(r.status === REDEMPTION_STATUS.quoted

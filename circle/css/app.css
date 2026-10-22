@@ -866,6 +866,8 @@ body:has(.botnav:not([hidden])) .toasts { bottom: calc(var(--h-nav) + var(--inse
 .msg .what { display: block; line-height: 1.45; }
 /* A listing link in Ian's answer is a 44px target; the negative margin hands the height back to the line. */
 .msg .what a[target] { display: inline-block; padding: 12px 0; margin: -12px 0; }
+/* One answer from Ian, brought into view whole after it arrives: clear of the running head above and the composer below. */
+.ian-turn { display: grid; gap: 8px; scroll-margin-top: calc(var(--h-bar) + var(--inset-top) + 8px); scroll-margin-bottom: calc(var(--h-nav) + var(--inset-bottom) + 96px); }
 .msg .when { display: block; margin-top: 3px; font-size: var(--t-folio); color: var(--ink-3); text-align: right; }
 .msg.gone .bubble { background: transparent; border: 1px dashed var(--hairline);
   color: var(--ink-3); font-style: italic; font-size: var(--t-fine); }

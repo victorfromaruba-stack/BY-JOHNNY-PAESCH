@@ -4,7 +4,9 @@ Live on project `cdkopyphjvfxjqhasrae` since 22 Oct 2026. Run from `circle/`.
 The access token is the `openclaw` secret in the web app's locked box. Pass it only as
 `SUPABASE_ACCESS_TOKEN` for the one command that needs it.
 
-1. **SQL.** `supabase/migrations/20261023_concierge.sql`. It is safe to run twice.
+1. **SQL.** `supabase/migrations/20261023_concierge.sql`, then `20261024_ian_fixes.sql`. Both are safe to run twice.
+   Apply the second and deploy the function back to back: the gate's signature changes, so the old function
+   and the new gate (or the reverse) answer "not switched on" until both are in.
    Paste it into the SQL editor, or POST it as `{"query": …}` to
    `https://api.supabase.com/v1/projects/cdkopyphjvfxjqhasrae/database/query`.
 2. **Function.** `supabase functions deploy concierge --project-ref cdkopyphjvfxjqhasrae --use-api`.
@@ -28,4 +30,4 @@ Settings live in the `settings` row:
 - `concierge_daily_usd`: 5.00. This is a hard stop. When it is reached, members see
   "Ian is resting until tomorrow" and the card goes up on the dashboard.
 
-Check: `deno test --allow-read --allow-env supabase/functions/concierge/`.
+Check: `deno test -A supabase/functions/concierge/` (unit tests, and both migrations run in PGlite).

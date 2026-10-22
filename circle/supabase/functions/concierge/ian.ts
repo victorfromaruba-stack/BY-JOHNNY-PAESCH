@@ -5,51 +5,34 @@
 
 import { systemBlocks, LEARNINGS } from './prompt.ts';
 import { runTool, TOOLS, type Card, type Data } from './tools.ts';
+import { collect, emptyFigures, strays, stripStray } from './guard.ts';
 
 export const MODELS = ['claude-haiku-5-5', 'claude-sonnet-5-5'] as const;
-/** USD per million tokens. ponytail: Haiku's >100k-token tier is ignored; Ian's prompts are ~10k. */
+/**
+ * USD per million tokens: base input, 5-minute cache write, cache read, output. From Anthropic's
+ * pricing page, https://platform.claude.com/docs/en/about-claude/pricing, read 22 Oct 2026.
+ * Every cost Ian logs, and the ceiling it counts toward, is these times the API's own usage counts.
+ * ponytail: Haiku's >100k-token tier is ignored; WORST below keeps a turn's calls well under it.
+ */
 export const PRICES: Record<string, { in: number; write: number; read: number; out: number }> = {
   'claude-haiku-5-5': { in: 0.10, write: 0.125, read: 0.01, out: 0.50 },
   'claude-sonnet-5-5': { in: 2, write: 2.5, read: 0.10, out: 10 },
 };
 export const LIMITS = { inputChars: 2000, lines: 12, rounds: 6, maxTokens: 1500 };
+/**
+ * The most one turn may cost: every round plus the guard's one re-ask, each with at most this much
+ * input. The loop stops when one call's input passes it. concierge_allow charges a provisional cost
+ * up front that must be at least worstCaseUsd() (a test reads it out of the migration), so a turn
+ * that crashes, times out or cannot be logged still counts toward the club's ceiling.
+ */
+export const WORST = { calls: LIMITS.rounds + 1, inputTokens: 40000 };
 
 export type Line = { role: 'user' | 'assistant'; text: string };
 export type Usage = { input: number; cacheWrite: number; cacheRead: number; output: number; calls: number };
 export type ToolCall = { name: string; input: unknown; result_sha: string; ms: number; error?: string };
 
-// ---------------------------------------------------------------- the number guard
-const NUM = /\d[\d,]*(?:\.\d+)?/g;
-const toNum = (s: string) => Number(s.replace(/,/g, ''));
-/** Every figure any source said this turn: tool results, the member's own words, Ian's context. */
-export function figuresIn(text: string, into = new Set<number>()) {
-  // Ids, links and dates are full of digits that are not figures. Counted, they let an invented
-  // "$75" through on the first live run because a 75 sat inside some uuid.
-  const clean = String(text)
-    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ' ')
-    .replace(/https?:\/\/[^\s"]+/g, ' ')
-    .replace(/\d{4}-\d{2}-\d{2}(?:T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?/g, ' ');
-  for (const m of clean.match(NUM) || []) { const n = toNum(m); into.add(Math.round(n)); into.add(Math.floor(n)); }
-  return into;
-}
-
 /** A line that says how the member travels. Haiku skipped remember twice live; this says it out loud. */
 export const LASTING = /\b(usually|always|every (year|time)|we are|we're|there are \d|(two|three|four|five|six|\d) of us|my (wife|husband|partner|kids|family)|budget|prefer|don't like|do not like|hate|love|kitchen)\b/i;
-/** The money and points figures in an answer: "$1,162", "$3k", "USD 3,500", "3500 dollars", "12k points", "800 pts".
- *  ponytail: one allow-list for the whole turn, so "$7" passes when a week has 7 nights; per-field
- *  allow-lists (money figures only from money fields) if that ever bites. */
-export function claimedFigures(reply: string) {
-  const out: number[] = [];
-  const n = (x: string, k?: string) => Math.round(toNum(x) * (k ? 1000 : 1));
-  for (const m of reply.matchAll(/(?:\$|\busd\s?)\s?(\d[\d,]*(?:\.\d+)?)(\s?[kK]\b)?/gi)) out.push(n(m[1], m[2]));
-  for (const m of reply.matchAll(/(\d[\d,]*(?:\.\d+)?)(\s?[kK])?\s*(?:points|pts|point|dollars|usd)\b/gi)) out.push(n(m[1], m[2]));
-  return out;
-}
-export const strayFigures = (reply: string, allowed: Set<number>) => claimedFigures(reply).filter(n => !allowed.has(n));
-/** Last resort: drop every sentence or line that still carries a figure no source gave. */
-export function stripStray(reply: string, allowed: Set<number>) {
-  return reply.split(/(?<=[.!?])\s+|\n/).filter(s => !strayFigures(s, allowed).length).join(' ').replace(/\s+\n/g, '\n').trim();
-}
 
 // ---------------------------------------------------------------- the call
 export type CallModel = (payload: Record<string, unknown>) => Promise<any>;
@@ -68,6 +51,9 @@ export const costUsd = (model: string, u: Usage) => {
   const p = PRICES[model] || PRICES['claude-sonnet-5-5'];
   return (u.input * p.in + u.cacheWrite * p.write + u.cacheRead * p.read + u.output * p.out) / 1e6;
 };
+/** Every call uncached, full input, full output: the provisional cost must cover this. */
+export const worstCaseUsd = (model: string) =>
+  costUsd(model, { input: WORST.inputTokens * WORST.calls, cacheWrite: 0, cacheRead: 0, output: LIMITS.maxTokens * WORST.calls, calls: WORST.calls });
 
 async function sha(x: unknown) {
   const b = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(x) ?? '')));
@@ -114,12 +100,13 @@ export async function turn({ lines, stayId = null, data, model, callModel, dryRu
 
   const usage: Usage = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, calls: 0 };
   const tools: ToolCall[] = [];
-  const allowed = figuresIn(context);
-  // The member's own words. Not Ian's earlier answers: those come back from the phone, and anything
-  // the phone sends could say anything. Ian looks a figure up again rather than repeat it.
-  for (const l of lines) if (l.role === 'user') figuresIn(l.text, allowed);
+  // Only what tools return this turn may be said (guard.ts). Not the member's words, not Ian's earlier
+  // answers sent back by the phone, not Ian's own notes: Ian looks a figure up again rather than repeat it.
+  const figs = emptyFigures();
+  let tooBig = false;
   const call = async () => {
     const res = await callModel(payload);
+    if ((res.usage?.input_tokens || 0) + (res.usage?.cache_creation_input_tokens || 0) + (res.usage?.cache_read_input_tokens || 0) > WORST.inputTokens) tooBig = true;
     usage.calls++;
     usage.input += res.usage?.input_tokens || 0;
     usage.cacheWrite += res.usage?.cache_creation_input_tokens || 0;
@@ -133,7 +120,7 @@ export async function turn({ lines, stayId = null, data, model, callModel, dryRu
   let guarded = false;
   try {
   for (let round = 0; ; round++) {
-    if (round >= LIMITS.rounds) { reply = 'I looked at too much at once to answer that well. Ask me something narrower?'; break; }
+    if (round >= LIMITS.rounds || tooBig) { reply = 'I looked at too much at once to answer that well. Ask me something narrower?'; break; }
     const res = await call();
     if (res.stop_reason === 'tool_use') {
       messages.push({ role: 'assistant', content: res.content });
@@ -144,7 +131,7 @@ export async function turn({ lines, stayId = null, data, model, callModel, dryRu
         try { out = await runTool(b.name, b.input, ctx); }
         catch (e) { out = { error: `That read failed: ${(e as Error).message}` }; }
         const text = JSON.stringify(out);
-        figuresIn(text, allowed);
+        if (b.name !== 'remember') collect(out, figs);           // remember only echoes what Ian wrote
         tools.push({ name: b.name, input: b.input, result_sha: await sha(out), ms: Date.now() - t0, ...((out as any)?.error ? { error: (out as any).error } : {}) });
         results.push({ type: 'tool_result', tool_use_id: b.id, content: text });
       }
@@ -152,18 +139,19 @@ export async function turn({ lines, stayId = null, data, model, callModel, dryRu
       continue;
     }
     reply = textOf(res);
-    const stray = strayFigures(reply, allowed);
+    const stray = strays(reply, figs);
     if (!stray.length) break;
-    if (guarded) { reply = stripStray(reply, allowed); tools.push({ name: '(number guard)', input: { stripped: stray }, result_sha: '', ms: 0 }); break; }
+    if (guarded) { reply = stripStray(reply, figs); tools.push({ name: '(number guard)', input: { stripped: stray }, result_sha: '', ms: 0 }); break; }
     // Once: say which figures came from nowhere and let it answer again.
     guarded = true;
     tools.push({ name: '(number guard)', input: { reprompted: stray }, result_sha: '', ms: 0 });
     messages.push({ role: 'assistant', content: res.content });
-    messages.push({ role: 'user', content: `Check: ${stray.map(n => n.toLocaleString('en-US')).join(', ')} appear in no tool result. Write your whole answer again without those figures, saying you do not know them where it matters. Keep everything else that answers the question.` });
+    messages.push({ role: 'user', content: `Check: ${stray.join(', ')} ${stray.length === 1 ? 'is' : 'are'} not what any tool gave for what you attached ${stray.length === 1 ? 'it' : 'them'} to (a points figure is not dollars; a week's price belongs to that week). Write your whole answer again without ${stray.length === 1 ? 'it' : 'them'}, saying you do not know where it matters. Keep everything else that answers the question.` });
   }
   } catch (e) {
     // What was spent before the failure is still spent: it goes in the log and counts to the ceiling.
-    return { reply: '', cards: [], usage, tools, cost: costUsd(model, usage), error: (e as Error).message };
+    return { reply: '', cards: [], links: [], usage, tools, cost: costUsd(model, usage), error: (e as Error).message };
   }
-  return { reply, cards: ctx.cards, usage, tools, cost: costUsd(model, usage), error: null as string | null };
+  // The listing links a tool gave this turn: the phone links these and no other address in the text.
+  return { reply, cards: ctx.cards, links: [...figs.links], usage, tools, cost: costUsd(model, usage), error: null as string | null };
 }

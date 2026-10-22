@@ -2,10 +2,12 @@
 // The rules Ian is held to, each with the case that would break it.
 
 import { assert, assertEquals } from 'jsr:@std/assert@1';
-import { bandNights, cheaperNextDoor, dealFacts, monthsToAfford, ownerAsk, publicTotal, rateBandFor, seasonEdge } from './compare.ts';
+import { bandNights, cheaperNextDoor, dealFacts, implausibleWhy, LOOKS_WRONG, monthsToAfford, ownerAsk, publicTotal, rateBandFor, seasonEdge } from './compare.ts';
 import { memberContext } from './redact.ts';
 import { runTool, TOOLS, type Data } from './tools.ts';
-import { claimedFigures, figuresIn, LASTING, stripStray, turn } from './ian.ts';
+import { costUsd, LASTING, PRICES, turn, worstCaseUsd } from './ian.ts';
+import { claims, collect, emptyFigures, strays, stripStray, toNum } from './guard.ts';
+import { hmac, linesFrom, makeHandler } from './handler.ts';
 
 const S = { pointsPerDollar: 100, serviceRate: 0.15, tiers: [{ monthlyUsd: 100, bonusRate: 0 }, { monthlyUsd: 200, bonusRate: 0.06 }] };
 const surf = { id: 'surf', name: 'Surf Club', rate_low_usd: 135, rate_high_usd: 300, rate_peak_usd: 580, retail_usd: 450, min_nights: 2, peak_min_nights: 7 };
@@ -51,7 +53,7 @@ Deno.test('a week under $40 a night is a misread, and a few dollars over the ask
   const f = dealFacts({ id: 'b', stay_id: 'surf', from_date: '2026-12-19', to_date: '2026-12-26', nights: 7, points_total: 7100, source: 'redweek', title: 'Barceló Aruba · owner asking $9 a night on RedWeek' }, surf, S);
   assert(f.implausible);
   const g = dealFacts({ id: 'g', stay_id: 'surf', from_date: '2026-11-27', to_date: '2026-12-04', nights: 7, points_total: 168500, source: 'redweek', title: 'owner asking $209 a night' }, surf, S);
-  assertEquals(g.implausible, false);
+  assertEquals(g.implausible, null);
   assertEquals(g.fee_usd, null, '$2 over seven nights is the title rounding the ask');
 });
 
@@ -124,7 +126,6 @@ function fakeData(over: Partial<Data> = {}): Data {
     watches: async () => [],
     members: async () => [{ id: 'm1', name: 'Ana Kock', status: 'active' }, { id: 'm2', name: 'Luis Ras', status: 'active' }, { id: 'bot', name: 'Watcher', status: 'active', bot: true }],
     redweekChecks: async () => null,
-    tap: async () => 'off',
     memory: async () => notes,
     saveMemory: async (n) => { notes = n; },
     ...over,
@@ -150,7 +151,9 @@ Deno.test('board puts RedWeek and Interval side by side, cheapest first, misread
   const misread = { id: 'bad', stay_id: 'surf', from_date: day(30), to_date: day(37), nights: 7, points_total: 7100, source: 'redweek', title: 'owner asking $9 a night', seen_at: new Date().toISOString() };
   const out: any = await runTool('board', { stay_id: null, from: null, to: null }, ctxOf({ ...base, deals: async () => [misread as any, ...await base.deals()] }));
   assertEquals(out.weeks.map((w: any) => w.deal_id), ['iv', 'rw', 'bad']);
-  assert(String(out.weeks[2].implausible).includes('misread'));
+  assertEquals(out.weeks[2].price, LOOKS_WRONG);
+  assert(String(out.weeks[2].why).includes('misread'));
+  for (const k of ['per_night_usd', 'total_usd_all_in', 'total_points', 'owner_ask_per_night_usd']) assert(!(k in out.weeks[2]), `a misread carries no ${k}`);
   assertEquals(out.weeks.slice(0, 2).map((w: any) => w.source), ['interval', 'redweek']);
   assertEquals(out.weeks[1].listing, 'https://www.redweek.com/posting/R1');
   assertEquals(out.interval_weeks_matching, 1);
@@ -206,17 +209,207 @@ Deno.test('remember keeps 20 notes of 200 characters, forgets on empty', async (
 });
 
 // ---------------------------------------------------------------- the number guard
-Deno.test('claimed figures: dollars, thousands, points, and the ways around them', () => {
-  assertEquals(claimedFigures('From $1,162 all in, or $3k, about 12,500 points (800 pts a night).'), [1162, 3000, 12500, 800]);
-  assertEquals(claimedFigures('USD 3,500, or 3500 dollars, or 12k points.').sort(), [12000, 3500, 3500].sort());
-  const ok = figuresIn('{"total_usd_all_in":1162,"per_night_usd":166}');
-  assertEquals(stripStray('It is $1,162 in all. That saves $400. The ask is $166 a night.', ok), 'It is $1,162 in all. The ask is $166 a night.');
+const dm = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+async function boardFigures() {
+  const f = emptyFigures();
+  collect(await runTool('board', { stay_id: null, from: null, to: null }, ctxOf()), f);
+  return f;      // iv: $115 a night, $805 all in, 80,500 points (11,500 a night). rw: $230 a night, ask $166.
+}
+
+Deno.test('the guard reads every way a figure can be written', () => {
+  const k = (t: string) => claims(t).map(c => `${c.kind}:${Number.isFinite(c.n) ? c.n : 'words'}`);
+  assertEquals(k('From $1,162 all in, or $3k, about 12,500 points (800 pts a night).'), ['usd:1162', 'usd:3000', 'pts:12500', 'pts:800']);
+  assertEquals(k('USD 3,500, 3500 dollars, 12k points, 27%, 500 a night.'), ['usd:3500', 'usd:3500', 'pts:12000', 'pct:27', 'usd:500']);
+  assertEquals(k('EUR 3,500 or €3,500 or 3,500 euros.'), ['other:3500', 'other:3500', 'other:3500']);
+  assertEquals(k('about three thousand dollars, a few hundred points'), ['other:words', 'other:words']);
+  assertEquals(k('seven nights for the price, in dollars and points'), [], 'no figure here');
+  assertEquals(toNum('1.162'), 1162, '"$1.162" is eleven hundred, never one');
+  assertEquals(toNum('165.50'), 165.5);
 });
 
-Deno.test('digits inside ids, links and dates are not figures anyone gave', () => {
-  const ok = figuresIn('{"deal_id":"1feb2854-4db5-464a-a339-f1a6068c6775","listing":"https://www.redweek.com/posting/R1517275","from":"2026-11-27","seen":"2026-10-22T13:50:03.457+00:00","per_night_usd":241}');
-  assert(ok.has(241));
-  for (const n of [75, 1517275, 2026, 27, 13, 50]) assert(!ok.has(n), `${n} leaked in from an id, a link or a date`);
+Deno.test('points do not pass as dollars, and nothing unverifiable passes at all', async () => {
+  const f = await boardFigures();
+  assertEquals(strays('The Getaway is $805 all in, or 80,500 points, $115 a night.', f), []);
+  assertEquals(strays('The Getaway is $80,500.', f), ['$80,500']);
+  assertEquals(strays('That is $11,500 a night.', f), ['$11,500']);
+  assertEquals(strays('That is 11,500 a night.', f), ['11,500 a night'], 'a bare nightly figure is money');
+  assertEquals(strays('Only 27% over.', f), ['27%']);
+  assertEquals(strays('Roughly EUR 805.', f), ['EUR 805']);
+  assertEquals(strays('About three thousand dollars.', f), ['three thousand dollars']);
+  assertEquals(strays('Everything is all in: the room plus the 15% share.', f), [], "the 15% is the board's own words");
+});
+
+Deno.test('a right price on the wrong week is caught; on the right week it passes', async () => {
+  const f = await boardFigures();
+  const rw = dm(day(30)), iv = dm(day(32));
+  assertEquals(strays(`The ${rw} week is $230 a night, owner asking $166.`, f), []);
+  assertEquals(strays(`The ${iv} week is $230 a night.`, f), ['$230'], '$230 is the other week\'s price');
+  assertEquals(strays(`The ${iv} week is $115 a night, against $230 for the ${rw} one.`, f), [], 'a sentence naming both weeks may use both');
+  assertEquals(stripStray(`The ${iv} Getaway is $805. The ${iv} week is $230 a night.`, f), `The ${iv} Getaway is $805.`);
+});
+
+Deno.test('only tool results feed the guard: not the member, not Ian, not remember, not an error echo', async () => {
+  const f = emptyFigures();
+  collect({ remembered: { budget: '$3,000' }, noted: { budget: '$3,000' }, error: 'No single place matches "Hotel $4,321"', deal_id: 'x1', from: '2026-11-27', listing: 'https://www.redweek.com/posting/R1517275', per_night_usd: 241 }, f);
+  assertEquals(strays('$241 a night.', f), []);
+  assertEquals(strays('Your budget is $3,000. Hotel $4,321.', f), ['$3,000', '$4,321']);
+  assertEquals(strays('$1517275, $2026, $27.', f).length, 3, 'nor digits from ids, links or dates');
+  const replies = [
+    { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't1', name: 'remember', input: { key: 'budget', value: 'about $3,000 a week' } }], usage: {} },
+    { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Noted: about $3,000 a week.' }], usage: {} },
+    { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Noted: about $3,000 a week, still.' }], usage: {} },
+  ];
+  let i = 0;
+  const out: any = await turn({ lines: [{ role: 'user', text: 'My budget is $3,000 a week.' }], data: fakeData(), model: 'claude-haiku-5-5', callModel: async () => replies[i++] });
+  assertEquals(out.reply, '', "a figure Ian wrote into its own notes, or the member typed, is not a source");
+});
+
+Deno.test('a figure no tool gave is sent back once, then cut; earlier answers are no source', async () => {
+  const replies = [
+    { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't1', name: 'board', input: { stay_id: null, from: null, to: null } }], usage: { input_tokens: 100, output_tokens: 10 } },
+    { stop_reason: 'end_turn', content: [{ type: 'text', text: 'The Getaway is $805 all in. You would save $999.' }], usage: { input_tokens: 50, cache_read_input_tokens: 1000, output_tokens: 20 } },
+    { stop_reason: 'end_turn', content: [{ type: 'text', text: 'The Getaway is $805 all in. It saves $999 still.' }], usage: { input_tokens: 50, output_tokens: 20 } },
+  ];
+  const seen: any[] = [];
+  const out: any = await turn({ lines: [{ role: 'user', text: 'cheapest?' }, { role: 'assistant', text: 'Earlier I said $999.' }, { role: 'user', text: 'and now?' }], data: fakeData(), model: 'claude-haiku-5-5',
+    callModel: async (p) => { seen.push(structuredClone(p)); return replies[seen.length - 1]; } });
+  assertEquals(out.reply, 'The Getaway is $805 all in.');
+  assertEquals(seen.length, 3);
+  assert(String(seen[2].messages.at(-1).content).includes('$999'), 'the re-prompt names the stray figure');
+  assertEquals(out.tools.map((t: any) => t.name), ['board', '(number guard)', '(number guard)']);
+  assertEquals(out.links, ['https://www.redweek.com/posting/R1'], 'the listing links a tool gave, for the phone to link');
+  assertEquals(out.usage, { input: 200, cacheWrite: 0, cacheRead: 1000, output: 50, calls: 3 });
+});
+
+// ---------------------------------------------------------------- prices and caps (each number written out: a changed cap fails)
+Deno.test('the cost is the API\'s token counts times PRICES, which are the published ones', () => {
+  assertEquals(PRICES['claude-haiku-5-5'], { in: 0.10, write: 0.125, read: 0.01, out: 0.50 });
+  assertEquals(PRICES['claude-sonnet-5-5'], { in: 2, write: 2.5, read: 0.10, out: 10 });
+  assertEquals(costUsd('claude-haiku-5-5', { input: 200, cacheWrite: 4360, cacheRead: 1000, output: 50, calls: 3 }), (200 * 0.10 + 4360 * 0.125 + 1000 * 0.01 + 50 * 0.50) / 1e6);
+  assertEquals(worstCaseUsd('claude-haiku-5-5'), (7 * 40000 * 0.10 + 7 * 1500 * 0.50) / 1e6, 'seven calls of 40,000 in and 1,500 out');
+});
+
+Deno.test('six rounds of tools, then it stops', async () => {
+  let calls = 0;
+  const out: any = await turn({ lines: [{ role: 'user', text: 'everything' }], data: fakeData(), model: 'claude-haiku-5-5',
+    callModel: async () => { calls++; return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: `t${calls}`, name: 'people', input: {} }], usage: {} }; } });
+  assertEquals(calls, 6);
+  assert(out.reply.includes('too much'));
+});
+
+Deno.test('one call over 40,000 input tokens ends the turn', async () => {
+  let calls = 0;
+  const out: any = await turn({ lines: [{ role: 'user', text: 'everything' }], data: fakeData(), model: 'claude-haiku-5-5',
+    callModel: async () => { calls++; return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't', name: 'people', input: {} }], usage: { input_tokens: 30000, cache_read_input_tokens: 10001 } }; } });
+  assertEquals(calls, 1);
+  assert(out.reply.includes('too much'));
+});
+
+Deno.test('the board shows twelve weeks, places forty', async () => {
+  const many = Array.from({ length: 30 }, (_, i) => ({ id: `d${i}`, stay_id: 'surf', from_date: day(30 + i), to_date: day(37 + i), nights: 7, points_total: 100000 + i * 100, source: 'redweek', title: 'owner asking $120 a night', seen_at: new Date().toISOString() }));
+  const b: any = await runTool('board', { stay_id: null, from: null, to: null }, ctxOf({ ...fakeData(), deals: async () => many as any }));
+  assertEquals([b.weeks.length, b.shown, b.total_on_board, b.looks_wrong_on_board], [12, 12, 30, 0]);
+  const bad = { id: 'bad', stay_id: 'surf', from_date: day(30), to_date: day(37), nights: 7, points_total: 7100, source: 'redweek', title: 'owner asking $9 a night' };
+  const w: any = await runTool('board', { stay_id: null, from: null, to: null }, ctxOf({ ...fakeData(), deals: async () => [...many, bad] as any }));
+  assertEquals([w.weeks.length, w.looks_wrong_on_board, w.weeks.at(-1).price], [13, 1, LOOKS_WRONG], 'a misread past the twelfth is still seen, as one');
+  const stays = Array.from({ length: 50 }, (_, i) => ({ id: `s${i}`, name: `Place ${i}`, kind: 'aruba' }));
+  const p: any = await runTool('places', { filter: null }, ctxOf({ ...fakeData(), stays: async () => stays as any }));
+  assertEquals(p.places.length, 40);
+});
+
+Deno.test('the phone\'s conversation is cut to twelve lines, 2,000 characters a question, 4,000 an answer', () => {
+  const msgs = Array.from({ length: 20 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', text: (i % 2 ? 'a' : 'u').repeat(9000) }));
+  msgs.push({ role: 'user', text: 'last' });
+  const l = linesFrom({ messages: msgs })!;
+  assertEquals(l.length, 11, 'the last twelve, less the answer at the front: the API starts with the member');
+  assertEquals(l[0].role, 'user');
+  assertEquals(linesFrom({ messages: Array.from({ length: 20 }, (_, i) => ({ role: 'user', text: `q${i}` })) })!.length, 12, 'twelve, however many are sent');
+  assertEquals(Math.max(...l.filter(x => x.role === 'user').map(x => x.text.length)), 2000);
+  assertEquals(Math.max(...l.filter(x => x.role === 'assistant').map(x => x.text.length)), 4000);
+  assertEquals(linesFrom({ messages: [{ role: 'assistant', text: 'hi' }] }), null, 'the member speaks last');
+});
+
+// ---------------------------------------------------------------- the request
+const KEYV = 'k'.repeat(40);
+function fakeServer({ member = { id: 'm1', name: 'Ana Kock', monthly_usd: 100, status: 'active', roles: ['member'] } as any,
+  allow = { ok: true, model: 'claude-haiku-5-5', turn_id: 't-1' } as any, logFails = 0, env = {} as Record<string, string> } = {}) {
+  const rpcs: [string, any][] = [];
+  let logTries = 0;
+  const memberClient = {
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: member }) }) }) }),
+    rpc: async (name: string, args: any) => {
+      rpcs.push([name, args]);
+      if (name === 'concierge_allow') return { data: allow, error: null };
+      if (name === 'log_concierge_turn') return ++logTries <= logFails ? { error: { message: 'refused' } } : { error: null };
+      return { data: null, error: null };
+    },
+  };
+  const handler = makeHandler({
+    createClient: (_u: string, _k: string, opts: any) => (opts?.global ? memberClient : { auth: { getUser: async (t: string) => ({ data: { user: t === 'good' ? { id: 'u1' } : null } }) } }),
+    env: (k) => ({ SUPABASE_URL: 'http://x', SUPABASE_ANON_KEY: 'anon', ANTHROPIC_API_KEY: 'sk-test', CONCIERGE_LOG_KEY: KEYV, ...env } as Record<string, string>)[k],
+    callModel: () => async () => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Hello.' }], usage: { input_tokens: 10, output_tokens: 5 } }),
+    dataFor: () => fakeData(),
+  });
+  const post = (body: unknown, token = 'good') => handler(new Request('http://x/', { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: JSON.stringify(body) }));
+  return { post, rpcs };
+}
+const ask = { messages: [{ role: 'user', text: 'hi' }] };
+
+Deno.test('who may ask: signed in, an Insider, active', async () => {
+  assertEquals((await fakeServer().post(ask, 'bad')).status, 401);
+  assertEquals((await fakeServer({ member: null }).post(ask)).status, 403);
+  assertEquals((await fakeServer({ member: { id: 'm1', name: 'A', status: 'paused', roles: [] } }).post(ask)).status, 403);
+  assertEquals((await fakeServer().post({ messages: [] })).status, 400);
+});
+
+Deno.test('the gate is signed with this minute, and "off" or a missing key means not switched on', async () => {
+  const s = fakeServer();
+  assertEquals((await s.post(ask)).status, 200);
+  const sig = s.rpcs.find(([n]) => n === 'concierge_allow')![1].p_sig;
+  const now = Math.floor(Date.now() / 60e3);
+  assert(sig === await hmac(KEYV, `allow:m1:${now}`) || sig === await hmac(KEYV, `allow:m1:${now - 1}`));
+  assertEquals((await fakeServer({ allow: { ok: false, why: 'off' } }).post(ask)).status, 503);
+  assertEquals((await fakeServer({ env: { CONCIERGE_LOG_KEY: 'short' } }).post(ask)).status, 503);
+  assertEquals((await fakeServer({ allow: { ok: false, why: 'ceiling' } }).post(ask)).status, 429);
+});
+
+Deno.test('a turn that cannot be logged is tried twice, then left at its provisional cost and cannot be rated', async () => {
+  const s = fakeServer({ logFails: 2 });
+  const res = await s.post(ask);
+  const body = await res.json();
+  assertEquals(res.status, 200);
+  assertEquals(body.reply, 'Hello.');
+  assertEquals(body.turn_id, undefined, 'no Helped / Not it on a turn that is not on the record');
+  assertEquals(s.rpcs.filter(([n]) => n === 'log_concierge_turn').length, 2);
+  assert(!s.rpcs.some(([n, a]) => n === 'log_concierge_turn' && a.p_cost === 0 && a.p_ok), 'nothing zeroes the charge');
+  const ok = fakeServer({ logFails: 1 });
+  assertEquals((await (await ok.post(ask)).json()).turn_id, 't-1', 'the retry with the cost alone lands, so it is on the record');
+});
+
+Deno.test('the dry run is for the Desk', async () => {
+  assertEquals((await fakeServer().post({ ...ask, dryRun: true })).status, 403);
+  const desk = await fakeServer({ member: { id: 'm1', name: 'Victor R', monthly_usd: 200, status: 'active', roles: ['planner', 'admin'] } }).post({ ...ask, dryRun: true });
+  assertEquals(desk.status, 200);
+  assert((await desk.json()).payload.tools.length > 0);
+});
+
+// ---------------------------------------------------------------- the high side, and taps
+Deno.test('a price can be impossible on the high side too, or far outside what the place charges', () => {
+  assertEquals(implausibleWhy(9049, surf), 'over $1,500 a night', 'a lost decimal point: $633 read as $63,346');
+  assertEquals(implausibleWhy(1499, { id: 'x', name: 'X' }), null, 'no band on file: only the absolute ceiling');
+  assertEquals(implausibleWhy(800, { id: 'c', name: 'Cheap', rate_low_usd: 100, rate_high_usd: 150, rate_peak_usd: 200 }), 'more than three times the dearest night this place charges');
+  assertEquals(implausibleWhy(60, { id: 'd', name: 'Dear', rate_low_usd: 300, rate_high_usd: 400, rate_peak_usd: 600 }), 'under a quarter of the cheapest night this place charges');
+  assertEquals(implausibleWhy(230, surf), null);
+  const f = dealFacts({ id: 'h', stay_id: 'surf', from_date: '2026-11-01', to_date: '2026-11-08', nights: 7, points_total: 6334600, source: 'interval', title: 'Getaway' }, surf, S);
+  assertEquals(f.implausible, 'over $1,500 a night');
+});
+
+Deno.test('a fresh look is a button for the member, never a read Ian starts', async () => {
+  const c = ctxOf();
+  const out: any = await runTool('refresh_redweek', { stay_id: 'Surf Club' }, c);
+  assert(out.shown);
+  assertEquals(c.cards.map((x: any) => [x.action, x.stay_id]), [['refresh', 'surf']]);
+  assert(!('tap' in fakeData()), 'the data layer has no way to tap at all');
 });
 
 Deno.test('a line about how they travel asks Ian to remember it', async () => {

@@ -15,6 +15,26 @@ export const NEXT_DOOR_DAYS = 7;             // "a cheaper week next door": chec
 // watcher/judge.mjs implausiblyCheap: under $40 a night is a misread listing, not a bargain. On 17 Oct
 // the board offered Barceló at Christmas for $71 a week; it was still on the board on 22 Oct.
 export const FLOOR_NIGHTLY = 40;
+// watcher/judge.mjs implausiblyDear (0b6c283): over $1,500 a night is a lost decimal point, not a price.
+export const CEILING_NIGHTLY = 1500;
+// Far outside what the place itself charges: over 3x its dearest night or under a quarter of its
+// cheapest, all in. Generous on purpose (a villa is not a studio); it is there for misreads.
+export const BAND_HIGH = 3, BAND_LOW = 0.25;
+export const LOOKS_WRONG = 'looks wrong, not quoted';
+
+/** Why a per-night price cannot be real, or null when it can. */
+export function implausibleWhy(nightly: number, stay?: Stay) {
+  if (!(nightly > 0)) return null;
+  if (nightly < FLOOR_NIGHTLY) return `under $${FLOOR_NIGHTLY} a night`;
+  if (nightly > CEILING_NIGHTLY) return `over $${CEILING_NIGHTLY.toLocaleString('en-US')} a night`;
+  const rates = [stay?.rate_low_usd, stay?.rate_high_usd, stay?.rate_peak_usd].map(Number).filter(n => n > 0);
+  if (rates.length) {
+    const hi = Math.max(...rates) * 1.15 * BAND_HIGH, lo = Math.min(...rates) * 1.15 * BAND_LOW;
+    if (nightly > hi) return 'more than three times the dearest night this place charges';
+    if (nightly < lo) return 'under a quarter of the cheapest night this place charges';
+  }
+  return null;
+}
 
 export type Settings = { pointsPerDollar: number; serviceRate: number; tiers?: Tier[] };
 export type Tier = { monthlyUsd: number; bonusRate: number };
@@ -110,7 +130,7 @@ export function dealFacts(d: Deal, stay: Stay | undefined, s: Settings, now = Da
     public_total_usd: pub,
     // Positive: the Circle's all-in is under the public rate by this much. Negative: it is over.
     under_public_usd: pub != null ? r0(pub - totalUsd) : null,
-    implausible: (ask ?? perNightPts / ppd) < FLOOR_NIGHTLY,
+    implausible: implausibleWhy(ask ?? perNightPts / ppd, stay),
     seen_days_ago: age,
     stale: age != null && age >= STALE_DAYS,
     peak_nights: bands.peak,

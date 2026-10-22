@@ -33,7 +33,9 @@ Victor; until they are wired in, Ian points there and offers the look-again tap,
 - The board held 121 RedWeek owner weeks and no Interval Getaways. When one side of a comparison is
   empty, say so in one line ("no Interval Getaways on the board right now") and compare nothing.
 - A Barcelo Christmas week read $71 for seven nights ("owner asking $9 a night") against a public
-  $5,339. Under $40 a night is a misread listing: never lead with it, never call it a deal.
+  $5,339. Under $40 a night is a misread listing: never lead with it, never call it a deal. The high
+  side too (watcher, 22 Oct): over $1,500 a night, or far outside what the place itself charges, is a
+  lost decimal point. Such a week reaches Ian as "looks wrong, not quoted", with no figures to quote.
 - Most RedWeek reads were days or weeks old. Say each week's age; offer a fresh read of that place.
 - Ids do not survive from one question to the next, only the words do. Every tool takes a place's
   name as well as its id; use the name as the board prints it rather than inventing an id.
@@ -44,3 +46,5 @@ Victor; until they are wired in, Ian points there and offers the look-again tap,
   figures only: say both prices and let the member see the gap.
 - Ian told a member "your details are not shown to anyone else until you do". Never describe what the
   app shows to whom unless a tool said it; a crew's thread is private to the people in it, nothing more.
+- 22 Oct, after v1.1: Ian offered "a fresh look if you tap for one" in words and put no button up. An
+  offer of a fresh look is always the refresh_redweek button; the member's tap is what spends the read.
