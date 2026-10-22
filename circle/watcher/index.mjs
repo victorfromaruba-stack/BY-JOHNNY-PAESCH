@@ -12,7 +12,8 @@
 //
 // Everything it needs is in .env next to this file. Nothing is written down anywhere else.
 
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, statSync, chownSync, existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sweep, ARUBA } from './redweek.mjs';
@@ -24,7 +25,7 @@ import { worthPosting, asDeal, resolveStay, capPerResortMonth, dedupeKey } from 
 // How many times in a row Interval said no. Pure, and on trial in pace.test.mjs. The `due`
 // gate it also exports is not read here any more: nothing signs in on a timer for it to hold
 // back. What is left is the count, which is what the next run by hand wants to be told.
-import { loadPace, savePace, refused as refusedPace, accepted as acceptedPace } from './pace.mjs';
+import { loadPace, savePace, refused as refusedPace, failed as failedPace, accepted as acceptedPace, cardFor } from './pace.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // Where the Interval pace lives between passes and across restarts. Git-ignored, like .env.
@@ -60,6 +61,23 @@ const CFG = {
 };
 
 const log = (...a) => console.log(new Date().toISOString().slice(0, 19).replace('T', ' '), ...a);
+
+// The card for Victor's dashboard goes through premanifest-bot's alerts module: one file for
+// everything that needs a person, one entry per source. That module is CommonJS in a directory
+// only openclaw (and root) can open, so this reaches it by path. The service runs as root, and
+// a root write would leave needs-human.json owned by root for the next writer, so the file is
+// handed back to the directory's owner. A card that cannot be put up is said in the log and
+// never stops the pass: alerting must not break the thing it alerts about.
+const ALERTS = process.env.ALERTS_MODULE || '/home/openclaw/premanifest-bot/alerts.js';
+function intervalCard(state) {
+  try {
+    const alerts = createRequire(import.meta.url)(ALERTS);
+    const card = cardFor(state);
+    if (card) alerts.raise('interval-watcher', card.title, card.detail, { since: card.since });
+    else alerts.clear('interval-watcher');
+    if (existsSync(alerts.FILE)) { const d = statSync(dirname(alerts.FILE)); chownSync(alerts.FILE, d.uid, d.gid); }
+  } catch (err) { log(`  could not reach the alerts module (${err.message}) — no card either way`); }
+}
 
 /**
  * Move the last-seen clock on the weeks this pass found on the page again.
@@ -213,22 +231,32 @@ async function pass(circle) {
       // It got in. Whatever the pace was, it is every pass again.
       if (pace.refusals) log(`  Interval signed the watcher in after ${pace.refusals} refusal${pace.refusals === 1 ? '' : 's'} — back to every pass`);
       savePace(PACE_FILE, acceptedPace());
+      intervalCard(acceptedPace());
     } catch (err) {
       if (err.needsDump) {
         // It signed in; only the search page is unset. Not a refusal, so not a longer wait.
         log(`  Interval: ${err.message}`);
         savePace(PACE_FILE, acceptedPace());
+        intervalCard(acceptedPace());
       } else if (err.needsBrowser) {
+        // Every failed run counts toward the card, not only a refusal: a browser that will not
+        // start was as silent for eight days as a refused password, and read just as routine.
+        const next = failedPace(pace, { said: err.message });
+        savePace(PACE_FILE, next); intervalCard(next);
         log(`  Interval needs a browser: ${err.message}`);
         log(`  Install it with: npx playwright install ${process.env.WATCH_BROWSER || 'chromium'}   (or set WATCH_INTERVAL_MODE=fetch)`);
       } else if (err.refused) {
         const next = refusedPace(pace, { everyMin: CFG.everyMin, maxMin: CFG.intervalRetryMaxMin, said: err.message });
-        savePace(PACE_FILE, next);
+        savePace(PACE_FILE, next); intervalCard(next);
         log(`  Interval refused the sign-in (${refusalsSaid(next.refusals)}): ${err.message}`);
         // No "next try" line any more: nothing tries on its own, so naming an hour would be
         // promising something no timer is going to keep.
         log('  Nothing retries this on its own. RedWeek carries on every pass.');
-      } else log(`  Interval failed: ${err.message}`);
+      } else {
+        const next = failedPace(pace, { said: err.message });
+        savePace(PACE_FILE, next); intervalCard(next);
+        log(`  Interval failed (${next.failures} in a row): ${err.message}`);
+      }
     } finally {
       // A browser left running would hold memory on a small VPS for as long as the watcher
       // lives, and the watcher lives for months.

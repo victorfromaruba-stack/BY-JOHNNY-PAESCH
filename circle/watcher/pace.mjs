@@ -24,15 +24,39 @@ export function backoffMinutes(refusals, everyMin, { maxMin = DAY_MIN } = {}) {
   return Math.min(every * 2 ** n, Math.max(every, maxMin));
 }
 
-/** The pace after one more refusal, said at `now` (ms). */
+/**
+ * One more failed Interval run, for any reason: refused, no browser, a crash. Not a refusal, so
+ * the wait is untouched. A pace file from before this count existed has `refusals` and no
+ * `failures`; those refusals were failures too, so the count carries on from them.
+ */
+export function failed(state, { now = Date.now(), said = '' } = {}) {
+  return {
+    ...(state || {}),
+    failures: (state?.failures ?? state?.refusals ?? 0) + 1,
+    failingSince: state?.failingSince || new Date(now).toISOString(),
+    lastFailSaid: String(said || '').slice(0, 200),
+  };
+}
+
+/** The pace after one more refusal, said at `now` (ms). A refusal is a failure as well. */
 export function refused(state, { everyMin, maxMin, now = Date.now(), said = '' } = {}) {
   const refusals = (state?.refusals || 0) + 1;
   const wait = backoffMinutes(refusals, everyMin, { maxMin });
-  return { refusals, nextTryAt: new Date(now + wait * 60_000).toISOString(), lastRefusalAt: new Date(now).toISOString(), lastSaid: String(said || '').slice(0, 200) };
+  return { ...failed(state, { now, said }), refusals, nextTryAt: new Date(now + wait * 60_000).toISOString(), lastRefusalAt: new Date(now).toISOString(), lastSaid: String(said || '').slice(0, 200) };
 }
 
-/** The pace after a sign-in that worked: back to every pass. */
-export const accepted = () => ({ refusals: 0, nextTryAt: null, lastRefusalAt: null, lastSaid: '' });
+/** The pace after a sign-in that worked: back to every pass, and nothing failing. */
+export const accepted = () => ({ refusals: 0, failures: 0, nextTryAt: null, lastRefusalAt: null, lastSaid: '' });
+
+/** Failed runs in a row before a person is told. One bad run is weather; three is a pattern. */
+export const FAIL_ALERT_AT = 3;
+
+/** The card to put up for this pace, or null when there is nothing to say (the caller clears it). */
+export function cardFor(state) {
+  const n = state?.failures || 0;
+  if (n < FAIL_ALERT_AT) return null;
+  return { title: `Interval has failed ${n} runs in a row`, detail: state.lastFailSaid || state.lastSaid || '', since: state.failingSince };
+}
 
 /** Is it time to try again? Nothing on file, or a date that has passed, means yes. */
 export function due(state, now = Date.now()) {
