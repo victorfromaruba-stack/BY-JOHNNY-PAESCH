@@ -12,16 +12,21 @@
 //
 // Everything it needs is in .env next to this file. Nothing is written down anywhere else.
 
-import { writeFileSync, mkdirSync, statSync, chownSync, existsSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sweep, ARUBA, useStopFile, stopped } from './redweek.mjs';
 import { Interval } from './interval.mjs';
 import { Circle } from './circle.mjs';
 import { loadEnv } from './dotenv.mjs';
-// Which finds go up, and what they look like when they do. Pure, and on trial in judge.test.mjs.
-import { worthPosting, asDeal, resolveStay, capPerResortMonth, dedupeKey } from './judge.mjs';
+import { putCard as putCardTo } from './cards.mjs';
+// The Interval scan a member's tap can set off (Victor, 22 Oct 2026), its browser, and its full stop. Off until WATCH_INTERVAL_SCAN says on.
+import { makeIntervalScanner, makeStopAnnouncer, useIntervalStopFile, intervalStopped } from './interval-scan.mjs';
+import { IntervalSession } from './interval-session.mjs';
+// Which catalog place a name belongs to. The rest of judge.mjs (what goes up, and what it looks like) runs in board.mjs.
+import { resolveStay } from './judge.mjs';
+// What happens to finds once they are found: judged, posted, last-seen clocks moved. Shared with the Interval scan.
+import { judgeAndPost } from './board.mjs';
 // How many times in a row Interval said no. Pure, and on trial in pace.test.mjs. The `due`
 // gate it also exports is not read here any more: nothing signs in on a timer for it to hold
 // back. What is left is the count, which is what the next run by hand wants to be told.
@@ -37,6 +42,12 @@ const PACE_FILE = join(HERE, '.interval-pace.json');
 const STOP_FILE = join(HERE, '.redweek-stop.json');
 // When each resort was last read, which taps have cost a read this hour, who was nudged and when.
 const TAPS_FILE = join(HERE, '.taps-state.json');
+// Interval's "no", written by the scan (interval-scan.mjs). While this file exists nothing asks Interval
+// anything, by a tap or by hand; only Victor deletes it. Beside it: the scan's caps and counters, and the
+// saved session (cookies, 0600). All three are git-ignored.
+const IV_STOP_FILE = join(HERE, '.interval-stop.json');
+const IV_STATE_FILE = join(HERE, '.interval-scan.json');
+const IV_SESSION_FILE = join(HERE, '.interval-session.json');
 const args = new Set(process.argv.slice(2));
 const ONCE = args.has('--once'), DRY = args.has('--dry'), DUMP = args.has('--dump');
 
@@ -53,6 +64,8 @@ const flag = (k, d) => (process.env[k] === undefined || process.env[k] === '' ? 
 const CFG = {
   everyMin:      num('WATCH_EVERY_MIN', 30),
   maxNightly:    num('WATCH_MAX_NIGHTLY_USD', 0),   // 0 = no ceiling
+  // The sanity ceiling, apart from the one above: a price over this a night is a broken listing, not a find.
+  maxPlausibleNightly: num('WATCH_MAX_PLAUSIBLE_NIGHTLY_USD', 1500),
   minNights:     num('WATCH_MIN_NIGHTS', 0),
   onlyOurStays:  flag('WATCH_ONLY_OUR_STAYS', true),
   pointsPerUsd:  num('CIRCLE_POINTS_PER_DOLLAR', 100),
@@ -69,79 +82,15 @@ const CFG = {
 
 const log = (...a) => console.log(new Date().toISOString().slice(0, 19).replace('T', ' '), ...a);
 
-// The card for Victor's dashboard goes through premanifest-bot's alerts module: one file for
-// everything that needs a person, one entry per source. That module is CommonJS in a directory
-// only openclaw (and root) can open, so this reaches it by path. The service runs as root, and
-// a root write would leave needs-human.json owned by root for the next writer, so the file is
-// handed back to the directory's owner. A card that cannot be put up is said in the log and
-// never stops the pass: alerting must not break the thing it alerts about.
-const ALERTS = process.env.ALERTS_MODULE || '/home/openclaw/premanifest-bot/alerts.js';
-function putCard(key, card) {
-  try {
-    const alerts = createRequire(import.meta.url)(ALERTS);
-    if (card) alerts.raise(key, card.title, card.detail, { since: card.since });
-    else alerts.clear(key);
-    if (existsSync(alerts.FILE)) { const d = statSync(dirname(alerts.FILE)); chownSync(alerts.FILE, d.uid, d.gid); }
-  } catch (err) { log(`  could not reach the alerts module (${err.message}) — no card either way`); }
-}
+// The card for Victor's dashboard: cards.mjs, through premanifest-bot's alerts module.
+const putCard = (key, card) => putCardTo(key, card, log);
 const intervalCard = (state) => putCard('interval-watcher', cardFor(state));
 const redweekCard = (held) => putCard('redweek-watcher', held && { title: 'RedWeek told the watcher to stop', detail: `${held.why}. Nothing reads RedWeek until circle/watcher/.redweek-stop.json is deleted.`, since: held.at || undefined });
-
-/**
- * Move the last-seen clock on the weeks this pass found on the page again.
- *
- * A row on the board carries two times: when it was first posted here, and when it was last
- * seen where it lives. The board shows the second one, and after two days it says it out loud —
- * "Last seen 3 days ago. Victor looks again before he books" (js/views/deals.js). The watcher
- * sweeps RedWeek every half hour and confirms these same weeks are still on the page, and until
- * now it wrote nothing when it did: anything already posted was skipped and that was the end of
- * it. So seen_at stayed at first sighting for ever, and since RedWeek is 78 of the 85 weeks on
- * the board, most of the board was telling members it was older than it is — about weeks the
- * watcher had confirmed forty-eight times that day. A row that is wrong about its own age is
- * worse than no row at all: browsing without having to ask is the entire point of the board.
- *
- * This is the watcher's half of a rule the Grab path already keeps. ingest-deal writes
- * `{ seen_at: now }` the moment it meets a week it has posted before (supabase/functions/
- * ingest-deal/index.ts). Two writers of one column, one rule, and only one of them kept it.
- *
- * Live rows only. A week Victor has taken down is not a listing any more, and a retired row
- * with a moving clock would read as alive in the Desk's own lists.
- *
- * It counts what came BACK, not what it asked for. The watcher signs in as an ordinary member —
- * the bot account holds no role and there is no service key on the VPS — and `deals` is behind
- * row-level security. An update that no policy allows does not fail loudly: Postgres filters the
- * rows away and PostgREST answers with nothing changed. Counting the rows the database returns
- * is the difference between a log line that is true and one that merely reads well.
- */
-async function refreshSeen(circle, refs) {
-  if (!refs.length) return { asked: 0, moved: 0, said: '' };
-  const now = new Date().toISOString();
-  let moved = 0, said = '';
-  // In batches: a pass can see a hundred weeks again, and a URL is not the place to put a
-  // hundred references at once.
-  for (let i = 0; i < refs.length; i += 50) {
-    const batch = refs.slice(i, i + 50);
-    // JSON.stringify quotes each reference the way PostgREST wants them inside in.(…), so a
-    // reference carrying a comma cannot become two.
-    const list = encodeURIComponent(batch.map(r => JSON.stringify(String(r))).join(','));
-    const res = await circle.call(`/rest/v1/deals?status=eq.live&source_ref=in.(${list})&select=source_ref`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json', prefer: 'return=representation' },
-      body: JSON.stringify({ seen_at: now }),
-    });
-    if (!res.ok) {
-      said = `the Circle answered ${res.status}: ${String(await res.text().catch(() => '')).slice(0, 160)}`;
-      break;
-    }
-    const rows = await res.json().catch(() => []);
-    moved += Array.isArray(rows) ? rows.length : 0;
-  }
-  return { asked: refs.length, moved, said };
-}
 
 const tapState = loadTapState(TAPS_FILE);
 const pusher = makePusher();
 useStopFile(STOP_FILE);
+useIntervalStopFile(IV_STOP_FILE);
 
 // Tell the stay page that RedWeek was read: one row per place, which it prints as "Checked 4 min
 // ago". Only for resorts that answered; a read that failed is not a check. Whatever happens to the
@@ -232,6 +181,9 @@ async function passBody(circle, { only = null } = {}, ctx) {
     // A member's tap. Not a word about Interval here, and no way into the sign-in below.
   } else if (!wantsInterval) {
     log('Interval: off (WATCH_INTERVAL is not set) — RedWeek only');
+  } else if (intervalStopped()) {
+    // The scan's full stop covers a sign-in by hand too: whatever Interval put up is still there.
+    log(`Interval: stopped (${intervalStopped().why}) — not signing in. Delete ${IV_STOP_FILE} to let it.`);
   } else if (!process.env.INTERVAL_USER) {
     log('Interval: no INTERVAL_USER set, skipping');
   } else if (!byHand) {
@@ -340,76 +292,8 @@ async function passBody(circle, { only = null } = {}, ctx) {
     } catch (err) { log(`could not read the catalog (${err.message})`); }
   }
 
-  // Attach the live catalog row by name, because ids differ between the bundled catalog and
-  // the database. A find that cannot be placed can never be posted — a deal must belong to a
-  // stay — so the Interval ones are named in the log for Victor to add in the Desk.
-  if (catalog) for (const f of found) f.stayId = resolveStay(f, catalog);
-  const ivUnplaced = found.filter(f => f.source === 'interval' && !f.stayId);
-  if (ivUnplaced.length) {
-    const names = [...new Set(ivUnplaced.map(f => f.resortName || f.ourName || '(no name read)'))].slice(0, 8);
-    log(`Interval: ${ivUnplaced.length} week${ivUnplaced.length === 1 ? '' : 's'} at places not in the catalog — add them in the Desk to see them here: ${names.join('; ')}`);
-  }
-  const good = capPerResortMonth(found.filter(f => worthPosting(f, catalog, CFG)), CFG.maxPerResortMonth);
-  const ivGood = good.filter(f => f.source === 'interval').length;
-  log(`${found.length} found, ${good.length} worth posting — ${ivGood} from Interval (every one at our places), ${good.length - ivGood} owner week${good.length - ivGood === 1 ? '' : 's'}`
-    + (CFG.mustBeatOurs ? ` at least ${Math.round(CFG.beatBy * 100)}% under the public rate` : '')
-    + `, cheapest ${CFG.maxPerResortMonth} a resort a month`);
-
-  if (DRY) {
-    log('dry run — nothing is posted');
-    for (const f of good.sort((a, b) => (a.usdNightly || 0) - (b.usdNightly || 0)).slice(0, 30)) {
-      log(`  ${f.source.padEnd(8)} ${f.from} → ${f.to}  ${String(f.nights).padStart(2)}n  $${String(f.usdNightly).padStart(7)}/n  $${String(f.usdTotal).padStart(7)}${f.retailPrice ? `  public $${f.retailPrice}` : ''}${f.saves ? `  vs ours ${f.saves > 0 ? '−' : '+'}$${Math.abs(f.saves)}` : ''}  ${f.unit || f.unitCode || ''}`);
-    }
-    return { found: good, posted: 0 };
-  }
-
-  if (!circle) { log('no CIRCLE_URL set — nothing to post to. Use --dry, or fill in .env.'); return { found: good, posted: 0 }; }
-  // Points are all-in at the Circle's own two numbers. Posting without them would put a week on
-  // the board fifteen per cent cheaper than the website shows the same week — so no settings,
-  // no posts.
-  let settings;
-  try { settings = await circle.settings(); }
-  catch (err) { log(`could not read the Circle's settings (${err.message}) — nothing posted this pass`); return { found: good, posted: 0 }; }
-  const already = await circle.knownRefs();
-  let posted = 0;
-  // The weeks this pass met on the page that are already on the board. Meeting one again is
-  // news — it is the whole difference between "posted on Monday" and "still there this
-  // morning" — so it is no longer thrown away with the `continue`.
-  const seenAgain = new Set();
-  for (const f of good) {
-    const deal = asDeal(f, CFG, settings);
-    if (!deal) { log(`  could not price ${f.source} ${f.from} at ${f.resortName || f.ourName || '?'} — skipped`); continue; }
-    if (already.refs.has(deal.sourceRef) || already.weeks.has(dedupeKey(deal))) {
-      // Only ever by the source's own reference. A week matched on the WEEK key is the same
-      // week standing on somebody else's page — an owner lists on RedWeek and on VakayMood
-      // alike — and the row on the board belongs to that other page, which this pass never
-      // read. Moving its clock would be the app saying it had seen something it had not.
-      if (deal.sourceRef && already.refs.has(deal.sourceRef)) seenAgain.add(deal.sourceRef);
-      continue;
-    }
-    try {
-      await circle.post(deal); posted++;
-      already.refs.add(deal.sourceRef); already.weeks.add(dedupeKey(deal));
-      log(`  posted ${deal.title} ${deal.from} $${deal.usdTotal} → ${deal.pointsTotal} pts`);
-    } catch (err) { log(`  could not post ${deal.sourceRef}: ${err.message}`); }
-    await new Promise(r => setTimeout(r, 400));
-  }
-  log(`${posted} new on the board`);
-
-  const clocks = await refreshSeen(circle, [...seenAgain]);
-  const weeks = (n) => `${n} week${n === 1 ? '' : 's'}`;
-  if (clocks.said) {
-    log(`  ${weeks(clocks.asked)} were on the page again — their last-seen clocks were NOT moved: ${clocks.said}`);
-  } else if (clocks.moved) {
-    log(`  ${weeks(clocks.asked)} seen again — ${clocks.moved} last-seen clock${clocks.moved === 1 ? '' : 's'} moved`);
-  } else if (clocks.asked) {
-    // Say the true thing rather than the tidy one. Zero rows came back changed, and from here
-    // there is no way to tell whether those rows have stopped being live or whether nothing
-    // grants this account the write — `deals` carries a read policy and, as supabase/schema.sql
-    // stands, no write policy that would let the watcher move seen_at.
-    log(`  ${weeks(clocks.asked)} seen again — 0 clocks moved. Either those rows are no longer live, or nothing has granted this account the write — supabase/migrations/20261022_stay_taps.sql does, and has to be pasted into the SQL editor once; until then the board shows them at their first sighting.`);
-  }
-  return { found: good, posted, refreshed: clocks.moved };
+  // Judge, post, move the clocks: board.mjs, the same door a member's Interval scan goes through.
+  return judgeAndPost({ circle, found, catalog, cfg: CFG, log, dry: DRY });
 }
 
 // A dry run still signs in, because judging a find needs the catalog to judge it against.
@@ -441,6 +325,18 @@ async function run() {
 // thirty seconds nobody would feel. If the function is not installed yet (the migration has not
 // been pasted into the SQL editor) it says so once an hour and asks again every ten minutes.
 const tapEverySec = Math.min(120, Math.max(15, num('WATCH_TAP_POLL_SEC', 30)));
+// The Interval scan. Off unless WATCH_INTERVAL_SCAN is on — Victor's word, after the stay_taps migration is
+// applied. What it posts goes through the same board.mjs door as everything else, in the same lane.
+const scanInterval = makeIntervalScanner({
+  armed: () => flag('WATCH_INTERVAL_SCAN', false),
+  stateFile: IV_STATE_FILE,
+  makeSession: () => new IntervalSession({ stateFile: IV_SESSION_FILE }),
+  post: ({ finds, catalog }) => serial(() => judgeAndPost({ circle, found: finds, catalog, cfg: CFG, log })),
+  onStop: makeStopAnnouncer({ putCard, tell: (msg) => tellOrHold(tapState, pusher, msg, log) }),
+  onGood: () => putCard('interval-watcher', null),
+  log,
+});
+
 async function pollTaps() {
   let next = tapEverySec * 1000;
   try {
@@ -454,6 +350,7 @@ async function pollTaps() {
         deps: {
           log, pusher,
           intervalLastSeen: (id) => circle.intervalLastSeen(id),
+          scanInterval: (stay) => scanInterval(stay, catalog),
           sweepResort: (slug) => serial(() => pass(circle, { only: [slug] })),
         },
       });
@@ -478,6 +375,7 @@ if (ONCE || DUMP) {
   };
   if (circle && !DRY) {
     log(`taps: listening every ${tapEverySec}s for members opening a stay`);
+    log(`Interval scan on a tap: ${flag('WATCH_INTERVAL_SCAN', false) ? 'ON' : 'off (WATCH_INTERVAL_SCAN is not on) — the Grab nudge only'}${intervalStopped() ? ` — and STOPPED: ${intervalStopped().why}` : ''}`);
     setTimeout(pollTaps, tapEverySec * 1000);
   }
   await forever();

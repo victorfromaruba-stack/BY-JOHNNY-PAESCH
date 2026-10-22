@@ -247,18 +247,62 @@ test('state survives a restart, and the file is private', () => {
   writeFileSync(f, '{not json'); assert.deepEqual(loadState(f), emptyState());
 });
 
-// ---------------------------------------------------------------- Interval is out of reach of a tap
-test('the tap path never reaches Interval: the pass for a tap skips that whole section, and nothing else calls it', () => {
+// ---------------------------------------------------------------- Interval, by a tap, only through the scan
+// Victor's words of 22 Oct 2026 allow an Interval scan on a member's tap, with guardrails
+// (interval-scan.mjs). What this file still guarantees is that taps.mjs itself holds no way in:
+// the scan is handed to it, and the half-hourly pass cannot reach it.
+test('the tap path reaches Interval only through the guarded scan, which is off unless switched on', () => {
   const src = readFileSync(new URL('./index.mjs', import.meta.url), 'utf8');
   const chain = src.indexOf('const wantsInterval');
   const guard = src.indexOf('if (only) {', chain);
   const firstBranch = src.indexOf('} else if (!wantsInterval)', chain);
-  assert.ok(chain > 0 && guard > chain && guard < firstBranch, 'the `only` (a member’s tap) branch is first in the Interval chain, so no later branch can run');
-  assert.ok(src.includes("sweepResort: (slug) => serial(() => pass(circle, { only: [slug] }))"), 'a tap reaches the board only through pass(only)');
+  assert.ok(chain > 0 && guard > chain && guard < firstBranch, 'the `only` (a member’s tap) branch is first in the by-hand Interval chain, so a tap pass never runs it');
+  assert.ok(src.includes("sweepResort: (slug) => serial(() => pass(circle, { only: [slug] }))"), 'a RedWeek tap reaches the board only through pass(only)');
+  // The one door: the scanner, armed only by an explicit switch whose default is off.
+  assert.ok(src.includes("armed: () => flag('WATCH_INTERVAL_SCAN', false)"), 'the scan is armed by WATCH_INTERVAL_SCAN, default off');
+  assert.equal((src.match(/new IntervalSession\(/g) || []).length, 1, 'one place builds the Interval browser');
+  assert.ok(/makeSession: \(\) => new IntervalSession\(/.test(src), 'and it is inside the scanner');
+  assert.equal((src.match(/scanInterval\(/g) || []).length, 1, 'the scan is called from one place only: the tap handler’s deps');
+  assert.ok(src.includes('scanInterval: (stay) => scanInterval(stay, catalog)'), 'and that place is inside pollTaps, which only a tap feeds');
   // taps.mjs can only call what it imports. It imports no Interval client and no browser.
   const taps = readFileSync(new URL('./taps.mjs', import.meta.url), 'utf8');
   const imports = [...taps.matchAll(/^import .* from '([^']+)';/gm)].map(m => m[1]).sort();
   assert.deepEqual(imports, ['./judge.mjs', './redweek.mjs', 'node:fs', 'node:module'], 'taps.mjs imports no Interval client, no browser');
+});
+
+test('a scan that worked replaces the nudge: Interval was just read, there is nothing to go and look at', async () => {
+  const w = world();
+  w.deps.scanInterval = async () => ({ ran: true, covered: true, rows: 3, posted: 2, refreshed: 1 });
+  const rows = await handleTaps({ taps: [{ stay: SURF.id, tapped: iso(T0) }], catalog, state: w.state, deps: w.deps, now: () => T0 });
+  assert.equal(w.sent.length, 0);
+  assert.equal(w.calls.intervalAsked.length, 0, 'it did not even ask how old the last grab was');
+  assert.ok(w.lines.some(l => /Interval: scanned — 3 weeks read, 2 new on the board, 1 last-seen clock moved/.test(l)));
+  assert.equal(rows[0].nudge.push, false);
+});
+
+test('a tap served from an earlier scan is covered too, and says so', async () => {
+  const w = world();
+  w.deps.scanInterval = async () => ({ ran: false, covered: true, why: 'scanned 5 min ago — served from that scan' });
+  await handleTaps({ taps: [{ stay: SURF.id, tapped: iso(T0) }], catalog, state: w.state, deps: w.deps, now: () => T0 });
+  assert.equal(w.sent.length, 0);
+  assert.ok(w.lines.some(l => /not scanning — scanned 5 min ago — served from that scan/.test(l)));
+});
+
+test('when the scan is off, stopped, capped, failed or throws, the Grab nudge fires exactly as before', async () => {
+  for (const scan of [
+    async () => ({ ran: false, covered: false, why: 'the Interval scan is switched off' }),
+    async () => ({ ran: false, covered: false, stopped: true, why: 'stopped since today' }),
+    async () => ({ ran: false, covered: false, why: '3 sign-ins in the last 24 hours (cap 3)' }),
+    async () => ({ ran: true, covered: false, why: 'Interval did not sign the watcher in' }),
+    async () => { throw new Error('boom'); },
+  ]) {
+    const w = world();
+    w.deps.scanInterval = scan;
+    const rows = await handleTaps({ taps: [{ stay: SURF.id, tapped: iso(T0) }], catalog, state: w.state, deps: w.deps, now: () => T0 });
+    assert.equal(w.sent.length, 1, 'the nudge still goes');
+    assert.match(w.sent[0].m.body, /Interval last grabbed 32 days ago/);
+    assert.equal(rows[0].nudge.push, true);
+  }
 });
 
 // ---------------------------------------------------------------- RedWeek says no

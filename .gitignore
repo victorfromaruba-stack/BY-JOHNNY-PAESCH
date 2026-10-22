@@ -10,3 +10,6 @@ circle/watcher/.taps-state.json
 aceternity-lab/
 lab-test/
 node_modules/
+circle/watcher/.interval-stop.json
+circle/watcher/.interval-scan.json
+circle/watcher/.interval-session.json

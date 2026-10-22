@@ -212,9 +212,17 @@ What actually exists, and is the whole system:
 - **The tap nudge** (22 Oct 2026, `circle/watcher/taps.mjs`) — when a member opens a place, the watcher
   reads that resort's public RedWeek page (once per resort per 15 min) and, if the newest Interval week
   the Circle holds there is over a day old, pushes Victor's phone once per resort per 12 h: *a member is
-  looking at X, Interval last grabbed N ago, sign in and tap Grab.* Interval itself is never touched on
-  a tap — the push is how a person gets asked to look. Victor asked on 22 Oct for the watch to "watch it
-  the moment a member clicks on stays"; this is the version that stays inside the line above.
+  looking at X, Interval last grabbed N ago, sign in and tap Grab.* Victor asked on 22 Oct for the watch to
+  "watch it the moment a member clicks on stays".
+- **The tap scan** (22 Oct 2026, `circle/watcher/interval-scan.mjs` + `interval-session.mjs`) — the one
+  case the box at the top allows, and only while `WATCH_INTERVAL_SCAN=on` is in `.env` (off until Victor
+  says; the migration comes first). On a tap at a place with an Interval code on file (`INTERVAL_ARUBA`;
+  add a code only when a real page shows it) the watcher reuses the saved session or signs in (3 a day),
+  searches that one resort by its code, and posts its weeks through `board.mjs` like any other. Caps and
+  full stops are exactly the box above, enforced in code and on trial in `interval-scan.test.mjs`; a stop
+  writes `.interval-stop.json`, raises the `interval-watcher` card and sends one push, and the tap nudge
+  above is the fallback whenever the scan is off, stopped, capped or fails. A scan that worked replaces it.
+  Never schedule it, never retry it, never add to what `iv-login.js` does.
 - **The mail pipe** — still live and still worth having: confirmations post the weeks the Circle
   holds, and cancellations take them down by themselves. That half needs no alerts.
 - **VakayMood** — the one source with a public documented API (60 req/min, no login). Poll it
@@ -243,7 +251,10 @@ circle/js/data/listing-paste.js                   the browser twin of the parser
 circle/js/views/deals.js                          stampFor() — the last-seen mark on a row
 circle/js/views/officer.js                        the Desk's Grab panel and freshness line
 circle/watcher/                                   RedWeek on Victor's VPS. Interval stays manual.
-circle/watcher/taps.mjs                           what a member opening a stay sets off (RedWeek read, Grab nudge)
+circle/watcher/taps.mjs                           what a member opening a stay sets off (RedWeek read, Interval scan, Grab nudge)
+circle/watcher/interval-scan.mjs                  the tap scan: caps, sign-in cap, full stop, weeks -> finds
+circle/watcher/interval-session.mjs               its browser: iv-login.js's flow, saved session, nothing added
+circle/watcher/board.mjs                          judge + post_deal + last-seen clocks; RedWeek and the scan share it
 circle/supabase/migrations/20261022_stay_taps.sql  the taps table, redweek_checks, and the seen_at grant
 .claude/skills/interval-board/scripts/parser-check.mjs   the regression cases, runnable
 ```

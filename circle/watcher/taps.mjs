@@ -7,11 +7,16 @@
 //             — at most once per resort per 15 minutes, 20 times an hour in all. A resort read
 //             five minutes ago by the half-hourly pass or by another member's tap is not read
 //             again: that read IS the answer, and the stay says how old it is.
-//   Interval  is NEVER touched by a tap. Interval's terms forbid automated access and the penalty
-//             is Victor's VIP Gold membership, which is the whole supply (see the interval-board
-//             skill). What a tap does there is tell Victor, once per resort per 12 hours, that a
-//             member is looking at a place whose Interval weeks are more than a day old — so that
-//             he, a person, can open Interval and tap Grab.
+//   Interval  is touched by a tap in ONE way, and only when Victor has switched it on
+//             (WATCH_INTERVAL_SCAN): the scan in interval-scan.mjs, which his own words of 22 Oct
+//             2026 allow and whose guardrails are part of that permission — one scan per resort per
+//             30 minutes, ten an hour, three sign-ins a day, a full stop on any challenge. taps.mjs
+//             does not import it: it is handed in as `scanInterval`, so this file still holds no
+//             Interval client and no browser. When the scan is off, stopped, capped or fails, what a
+//             tap does is the older thing: tell Victor, once per resort per 12 hours, that a member
+//             is looking at a place whose Interval weeks are more than a day old — so that he, a
+//             person, can open Interval and tap Grab. A scan that worked makes that unnecessary,
+//             and then no nudge is sent.
 //
 // The decisions are pure functions of a small state file, so they can be argued with in
 // taps.test.mjs without a network. No member's name is read, stored or sent anywhere here: the
@@ -162,10 +167,11 @@ export async function tellOrHold(state, pusher, msg, log, now = new Date()) {
 // ---------------------------------------------------------------- one poll's worth of taps
 /**
  * Act on what members opened since the last poll. `deps` carries the world: sweepResort(slug),
- * intervalLastSeen(stayId), pusher, log. Returns what was decided per place, for the tests.
+ * intervalLastSeen(stayId), pusher, log, and optionally scanInterval(stay) (interval-scan.mjs).
+ * Returns what was decided per place, for the tests.
  */
 export async function handleTaps({ taps, catalog, state, deps, now = () => Date.now(), caps = CAPS }) {
-  const { sweepResort, intervalLastSeen, pusher, log } = deps;
+  const { sweepResort, intervalLastSeen, pusher, log, scanInterval } = deps;
   // Ten members opening the Surf Club in one minute are one place to look at, not ten.
   const first = new Map();
   for (const t of taps) if (!first.has(t.stay) || t.tapped < first.get(t.stay)) first.set(t.stay, t.tapped);
@@ -175,7 +181,7 @@ export async function handleTaps({ taps, catalog, state, deps, now = () => Date.
     if (!stay) { log(`tap  a stay that is not in the catalog (${String(stayId).slice(0, 8)}) — nothing to do`); continue; }
     const lag = Math.max(0, Math.round((now() - Date.parse(tapped)) / 1000));
     log(`tap  ${stay.name} — opened by a member at ${tapped}, ${lag}s ago`);
-    const row = { stay: stay.name, sweep: null, nudge: null };
+    const row = { stay: stay.name, sweep: null, scan: null, nudge: null };
 
     const slug = slugFor(stay, catalog);
     if (!slug) {
@@ -193,6 +199,24 @@ export async function handleTaps({ taps, catalog, state, deps, now = () => Date.
       }
     }
     if (!row.sweep.go) log(`  RedWeek: not reading — ${row.sweep.why}`);
+
+    // Interval, read for the member — if it is switched on, not stopped, not capped, and this place has a
+    // code on file. `covered` means a scan that worked is still current (this tap's or an earlier one's).
+    if (scanInterval) {
+      try { row.scan = await scanInterval(stay); }
+      catch (err) { row.scan = { ran: false, covered: false, why: err.message }; }
+      const sc = row.scan;
+      if (sc.ran && sc.covered) log(`  Interval: scanned — ${sc.rows} week${sc.rows === 1 ? '' : 's'} read, ${sc.posted} new on the board, ${sc.refreshed} last-seen clock${sc.refreshed === 1 ? '' : 's'} moved`);
+      else if (sc.covered) log(`  Interval: not scanning — ${sc.why}`);
+      else log(`  Interval: ${sc.ran ? 'the scan did not complete' : 'not scanning'} — ${sc.why}`);
+    }
+    if (row.scan?.covered) {
+      // Interval was just read for this place. There is nothing for Victor to go and look at.
+      row.nudge = { push: false, why: 'Interval was just scanned for this place' };
+      log(`  Interval: no nudge — ${row.nudge.why}`);
+      done.push(row);
+      continue;
+    }
 
     let last = null;
     try { last = await intervalLastSeen(stayId); }

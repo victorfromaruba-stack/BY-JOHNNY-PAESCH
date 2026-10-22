@@ -147,8 +147,15 @@ Two things to weigh before turning it on, both of which land on Victor rather th
 Where the line sits, as this code draws it: sending back the site's own `OWASP_CSRFTOKEN` and
 letting the page's own JavaScript run is *using the form as built*. Routing the traffic through
 a residential address so it does not look like a datacenter is *circumventing a control the
-site deliberately put up*. The first is here; the second is not, and there is no setting for it
-— that was tried, recognised for what it was, and taken back out.
+site deliberately put up*. The first is here; the second was taken back out.
+
+**Changed 22 Oct 2026, for one case.** Victor, told the penalty is termination of the VIP Gold
+membership, allowed an Interval scan on a member's tap, with guardrails that are part of the
+permission (the interval-board skill, "The line"). That scan signs in the way `iv-login.js` /
+`iv-map.js` did on 17 Oct — the VIP host's own login page, **the proxy line from the locked box**
+(Interval turns the server's own address away), the same launch switch, user agent and init script,
+fixed waits — and adds nothing to it. See *A member opens a stay*. Everything in this section still
+holds for anything that is not a member's tap: no timer signs in, and `--once` / `--dump` are by hand.
 
 If Interval is turned on and the login keeps failing, the honest reading is that they do not
 want this, and the answer is to stop rather than to try harder.
@@ -296,7 +303,8 @@ Two suites, both stub-driven, no network and no credentials:
 ```sh
 node --test judge.test.mjs   # the posting rules: Interval always, RedWeek under the public rate, the cap, all-in points
 node --test pace.test.mjs    # how soon a refused Interval sign-in is tried again
-node --test taps.test.mjs    # a member opens a stay: caps, quiet hours, RedWeek's full stops, no Interval
+node --test taps.test.mjs    # a member opens a stay: caps, quiet hours, RedWeek's full stops, the Grab nudge
+node --test interval-scan.test.mjs  # the Interval scan on a tap: caps, sign-in cap, session reuse, every full stop — stand-ins only
 node session.test.mjs        # 48 assertions — the fetch client, cookie scoping, the host guard
 node browser.test.mjs        # the browser client end to end; reads .env for WATCH_BROWSER, runs with whichever engine is downloaded, says what to install when none is
 ```
@@ -318,7 +326,8 @@ What no stub can prove is the Radware challenge itself, which only the real site
 ## A member opens a stay
 
 Victor, 22 Oct 2026: *"I want the watch to watch it the moment a member clicks on stays."* This is
-the nearest honest version of that. It is not a login on a tap, and the difference is the point.
+the nearest honest version of that — and, since his words of 09:40 and 09:50 the same morning, an
+Interval scan on a tap too, inside the guardrails below.
 
 1. **The tap is recorded.** Opening a place in the app calls `record_stay_tap` — a place and a
    time, **no member**, one waiting row per place (`supabase/migrations/20261022_stay_taps.sql`).
@@ -331,12 +340,31 @@ the nearest honest version of that. It is not a login on a tap, and the differen
      `robots.txt` that disallows the page is a **full stop**: `.redweek-stop.json` is written, nothing
      reads RedWeek again until Victor deletes it, a card goes on the dashboard and one push to his
      phone says so (held until 07:00 Aruba if it happens in the night).
-   - **Interval** — **never touched.** If the Circle's newest Interval week at that place is more
-     than 24 hours old, one push to Victor's phone: *"A member is looking at <place>. Interval last
-     grabbed <age> ago. Sign in at vip.intervalworld.com and tap Grab."* At most once per resort per
-     12 hours, never between 23:00 and 07:00 Aruba (alertPush's own rule, read from alertPush.js),
-     no member or guest named. A place the Circle has never held an Interval week at gets no push:
-     nothing says it is on Interval at all.
+   - **Interval, scanned** — only if `WATCH_INTERVAL_SCAN=on` is in `.env` (off until Victor says),
+     and only for a place with an Interval code on file (`INTERVAL_ARUBA` in `interval-scan.mjs`: codes
+     read off real pages, never guessed). A real browser (Chromium, via the proxy in the locked box)
+     reuses the saved session (`.interval-session.json`, 0600), signs in only when there is none that
+     works, types the resort's code into the Getaways search ("Resort Name or Code") and reads the
+     rows with `interval-getaways.mjs`. The resort's own weeks go through `board.mjs` — the same
+     floor, ceiling, dedupe and `post_deal` as RedWeek's — with the reference the Grab path writes
+     for the same week, `source_url`, and a note saying when it was read. Weeks already on the board
+     have their last-seen clock moved; nothing is ever retired by a scan. **Caps:** one scan per resort
+     per 30 minutes, ten an hour, three sign-ins in any rolling 24 hours and never two within 30
+     minutes — a tap inside the window is served from the last scan. The counters are written before
+     the request they limit, in `.interval-scan.json`; if that file cannot be read the scan does not run.
+     **Full stop** on a 403, a 429, a captcha, a challenge or lock or "unusual activity" page, a "Please
+     wait" page that has not cleared after a few seconds' waiting (it is waited on, never pressed), or
+     two refused sign-ins in a row: `.interval-stop.json` is written, the `interval-watcher` card goes
+     on the dashboard, ONE push says why (held until 07:00 Aruba at night), and nothing asks Interval
+     again — a tap, a restart, or `--once` — until Victor deletes the file. No retry anywhere.
+   - **Interval, otherwise** — when the scan is off, stopped, capped, has no code for the place, or
+     did not complete, the Grab nudge is exactly what it was: if the Circle's newest Interval week at
+     that place is more than 24 hours old, one push to Victor's phone: *"A member is looking at
+     <place>. Interval last grabbed <age> ago. Sign in at vip.intervalworld.com and tap Grab."* At
+     most once per resort per 12 hours, never between 23:00 and 07:00 Aruba (alertPush's own rule,
+     read from alertPush.js), no member or guest named. A place the Circle has never held an
+     Interval week at gets no push: nothing says it is on Interval at all. A scan that worked
+     replaces the nudge — Interval was just read.
 3. **The member sees it.** The stay page prints `Checked 4 min ago · RedWeek` from `redweek_checks`,
    which the watcher writes after every read (tap or timer) and the page asks again every twenty
    seconds. It says when RedWeek was read. It never says anything is available.
@@ -348,9 +376,15 @@ an hour and asks again every ten minutes; nothing else is affected.
 The same migration fixes the `42501` the log showed on 22 Oct ("last-seen clocks were NOT moved"):
 `grant update (seen_at) on deals`, one column, with a policy that lets a robot through and nobody else.
 
-`taps.test.mjs` holds all of it — the caps, the quiet hours, the full stops — with the network
-made unreachable first, so a test cannot reach RedWeek, Interval or ntfy.sh. State is in
-`.taps-state.json` (git-ignored).
+`taps.test.mjs` holds the RedWeek half and the nudge, `interval-scan.test.mjs` the Interval half —
+the caps, the quiet hours, every full stop — with the network made unreachable first, so a test
+cannot reach RedWeek, Interval or ntfy.sh. The Interval one drives the real browser session against
+a local stand-in for Interval (login, a "Please wait" page, the search form, the real 17 Oct results
+page, a challenge, a 403), the real `Circle` and `judgeAndPost` against a stand-in Supabase, and the
+real `ntfySend` against a stand-in ntfy. State is in `.taps-state.json`, `.interval-scan.json`,
+`.interval-session.json` and `.interval-stop.json` (all git-ignored). Chromium: the box's Playwright
+expects `chromium-1228` in root's cache and it lives in openclaw's; `interval-session.mjs` finds it
+there (`PLAYWRIGHT_ALT_CACHE` to point elsewhere).
 
 ## What it will and will not post
 
