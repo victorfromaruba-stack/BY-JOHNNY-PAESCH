@@ -154,7 +154,7 @@ const missingMigration = (e) => e?.code === 'PGRST202' || e?.status === 404;
  * contributes nothing. If the database does not have the functions yet (20261022_board_freshness.sql) the
  * re-check reports what it would do and does none of it.
  */
-export async function verifyBoard({ circle, catalog, listings, okSlugs, full, apply, cfg, log, slugOf, warn = (_k, t) => log(t) }) {
+export async function verifyBoard({ circle, catalog, listings, okSlugs, full, apply, cfg, log, slugOf, outages = [], warn = (_k, t) => log(t) }) {
   const settings = await circle.settings();
   const rows = await circle.liveRows();
   const redweek = new Map(okSlugs.map((slug) => [slug, { ok: true, listings: listings.filter((l) => l.slug === slug) }]));
@@ -163,8 +163,8 @@ export async function verifyBoard({ circle, catalog, listings, okSlugs, full, ap
     dealOf: (l, stayId) => { const f = { ...l, stayId }; worthPosting(f, catalog, cfg); return asDeal(f, cfg, settings); },
   });
   const c = plan.counts;
-  const aged = rows.filter((r) => isStale({ source: r.source, seenAt: r.seen_at, postedAt: r.posted_at })).length;
-  log(`board: ${rows.length} live weeks — ${c.verified} checked against their source (${plan.seen.length} still listed), ${c.repriced} repriced, ${plan.retire.length} to take down${aged ? `, ${aged} not seen for 7 days` : ''}`);
+  const aged = rows.filter((r) => isStale({ source: r.source, seenAt: r.seen_at, postedAt: r.posted_at }, Date.now(), undefined, outages)).length;
+  log(`board: ${rows.length} live weeks — ${c.verified} checked against their source (${plan.seen.length} still listed), ${c.repriced} repriced, ${plan.retire.length} to take down${aged ? `, ${aged} not seen for 7 days (RedWeek's days out not counted)` : ''}`);
   for (const x of plan.retire.slice(0, 12)) log(`  take down ${x.ref} — ${x.why}`);
   for (const x of plan.reprice.slice(0, 12)) log(`  reprice ${x.ref}: ${x.was} -> ${x.points} points`);
   if (!apply) { log('  dry run — nothing changed'); return { verified: c.verified, repriced: c.repriced, retired: plan.retire.length + aged, applied: false }; }

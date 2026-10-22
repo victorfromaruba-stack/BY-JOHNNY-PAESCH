@@ -148,3 +148,14 @@ test('a find may carry a note about where it was read, and it reaches the board'
   const f = { source: 'interval', stayId: 's1', from: '2026-12-19', to: '2026-12-26', nights: 7, usdTotal: 633.46, externalId: 'interval:s1:2026-12-19:2026-12-26', seenNote: 'Read off Interval at 14:03' };
   assert.match(asDeal(f, { pointsPerUsd: 100 }, {}).note, /Read off Interval at 14:03/);
 });
+
+test('the horizon: a week checking in between today (Aruba) and 90 days on', async () => {
+  const { inHorizon } = await import('./judge.mjs');
+  const now = Date.parse('2026-10-22T16:00:00Z');
+  assert.equal(inHorizon({ from: '2026-10-22' }, 90, now), true, 'today');
+  assert.equal(inHorizon({ from: '2027-01-20' }, 90, now), true, 'the 90th day');
+  assert.equal(inHorizon({ from: '2027-01-21' }, 90, now), false, 'the 91st');
+  assert.equal(inHorizon({ from: '2026-10-21' }, 90, now), false, 'yesterday');
+  assert.equal(inHorizon({ from: '2026-10-22' }, 90, Date.parse('2026-10-23T02:00:00Z')), true, '22:00 on the 22nd in Aruba is still the 22nd');
+  assert.equal(inHorizon({}, 90, now), false);
+});

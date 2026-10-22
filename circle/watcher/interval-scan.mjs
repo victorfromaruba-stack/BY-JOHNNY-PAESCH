@@ -15,6 +15,13 @@
 //     phone saying why, and never try again until a person deletes the flag   -> classify(), the scanner
 //   - when Interval is stopped or capped, the Grab nudge still fires          -> taps.mjs
 //
+// Dates (Victor, 22 Oct 2026: "I'd like to see a month or two in advance"): a tap carries the dates the member is
+// looking for, and the scan searches Getaways for THOSE dates — the form's "Earliest/Latest Travel Date". Interval
+// shows at most three rows per resort on a results page, soonest first, so a search over two months shows the next
+// three weeks and stops. The scan therefore goes on: when a resort showed a full page, it searches again from that
+// resort's last check-in, up to five searches in all. That is still ONE scan: one count against the 30-minute and
+// hourly caps, one session, one sign-in at most — a window of 60 days is not 60 scans, and not 8 either.
+//
 // Nothing here runs on a timer. The only caller is handleTaps() in taps.mjs, through index.mjs, and
 // only while WATCH_INTERVAL_SCAN is switched on — which it is not until Victor says so.
 //
@@ -25,7 +32,7 @@
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { sameName } from './redweek.mjs';
 import { readsAsSignedIn } from './interval.mjs';
-import { parseGetaways } from './interval-getaways.mjs';
+import { parseGetaways, pageStats, reachedNearby, PAGE_ROWS } from './interval-getaways.mjs';
 import { ORIGIN } from './interval-session.mjs';
 import { resolveStay } from './judge.mjs';
 
@@ -37,6 +44,51 @@ export const IV_CAPS = Object.freeze({
   refusalsToStop: 2,     // refused sign-ins in a row before the stop
 });
 const MIN = 60e3, HOUR = 3600e3, DAY = 24 * HOUR;
+
+// ---------------------------------------------------------------- the dates: one scan, several searches
+export const SCAN = Object.freeze({
+  defaultDays: 60,       // a tap with no dates (an older phone) is scanned for today to this many days on
+  maxDays: 366,          // and no window is longer than a year
+  maxSearches: 5,        // searches in ONE scan: the first, and up to four more for later check-in dates
+  maxPages: 3,           // result pages followed after a search, for the island-wide read only
+});
+const arubaDay = (ms) => new Date(ms - 4 * HOUR).toISOString().slice(0, 10);       // Aruba is UTC-4, no daylight time
+const addDay = (iso, n) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
+const isDay = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && Number.isFinite(Date.parse(`${s}T12:00:00Z`));
+
+/**
+ * The dates one scan searches for: the member's window, moved to start no earlier than today and cut to a
+ * year; and with no usable window (a tap from an older phone, dates the wrong way round, dates that are
+ * over) today to `SCAN.defaultDays` on. `asked` says whether it was the member's own.
+ */
+export function planWindow(win, now = Date.now()) {
+  const today = arubaDay(now);
+  if (!win || !isDay(win.from) || !isDay(win.to) || win.to < win.from || win.to < today) {
+    return { from: today, to: addDay(today, SCAN.defaultDays), asked: false };
+  }
+  const from = win.from < today ? today : win.from;
+  const cap = addDay(from, SCAN.maxDays);
+  return { from, to: win.to > cap ? cap : win.to, asked: true };
+}
+
+/** Resorts whose page was full, so that later weeks may exist: the rows were cut at PAGE_ROWS, not run out. */
+export const saturated = (stats, watch = () => true) =>
+  stats.filter((s) => !s.nearby && watch(s.code) && s.rows >= PAGE_ROWS && s.lastCheckIn);
+
+/**
+ * Where the NEXT search of this scan starts, or null when nothing is left to look for. The earliest "last
+ * check-in" among the resorts that showed a full page is the date up to which nothing is missing; the next
+ * search starts there (the same day again, not the day after, so a week at that date that was cut off the
+ * bottom is still met). Always moves forward, and never past the window.
+ */
+export function nextCursor(stats, cursor, to, watch = () => true) {
+  const sat = saturated(stats, watch);
+  if (!sat.length) return null;
+  const last = sat.map((s) => s.lastCheckIn).sort()[0];
+  const next = last > cursor ? last : addDay(last, 1);
+  const forward = next > cursor ? next : addDay(cursor, 1);
+  return forward > to ? null : forward;
+}
 
 // ---------------------------------------------------------------- which resort is this stay
 /**
@@ -81,13 +133,23 @@ export function saveIvState(file, state) {
 
 const minsAgo = (now, at) => { const m = Math.floor((now - at) / MIN); return m < 1 ? 'less than a minute' : `${m} min`; };
 
-/** May this resort be scanned now? `covered` means a scan that worked is still current: serve from it. */
-export function decideScan(state, code, now = Date.now(), caps = IV_CAPS) {
+/**
+ * May this resort be scanned now? `covered` means a scan that worked is still current AND searched these dates:
+ * serve from it. A scan inside the 30 minutes that searched other dates does not cover this member's, and is
+ * not repeated until the 30 minutes are up (the cap is Victor's, and the dates do not move it).
+ */
+export function decideScan(state, code, now = Date.now(), caps = IV_CAPS, window = null) {
   if (state.broken) return { go: false, covered: false, why: 'the scan\'s state file cannot be read, so its caps cannot be kept — not scanning until it is fixed or deleted' };
   const at = Date.parse(state.scans?.[code] || '');
   if (Number.isFinite(at) && now - at < caps.resortGapMin * MIN) {
-    const ok = !!state.last?.[code]?.ok;
-    return { go: false, covered: ok, why: ok ? `scanned ${minsAgo(now, at)} ago — served from that scan` : `scanned ${minsAgo(now, at)} ago and it did not complete — not asking Interval again yet` };
+    const last = state.last?.[code];
+    if (!last?.ok) return { go: false, covered: false, why: `scanned ${minsAgo(now, at)} ago and it did not complete — not asking Interval again yet` };
+    const want = planWindow(window, now), had = last.covers;
+    if (!had || had.from > want.from || had.to < want.to) {
+      const was = had ? `${had.from} to ${had.to}` : 'dates that were not recorded';
+      return { go: false, covered: false, why: `scanned ${minsAgo(now, at)} ago for ${was}; ${want.from} to ${want.to} reaches beyond that — not asking Interval again before ${caps.resortGapMin} minutes are up` };
+    }
+    return { go: false, covered: true, why: `scanned ${minsAgo(now, at)} ago — served from that scan` };
   }
   const recent = (state.scanLog || []).filter((t) => now - Date.parse(t) < HOUR);
   if (recent.length >= caps.perHour) return { go: false, covered: false, why: `${recent.length} Interval scans in the last hour (cap ${caps.perHour})` };
@@ -240,23 +302,26 @@ class Soft extends Error {}          // something went wrong that is not a stop:
  * the proof can run the whole path against stubs.
  */
 export function makeIntervalScanner({ armed = () => true, stateFile, makeSession, post, onStop, onGood = async () => {},
-                                      log = () => {}, now = Date.now, caps = IV_CAPS, canSignIn = true }) {
+                                      log = () => {}, now = Date.now, caps = IV_CAPS, canSignIn = true, maxSearches = SCAN.maxSearches }) {
   let busy = false;
   /**
    * One scan, whatever it searches for. `key` is what the caps count it under (a resort code, or ARUBA
-   * for the whole-island read); `search(session)` makes the one search; `finds(html)` turns the page
-   * into `{ finds, rows, unplaced }`. Everything between is the box: stopped?, capped?, session, sign-in
-   * cap, full stop.
+   * for the whole-island read); `search(session, { from, to })` makes ONE search for those check-in dates;
+   * `finds(html)` turns a results page into `{ finds, rows, unplaced }`; `watch(code)` says which resorts'
+   * full pages mean "there may be more weeks". `window` is the member's dates (or null). Everything between
+   * is the box: stopped?, capped?, session, sign-in cap, full stop. The searches after the first are part
+   * of the same scan, not new ones.
    */
-  async function run(key, { search, finds: gather, catalog }) {
+  async function run(key, { search, finds: gather, catalog, window = null, watch = () => true, paged = false }) {
     const code = key;
     const held = intervalStopped();
     if (held) return { ran: false, covered: false, stopped: true, why: `stopped${held.at ? ` since ${held.at}` : ''} (${held.why}) — delete .interval-stop.json to let it` };
     if (busy) return { ran: false, covered: false, why: 'another scan is still running' };
     const state = loadIvState(stateFile);
     const t = now();
-    const d = decideScan(state, code, t, caps);
+    const d = decideScan(state, code, t, caps, window);
     if (!d.go) return { ran: false, covered: d.covered, why: d.why };
+    const plan = planWindow(window, t);
 
     busy = true;
     let session = null, spent = false;
@@ -309,22 +374,55 @@ export function makeIntervalScanner({ armed = () => true, stateFile, makeSession
         if (!lv.signedIn) throw new Soft('signed in, but the next page read as signed out');
       }
 
-      log(`  Interval: searching ${code === ARUBA ? 'Aruba' : code}`);
-      const res = await search(session);
-      const v = classify(res);
-      if (v.stop) throw new IntervalStop(v.stop);
-      if (!v.signedIn) { session.forget(); throw new Soft('the session was signed out by the time the search ran'); }
-      await session.save();
-
-      const { finds, rows: weeks, unplaced = [] } = gather(res.html, t);
+      // The searches of this scan. Each is judged on its own: a wall, a stop or a signed-out page ends it.
+      const check = (res) => {
+        const v = classify(res);
+        if (v.stop) throw new IntervalStop(v.stop);
+        if (!v.signedIn) { session.forget(); throw new Soft('the session was signed out by the time the search ran'); }
+      };
+      const found = new Map(), placeless = [];
+      let weeks = 0, searches = 0, cursor = plan.from, coversTo = plan.to;
+      log(`  Interval: searching ${code === ARUBA ? 'Aruba' : code} for ${plan.from} to ${plan.to}${plan.asked ? '' : ' (no dates were given)'}`);
+      for (;;) {
+        const pages = [await search(session, { from: cursor, to: plan.to })];
+        check(pages[0]);
+        if (searches === 0) await session.save();
+        // The island-wide read can run to several pages of ten resorts. Follow the page's own "Next Page" while the
+        // places are still the ones asked for — never into "Areas Surrounding" — and never past the page cap.
+        while (paged && pages.length < SCAN.maxPages && !reachedNearby(pages.at(-1).html)) {
+          const more = await session.nextPage();
+          if (!more) break;
+          check(more);
+          pages.push(more);
+        }
+        searches++;
+        for (const pg of pages) {
+          const g = gather(pg.html, t);
+          weeks += g.rows;
+          for (const f of g.finds) if (!found.has(f.externalId)) found.set(f.externalId, f);
+          placeless.push(...(g.unplaced || []));
+        }
+        const stats = pages.flatMap((pg) => pageStats(pg.html));
+        const next = nextCursor(stats, cursor, plan.to, watch);
+        if (!next) break;
+        if (searches >= maxSearches) {
+          // Stopped by the cap, not by running out: say how far the weeks are known, so nothing claims the rest.
+          coversTo = saturated(stats, watch).map((s) => s.lastCheckIn).sort()[0] || coversTo;
+          log(`  Interval: ${searches} searches is the most one scan makes — weeks are known up to ${coversTo}, not to ${plan.to}`);
+          break;
+        }
+        log(`  Interval: a resort showed a full page, so there may be more weeks — searching again from ${next}`);
+        cursor = next;
+      }
+      const finds = [...found.values()], unplaced = placeless;
       if (unplaced.length) log(`  Interval: ${unplaced.length} week${unplaced.length === 1 ? '' : 's'} at places not in the catalog — add them in the Desk to see them here: ${[...new Set(unplaced)].slice(0, 8).join('; ')}`);
       let out = { posted: 0, refreshed: 0 };
       try { if (finds.length) out = await post({ finds, catalog }) || out; }
       catch (err) { throw new Soft(`Interval was read (${weeks} week${weeks === 1 ? '' : 's'}) but the board would not take them: ${err.message}`); }
       const wasUp = state.cardUp; state.cardUp = false;
-      record({ ok: true, rows: weeks, posted: out.posted || 0, refreshed: out.refreshed || 0 });
+      record({ ok: true, rows: weeks, posted: out.posted || 0, refreshed: out.refreshed || 0, searches, covers: { from: plan.from, to: coversTo } });
       if (wasUp) await onGood();
-      return { ran: true, covered: true, rows: weeks, posted: out.posted || 0, refreshed: out.refreshed || 0, unplaced: unplaced.length };
+      return { ran: true, covered: true, rows: weeks, posted: out.posted || 0, refreshed: out.refreshed || 0, unplaced: unplaced.length, searches, window: { from: plan.from, to: plan.to } };
     } catch (err) {
       if (err instanceof IntervalStop) {
         writeStop(err.message);
@@ -345,30 +443,32 @@ export function makeIntervalScanner({ armed = () => true, stateFile, makeSession
 
   const off = { ran: false, covered: false, why: 'the Interval scan is switched off (WATCH_INTERVAL_SCAN is not on)' };
 
-  /** A member opened this place: scan its resort, by its code. */
-  const scan = async (stay, catalog) => {
+  /** A member opened this place, looking for `window`: scan its resort, by its code, for those dates. */
+  const scan = async (stay, catalog, window = null) => {
     if (!armed()) return off;
     const code = codeFor(stay, catalog);
     if (!code) return { ran: false, covered: false, why: 'no Interval resort code is on file for this place' };
     return run(code, {
-      catalog,
-      search: (session) => session.search(code),
+      catalog, window,
+      search: (session, range) => session.search(code, range),
       finds: (html, t) => { const weeks = weeksFor(html, code); return { finds: toFinds(weeks, stay, t), rows: weeks.length }; },
+      watch: (c) => c === code,
     });
   };
 
   /**
-   * A member opened the Stays LIST: one Getaways search for Aruba — the form as Interval offers it,
-   * "Single Destination: Aruba" — and every week on the first page at a place the catalog has goes to
-   * the board. It is one scan under the key ARUBA with the same caps (one per 30 minutes, ten an hour),
-   * so a list opened ten times is one read.
+   * A member opened the Stays LIST, looking for `window`: Getaways searches for Aruba — the form as Interval
+   * offers it, "Single Destination: Aruba" — and every week at a place the catalog has goes to the board. It is
+   * one scan under the key ARUBA with the same caps (one per 30 minutes, ten an hour), so a list opened ten times
+   * is one read.
    */
-  scan.aruba = async (catalog) => {
+  scan.aruba = async (catalog, window = null) => {
     if (!armed()) return off;
     return run(ARUBA, {
-      catalog,
-      search: (session) => session.search('Aruba', { city: true }),
+      catalog, window, paged: true,
+      search: (session, range) => session.search('Aruba', { city: true, ...range }),
       finds: (html, t) => arubaFinds(html, catalog, t),
+      watch: (c) => Object.hasOwn(INTERVAL_ARUBA, c),
     });
   };
   return scan;

@@ -26,10 +26,31 @@ export function seenMs(d) {
   return Number.isFinite(t) ? t : null;
 }
 
-/** Past the retirement age, for a source that is re-read. The same test the database applies. */
-export function isStale(d, now = Date.now(), days = RETIRE_AFTER_DAYS) {
+// ---------------------------------------------------------------- a source being out stops its clock
+// RedWeek stopped answering this server on 22 Oct 2026, and Victor's decision was to wait. A week that nobody
+// could see because the SOURCE was out has not aged: its seven days do not run while the source is unreachable
+// (the database does the same, retire_stale_deals + source_outages, 20261022_source_outage.sql). The page does
+// not alter any "seen" time for it — a row still says honestly when it was last seen.
+let OUTAGES = [];
+/** The outages the clock does not count: [{ source, since, until }] (ISO times; `until` null while it is out). */
+export function setOutages(list) { OUTAGES = Array.isArray(list) ? list : []; }
+export const outages = () => OUTAGES;
+
+/** How long `source` was out between `fromMs` and `now`, in ms. */
+export function pausedMs(source, fromMs, now = Date.now(), list = OUTAGES) {
+  let n = 0;
+  for (const o of list || []) {
+    if (o?.source !== source) continue;
+    const a = Math.max(Date.parse(o.since), fromMs), b = Math.min(o.until ? Date.parse(o.until) : now, now);
+    if (Number.isFinite(a) && Number.isFinite(b) && a < b) n += b - a;
+  }
+  return n;
+}
+
+/** Past the retirement age, for a source that is re-read. The same test the database applies — less the time the source was out. */
+export function isStale(d, now = Date.now(), days = RETIRE_AFTER_DAYS, list = OUTAGES) {
   const t = seenMs(d);
-  return WATCHED_SOURCES.includes(d?.source) && t != null && now - t > days * DAY;
+  return WATCHED_SOURCES.includes(d?.source) && t != null && now - t - pausedMs(d.source, t, now, list) > days * DAY;
 }
 
 /** Seen within the last `hours`. A row with no time at all is not fresh: nothing says it was ever seen. */
@@ -70,6 +91,32 @@ export function boardOrder(nightly, now = Date.now()) {
   return (a, b) => rank(a) - rank(b)
     || (nightly(a) || Infinity) - (nightly(b) || Infinity)
     || (seenMs(b) ?? 0) - (seenMs(a) ?? 0);
+}
+
+// ---------------------------------------------------------------- a time, in words
+const clock = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const dayWord = (d, now) => {
+  const n = new Date(now), y = new Date(now - DAY);
+  if (d.toDateString() === n.toDateString()) return '';
+  if (d.toDateString() === y.toDateString()) return 'yesterday';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+};
+/**
+ * "at 06:00" today, "yesterday at 18:00", "21 Oct at 06:00" — the line that says when RedWeek was last read
+ * ("RedWeek checked at 06:00"): a time, never a verdict. Empty when there is no time.
+ */
+export function atWords(iso, now = Date.now()) {
+  const d = new Date(iso || NaN);
+  if (Number.isNaN(+d)) return '';
+  const day = dayWord(d, now);
+  return `${day ? `${day} ` : ''}at ${clock(d)}`;
+}
+/** "14:20", "yesterday 14:20", "21 Oct 14:20" — for "RedWeek not reachable since …". */
+export function sinceWords(iso, now = Date.now()) {
+  const d = new Date(iso || NaN);
+  if (Number.isNaN(+d)) return '';
+  const day = dayWord(d, now);
+  return `${day ? `${day} ` : ''}${clock(d)}`;
 }
 
 /** Weeks taken down today, by the watcher or by hand: status gone and a retirement time on today's date. */

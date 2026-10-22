@@ -2,6 +2,7 @@ circle/watcher/.env
 circle/watcher/dump/
 circle/watcher/.interval-pace.json
 circle/watcher/.redweek-stop.json
+circle/watcher/.redweek-backoff.json
 circle/watcher/.taps-state.json
 
 # The viewing room: a scratch React project for looking at third-party component libraries,

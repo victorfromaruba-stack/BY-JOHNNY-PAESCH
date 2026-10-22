@@ -20,7 +20,7 @@ undercut, and so in all its months of running it never posted a single thing.
 
 **RedWeek** needs no login. Each listing carries its own data attributes — check-in, check-out,
 nights, bedrooms, sleeps, view, price — so this reads structured values rather than guessing at
-text. One request per resort, 2.5 seconds apart, identifying itself in the user agent.
+text. One request per resort, ten seconds apart (`WATCH_REDWEEK_PAUSE_SEC`), identifying itself in the user agent, twice a day (below).
 
 **Interval** is Victor's account, and it needs a real browser — see *Interval needs a browser*
 below for the three reasons, each read off the live site. Signing in is a form POST
@@ -59,7 +59,7 @@ Then, for real:
 
 ```sh
 node index.mjs --once                      # one pass, posts what it finds
-node index.mjs                             # every WATCH_EVERY_MIN minutes, forever
+node index.mjs                             # forever: RedWeek at 06:00 and 18:00 Aruba time, member taps every 30 s
 ```
 
 ## Keeping it running
@@ -324,29 +324,65 @@ as not-cleared rather than hanging a pass that runs unattended for months.
 
 What no stub can prove is the Radware challenge itself, which only the real site issues.
 
+## RedWeek: twice a day, and a day's wait when it does not answer
+
+Victor, 22 Oct 2026: *"RedWeek can be scanned 2 times a day automatically"* — and, when RedWeek stopped
+answering this server's address (every request timed out), *"Wait"*, not the proxy.
+
+- **Two scans a day**, at `WATCH_REDWEEK_TIMES` (default `06:00,18:00`, Aruba time — `schedule.mjs`). Each one
+  reads every resort (10 s between them), posts what is worth posting, and compares **every live RedWeek
+  week** with what the page shows: seen again (clock moves), repriced, rented or gone (retired). The scan
+  reports how many of the weeks worth posting check in within `WATCH_HORIZON_DAYS` (90) — it reads each
+  resort's whole page, so that is what it says about, not a limit. A restart does not read RedWeek again: the
+  loop reads only when the latest scheduled time was not served (`redweekScan` in `.taps-state.json`).
+  `WATCH_EVERY_MIN` no longer sets this.
+- **A tap reads no RedWeek.** Not a stay, not the Stays list, not a member's dates. It is served from the
+  last scan, and says so: the journal ("the last read was at 06:00 Aruba time"), the stay page and the top of
+  Stays ("RedWeek checked at 06:00"). The board pass a Stays-list tap asks for compares nothing with RedWeek:
+  it applies the price floor and ceiling to every watched row and the seven-day rule, and the Interval scan
+  does the rest.
+- **A timeout is a block.** The first request that times out stops the rest of that pass and writes
+  `.redweek-backoff.json` (`until` a day on, and why). Every RedWeek path — a scan, `--once`, anything — checks
+  it first and skips RedWeek, with one line in the journal per pass, and never retries in a loop. When the day
+  is up the next request is ONE probe: `robots.txt`, fetched fresh. Answered, the back-off is cleared and the
+  read goes on; timed out, another day. Deleting the file ends it early. A 403, a challenge page or a
+  disallowing `robots.txt` is still the older, harder stop (`.redweek-stop.json`).
+- **A source being out stops its clock.** While RedWeek is backed off or stopped the watcher tells the
+  database (`mark_source_unreachable`, with the last time it did answer), and the 7-day rule does not count
+  those days against RedWeek rows — in `retire_stale_deals` and in the app (`freshness.js`, `source_outages`,
+  `supabase/migrations/20261022_source_outage.sql`). No row's own "seen" time is altered. The top of Stays says
+  *"RedWeek not reachable since 14:20; weeks shown as last seen"* until it answers again.
+
 ## A member opens a stay
 
 Victor, 22 Oct 2026: *"I want the watch to watch it the moment a member clicks on stays."* This is
 the nearest honest version of that — and, since his words of 09:40 and 09:50 the same morning, an
 Interval scan on a tap too, inside the guardrails below.
 
-1. **The tap is recorded.** Opening a place in the app calls `record_stay_tap` — a place and a
-   time, **no member**, one waiting row per place (`supabase/migrations/20261022_stay_taps.sql`).
+1. **The tap is recorded.** Opening a place in the app calls `record_stay_tap` — a place, a time and the
+   **dates the member is looking for** (`from_date`/`to_date`, from the "Looking for" row on Stays,
+   remembered on their phone), **no member**, one waiting row per place; a second member's dates *widen* the
+   waiting row's rather than being dropped (`supabase/migrations/20261022_stay_taps.sql`, then
+   `20261022_tap_window.sql`). The Stays list does the same through `record_board_tap`. The database clamps
+   the dates (a start in the past moves to today, a year at most, nonsense is no window) and the watcher
+   takes them with the tap (`take_stay_taps`: `window_from`, `window_to`).
 2. **Within about thirty seconds** the watcher collects the waiting taps (`take_stay_taps`, robot
    only; it polls every `WATCH_TAP_POLL_SEC`, 30 by default) and, for each place:
-   - **RedWeek** — reads that resort's public page, through the same `rentals()` the half-hourly
-     pass uses and the same posting rules. At most once per resort per 15 minutes (the half-hourly
-     pass counts as a read), and 20 tap-triggered reads an hour; a tap inside the window is served
-     from the last read, and the stay says how old that is. A 403, a challenge page or a
-     `robots.txt` that disallows the page is a **full stop**: `.redweek-stop.json` is written, nothing
-     reads RedWeek again until Victor deletes it, a card goes on the dashboard and one push to his
-     phone says so (held until 07:00 Aruba if it happens in the night).
+   - **RedWeek** — not read. It is read twice a day (above); the journal says when it last was.
    - **Interval, scanned** — only if `WATCH_INTERVAL_SCAN=on` is in `.env` (off until Victor says),
      and only for a place with an Interval code on file (`INTERVAL_ARUBA` in `interval-scan.mjs`: codes
      read off real pages, never guessed). A real browser (Chromium, via the proxy in the locked box)
      reuses the saved session (`.interval-session.json`, 0600), signs in only when there is none that
-     works, types the resort's code into the Getaways search ("Resort Name or Code") and reads the
-     rows with `interval-getaways.mjs`. The resort's own weeks go through `board.mjs` — the same
+     works, types the resort's code into the Getaways search ("Resort Name or Code"), **with the member's
+     dates in "Earliest/Latest Travel Date"**, and reads the rows with `interval-getaways.mjs`. Interval shows
+     at most three rows a resort on a results page, soonest first (the saved 17 Oct page: ten resorts, never
+     more than three each, over a six-month search), so a search over two months shows the next three weeks
+     and stops. The scan therefore searches again from the last check-in a full page ended on, up to five
+     searches, and on the island-wide read follows the page's own "Next Page" (three pages, never into "Areas
+     Surrounding"). That is **one scan**: one count against the caps below, one session, one sign-in at most —
+     a window of 60 days is not 60 scans. A tap with no dates (an older phone) is scanned for today to 60 days;
+     what a scan covered is written down, and a later tap is "served from that scan" only if its dates are
+     inside it (otherwise it waits out the 30 minutes and the Grab nudge fires). The resort's own weeks go through `board.mjs` — the same
      floor, ceiling, dedupe and `post_deal` as RedWeek's — with the reference the Grab path writes
      for the same week, `source_url`, and a note saying when it was read. Weeks already on the board
      have their last-seen clock moved; nothing is ever retired by a scan. **Caps:** one scan per resort
@@ -366,12 +402,11 @@ Interval scan on a tap too, inside the guardrails below.
      read from alertPush.js), no member or guest named. A place the Circle has never held an
      Interval week at gets no push: nothing says it is on Interval at all. A scan that worked
      replaces the nudge — Interval was just read.
-3. **The member sees it.** The stay page prints `Checked 4 min ago · RedWeek` from `redweek_checks`,
-   which the watcher writes after every read (tap or timer) and the page asks again every twenty
-   seconds. It says when RedWeek was read. It never says anything is available.
+3. **The member sees it.** The stay page prints `RedWeek checked at 06:00` from `redweek_checks`, which the
+   watcher writes after every scan. It says when RedWeek was read. It never says anything is available.
 
-Taps and the half-hourly pass share one lane, so a tap cannot read the board at the same moment as
-a pass and post the same week twice. If the migration has not been applied the watcher says so once
+Taps and the scheduled scans share one lane, so a tap cannot read the board at the same moment as
+a scan and post the same week twice. If the migration has not been applied the watcher says so once
 an hour and asks again every ten minutes; nothing else is affected.
 
 The same migration fixes the `42501` the log showed on 22 Oct ("last-seen clocks were NOT moved"):
@@ -390,10 +425,11 @@ there (`PLAYWRIGHT_ALT_CACHE` to point elsewhere).
 ## The Stays list is a tap on the whole board
 
 Victor, 22 Oct 2026: *"The watcher needs to update the moment someone clicks Stays."* Opening the Stays
-**list** (not one place) calls `record_board_tap()` — one waiting row at most, no member — and within the
-30-second poll the watcher does one full pass: RedWeek read for every catalog resort, new weeks posted,
-and **every live week on the board re-checked against what its source shows now** (`verify.mjs`,
-`board.mjs verifyBoard`):
+**list** (not one place) calls `record_board_tap(from, to)` — one waiting row at most, no member — and within
+the 30-second poll the watcher re-checks the board. Since later that day that re-check reads **no RedWeek**:
+RedWeek is read by the twice-a-day scan, and **every live week on the board is re-checked against what its
+source showed then** (`verify.mjs`, `board.mjs verifyBoard`) — by the scan; a tap's pass applies the price
+floor and ceiling and the seven-day rule to what the board holds:
 
 | the week is | the board does |
 |---|---|
@@ -405,15 +441,17 @@ and **every live week on the board re-checked against what its source shows now*
 | not seen for 7 days (RedWeek, Interval, VakayMood) | retired by `retire_stale_deals`: "not seen for 7 days" |
 
 A resort that did not answer teaches nothing. At most one full check per 15 minutes however many lists
-are opened (the half-hourly pass counts), and the sweep keeps its 2.5 s pacing and its stop rules. The
-top of Stays prints `Board checked N min ago · M weeks retired today` from `board_checks`, asks again every
+are opened (a scan's own check counts), and the sweep keeps its 10 s pacing, its back-off and its stop rules. The
+top of Stays prints `RedWeek checked at 06:00 · Board checked N min ago · M weeks retired today` (or `RedWeek
+not reachable since 14:20; weeks shown as last seen`) from `redweek_checks`, `board_checks` and
+`source_outages`, asks again every
 ten seconds for a minute after the tap, and redraws the rows when a newer check appears. Interval, on the
-same tap, is one Aruba search inside the scan's box (off unless `WATCH_INTERVAL_SCAN=on`), with the Grab
-nudge as fallback. `node index.mjs --once --dry` runs one pass and prints what a re-check would do, changing
-nothing. All of it needs `supabase/migrations/20261022_board_freshness.sql` (after `20261022_stay_taps.sql`);
+same tap, is the Aruba search for the member's dates inside the scan's box (off unless
+`WATCH_INTERVAL_SCAN=on`), with the Grab nudge as fallback. `node index.mjs --once --dry` runs one full pass (RedWeek included, back-off permitting) and prints what a
+re-check would do, changing nothing. All of it needs `supabase/migrations/20261022_board_freshness.sql` (after `20261022_stay_taps.sql`);
 until it is applied a re-check says what it would do and does none of it.
 
-`node index.mjs --interval-read --confirm` is one read of Aruba Getaways on a session somebody else saved
+`node index.mjs --interval-read --confirm` is one read — ONE search, never the several of a scan — of Aruba Getaways on a session somebody else saved
 (it never signs in, and says so when there is none). It is a read no member asked for, which the permission
 on file does not cover: it refuses without `--confirm`, and `--confirm` is for the day Victor says to, in his
 own words.

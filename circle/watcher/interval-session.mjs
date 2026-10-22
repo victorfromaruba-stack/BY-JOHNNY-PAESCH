@@ -211,10 +211,13 @@ export class IntervalSession {
   /**
    * Type a resort's code into the Getaways search the way a person does — "Resort Name or Code" — or,
    * with `city`, ask for the island ("Single Destination", Aruba, as the form's own default has it), and
-   * press Find Getaway. The dates are left as the form offers them. Throws `noForm` (not a stop)
-   * when this page has no such form, and says which forms it does have.
+   * press Find Getaway. The dates are the form's "Earliest Travel Date" and "Latest Travel Date": `from`
+   * and `to` (ISO days) are typed into them the way a person picks them; left out, the form's own
+   * pre-filled dates stand. Throws `noForm` (not a stop) when this page has no such form, and says which
+   * forms it does have. The form is also on the results page, so a second search for later dates is made
+   * from there, as a person changing the dates would.
    */
-  async search(code, { city = false } = {}) {
+  async search(code, { city = false, from = null, to = null } = {}) {
     const page = this.page;
     const form = page.locator('form[name="SearchForm"]').first();
     if (!(await form.count())) {
@@ -226,15 +229,32 @@ export class IntervalSession {
     if (!(await radio.count())) throw Object.assign(new Error(`the search form has no ${city ? '"Single Destination"' : '"Resort Name or Code"'} choice`), { noForm: true });
     await radio.check();
     await form.locator('input[name="searchCriteria"]').fill(city ? 'Aruba, ANT' : code);
-    // Empty date boxes get a window; the ones the form pre-filled (it does) are not touched.
+    // The member's dates when there are some; otherwise empty date boxes get a window and the ones the form pre-filled (it does) are not touched.
+    const us = (iso) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}`;
     const day = (ms) => { const d = new Date(ms - 4 * 3600e3); return `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}/${d.getUTCFullYear()}`; };
-    for (const [name, ms] of [['fromDate', Date.now()], ['toDate', Date.now() + 180 * 864e5]]) {
+    for (const [name, ms, asked] of [['fromDate', Date.now(), from], ['toDate', Date.now() + 180 * 864e5, to]]) {
       const box = form.locator(`input[name="${name}"]`);
-      if ((await box.count()) && !(await box.inputValue())) await box.fill(day(ms));
+      if (!(await box.count())) continue;
+      if (asked) await box.fill(us(asked));
+      else if (!(await box.inputValue())) await box.fill(day(ms));
     }
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: this.waits.nav }).catch(() => null),
       form.locator('input[type=submit]').first().click(),
+    ]);
+    return this.settled();
+  }
+
+  /**
+   * The results page's own "Next Page" link, pressed the way a person presses it. Null when this page has
+   * none (a resort search, or the last page). The caller decides whether another page is wanted.
+   */
+  async nextPage() {
+    const link = this.page.locator('.menu_page_result a', { hasText: 'Next Page' }).first();
+    if (!(await link.count())) return null;
+    await Promise.all([
+      this.page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: this.waits.nav }).catch(() => null),
+      link.click(),
     ]);
     return this.settled();
   }

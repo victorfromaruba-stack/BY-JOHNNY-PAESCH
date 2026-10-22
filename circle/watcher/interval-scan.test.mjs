@@ -25,7 +25,9 @@ import { join } from 'node:path';
 import {
   IV_CAPS, INTERVAL_ARUBA, codeFor, emptyIvState, loadIvState, saveIvState, decideScan, noteScan, decideSignIn, noteSignIn,
   useIntervalStopFile, intervalStopped, classify, WALL, weeksFor, toFinds, makeIntervalScanner, makeStopAnnouncer,
+  SCAN, planWindow, nextCursor, saturated,
 } from './interval-scan.mjs';
+import { pageStats, reachedNearby, PAGE_ROWS } from './interval-getaways.mjs';
 import { IntervalSession, readBox, UA, launchOptions, contextOptions, isHolding } from './interval-session.mjs';
 import { splitProxy } from './interval-browser.mjs';
 import { judgeAndPost } from './board.mjs';
@@ -64,7 +66,7 @@ test('one scan per resort per 30 minutes: a tap inside the window is served from
   const st = emptyIvState();
   assert.equal(decideScan(st, 'RBK', T0).go, true, 'never scanned: go');
   noteScan(st, 'RBK', T0);
-  st.last.RBK = { at: iso(T0), ok: true };
+  st.last.RBK = { at: iso(T0), ok: true, covers: { from: '2026-10-22', to: '2026-12-21' } };
   const d = decideScan(st, 'RBK', T0 + min(29));
   assert.deepEqual([d.go, d.covered], [false, true]);
   assert.match(d.why, /scanned 29 min ago — served from that scan/);
@@ -235,8 +237,9 @@ test('the browser is set up exactly as iv-login.js sets it up, and nothing is ad
   const code = src.replace(/\/\/.*$/gm, '');
   assert.ok(!/throughInterstitial|solve|2captcha|stealth|fingerprint/i.test(code), 'nothing here solves anything or hides anything further');
   assert.deepEqual([...code.matchAll(/\.click\(([^)]*)\)/g)].map((m) => m[1]),
-    ["'input[type=submit], button[type=submit], #buttonlogin'", ''],
-    'the only two things ever clicked are Sign In and Find Getaway — never a Continue on a holding page, never a challenge');
+    ["'input[type=submit], button[type=submit], #buttonlogin'", '', ''],
+    'the only three things ever clicked are Sign In, Find Getaway and the results page\'s own Next Page — never a Continue on a holding page, never a challenge');
+  assert.ok(code.includes(".locator('.menu_page_result a', { hasText: 'Next Page' })"), 'and that third click is the pager link and nothing else');
   assert.deepEqual([...src.matchAll(/addInitScript\(([^)]*)\)/g)].map((m) => m[1]), ['HIDE_WEBDRIVER'], 'the one init script iv-login.js has');
 });
 
@@ -266,7 +269,7 @@ const LANDING = `<html><head><title>VIP Gold</title></head><body><a href="/web/m
 
 /** Interval as a stand-in. `S.mode` picks what it does; `S.hits` is every request it ever got. */
 async function startInterval() {
-  const S = { mode: 'ok', hits: [], sessions: new Set(), searches: [], logins: [], n: 0 };
+  const S = { mode: 'ok', hits: [], sessions: new Set(), searches: [], logins: [], nexts: [], n: 0, k: 0 };
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
     S.hits.push(`${req.method} ${u.pathname}${u.search}`);
@@ -290,14 +293,18 @@ async function startInterval() {
         const id = `sess${++S.n}`; S.sessions.add(id);
         return send(200, HOLD(S.mode !== 'hold-forever'), { 'set-cookie': `IVSESS=${id}; Path=/` });
       }
-      if (u.pathname === '/web/cs' && a === '0') return send(200, authed ? LANDING : ANON);
+      if (u.pathname === '/web/cs' && a === '0') { S.k = 0; return send(200, authed ? LANDING : ANON); }       // a new scan starts at the landing page
       if (u.pathname === '/web/cs' && a === '1001' && req.method === 'POST') {
         if (!authed) return send(200, ANON);
         S.searches.push(Object.fromEntries(new URLSearchParams(body)));
         if (S.mode === 'challenge-search') return send(200, CHALLENGE);
         if (S.mode === 'forbidden-search') return send(403, 'Forbidden');
-        return send(200, results);
+        // The first search of a scan gets the real 17 Oct page (or the page the test set); a later one, for later
+        // dates, gets a page with no resorts on it unless the test says what it should carry.
+        const n = S.k++;
+        return send(200, S.pages?.[n] ?? (n === 0 ? results : LANDING));
       }
+      if (u.pathname === '/web/cs' && a === '1014') { S.nexts.push(u.searchParams.get('p')); return send(200, authed ? (S.pager?.[u.searchParams.get('p')] ?? LANDING) : ANON); }
       res.writeHead(404); res.end();               // an asset of the saved page
     });
   });
@@ -398,14 +405,12 @@ async function world({ mode = 'ok', armed = true, quiet = false, seen = true } =
     onGood: () => putCard('interval-watcher', null, log),
   });
   const scanner = mk(true);
-  const swept = [];
-  const tap = (stay, afterMs = 0) => {
+  const tap = (stay, afterMs = 0, window = null) => {
     clock.t += afterMs;
     return handleTaps({
-      taps: [{ stay: stay.id, tapped: iso(clock.t) }], catalog, state: tapState, now: () => clock.t,
+      taps: [{ stay: stay.id, tapped: iso(clock.t), from: window?.from || null, to: window?.to || null }], catalog, state: tapState, now: () => clock.t,
       deps: { log, pusher, intervalLastSeen: (id) => circle.intervalLastSeen(id),
-        sweepResort: async (slug) => { swept.push(slug); return { found: [], posted: 0, refreshed: 0 }; },
-        scanInterval: (stay2) => scanner(stay2, catalog) },
+        scanInterval: (stay2, win) => scanner(stay2, catalog, win) },
     });
   };
   const cards = () => { try { return JSON.parse(readFileSync(cardsFile, 'utf8')); } catch { return {}; } };
@@ -413,7 +418,7 @@ async function world({ mode = 'ok', armed = true, quiet = false, seen = true } =
   const nudges = () => ntfy.S.pushes.filter((p) => /A member is looking at/.test(p.title));
   const ivHits = (re) => iv.S.hits.filter((h) => re.test(h)).length;
   const close = () => { iv.close(); sb.close(); ntfy.close(); rmSync(dir, { recursive: true, force: true }); };
-  return { dir, iv, sb, ntfy, lines, clock, flag, tap, mk, scanner, catalog, cards, stopPushes, nudges, ivHits, close, stopFile, stateFile, sessionFile, tapState, pusher, swept, circle };
+  return { dir, iv, sb, ntfy, lines, clock, flag, tap, mk, scanner, catalog, cards, stopPushes, nudges, ivHits, close, stopFile, stateFile, sessionFile, tapState, pusher, circle };
 }
 
 test('ONE TAP -> ONE SCAN; a second tap inside 30 minutes is served from it; a third after 30 reuses the session', e2e, async () => {
@@ -424,7 +429,8 @@ test('ONE TAP -> ONE SCAN; a second tap inside 30 minutes is served from it; a t
     assert.equal(row1.scan.ran, true);
     assert.equal(row1.scan.covered, true);
     assert.equal(w.ivHits(/POST \/web\/my\/auth\/login$/), 1, 'one sign-in');
-    assert.equal(w.ivHits(/POST \/web\/cs\?a=1001/), 1, 'one search');
+    assert.equal(w.ivHits(/POST \/web\/cs\?a=1001/), 2, 'the Radisson showed a full page of three, so the scan searched once more for later dates — one scan, two searches');
+    assert.equal(w.iv.S.searches.length, 2);
     assert.deepEqual(w.iv.S.searches[0].searchType, 'ResortSearch');
     assert.equal(w.iv.S.searches[0].searchCriteria, 'RBK', 'it asked for the one resort, by its code');
     assert.equal(w.iv.S.logins[0].j_username, 'stub-user');
@@ -461,7 +467,7 @@ test('ONE TAP -> ONE SCAN; a second tap inside 30 minutes is served from it; a t
     assert.equal(row3.scan.ran, true);
     assert.equal(w.ivHits(/POST \/web\/my\/auth\/login$/), 1, 'still one sign-in: the session was reused');
     assert.equal(w.ivHits(/GET \/web\/my\/auth\/loginPage/), 1, 'and the login page was not even opened again');
-    assert.equal(w.ivHits(/POST \/web\/cs\?a=1001/), 2);
+    assert.equal(w.ivHits(/POST \/web\/cs\?a=1001/), 4, 'and the second scan made its own two searches');
     assert.equal(row3.scan.posted, 0, 'nothing new to post');
     assert.equal(w.sb.S.posts.length, 2, 'the same weeks are not posted twice');
     assert.equal(row3.scan.refreshed, 2, 'but the two on the board had their last-seen clocks moved');
@@ -678,7 +684,7 @@ test('THE STAYS LIST: one Getaways search for Aruba, the weeks at places the Cir
     const r = await w.scanner.aruba(catalog);
     assert.equal(r.ran, true);
     assert.equal(r.covered, true);
-    assert.equal(w.iv.S.searches.length, 1, 'one search for the whole island');
+    assert.equal(w.iv.S.searches.length, 2, 'one search for the whole island, and one more for later dates because resorts showed a full page — one scan');
     assert.equal(w.iv.S.searches[0].searchType, 'CitySearch', '"Single Destination", as the form comes');
     assert.equal(w.iv.S.searches[0].searchCriteria, 'Aruba, ANT');
     assert.equal(r.rows, 15, 'the fifteen Aruba weeks on the page — not the twelve under "areas surrounding Aruba"');
@@ -696,7 +702,7 @@ test('THE STAYS LIST: one Getaways search for Aruba, the weeks at places the Cir
     const again = await w.scanner.aruba(catalog);
     assert.deepEqual([again.ran, again.covered], [false, true]);
     assert.match(again.why, /scanned 3 min ago — served from that scan/);
-    assert.equal(w.iv.S.searches.length, 1);
+    assert.equal(w.iv.S.searches.length, 2, 'and asked Interval nothing more');
   } finally { w.close(); }
 });
 
@@ -723,6 +729,191 @@ test('a run that does not sign in reuses a saved session, and with none says so 
     const expired = await nosignin.aruba(catalog);
     assert.equal(expired.noSession, true);
     assert.equal(w.ivHits(/POST \/web\/my\/auth\/login$/), 1, 'no sign-in on an expired session either');
+  } finally { w.close(); }
+});
+
+// ================================================================ the dates: the planner, and one scan with several searches
+// Victor, 22 Oct 2026: "I'd like to see a month or two in advance." A tap carries the dates; the scan searches for
+// them. Interval shows three rows a resort per results page, soonest first (read off the saved 17 Oct page), so a
+// search over two months shows the next three weeks and stops: the scan goes on from where each full page ended.
+test('the window a scan searches: the member\'s, from no earlier than today, no longer than a year; none given is today + 60 days', () => {
+  const now = Date.parse('2026-10-22T16:00:00Z');           // noon in Aruba, 22 Oct
+  assert.deepEqual(planWindow({ from: '2026-12-20', to: '2027-01-03' }, now), { from: '2026-12-20', to: '2027-01-03', asked: true });
+  assert.deepEqual(planWindow({ from: '2026-10-01', to: '2026-11-10' }, now), { from: '2026-10-22', to: '2026-11-10', asked: true }, 'a start in the past moves to today');
+  assert.deepEqual(planWindow(null, now), { from: '2026-10-22', to: '2026-12-21', asked: false }, 'no dates: two months, the same as the app\'s own default');
+  for (const bad of [{ from: '2026-12-10', to: '2026-12-01' }, { from: '2026-09-01', to: '2026-10-01' }, { from: 'soon', to: 'later' }, { from: '2026-12-01' }]) {
+    assert.equal(planWindow(bad, now).asked, false, JSON.stringify(bad));
+  }
+  assert.equal(planWindow({ from: '2026-11-01', to: '2031-01-01' }, now).to, '2027-11-02', 'cut to a year');
+  assert.equal(planWindow({ from: '2026-10-21', to: '2026-10-25' }, Date.parse('2026-10-23T02:00:00Z')).from, '2026-10-22', 'Aruba\'s day, not the UTC one: 22:00 on the 22nd is still the 22nd');
+  assert.deepEqual({ ...SCAN }, { defaultDays: 60, maxDays: 366, maxSearches: 5, maxPages: 3 });
+});
+
+const stat = (code, rows, lastCheckIn, nearby = false) => ({ code, nearby, rows, lastCheckIn });
+test('the next search starts where the earliest full page ended; a page that was not full needs no more', () => {
+  assert.equal(PAGE_ROWS, 3);
+  // RBK showed three rows up to 15 Nov, LC2 showed two (all it has): search again from the 15th.
+  assert.equal(nextCursor([stat('RBK', 3, '2026-11-15'), stat('LC2', 2, '2026-11-22')], '2026-10-22', '2026-12-21'), '2026-11-15');
+  // Two full pages: nothing is missing before the EARLIER of their last dates.
+  assert.equal(nextCursor([stat('RBK', 3, '2026-11-15'), stat('DV2', 3, '2026-11-08')], '2026-10-22', '2026-12-21'), '2026-11-08');
+  assert.equal(nextCursor([stat('RBK', 2, '2026-11-15')], '2026-10-22', '2026-12-21'), null, 'not full: everything is shown');
+  assert.equal(nextCursor([], '2026-10-22', '2026-12-21'), null);
+  assert.equal(nextCursor([stat('RBK', 3, '2026-12-19')], '2026-10-22', '2026-12-18'), null, 'past the end of the window');
+  assert.equal(nextCursor([stat('FVS', 3, '2026-11-15', true)], '2026-10-22', '2026-12-21'), null, 'a resort under "areas surrounding" is not the place asked for');
+  assert.equal(nextCursor([stat('LCB', 3, '2026-11-15')], '2026-10-22', '2026-12-21', (c) => c === 'RBK'), null, 'nor one this scan is not about');
+  // Always forward: three rows all on the cursor's own day still moves on.
+  assert.equal(nextCursor([stat('RBK', 3, '2026-10-22')], '2026-10-22', '2026-12-21'), '2026-10-23');
+  assert.equal(nextCursor([stat('RBK', 3, '2026-10-10')], '2026-10-22', '2026-12-21'), '2026-10-23', 'even when the page says something older');
+});
+
+test('the real 17 Oct page, read as a page: ten resorts, never more than three rows each, and the twelve nearby weeks are after the marker', () => {
+  const stats = pageStats(results);
+  assert.equal(stats.length, 10);
+  assert.ok(stats.every((s) => s.rows <= PAGE_ROWS));
+  const rbk = stats.find((s) => s.code === 'RBK');
+  assert.deepEqual([rbk.rows, rbk.lastCheckIn, rbk.nearby], [3, '2026-11-06', false]);
+  assert.deepEqual(stats.filter((s) => s.nearby).map((s) => s.code), ['AWA', 'FVE', 'FVD', 'FVS']);
+  assert.deepEqual(saturated(stats, (c) => c in INTERVAL_ARUBA).map((s) => s.code).sort(), ['CPV', 'DV2', 'RBK', 'TD4'], 'the Aruba resorts that showed a full page; LC2 (2 rows) and DP1 (1) showed all they have');
+  assert.equal(reachedNearby(results), true);
+  assert.equal(reachedNearby(LANDING), false);
+});
+
+/** A results page in the markup the parser reads: the form (a person changes the dates from it), the resorts, the pager. */
+const row = (a, b, price, id = 'resortallInclusive_false') => `<tr class="bottom_border ${id}"><td><div class="avail_dates">${a} - ${b}</div></td><td>US$${price}</td></tr>`;
+const gw = (resorts, { nearby = false, next = false } = {}) => LANDING.replace('</body>',
+  resorts.map(([code, name, rows]) => `<div class="resort_header_row_2 ${code}"><img class="results_thumbnail" alt="${name}"><table>${rows.map((r) => row(...r)).join('')}</table></div>`).join('')
+  + (nearby ? '<h2 id="resorts_nearby">Areas Surrounding Aruba</h2>' : '')
+  + (next ? '<div class="menu_page_result"><ul><li><a href="/web/cs?a=1014&amp;p=2">Next Page</a></li></ul></div>' : '') + '</body>');
+const RBK_NAME = 'Radisson Blu Aruba';
+const RBK_P1 = gw([['RBK', RBK_NAME, [['Nov 01 2026', 'Nov 08 2026', '1,500.00'], ['Nov 08 2026', 'Nov 15 2026', '1,520.00'], ['Nov 15 2026', 'Nov 22 2026', '1,540.00']]]]);
+const RBK_P2 = gw([['RBK', RBK_NAME, [['Nov 15 2026', 'Nov 22 2026', '1,540.00'], ['Nov 22 2026', 'Nov 29 2026', '1,560.00']]]]);
+
+test('A TAP WITH DATES: the Getaways form gets those dates, and a resort that showed a full page is searched again from where it ended — one scan, two searches, one sign-in', e2e, async () => {
+  const w = await world();
+  w.iv.S.pages = [RBK_P1, RBK_P2];
+  try {
+    const t0 = w.clock.t;
+    const row1 = (await w.tap(RBK, 0, { from: '2026-11-01', to: '2026-12-15' }))[0];
+    assert.equal(row1.scan.ran, true, row1.scan.why);
+    assert.equal(w.ivHits(/POST \/web\/my\/auth\/login$/), 1, 'one sign-in');
+    assert.equal(w.iv.S.searches.length, 2, 'two searches in the one scan');
+    assert.deepEqual([w.iv.S.searches[0].fromDate, w.iv.S.searches[0].toDate], ['11/01/2026', '12/15/2026'], 'the member\'s dates, typed the way the form takes them');
+    assert.deepEqual([w.iv.S.searches[1].fromDate, w.iv.S.searches[1].toDate], ['11/15/2026', '12/15/2026'], 'then from the check-in date the full page ended on');
+    assert.ok(w.iv.S.searches.every((s) => s.searchType === 'ResortSearch' && s.searchCriteria === 'RBK'));
+    // Every week from both pages reached the board, through post_deal, once: 15 Nov was on both pages.
+    assert.deepEqual(w.sb.S.posts.map((p) => p.p_from).sort(), ['2026-11-01', '2026-11-08', '2026-11-15', '2026-11-22']);
+    assert.equal(row1.scan.posted, 4);
+    assert.deepEqual(row1.scan.window, { from: '2026-11-01', to: '2026-12-15' });
+    assert.ok(w.lines.some((l) => /searching RBK for 2026-11-01 to 2026-12-15$/.test(l)));
+    assert.ok(w.lines.some((l) => /may be more weeks — searching again from 2026-11-15/.test(l)));
+    // What the scan covered is written down, and a tap for dates inside it is served from it.
+    const st = JSON.parse(readFileSync(w.stateFile, 'utf8'));
+    assert.deepEqual(st.last.RBK.covers, { from: '2026-11-01', to: '2026-12-15' });
+    assert.equal(st.last.RBK.searches, 2);
+    const inside = (await w.tap(RBK, min(5), { from: '2026-11-10', to: '2026-12-01' }))[0];
+    assert.deepEqual([inside.scan.ran, inside.scan.covered], [false, true], 'dates inside what was searched: served from the scan');
+    // Dates that reach beyond it are NOT covered by it, and Interval is not asked again inside the 30 minutes.
+    const hits = w.iv.S.hits.length;
+    const beyond = (await w.tap(RBK, min(5), { from: '2026-11-10', to: '2027-02-01' }))[0];
+    assert.deepEqual([beyond.scan.ran, beyond.scan.covered], [false, false]);
+    assert.match(beyond.scan.why, /scanned 10 min ago for 2026-11-01 to 2026-12-15; 2026-11-10 to 2027-02-01 reaches beyond that — not asking Interval again before 30 minutes are up/);
+    assert.equal(w.iv.S.hits.length, hits, 'not one request');
+    assert.equal(w.nudges().length, 1, 'and so the Grab nudge fires for that tap, as it always does when Interval was not read for it');
+    void t0;
+  } finally { w.close(); }
+});
+
+test('no dates sent (an older phone): the scan searches today to two months on, and says so', e2e, async () => {
+  const w = await world();
+  try {
+    const row1 = (await w.tap(RBK))[0];
+    assert.equal(row1.scan.ran, true, row1.scan.why);
+    const today = new Date(w.clock.t - 4 * 3600e3).toISOString().slice(0, 10);
+    const us = (iso) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}`;
+    assert.equal(w.iv.S.searches[0].fromDate, us(today));
+    assert.ok(w.lines.some((l) => /searching RBK for .* \(no dates were given\)/.test(l)));
+  } finally { w.close(); }
+});
+
+test('ONE SCAN IS AT MOST FIVE SEARCHES: when every page is full it stops, says how far the weeks are known, and covers no further than that', e2e, async () => {
+  const w = await world();
+  // Every search shows a full page that ends a week later than the last one did.
+  const page = (k) => gw([['RBK', RBK_NAME, [0, 1, 2].map((i) => {
+    const d = (n) => new Date(Date.parse('2026-11-01T12:00:00Z') + (k * 7 + n) * 864e5).toISOString().slice(0, 10);
+    const w2 = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric', timeZone: 'UTC' }).replace(',', '');
+    return [w2(d(i * 7)), w2(d(i * 7 + 7)), `${1500 + k * 10 + i}.00`];
+  })]]);
+  w.iv.S.pages = [0, 1, 2, 3, 4, 5, 6, 7].map(page);
+  try {
+    const row1 = (await w.tap(RBK, 0, { from: '2026-11-01', to: '2027-10-01' }))[0];
+    assert.equal(row1.scan.ran, true, row1.scan.why);
+    assert.equal(w.iv.S.searches.length, SCAN.maxSearches, 'five and no more');
+    assert.ok(w.lines.some((l) => /5 searches is the most one scan makes — weeks are known up to \d{4}-\d\d-\d\d, not to 2027-10-01/.test(l)));
+    const st = JSON.parse(readFileSync(w.stateFile, 'utf8'));
+    assert.ok(st.last.RBK.covers.to < '2027-10-01' && st.last.RBK.covers.to > '2026-11-01', `covers up to ${st.last.RBK.covers.to}, not the whole year`);
+    // The count against the caps is ONE scan.
+    assert.equal(st.scanLog.length, 1);
+    assert.equal(Object.keys(st.scans).length, 1);
+    assert.equal(w.ivHits(/POST \/web\/my\/auth\/login$/), 1);
+  } finally { w.close(); }
+});
+
+test('--interval-read makes ONE search, as it always did, however many full pages there are', e2e, async () => {
+  const w = await world();
+  try {
+    const one = w.mk(false);                                    // canSignIn false: it needs a saved session
+    const solo = makeIntervalScanner({ armed: () => true, canSignIn: true, maxSearches: 1, stateFile: w.stateFile, now: () => w.clock.t, log: () => {},
+      makeSession: () => new IntervalSession({ origin: w.iv.url, stateFile: w.sessionFile, browser: ENGINE, requireProxy: false, getProxy: () => null,
+        getCreds: () => ({ user: 'u', pass: 'p' }), onlyHosts: ['127.0.0.1'], waits: FAST }),
+      post: ({ finds, catalog: c }) => judgeAndPost({ circle: w.circle, found: finds, catalog: c, cfg: WORLD_CFG, log: () => {} }),
+      onStop: async () => {} });
+    void one;
+    const r = await solo(RBK, catalog);
+    assert.equal(r.ran, true, r.why);
+    assert.equal(w.iv.S.searches.length, 1, 'RBK showed a full page; with maxSearches 1 the scan still stops after the first search');
+  } finally { w.close(); }
+});
+
+test('THE STAYS LIST with dates: the island search follows the pager while the places are still Aruba, and never into "areas surrounding"', e2e, async () => {
+  const w = await world();
+  const p1 = gw([['RBK', RBK_NAME, [['Nov 01 2026', 'Nov 08 2026', '1,500.00']]]], { next: true });          // not full, no nearby: a second page exists
+  const p2 = gw([['LC2', 'Eagle Aruba Resort', [['Nov 20 2026', 'Nov 27 2026', '1,600.00']]]], { nearby: true, next: true });   // reaches the surrounding areas: stop
+  w.iv.S.pages = [p1]; w.iv.S.pager = { 2: p2, 3: gw([['TD4', 'Divi Dutch Village Beach Resort', [['Nov 21 2026', 'Nov 28 2026', '1,700.00']]]]) };
+  try {
+    const r = await w.scanner.aruba(catalog, { from: '2026-11-01', to: '2026-12-15' });
+    assert.equal(r.ran, true, r.why);
+    assert.deepEqual(w.iv.S.nexts, ['2'], 'page two was asked for; page three was not, because page two had reached the areas surrounding Aruba');
+    assert.deepEqual(w.sb.S.posts.map((p) => p.p_stay).sort(), ['stay-eagle', 'stay-rbk'], 'weeks from both pages reached the board');
+    assert.equal(w.iv.S.searches.length, 1, 'neither page was full, so no later dates were searched');
+    assert.deepEqual([w.iv.S.searches[0].fromDate, w.iv.S.searches[0].toDate], ['11/01/2026', '12/15/2026']);
+    assert.equal(w.iv.S.searches[0].searchType, 'CitySearch');
+  } finally { w.close(); }
+});
+
+test('the pager is followed at most three pages deep', e2e, async () => {
+  const w = await world();
+  const more = (code, name) => gw([[code, name, [['Nov 01 2026', 'Nov 08 2026', '1,500.00']]]], { next: true });
+  w.iv.S.pages = [more('RBK', RBK_NAME)];
+  w.iv.S.pager = { 2: more('LC2', 'Eagle Aruba Resort'), 3: more('TD4', 'Divi Dutch Village Beach Resort'), 4: more('DV2', 'Divi Village Golf and Beach Resort') };
+  try {
+    const r = await w.scanner.aruba(catalog);
+    assert.equal(r.ran, true, r.why);
+    assert.equal(w.iv.S.nexts.length, SCAN.maxPages - 1, 'three pages in all: the search and two Next Page presses');
+  } finally { w.close(); }
+});
+
+test('a wall on a LATER search stops everything, the same as on the first', e2e, async () => {
+  const w = await world();
+  w.iv.S.pages = [RBK_P1, CHALLENGE];
+  try {
+    const r = (await w.tap(RBK, 0, { from: '2026-11-01', to: '2026-12-15' }))[0];
+    assert.equal(r.scan.stopped, true);
+    assert.ok(existsSync(w.stopFile));
+    assert.equal(w.iv.S.searches.length, 2, 'it asked once more, met the wall, and stopped');
+    assert.equal(w.stopPushes().length, 1);
+    const hits = w.iv.S.hits.length;
+    await w.tap(RBK, min(40), { from: '2026-11-01', to: '2026-12-15' });
+    assert.equal(w.iv.S.hits.length, hits, 'and nothing asks Interval again');
   } finally { w.close(); }
 });
 

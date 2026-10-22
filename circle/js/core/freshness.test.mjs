@@ -8,7 +8,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { isStale, isFresh, seenWords, ageDays, boardOrder, retiredToday, seenMs, RETIRE_AFTER_DAYS, FRESH_HOURS, WATCHED_SOURCES } from './freshness.js';
+import { isStale, isFresh, seenWords, ageDays, boardOrder, retiredToday, seenMs, RETIRE_AFTER_DAYS, FRESH_HOURS, WATCHED_SOURCES, setOutages, outages, pausedMs, atWords, sinceWords } from './freshness.js';
 import { Store, emptyState } from './store.js';
 import { SupabaseStore } from './supabase-store.js';
 
@@ -130,7 +130,7 @@ test('the line at the top of Stays: when the board was last re-checked, from the
     : stubClient().from(t)) });
   const store = new SupabaseStore({ client: withRow({ data: { checked_at: at, verified: 41, repriced: 3, retired: 2 }, error: null }) });
   store.state.deals = [{ status: 'gone', retiredAt: new Date().toISOString() }];
-  assert.deepEqual(await store.boardStatus(), { at, verified: 41, repriced: 3, retired: 2, retiredToday: 1 });
+  assert.deepEqual(await store.boardStatus(), { at, verified: 41, repriced: 3, retired: 2, retiredToday: 1, redweekAt: null, outage: null });
   assert.equal(await new SupabaseStore({ client: withRow({ data: null, error: null }) }).boardStatus(), null);
   assert.equal(await new SupabaseStore({ client: withRow({ data: null, error: { code: '42P01', message: 'relation does not exist' } }) }).boardStatus(), null, 'the migration not being applied is no line, not an error');
   assert.equal(await new SupabaseStore({ client: withRow(new Error('offline')) }).boardStatus(), null);
@@ -150,4 +150,104 @@ test('the migration says what Victor decided: seven days, and the reason a membe
   }
   const schema = readFileSync(new URL('../../supabase/schema.sql', import.meta.url), 'utf8');
   assert.ok(schema.includes(sql.slice(sql.indexOf('create or replace function retire_stale_deals'))), 'schema.sql carries the same text');
+});
+
+// ---------------------------------------------------------------- a source being out stops its clock
+// RedWeek stopped answering this server on 22 Oct 2026; Victor decided to wait. Seven days of a source being
+// unreachable must not empty the board, and nothing that is shown may lie about when a row was last seen.
+test('while RedWeek is out, its rows\' seven days do not run — the Barceló row seen 16 Oct is still on the 25th, and stale on the 29th', () => {
+  const seen = '2026-10-16T14:00:00Z';
+  const out = [{ source: 'redweek', since: '2026-10-17T00:00:00Z', until: null }];            // still out
+  const row = row0('redweek', seen);
+  assert.equal(isStale(row, Date.parse('2026-10-25T15:00:00Z'), 7, []), true, 'with no outage known it would have gone on the 24th');
+  assert.equal(isStale(row, Date.parse('2026-10-25T15:00:00Z'), 7, out), false, 'RedWeek has been out since the 17th: only one of its nine days counted');
+  assert.equal(isStale(row, Date.parse('2026-11-30T15:00:00Z'), 7, out), false, 'however long it is out');
+  const back = [{ source: 'redweek', since: '2026-10-17T00:00:00Z', until: '2026-10-27T00:00:00Z' }];
+  assert.equal(isStale(row, Date.parse('2026-11-02T00:00:00Z'), 7, back), false, 'out for ten days, then back: only the ten hours before it and the six days since count');
+  assert.equal(isStale(row, Date.parse('2026-11-03T00:00:00Z'), 7, back), true, 'and once more than seven counted days have passed it is stale, as ever');
+});
+
+const row0 = (source, seenAt) => ({ id: `${source}-${seenAt}`, source, seenAt, postedAt: seenAt, status: 'live' });
+
+test('the pause belongs to the source that was out: RedWeek being down does not keep an Interval or a VakayMood row alive', () => {
+  const out = [{ source: 'redweek', since: '2026-10-10T00:00:00Z', until: null }];
+  const now = Date.parse('2026-10-25T00:00:00Z');
+  assert.equal(isStale(row0('interval', '2026-10-12T00:00:00Z'), now, 7, out), true);
+  assert.equal(isStale(row0('vakaymood', '2026-10-12T00:00:00Z'), now, 7, out), true);
+  assert.equal(isStale(row0('redweek', '2026-10-12T00:00:00Z'), now, 7, out), false);
+});
+
+test('only the time the source was out AFTER the row was last seen is paused', () => {
+  const D = 24 * 3600e3, now = Date.parse('2026-10-25T00:00:00Z');
+  const out = [{ source: 'redweek', since: '2026-10-10T00:00:00Z', until: '2026-10-14T00:00:00Z' }, { source: 'redweek', since: '2026-10-20T00:00:00Z', until: null }];
+  assert.equal(pausedMs('redweek', Date.parse('2026-10-01T00:00:00Z'), now, out), 4 * D + 5 * D, 'both outages, whole');
+  assert.equal(pausedMs('redweek', Date.parse('2026-10-12T00:00:00Z'), now, out), 2 * D + 5 * D, 'seen in the middle of the first: its last two days and all of the second');
+  assert.equal(pausedMs('redweek', Date.parse('2026-10-15T00:00:00Z'), now, out), 5 * D, 'seen after the first had ended: only the second');
+  assert.equal(pausedMs('redweek', Date.parse('2026-10-24T00:00:00Z'), now, out), D);
+  assert.equal(pausedMs('interval', 0, now, out), 0);
+  assert.equal(pausedMs('redweek', 0, now, []), 0);
+  assert.equal(pausedMs('redweek', 0, now, [{ source: 'redweek', since: 'garbage', until: null }]), 0, 'a bad row is nothing');
+});
+
+test('the outages the page holds are the ones the clock uses, by default — and a row\'s own "seen" is never altered by them', () => {
+  const was = outages();
+  try {
+    setOutages([{ source: 'redweek', since: '2026-10-17T00:00:00Z', until: null }]);
+    const r = row0('redweek', '2026-10-16T14:00:00Z');
+    assert.equal(isStale(r, Date.parse('2026-10-29T00:00:00Z')), false);
+    assert.equal(r.seenAt, '2026-10-16T14:00:00Z');
+    assert.equal(seenWords(r, Date.parse('2026-10-29T00:00:00Z')), 'seen 12 days ago', 'and it still says honestly how long ago it was seen');
+    setOutages(null); assert.deepEqual(outages(), []);
+    assert.equal(isStale(r, Date.parse('2026-10-29T00:00:00Z')), true);
+    // The store reads the same: liveDeals() drops a stale row and keeps a paused one.
+    const store = new Store(); store.state = emptyState();
+    store.state.deals = [{ ...r, id: 'barcelo' }];
+    const at = Date.now();
+    store.state.deals[0].seenAt = store.state.deals[0].postedAt = new Date(at - 9 * D).toISOString();
+    assert.equal(store.liveDeals().length, 0);
+    setOutages([{ source: 'redweek', since: new Date(at - 8 * D).toISOString(), until: null }]);
+    assert.equal(store.liveDeals().length, 1, 'RedWeek has been out for eight of the nine days');
+  } finally { setOutages(was); }
+});
+
+test('"RedWeek checked at 06:00" and "not reachable since 14:20": a time in words, today, yesterday or a date', () => {
+  const now = new Date(2026, 9, 22, 15, 0).getTime();                    // 22 Oct, 15:00 local
+  const at = (d, h, m = 0) => new Date(2026, 9, d, h, m).toISOString();
+  assert.equal(atWords(at(22, 6), now), 'at 06:00');
+  assert.equal(atWords(at(22, 18), now), 'at 18:00');
+  assert.equal(atWords(at(21, 18), now), 'yesterday at 18:00');
+  assert.equal(atWords(at(19, 6), now), '19 Oct at 06:00');
+  assert.equal(sinceWords(at(22, 14, 20), now), '14:20');
+  assert.equal(sinceWords(at(21, 14, 20), now), 'yesterday 14:20');
+  assert.equal(sinceWords(at(18, 14, 20), now), '18 Oct 14:20');
+  assert.equal(atWords('nonsense', now), '');
+  assert.equal(sinceWords(null, now), '');
+});
+
+test('the migrations say what was decided: dates carried by a tap, widened not dropped; an outage pauses the clock, in the database too', () => {
+  const sql = readFileSync(new URL('../../supabase/migrations/20261022_tap_window.sql', import.meta.url), 'utf8');
+  assert.match(sql, /alter table stay_taps add column if not exists from_date date/);
+  assert.match(sql, /alter table stay_taps add column if not exists to_date   date/);
+  for (const fn of ['record_stay_tap', 'record_board_tap']) {
+    const body = sql.slice(sql.indexOf(`create or replace function ${fn}`));
+    assert.ok(/security definer/.test(body.slice(0, 300)), `${fn} is security definer, as before`);
+    assert.ok(body.slice(0, 500).includes('current_member_id() is null'), `${fn} is a member's alone`);
+    assert.ok(body.slice(0, 900).includes('least(from_date, w.o_from)') && body.slice(0, 900).includes('greatest(to_date, w.o_to)'), `${fn} widens a waiting tap`);
+  }
+  assert.match(sql, /p_from date default null, p_to date default null/, 'an older phone\'s call with no dates still works');
+  assert.match(sql, /drop function if exists record_stay_tap\(uuid\);/);
+  assert.match(sql, /drop function if exists record_board_tap\(\);/);
+  assert.match(sql, /returns table \(stay uuid, tapped timestamptz, window_from date, window_to date\)/);
+  assert.ok(sql.slice(sql.indexOf('function take_stay_taps')).slice(0, 300).includes('current_is_bot()'), 'the watcher alone collects them');
+  assert.match(sql, /o_to := least\(p_to, o_from \+ 366\)/, 'a year at most');
+  assert.match(sql, /p_to < today then return/, 'dates that are over are no window');
+  const out = readFileSync(new URL('../../supabase/migrations/20261022_source_outage.sql', import.meta.url), 'utf8');
+  assert.match(out, /create unique index if not exists source_outages_one_open_idx on source_outages\(source\) where until is null/);
+  for (const fn of ['mark_source_unreachable', 'mark_source_reachable']) assert.ok(out.slice(out.indexOf(`function ${fn}`)).slice(0, 400).includes('current_is_bot()'), `${fn} is the watcher's alone`);
+  assert.match(out, /outage_paused\(source::text, coalesce\(seen_at, posted_at\)\) < now\(\)/, 'the seven days are seven days of the source being up');
+  assert.match(out, /grant select on source_outages to authenticated/);
+  assert.ok(!/grant (insert|update|delete)/.test(out), 'nothing grants a write on the table');
+  const schema = readFileSync(new URL('../../supabase/schema.sql', import.meta.url), 'utf8');
+  assert.ok(schema.includes(sql), 'schema.sql carries the tap-window text whole');
+  assert.ok(schema.includes(out), 'and the outage text whole');
 });

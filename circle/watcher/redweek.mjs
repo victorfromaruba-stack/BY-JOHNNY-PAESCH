@@ -4,7 +4,7 @@
 // check-out, nights, bedrooms, sleeps, view, price, price per night — so this reads structured
 // values rather than guessing at text. One request per resort, and it identifies itself.
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
 
 const BASE = 'https://www.redweek.com';
 // A crawler saying who it is, and how to be told to stop, is the polite convention and makes a
@@ -127,6 +127,57 @@ function stop(why) {
   throw new RedWeekStop(why);
 }
 
+// ---- When RedWeek does not answer at all, wait a day ---------------------------------------
+//
+// Since 22 Oct 2026 every request from this server to RedWeek times out: it has stopped answering this
+// address. Victor's decision was to wait, not to route around it. A connection timeout is treated like a
+// block: the FIRST one stops the rest of the pass and writes a back-off (.redweek-backoff.json, `until` a
+// day on), and every RedWeek path checks it before it asks anything — the two daily scans, a by-hand
+// --once, anything. Nothing retries in a loop. When the day is up the next request is ONE probe
+// (robots.txt, fetched fresh): if it answers, the back-off is cleared and the read goes on; if it times
+// out, another day. A person can end it early by deleting the file.
+
+export const BACKOFF_MS = 24 * 3600e3;
+const TIMEOUT_CODES = new Set(['UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT', 'ETIMEDOUT', 'ESOCKETTIMEDOUT']);
+/** A request that never got an answer: our own clock ran out, or undici's connect/headers/body timer did. */
+export function isTimeout(err) {
+  const c = err?.cause || err;
+  return err?.name === 'AbortError' || err?.name === 'TimeoutError' || TIMEOUT_CODES.has(c?.code) || TIMEOUT_CODES.has(err?.code);
+}
+
+/** Thrown while RedWeek is backed off. `stop` makes sweep() end the pass; `backoff` tells callers it is not a block. */
+export class RedWeekBackoff extends Error { constructor(why, until) { super(why); this.stop = true; this.backoff = true; this.until = until; } }
+
+let BACKOFF_FILE = null, backoffMemory = null;
+/** Where the back-off is remembered across restarts. Unset (the tests) it lives for the process only. */
+export const useBackoffFile = (path) => { BACKOFF_FILE = path; backoffMemory = null; };
+/**
+ * The back-off in force or run out, `{ at, until, why, expired }`, or null when there is none. A file that
+ * exists but cannot be read still holds (until a day from now, every time it is asked): it fails closed.
+ */
+export function backoff(now = Date.now()) {
+  let b = backoffMemory;
+  if (BACKOFF_FILE) {
+    b = null;
+    if (existsSync(BACKOFF_FILE)) {
+      try { b = JSON.parse(readFileSync(BACKOFF_FILE, 'utf8')); }
+      catch { b = { at: null, until: new Date(now + BACKOFF_MS).toISOString(), why: 'the back-off file is there' }; }
+    }
+  }
+  if (!b) return null;
+  return { ...b, expired: !(Date.parse(b.until) > now) };
+}
+function startBackoff(why, now = Date.now()) {
+  backoffMemory = { at: new Date(now).toISOString(), until: new Date(now + BACKOFF_MS).toISOString(), why };
+  if (BACKOFF_FILE) { try { writeFileSync(BACKOFF_FILE, JSON.stringify(backoffMemory, null, 1), { mode: 0o600 }); } catch { /* memory still holds it */ } }
+  return new RedWeekBackoff(`RedWeek did not answer (${why}) — backing off until ${backoffMemory.until}`, backoffMemory.until);
+}
+/** The probe answered: resume. */
+export function clearBackoff() {
+  backoffMemory = null;
+  if (BACKOFF_FILE) { try { unlinkSync(BACKOFF_FILE); } catch { /* already gone */ } }
+}
+
 // What a bot wall looks like when it arrives with a 200. Only believed on a page with no listings
 // at all, because a real resort page never shows one of these and a resort with nothing open does
 // not need to be mistaken for a wall.
@@ -182,12 +233,17 @@ export const _forgetRobots = () => { robots = { at: 0, txt: '' }; };
 export async function rentals(slug, { includeTaken = false, timeoutMs = 30000 } = {}) {
   const held = stopped();
   if (held) throw new RedWeekStop(`RedWeek stopped us${held.at ? ` on ${held.at}` : ''}: ${held.why}`);
+  // Backed off: not one request. Run out: this request is the single probe, and robots.txt is it.
+  const bo = backoff();
+  if (bo && !bo.expired) throw new RedWeekBackoff(`RedWeek did not answer on ${bo.at || 'an earlier pass'} (${bo.why}) — backed off until ${bo.until}`, bo.until);
+  if (bo) robots = { at: 0, txt: '' };
   const path = `/resort/${slug}/timeshare-rentals`;
   const url = BASE + path;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     await checkRobots(path, timeoutMs);
+    if (bo) clearBackoff();                                 // the probe was answered: carry on
     const res = await fetch(url, { signal: ctrl.signal, headers: { 'user-agent': UA, accept: 'text/html' } });
     if (res.status === 429) throw new Error('RedWeek is rate-limiting us — slow down.');
     if (res.status === 403) stop(`RedWeek answered 403 for ${slug}`);
@@ -196,13 +252,26 @@ export async function rentals(slug, { includeTaken = false, timeoutMs = 30000 } 
     const all = parseRentals(html, { slug, ourName: ARUBA[slug] ?? null });
     if (!all.length && WALL.test(html)) stop(`RedWeek served a challenge page for ${slug}`);
     return includeTaken ? all : all.filter(x => !x.taken);
+  } catch (err) {
+    if (!err.stop && isTimeout(err)) throw startBackoff(`connection timed out on ${slug}`);
+    throw err;
   } finally { clearTimeout(timer); }
 }
 
+/**
+ * The pause between two resorts, in ms: WATCH_REDWEEK_PAUSE_SEC, 10 s when it is not set. It was 2.5 s while
+ * the watcher read RedWeek every half hour; it reads twice a day now, and slowly (Victor, 22 Oct 2026).
+ */
+export function pauseMs() {
+  const raw = process.env.WATCH_REDWEEK_PAUSE_SEC;
+  const s = raw === undefined || raw === '' ? NaN : Number(raw);
+  return Number.isFinite(s) && s >= 0 ? s * 1000 : 10000;
+}
+
 /** Every resort we care about, one at a time with a pause. Politeness, not performance. */
-export async function sweep(slugs = Object.keys(ARUBA), { pauseMs = 2500, onResort = () => {}, includeTaken = false } = {}) {
+export async function sweep(slugs = Object.keys(ARUBA), { pauseMs: pause = pauseMs(), onResort = () => {}, includeTaken = false } = {}) {
   const found = [];
-  let wait = pauseMs;
+  let wait = pause;
   for (const slug of slugs) {
     try {
       const list = await rentals(slug, { includeTaken });
@@ -210,10 +279,10 @@ export async function sweep(slugs = Object.keys(ARUBA), { pauseMs = 2500, onReso
       // How many are OPEN; with includeTaken the list also carries the rented ones, which a re-check of
       // the board needs in order to take their rows down.
       onResort(slug, list.filter((x) => !x.taken).length, null);
-      wait = pauseMs;                       // it answered; back to the ordinary pace
+      wait = pause;                         // it answered; back to the ordinary pace
     } catch (err) {
       onResort(slug, 0, err);
-      // Told to go away: the other five resorts are the same site and get the same answer.
+      // Told to go away, or not answering at all: the other resorts are the same site and get the same answer.
       if (err.stop) break;
       // Being told to slow down and then carrying on at the same rate is how a watcher gets
       // itself blocked. Each refusal doubles the wait, up to two minutes.

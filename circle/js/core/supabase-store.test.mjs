@@ -184,3 +184,89 @@ test('a burst of realtime events is one reload, not one per row', () => {
     mock.timers.tick(200);  assert.equal(reloads, 1, 'one reload answers the whole burst');
   } finally { mock.timers.reset(); }
 });
+
+// ---------------------------------------------------------------- the dates a tap carries (22 Oct 2026)
+test('a tap on a stay carries the dates the member is looking for; the same dates five minutes apart are one tap, new dates are another', () => {
+  const calls = [];
+  const store = newStore(tapClient({ rpc: (fn, args) => { calls.push([fn, args]); return Promise.resolve({ data: null, error: null }); } }));
+  const xmas = { from: '2026-12-20', to: '2027-01-03' }, soon = { from: '2026-10-22', to: '2026-12-21' };
+  store.noteStayLook('stay-surf', xmas); store.noteStayLook('stay-surf', xmas); store.noteStayLook('stay-surf', xmas);
+  store.noteStayLook('stay-surf', soon);
+  store.noteStayLook('stay-ocean');
+  assert.deepEqual(calls, [
+    ['record_stay_tap', { p_stay: 'stay-surf', p_from: '2026-12-20', p_to: '2027-01-03' }],
+    ['record_stay_tap', { p_stay: 'stay-surf', p_from: '2026-10-22', p_to: '2026-12-21' }],
+    ['record_stay_tap', { p_stay: 'stay-ocean' }],
+  ]);
+});
+
+test('opening the Stays list carries the dates; changing them taps again at once, the same dates do not inside a minute', () => {
+  const calls = [];
+  const store = newStore(tapClient({ rpc: (fn, args) => { calls.push([fn, args]); return Promise.resolve({ data: null, error: null }); } }));
+  const a = { from: '2026-10-22', to: '2026-12-21' }, b = { from: '2026-12-20', to: '2027-01-03' };
+  store.noteBoardLook(a); store.noteBoardLook(a);
+  store.noteBoardLook(b); store.noteBoardLook(b);
+  store.noteBoardLook(a);
+  assert.deepEqual(calls, [
+    ['record_board_tap', { p_from: '2026-10-22', p_to: '2026-12-21' }],
+    ['record_board_tap', { p_from: '2026-12-20', p_to: '2027-01-03' }],
+    ['record_board_tap', { p_from: '2026-10-22', p_to: '2026-12-21' }],
+  ]);
+});
+
+test('a tap with a window is as invisible as one without: not installed, offline, throwing', async () => {
+  for (const rpc of [() => Promise.resolve({ data: null, error: { code: 'PGRST202' } }), () => Promise.reject(new Error('offline')), () => { throw new Error('boom'); }]) {
+    const store = newStore(tapClient({ rpc }));
+    assert.doesNotThrow(() => store.noteBoardLook({ from: '2026-10-22', to: '2026-12-21' }));
+    assert.doesNotThrow(() => store.noteStayLook('s', { from: '2026-10-22', to: '2026-12-21' }));
+  }
+  await new Promise((r) => setTimeout(r, 5));
+});
+
+// ---------------------------------------------------------------- the line at the top of Stays, and the outages the clock uses
+const tableClient = (tables) => ({
+  ...stubClient(),
+  from(t) {
+    const hit = tables[t];
+    if (!hit) return stubClient().from(t);
+    const chain = {
+      select: () => chain, order: () => chain, limit: () => (hit.rows !== undefined ? Promise.resolve(hit.rows) : chain),
+      eq: () => chain, is: () => chain, maybeSingle: async () => (hit.one instanceof Error ? Promise.reject(hit.one) : hit.one),
+      then: (res, rej) => Promise.resolve(hit.all ?? { data: [], error: null }).then(res, rej),
+    };
+    return chain;
+  },
+});
+
+test('the Stays line: when RedWeek was last read, whether it is out right now since when, and the board check', async () => {
+  const read = '2026-10-22T10:00:00+00:00', since = '2026-10-22T18:20:00+00:00';
+  const store = newStore(tableClient({
+    board_checks: { one: { data: { checked_at: '2026-10-22T18:00:00+00:00', verified: 4, repriced: 0, retired: 1 }, error: null } },
+    redweek_checks: { rows: { data: [{ checked_at: read }], error: null } },
+    source_outages: { one: { data: { since }, error: null } },
+  }));
+  store.state.deals = [];
+  const st = await store.boardStatus();
+  assert.equal(st.redweekAt, read);
+  assert.deepEqual(st.outage, { source: 'redweek', since });
+  assert.equal(st.at, '2026-10-22T18:00:00+00:00');
+  // No outage: the line is "checked at", nothing about reachability.
+  const calm = await newStore(tableClient({ redweek_checks: { rows: { data: [{ checked_at: read }], error: null } }, source_outages: { one: { data: null, error: null } } })).boardStatus();
+  assert.deepEqual([calm.redweekAt, calm.outage, calm.at], [read, null, null], 'RedWeek alone is enough to say something');
+  // Nothing at all, or none of the tables: no line, not an error.
+  assert.equal(await newStore(tableClient({})).boardStatus(), null);
+  assert.equal(await newStore(tableClient({ redweek_checks: { rows: { data: null, error: { code: '42P01' } } }, source_outages: { one: new Error('offline') } })).boardStatus(), null);
+});
+
+test('the outages are loaded for the clock; a table that is not there, or a stranger who may not read it, is none', async () => {
+  const { outages, setOutages } = await import('./freshness.js');
+  try {
+    const rows = [{ source: 'redweek', since: '2026-10-22T18:20:00+00:00', until: null }];
+    await newStore(tableClient({ source_outages: { all: { data: rows, error: null } } })).loadOutages();
+    assert.deepEqual(outages(), rows);
+    setOutages([]);
+    await newStore(tableClient({ source_outages: { all: { data: null, error: { code: '42P01' } } } })).loadOutages();
+    assert.deepEqual(outages(), []);
+    await newStore(tableClient({ source_outages: { all: Promise.reject(new Error('offline')).catch((e) => { throw e; }) } })).loadOutages().catch(() => {});
+  } finally { setOutages([]); }
+});

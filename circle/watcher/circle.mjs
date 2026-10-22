@@ -74,13 +74,27 @@ export class Circle {
   }
 
   /**
-   * Members who opened a stay since the last call: [{ stay, tapped }]. A place and a time, never
-   * a member (take_stay_taps in supabase/migrations/20261022_stay_taps.sql). Collecting marks
-   * them taken, so each tap comes back once.
+   * Members who opened a stay since the last call: [{ stay, tapped, from, to }]. A place, a time and the dates
+   * the member was looking for (null when their phone sent none) — never a member (take_stay_taps in
+   * supabase/migrations/20261022_stay_taps.sql and 20261022_tap_window.sql). Collecting marks them taken, so
+   * each tap comes back once.
    */
   async takeTaps() {
     const rows = await this.rpc('take_stay_taps', {});
-    return Array.isArray(rows) ? rows : [];
+    return Array.isArray(rows) ? rows.map((r) => ({ stay: r.stay, tapped: r.tapped, from: r.window_from || null, to: r.window_to || null })) : [];
+  }
+
+  /** A source stopped answering (`sinceMs`: the last time it did). Idempotent: the first time stands. Needs 20261022_source_outage.sql. */
+  async markSourceUnreachable(source, sinceMs = null, why = null) {
+    return this.rpc('mark_source_unreachable', { p_source: source, p_since: sinceMs ? new Date(sinceMs).toISOString() : null, p_why: why });
+  }
+  /** A source answered: close its open outage, if any. */
+  async markSourceReachable(source) { return this.rpc('mark_source_reachable', { p_source: source }); }
+  /** Outages, for the seven-day clock the watcher counts in its own log: [{ source, since, until }]. */
+  async outages() {
+    const res = await this.call('/rest/v1/source_outages?select=source,since,until&order=since.desc&limit=50');
+    if (!res.ok) throw new Error(`Could not read the outages: ${res.status}`);
+    return res.json();
   }
 
   /**

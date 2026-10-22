@@ -15,7 +15,7 @@ export function loadSupabaseJs() {
   });
 }
 
-import { retiredToday } from './freshness.js';
+import { retiredToday, setOutages } from './freshness.js';
 import { Store, emptyState } from './store.js';
 import { DEFAULT_SETTINGS } from './money.js';
 
@@ -181,6 +181,7 @@ export class SupabaseStore extends Store {
     // Cleared here, after the settings read has had its say, or the public page would open on
     // "Some of this could not be refreshed" — an outage notice for a page that is working.
     if (this.publicOnly) this.partial = [];
+    if (this.state.session) await this.loadOutages();      // before the first draw, so a week is not judged stale on a clock that should have stopped
     this.notify(this.partial?.length ? 'partial' : 'reload');
   }
   subscribeRealtime() {
@@ -205,23 +206,28 @@ export class SupabaseStore extends Store {
   notify(reason) { this.listeners.forEach(fn => fn(reason, this.state)); }
 
   /**
-   * A member opened a stay. The watcher hears about it within a minute and re-reads RedWeek for
-   * that place (see watcher/taps.mjs).
+   * A member opened a stay, looking for `win` ({ from, to }, the dates remembered on this phone). The
+   * watcher hears about it within a minute: it scans Interval for those dates if it is allowed to (see
+   * watcher/taps.mjs). It does not read RedWeek for it any more — that is read twice a day, and the stay
+   * says when.
    *
    * Fire and forget, on purpose. This runs while a page is being drawn, so it can never be awaited,
    * never throw and never put anything in front of a member: the function not being installed
    * yet, a phone with one bar, a place that is not an Aruba stay — each is simply no tap. It does
    * not go through rpc(), which reloads every table after the call. And it is asked at most once
-   * per place per five minutes from this phone, because every reload redraws the open page and
-   * would otherwise tap again each time. The row carries a place and a time, never the member.
+   * per place per five minutes from this phone for the same dates, because every reload redraws the
+   * open page and would otherwise tap again each time. The row carries a place, a time and two dates,
+   * never the member.
    */
-  noteStayLook(stayId) {
+  noteStayLook(stayId, win = null) {
     if (!stayId) return;
     const now = Date.now();
+    const key = `${stayId}|${win?.from || ''}|${win?.to || ''}`;
     const seen = (this._looked ||= new Map());
-    if (now - (seen.get(stayId) || 0) < 5 * 60e3) return;
-    seen.set(stayId, now);
-    try { Promise.resolve(this.sb.rpc('record_stay_tap', { p_stay: stayId })).then(() => {}, () => {}); } catch { /* no tap */ }
+    if (now - (seen.get(key) || 0) < 5 * 60e3) return;
+    seen.set(key, now);
+    const args = win?.from && win?.to ? { p_stay: stayId, p_from: win.from, p_to: win.to } : { p_stay: stayId };
+    try { Promise.resolve(this.sb.rpc('record_stay_tap', args)).then(() => {}, () => {}); } catch { /* no tap */ }
   }
   /**
    * When the watcher last read RedWeek's public page for this place, as an ISO time, or null if
@@ -241,32 +247,54 @@ export class SupabaseStore extends Store {
     return value;
   }
   /**
-   * A member opened the Stays LIST. The watcher hears within its 30 seconds and re-checks every live
-   * week against where it lives (watcher/taps.mjs, index.mjs verify). Fire and forget, like
-   * noteStayLook: it runs while a page is drawn, so it never awaits, never throws and never shows a
-   * member anything. At most once a minute from this phone; the watcher keeps its own limit of one
-   * full check per 15 minutes, so a busy evening of taps is one read of RedWeek.
+   * A member opened the Stays LIST, looking for `win`. The watcher hears within its 30 seconds and re-checks
+   * the board and, inside its caps, scans Interval for those dates (watcher/taps.mjs). Fire and forget, like
+   * noteStayLook: it runs while a page is drawn, so it never awaits, never throws and never shows a member
+   * anything. At most once a minute from this phone for the same dates — and straight away when the dates
+   * change, so a member who moves them is looked for; the watcher keeps its own limits.
    */
-  noteBoardLook() {
+  noteBoardLook(win = null) {
     const now = Date.now();
-    if (now - (this._boardLooked || 0) < 60e3) return;
-    this._boardLooked = now;
-    try { Promise.resolve(this.sb.rpc('record_board_tap')).then(() => {}, () => {}); } catch { /* no tap */ }
+    const key = `${win?.from || ''}|${win?.to || ''}`;
+    if (key === this._boardKey && now - (this._boardLooked || 0) < 60e3) return;
+    this._boardKey = key; this._boardLooked = now;
+    const args = win?.from && win?.to ? { p_from: win.from, p_to: win.to } : undefined;
+    try { Promise.resolve(this.sb.rpc('record_board_tap', args)).then(() => {}, () => {}); } catch { /* no tap */ }
   }
   /**
-   * What the line at the top of Stays says: when the watcher last re-checked the whole board and what
-   * it did, plus how many weeks have been taken down today (counted from the deals this phone already
-   * holds). Null until the watcher has written a check — or if this database does not have the table
-   * yet, which is no line rather than an error.
+   * What the line at the top of Stays says: when the watcher last re-checked the board and what it did, plus
+   * how many weeks have been taken down today (counted from the deals this phone already holds); when RedWeek
+   * was last read (`redweekAt`, the newest check of any place); and whether RedWeek is out right now
+   * (`outage`, with the time it was last known to answer). Null until the watcher has written any of them — or
+   * if this database does not have the tables yet, which is no line rather than an error.
    */
   async boardStatus() {
-    let row = null;
+    let row = null, redweekAt = null, outage = null;
     try {
       const { data, error } = await this.sb.from('board_checks').select('checked_at,verified,repriced,retired').eq('id', 1).maybeSingle();
       if (!error && data?.checked_at) row = data;
     } catch { /* null */ }
-    if (!row) return null;
-    return { at: row.checked_at, verified: row.verified, repriced: row.repriced, retired: row.retired, retiredToday: retiredToday(this.state.deals) };
+    try {
+      const { data, error } = await this.sb.from('redweek_checks').select('checked_at').order('checked_at', { ascending: false }).limit(1);
+      if (!error && data?.[0]?.checked_at) redweekAt = data[0].checked_at;
+    } catch { /* null */ }
+    try {
+      const { data, error } = await this.sb.from('source_outages').select('since').eq('source', 'redweek').is('until', null).maybeSingle();
+      if (!error && data?.since) outage = { source: 'redweek', since: data.since };
+    } catch { /* null */ }
+    if (!row && !redweekAt && !outage) return null;
+    return { at: row?.checked_at ?? null, verified: row?.verified ?? 0, repriced: row?.repriced ?? 0, retired: row?.retired ?? 0,
+      retiredToday: retiredToday(this.state.deals), redweekAt, outage };
+  }
+  /**
+   * The outages the seven-day clock does not count (freshness.js). Read on its own, never with the tables in
+   * reload(): a table that is missing, or a stranger who may not read it, is no outages and not an error.
+   */
+  async loadOutages() {
+    try {
+      const { data, error } = await this.sb.from('source_outages').select('source,since,until');
+      if (!error && Array.isArray(data)) setOutages(data);
+    } catch { /* none */ }
   }
   async commit(reason) { this.notify(reason); }
 

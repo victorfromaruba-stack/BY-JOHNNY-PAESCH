@@ -37,6 +37,17 @@ This skill is how weeks get on, how the reader is fixed when a site changes, and
 >
 > Everything below this box is still the rule for anything that is NOT a member's tap.
 
+> **Added 22 Oct 2026, with the dates control** (the task that built it, relayed by the coordinator for Victor,
+> who wanted to "see a month or two in advance"; the line it works from was *"a window of 60 days is one scan
+> per resort with multiple pages, not 60 scans"*). A tap now carries the dates the member is looking for, and
+> the scan searches Getaways for THOSE dates. Interval shows at most three rows per resort per results page, so
+> one scan may make up to **five searches** (each from the last check-in a full page ended on) and, on the
+> island-wide read, press the page's own **Next Page** up to three pages deep, never into "Areas Surrounding".
+> It is still ONE scan against the caps above (one count, one session, at most one sign-in), every page goes
+> through the same wall/stop check, and `--interval-read` stays one search. `interval-scan.mjs` (`SCAN`,
+> `planWindow`, `nextCursor`) and its tests hold the numbers. The permission is still a member's tap, nothing
+> on a timer.
+
 **Never build, restore, or schedule automated sign-in to Interval or RedWeek. Never work around
 bot management. A block, a challenge, a 403 or a robots.txt disallow is a full stop — not a puzzle.**
 
@@ -214,10 +225,10 @@ This reverses the old line "reported, never retired automatically", for the watc
   retired" was exactly that; this keeps it where it still applies). A resort that did not answer
   verifies nothing. Any watched row whose price a night is under $40 or over $1,500 is retired as "price
   not credible", whatever its age: a figure can be parsed correctly and still be impossible.
-- **The tap** (`record_board_tap`, opening the Stays LIST, not a place): one full re-check, at most once
-  per 15 minutes; later lists are served by it and the top of Stays says "Board checked N min ago".
-  Interval is read on that tap only inside the box at the top (one Aruba search, same caps), with the
-  Grab nudge as fallback.
+- **The tap** (`record_board_tap`, opening the Stays LIST, not a place): a board re-check, at most once
+  per 15 minutes, that reads **no RedWeek** (see below); later lists are served by it and the top of Stays
+  says "Board checked N min ago". Interval is read on that tap only inside the box at the top (the Aruba
+  search for the member's dates, same caps), with the Grab nudge as fallback.
 - **Interval weeks** reach the board through a Grab or the tap scan, and get the 7-day rule from their
   own last-seen. A scan never retires one by absence: a week the 7 days takes down is one nobody saw
   for a week, which is the honest meaning of it.
@@ -226,6 +237,26 @@ Past two days a card tells members in words ("seen N days ago"). The Desk sees h
 looked. Stays lists what was seen in the last 48 hours first, Interval above the rest, cheapest a
 night first within each; Ian recommends only those, and shows the rest as old with the tap that
 re-checks them.
+
+### RedWeek is read twice a day, and waits a day when it does not answer — 22 Oct 2026
+
+Victor: *"RedWeek can be scanned 2 times a day automatically"*, and, when this server's address stopped
+being answered (every request times out), *"Wait"* — not the proxy. So: two scans at 06:00 and 18:00 Aruba time
+(`WATCH_REDWEEK_TIMES`, `schedule.mjs`), every resort 10 s apart, every live RedWeek row compared; **a tap reads
+no RedWeek** and is served from the last scan ("RedWeek checked at 06:00"). The first request that times out
+stops the pass and writes `.redweek-backoff.json` (a day); every RedWeek path checks it first; the next request
+after it is ONE probe (`robots.txt`, fresh). While RedWeek is backed off or stopped the database is told
+(`source_outages`), the 7-day rule does not count those days against RedWeek rows (`retire_stale_deals`, and
+`freshness.js` in the app), no row's "seen" time is altered, and the top of Stays says "RedWeek not reachable
+since 14:20; weeks shown as last seen". Not routing around it is the same rule as everywhere on this page.
+
+### The dates a member is looking for — 22 Oct 2026
+
+Stays has a "Looking for" row (`js/core/window.js`: two date boxes, the chips Next 2 weeks / Next month / 2
+months / Christmas, default today to two months, remembered per device). The list shows only the weeks that
+overlap it, Interval first, cheapest a night. A tap carries the dates (`stay_taps.from_date/to_date`,
+`record_stay_tap(p_stay, p_from, p_to)`, `record_board_tap(p_from, p_to)`, a second member's dates widen the
+waiting row's; `supabase/migrations/20261022_tap_window.sql`) to the Interval scan, above.
 
 ## There is no automatic route, and stop looking for one
 
@@ -248,16 +279,17 @@ What actually exists, and is the whole system:
   still there, and flag what has gone. This is not a fallback. It is the mechanism.
 - **The reminder** — `circle/tools/check-interval.ics`, a subscribed calendar that nudges him four
   times a day with the link. Automation of the person, since the site cannot be automated.
-- **The tap nudge** (22 Oct 2026, `circle/watcher/taps.mjs`) — when a member opens a place, the watcher
-  reads that resort's public RedWeek page (once per resort per 15 min) and, if the newest Interval week
-  the Circle holds there is over a day old, pushes Victor's phone once per resort per 12 h: *a member is
-  looking at X, Interval last grabbed N ago, sign in and tap Grab.* Victor asked on 22 Oct for the watch to
-  "watch it the moment a member clicks on stays".
+- **The tap nudge** (22 Oct 2026, `circle/watcher/taps.mjs`) — when a member opens a place and the newest
+  Interval week the Circle holds there is over a day old, the watcher pushes Victor's phone once per resort per
+  12 h: *a member is looking at X, Interval last grabbed N ago, sign in and tap Grab.* Victor asked on 22 Oct for
+  the watch to "watch it the moment a member clicks on stays". (It used to read that resort's RedWeek page on
+  the tap too; RedWeek is read twice a day now, below, and a tap reads none.)
 - **The tap scan** (22 Oct 2026, `circle/watcher/interval-scan.mjs` + `interval-session.mjs`) — the one
   case the box at the top allows, and only while `WATCH_INTERVAL_SCAN=on` is in `.env` (off until Victor
   says; the migration comes first). On a tap at a place with an Interval code on file (`INTERVAL_ARUBA`;
   add a code only when a real page shows it) the watcher reuses the saved session or signs in (3 a day),
-  searches that one resort by its code, and posts its weeks through `board.mjs` like any other. Caps and
+  searches that one resort by its code for the dates the member is looking for (the Stays "Looking for" row,
+  carried by the tap; none sent means today to 60 days), and posts its weeks through `board.mjs` like any other. Caps and
   full stops are exactly the box above, enforced in code and on trial in `interval-scan.test.mjs`; a stop
   writes `.interval-stop.json`, raises the `interval-watcher` card and sends one push, and the tap nudge
   above is the fallback whenever the scan is off, stopped, capped or fails. A scan that worked replaces it.
@@ -295,8 +327,13 @@ circle/watcher/interval-scan.mjs                  the tap scan: caps, sign-in ca
 circle/watcher/interval-session.mjs               its browser: iv-login.js's flow, saved session, nothing added
 circle/watcher/board.mjs                          judge + post_deal + last-seen clocks + the re-check of the whole board; RedWeek and the scan share it
 circle/watcher/verify.mjs                         what a re-check decides: seen, repriced, rented, gone, not credible
-circle/js/core/freshness.js                       7 days, 48 hours, "seen N days ago", the Stays order — one file for the app, the watcher and Ian
+circle/js/core/freshness.js                       7 days (less the days a source was out), 48 hours, "seen N days ago", the Stays order — one file for the app, the watcher and Ian
+circle/js/core/window.js                          the dates a member is looking for: chips, clamp, overlap, remembered per device
+circle/watcher/schedule.mjs                       the two daily RedWeek times (Aruba), and whether the latest was served
+circle/watcher/redweek.mjs                        the reader, its stop file, its one-day back-off and probe, its 10 s pacing
 circle/supabase/migrations/20261022_board_freshness.sql   the board tap, board_checks, retire_deals_gone / retire_stale_deals / reprice_deal
 circle/supabase/migrations/20261022_stay_taps.sql  the taps table, redweek_checks, and the seen_at grant
+circle/supabase/migrations/20261022_tap_window.sql the dates a tap carries (record_* and take_stay_taps)
+circle/supabase/migrations/20261022_source_outage.sql source_outages: a source being out pauses its rows' 7-day clock
 .claude/skills/interval-board/scripts/parser-check.mjs   the regression cases, runnable
 ```

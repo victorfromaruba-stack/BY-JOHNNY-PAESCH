@@ -31,6 +31,27 @@ const text = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').rep
   .replace(/&#39;|&rsquo;/g, "'").replace(/\s+/g, ' ').trim();
 
 /**
+ * The page cut into one block per resort: `{ code, nearby, block }`. `nearby` is true from the
+ * "Areas Surrounding" heading onwards. Ask for Aruba and Interval answers with Aruba, then keeps going into
+ * "Areas Surrounding Aruba" — which for this search meant Cancun and three resorts in Mexico. Everything
+ * from `resorts_nearby` onwards is a suggestion, not the place the member asked about, and showing those as
+ * Aruba would be the app telling a member something untrue.
+ */
+function resortBlocks(source) {
+  // Where each resort's group begins, and which resort it is.
+  const heads = [...source.matchAll(/class="[^"]*resort_header_row_2\s+([A-Z0-9]{2,6})[^"]*"/g)]
+    .map((m) => ({ code: m[1], at: m.index }));
+  const nearbyFrom = (() => {
+    const m = /id="resorts_nearby"/.exec(source) || /Areas\s+Surrounding/i.exec(source);
+    return m ? m.index : Infinity;
+  })();
+  return heads.map((head, i) => ({ code: head.code, nearby: head.at > nearbyFrom, block: source.slice(head.at, i + 1 < heads.length ? heads[i + 1].at : source.length) }));
+}
+
+const rowsOf = (block) => [...block.matchAll(/<tr[^>]*class="[^"]*bottom_border[^"]*"[^>]*>([\s\S]*?)<\/tr>/g)];
+const WHEN = /([A-Za-z]{3}\s+\d{1,2}\s+\d{4})\s*-\s*([A-Za-z]{3}\s+\d{1,2}\s+\d{4})/;
+
+/**
  * Every week on a Getaways results page, cheapest first.
  *
  * Returns `{ code, resort, from, to, nights, week, allInclusive }`, where `week` is the price for
@@ -38,26 +59,9 @@ const text = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').rep
  * bookable per night would be a lie the member only discovers at checkout.
  */
 export function parseGetaways(html, { includeNearby = false } = {}) {
-  const source = String(html || '');
-  // Where each resort's group begins, and which resort it is.
-  const heads = [...source.matchAll(/class="[^"]*resort_header_row_2\s+([A-Z0-9]{2,6})[^"]*"/g)]
-    .map((m) => ({ code: m[1], at: m.index }));
-  if (!heads.length) return [];
-
-  // Ask for Aruba and Interval answers with Aruba, then keeps going into "Areas Surrounding
-  // Aruba" — which for this search meant Cancun and three resorts in Mexico. Everything from
-  // `resorts_nearby` onwards is a suggestion, not the place the member asked about, and showing
-  // those as Aruba would be the app telling a member something untrue. Dropped unless asked for.
-  const nearbyFrom = (() => {
-    const m = /id="resorts_nearby"/.exec(source) || /Areas\s+Surrounding/i.exec(source);
-    return m ? m.index : Infinity;
-  })();
-
   const out = [];
-  heads.forEach((head, i) => {
-    const nearby = head.at > nearbyFrom;
-    if (nearby && !includeNearby) return;
-    const block = source.slice(head.at, i + 1 < heads.length ? heads[i + 1].at : source.length);
+  for (const { code, nearby, block } of resortBlocks(String(html || ''))) {
+    if (nearby && !includeNearby) continue;
     // The name is the alt text on the group's own thumbnail. Every resort has one; only the few
     // with a video also carry it as an aria-label, and the carousel's own buttons are labelled
     // "Previous Image" too — which is exactly what an earlier version of this read, and so it
@@ -66,16 +70,16 @@ export function parseGetaways(html, { includeNearby = false } = {}) {
       || /<img[^>]+\salt="([^"]{3,70})"[^>]*class="[^"]*results_thumbnail[^"]*"/.exec(block)
       || [, ''])[1];
 
-    for (const row of block.matchAll(/<tr[^>]*class="[^"]*bottom_border[^"]*"[^>]*>([\s\S]*?)<\/tr>/g)) {
+    for (const row of rowsOf(block)) {
       const t = text(row[1]);
-      const when = /([A-Za-z]{3}\s+\d{1,2}\s+\d{4})\s*-\s*([A-Za-z]{3}\s+\d{1,2}\s+\d{4})/.exec(t);
+      const when = WHEN.exec(t);
       const price = /US\$\s*([\d,]+(?:\.\d{2})?)/.exec(t);
       if (!when || !price) continue;
       const from = isoDate(when[1]), to = isoDate(when[2]);
       const week = money(price[1]);
       if (!from || !to || !week) continue;
       out.push({
-        code: head.code,
+        code,
         resort: resort.replace(/_/g, ' ').trim(),
         from,
         to,
@@ -87,12 +91,30 @@ export function parseGetaways(html, { includeNearby = false } = {}) {
         nearby,
       });
     }
-  });
+  }
 
   // Cheapest first, because that is the only order a member asked for. Ties settle on the
   // earlier stay, so the list is stable between runs and does not shuffle under them.
   return dedupe(out).sort((a, b) => a.week - b.week || a.from.localeCompare(b.from));
 }
+
+/** Interval shows at most this many rows for a resort on one results page (read off the saved 17 Oct page: ten resorts, never more than 3 each, across a six-month search). */
+export const PAGE_ROWS = 3;
+
+/**
+ * What one results page was made of, per resort, BEFORE any de-duplication: `{ code, nearby, rows,
+ * lastCheckIn }`. A resort showing PAGE_ROWS rows may have more weeks past its last one; a resort showing
+ * fewer has shown them all. The scan reads this to decide whether a later check-in date is worth another search.
+ */
+export function pageStats(html) {
+  return resortBlocks(String(html || '')).map(({ code, nearby, block }) => {
+    const dates = rowsOf(block).map((r) => WHEN.exec(text(r[1]))).filter(Boolean).map((m) => isoDate(m[1])).filter(Boolean).sort();
+    return { code, nearby, rows: dates.length, lastCheckIn: dates.at(-1) || null };
+  });
+}
+
+/** Does this page reach "Areas Surrounding"? Past that point the places are not the ones asked for, so no later page has any. */
+export const reachedNearby = (html) => /id="resorts_nearby"/.test(String(html || '')) || /Areas\s+Surrounding/i.test(String(html || ''));
 
 /** The same week can be listed twice on one page; a member should see it once. */
 function dedupe(weeks) {

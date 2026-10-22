@@ -25,6 +25,12 @@ import { normName, sameName, nameWithin } from '../js/core/names.js';
 /** The last second of a check-in day in Aruba (AST, UTC−4, no daylight time), as UTC. */
 export const endOfCheckInDay = (isoDay) => new Date(Date.parse(`${isoDay}T23:59:59-04:00`)).toISOString();
 
+/** Does the week check in between today (Aruba) and `days` days on? For the line that says what a RedWeek scan covered. */
+export function inHorizon(f, days = 90, now = Date.now()) {
+  const day = (ms) => new Date(ms - 4 * 3600e3).toISOString().slice(0, 10);
+  return !!f?.from && f.from >= day(now) && f.from <= day(now + days * 864e5);
+}
+
 export function ourPrice(stay, from, nights) {
   if (!stay) return null;
   const rates = { low: stay.rate_low_usd, high: stay.rate_high_usd, peak: stay.rate_peak_usd };

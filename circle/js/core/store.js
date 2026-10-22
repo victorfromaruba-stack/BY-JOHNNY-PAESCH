@@ -2050,9 +2050,9 @@ export class Store {
    */
   teased(d) { return !!d?.dropAt && d.dropAt > nowIso(); }
   // The preview has no watcher to tell. SupabaseStore overrides both (see noteStayLook there).
-  noteStayLook() {}
+  noteStayLook(_stayId, _window) {}
   async redweekCheckedAt() { return null; }
-  noteBoardLook() {}
+  noteBoardLook(_window) {}
   /** `{ at, verified, repriced, retired, retiredToday }` for the line at the top of Stays, or null: the preview has no watcher. */
   async boardStatus() { return null; }
   /** Weeks waiting on a board that has not opened yet, soonest board first. */

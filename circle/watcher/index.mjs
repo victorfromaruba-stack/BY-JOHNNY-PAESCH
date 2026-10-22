@@ -8,15 +8,20 @@
 //   node index.mjs --dump      save what a signed-in Interval session sees, then stop
 //   node index.mjs --interval-read --confirm   one read of Aruba Getaways on a saved session (never signs in; see intervalRead)
 //
-// The timer sweeps RedWeek, which needs no login. Interval is signed into only on a run a
-// person started — --once or --dump — and never by the service. See "Interval by hand" below.
+// RedWeek needs no login and is read by two scheduled passes a day, at 06:00 and 18:00 Aruba time
+// (WATCH_REDWEEK_TIMES): every resort, ten seconds apart, the whole board compared with it. A timeout
+// stops the pass and backs RedWeek off for a day. Interval is signed into only on a run a person
+// started — --once or --dump — and never by the service; a member's tap can scan it, inside the caps
+// (interval-scan.mjs). See "Interval by hand" below.
 //
 // Everything it needs is in .env next to this file. Nothing is written down anywhere else.
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sweep, ARUBA, useStopFile, stopped } from './redweek.mjs';
+import { sweep, ARUBA, useStopFile, stopped, backoff, useBackoffFile } from './redweek.mjs';
+// The two daily times RedWeek is read at, and whether the last of them has been served.
+import { parseTimes, due, lastSlot, nextSlot, arubaClock } from './schedule.mjs';
 import { Interval } from './interval.mjs';
 import { Circle } from './circle.mjs';
 import { loadEnv } from './dotenv.mjs';
@@ -25,22 +30,25 @@ import { putCard as putCardTo } from './cards.mjs';
 import { makeIntervalScanner, makeStopAnnouncer, useIntervalStopFile, intervalStopped } from './interval-scan.mjs';
 import { IntervalSession } from './interval-session.mjs';
 // Which catalog place a name belongs to. The rest of judge.mjs (what goes up, and what it looks like) runs in board.mjs.
-import { resolveStay } from './judge.mjs';
+import { resolveStay, inHorizon } from './judge.mjs';
 // What happens to finds once they are found: judged, posted, last-seen clocks moved. Shared with the Interval scan.
 import { judgeAndPost, verifyBoard } from './board.mjs';
 // How many times in a row Interval said no. Pure, and on trial in pace.test.mjs. The `due`
 // gate it also exports is not read here any more: nothing signs in on a timer for it to hold
 // back. What is left is the count, which is what the next run by hand wants to be told.
 import { loadPace, savePace, refused as refusedPace, failed as failedPace, accepted as acceptedPace, cardFor } from './pace.mjs';
-// What a member opening a stay sets off: one public RedWeek read for that resort, and a nudge to
-// Victor's phone when Interval is stale there. Never an Interval sign-in. See taps.mjs.
-import { loadState as loadTapState, saveState as saveTapState, noteSwept, noteBoard, decideBoard, slugFor, handleTaps, makePusher, flushHeld, tellOrHold } from './taps.mjs';
+// What a member opening a stay sets off: the dates they are looking for go to the Interval scan (inside its
+// caps), and a nudge to Victor's phone when Interval is stale there. No RedWeek read, no sign-in of its own. See taps.mjs.
+import { loadState as loadTapState, saveState as saveTapState, noteSwept, noteRedweekScan, lastRedweekRead, noteBoard, decideBoard, slugFor, handleTaps, makePusher, flushHeld, tellOrHold } from './taps.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // Where the Interval pace lives between passes and across restarts. Git-ignored, like .env.
 const PACE_FILE = join(HERE, '.interval-pace.json');
 // RedWeek's "no". While this file exists nothing reads RedWeek; only Victor deletes it.
 const STOP_FILE = join(HERE, '.redweek-stop.json');
+// RedWeek's silence: a request that timed out. While this file says `until` is ahead nothing reads RedWeek;
+// when it has run out, ONE probe decides whether to resume. A person can end it early by deleting it.
+const BACKOFF_FILE = join(HERE, '.redweek-backoff.json');
 // When each resort was last read, which taps have cost a read this hour, who was nudged and when.
 const TAPS_FILE = join(HERE, '.taps-state.json');
 // Interval's "no", written by the scan (interval-scan.mjs). While this file exists nothing asks Interval
@@ -77,9 +85,15 @@ const CFG = {
   mustBeatOurs:  flag('WATCH_MUST_BEAT_OURS', true),
   beatBy:        num('WATCH_BEAT_BY_PCT', 15) / 100,
   maxPerResortMonth: num('WATCH_MAX_PER_RESORT_MONTH', 3),
+  // How far ahead the RedWeek scan reports on, in days (Victor, 22 Oct 2026: the board is never only "next week").
+  // The scan reads each resort's whole page, so this is what it says about, not a limit on what it posts.
+  horizonDays:   num('WATCH_HORIZON_DAYS', 90),
   // The longest a refused Interval sign-in waits before the next attempt. A day by default.
   intervalRetryMaxMin: num('WATCH_INTERVAL_RETRY_MAX_MIN', 24 * 60),
 };
+
+// When RedWeek is read: twice a day, Aruba time. WATCH_EVERY_MIN no longer sets this.
+const TIMES = parseTimes(process.env.WATCH_REDWEEK_TIMES);
 
 const log = (...a) => console.log(new Date().toISOString().slice(0, 19).replace('T', ' '), ...a);
 
@@ -91,6 +105,7 @@ const redweekCard = (held) => putCard('redweek-watcher', held && { title: 'RedWe
 const tapState = loadTapState(TAPS_FILE);
 const pusher = makePusher();
 useStopFile(STOP_FILE);
+useBackoffFile(BACKOFF_FILE);
 useIntervalStopFile(IV_STOP_FILE);
 
 // Tell the stay page that RedWeek was read: one row per place, which it prints as "Checked 4 min
@@ -120,8 +135,38 @@ async function announceStop(err) {
 
 
 /**
- * One look at the world. `only` is a list of RedWeek resorts: a member's tap asks for exactly one,
- * and a tap never goes near Interval, however Interval is configured.
+ * What is holding RedWeek back right now, or null: the stop file (it told us to go away) or a back-off that has
+ * not run out (it did not answer). Both mean the same thing to everything that would ask it anything.
+ */
+function redweekHold() {
+  const s = stopped();
+  if (s) return { kind: 'stop', why: `stopped${s.at ? ` since ${s.at}` : ''} (${s.why}); delete ${STOP_FILE} to let it` };
+  const b = backoff();
+  if (b && !b.expired) return { kind: 'backoff', why: `did not answer${b.at ? ` on ${b.at}` : ''} (${b.why}); backed off until ${b.until}`, until: b.until };
+  return null;
+}
+
+/**
+ * Tell the Circle whether RedWeek is reachable, so a week's seven days stop running while it is not (the
+ * 20261022_source_outage.sql functions) and the Stays page can say so. `since` is the last time RedWeek was
+ * known to answer — the watcher's own last read. Idempotent, quiet when the migration is not applied yet.
+ */
+async function reportRedweek(circle, down, why) {
+  if (DRY || !circle) return;
+  try {
+    if (down) await circle.markSourceUnreachable('redweek', lastRedweekRead(tapState), why);
+    else await circle.markSourceReachable('redweek');
+  } catch (err) {
+    if (err.code === 'PGRST202' || err.status === 404) warnOnce('outage', "RedWeek's reachability was not recorded: paste supabase/migrations/20261022_source_outage.sql into the SQL editor. Until then the seven-day clock keeps running while RedWeek is out.");
+    else warnOnce('outage-err', `could not record RedWeek's reachability (${err.message})`);
+  }
+}
+
+/**
+ * One look at the world. `redweek: false` is the pass a member's tap on the Stays list asks for: it reads no
+ * RedWeek at all (RedWeek is read twice a day) and re-checks the board against what the Circle already holds —
+ * the floor and the ceiling on every watched price, the seven-day rule. `fromTap` keeps the by-hand Interval
+ * chain below out of reach: a member's tap never enters it.
  */
 async function pass(circle, opts = {}) {
   const ctx = { ok: [], catalog: null };
@@ -129,29 +174,39 @@ async function pass(circle, opts = {}) {
   finally { await stampChecked(circle, ctx); }
 }
 
-async function passBody(circle, { only = null } = {}, ctx) {
+async function passBody(circle, { redweek = true, fromTap = false } = {}, ctx) {
   const found = [];
 
-  const slugs = only || (CFG.onlyOurStays ? Object.keys(ARUBA).filter(s => ARUBA[s]) : Object.keys(ARUBA));
-  let wall = null;
+  const slugs = CFG.onlyOurStays ? Object.keys(ARUBA).filter(s => ARUBA[s]) : Object.keys(ARUBA);
+  let wall = null, silent = null;
   let rwAll = [];           // everything RedWeek showed this pass, rented weeks included: the re-check of the board reads it
-  const held = stopped();
-  if (held) {
-    log(`RedWeek: stopped${held.at ? ` since ${held.at}` : ''} (${held.why}) — not reading it. Delete ${STOP_FILE} to let it.`);
-    redweekCard(held);
-  } else {
-    log(only ? `RedWeek: reading ${only.join(', ')} for a member` : 'RedWeek: sweeping');
-    rwAll = await sweep(slugs, {
-      includeTaken: true,        // rented weeks are what take a row down; worthPosting never lets one up
-      onResort: (slug, n, err) => {
-        log(`  ${err ? 'x' : ' '} ${slug.padEnd(44)} ${err ? err.message : `${n} open`}`);
-        if (err?.stop) wall = err;
-        else if (!err) { ctx.ok.push(slug); noteSwept(tapState, slug); }
-      },
-    });
-    found.push(...rwAll);
-    if (wall) await announceStop(wall);
-    else if (ctx.ok.length) redweekCard(null);
+  if (redweek) {
+    const hold = redweekHold();
+    if (hold) {
+      // One line a pass, and not one request. The Circle is told so the weeks are shown as last seen and their clock waits.
+      log(`RedWeek: ${hold.kind === 'stop' ? 'stopped' : 'backed off'} — ${hold.why}. Not read this pass; the board's RedWeek weeks stay as last seen.`);
+      if (hold.kind === 'stop') redweekCard(stopped());
+      await reportRedweek(circle, true, hold.kind === 'stop' ? 'RedWeek told the watcher to stop' : 'RedWeek did not answer');
+    } else {
+      if (backoff()) log('RedWeek: the back-off has run out — one probe request decides whether to resume');
+      log('RedWeek: scanning');
+      noteRedweekScan(tapState);
+      rwAll = await sweep(slugs, {
+        includeTaken: true,        // rented weeks are what take a row down; worthPosting never lets one up
+        onResort: (slug, n, err) => {
+          log(`  ${err ? 'x' : ' '} ${slug.padEnd(44)} ${err ? err.message : `${n} open`}`);
+          if (err?.backoff) silent = err;
+          else if (err?.stop) wall = err;
+          else if (!err) { ctx.ok.push(slug); noteSwept(tapState, slug); }
+        },
+      });
+      found.push(...rwAll);
+      if (wall) await announceStop(wall);
+      else if (silent) log(`RedWeek: did not answer — the rest of this pass is skipped, and nothing asks it again until ${silent.until}`);
+      else if (ctx.ok.length) redweekCard(null);
+      if (ctx.ok.length) await reportRedweek(circle, false);
+      else if (wall || silent) await reportRedweek(circle, true, wall ? 'RedWeek told the watcher to stop' : 'RedWeek did not answer');
+    }
   }
 
   // INTERVAL, BY HAND AND ONLY BY HAND.
@@ -181,7 +236,7 @@ async function passBody(circle, { only = null } = {}, ctx) {
   const pace = loadPace(PACE_FILE);
   const byHand = ONCE || DUMP;
   const refusalsSaid = (n) => `${n} time${n === 1 ? '' : 's'} in a row`;
-  if (only) {
+  if (fromTap) {
     // A member's tap. Not a word about Interval here, and no way into the sign-in below.
   } else if (!wantsInterval) {
     log('Interval: off (WATCH_INTERVAL is not set) — RedWeek only');
@@ -296,14 +351,23 @@ async function passBody(circle, { only = null } = {}, ctx) {
     } catch (err) { log(`could not read the catalog (${err.message})`); }
   }
 
-  // Judge, post, move the clocks: board.mjs, the same door a member's Interval scan goes through.
-  const res = await judgeAndPost({ circle, found, catalog, cfg: CFG, log, dry: DRY });
+  // Judge, post, move the clocks: board.mjs, the same door a member's Interval scan goes through. The board pass a
+  // tap asks for reads no RedWeek, so it has nothing to judge.
+  const res = redweek ? await judgeAndPost({ circle, found, catalog, cfg: CFG, log, dry: DRY }) : { found: [], posted: 0 };
+  if (redweek && ctx.ok.length) {
+    const near = res.found.filter((f) => inHorizon(f, CFG.horizonDays)).length;
+    log(`RedWeek: ${near} of the ${res.found.length} weeks worth posting check in within the next ${CFG.horizonDays} days`);
+  }
   // And then the other half of being honest about age: every live week already on the board, not only the
-  // ones that were just posted, is compared with what its source shows now (verify.mjs).
+  // ones that were just posted, is compared with what its source shows now (verify.mjs) — RedWeek's with what
+  // this scan read, the rest by their price and their age. The seven days of a RedWeek week do not run while
+  // RedWeek is out (source_outages), here as in the database.
   if (circle && catalog) {
     try {
-      res.verify = await verifyBoard({ circle, catalog, listings: rwAll, okSlugs: ctx.ok, full: !only, apply: !DRY, cfg: CFG, log, slugOf: (stayId) => slugFor({ id: stayId }, catalog), warn: warnOnce });
-      if (!only && !DRY && ctx.ok.length) noteBoard(tapState);
+      let outages = [];
+      try { outages = await circle.outages(); } catch { /* none known: the migration may not be applied yet */ }
+      res.verify = await verifyBoard({ circle, catalog, listings: rwAll, okSlugs: ctx.ok, full: true, apply: !DRY, cfg: CFG, log, outages, slugOf: (stayId) => slugFor({ id: stayId }, catalog), warn: warnOnce });
+      if (!DRY) noteBoard(tapState);
     } catch (err) { log(`board: could not re-check the live weeks (${err.message})`); }
   }
   return res;
@@ -363,16 +427,17 @@ async function pollTaps() {
         deps: {
           log, pusher,
           intervalLastSeen: (id) => circle.intervalLastSeen(id),
-          scanInterval: (stay) => scanInterval(stay, catalog),
-          scanAruba: () => scanInterval.aruba(catalog),
-          // The Stays list: one full pass — RedWeek read, new weeks posted, every live week re-checked — unless a
-          // full check finished in the last 15 minutes, which is re-asked once this one has its turn in the lane.
+          // The member's dates go to the scan: it searches Interval for them (inside its caps, when it is switched on).
+          scanInterval: (stay, window) => scanInterval(stay, catalog, window),
+          scanAruba: (window) => scanInterval.aruba(catalog, window),
+          // The Stays list: the board re-checked, unless a full check finished in the last 15 minutes (a tap's or
+          // the scan's), which is re-asked once this one has its turn in the lane. It reads no RedWeek: that is the
+          // scan's, twice a day.
           verifyBoard: () => serial(async () => {
             if (!decideBoard(tapState, Date.now()).go) return { verified: 0, repriced: 0, retired: 0, skipped: true };
-            const r = await pass(circle);
+            const r = await pass(circle, { redweek: false, fromTap: true });
             return r?.verify || { verified: 0, repriced: 0, retired: 0 };
           }),
-          sweepResort: (slug) => serial(() => pass(circle, { only: [slug] })),
         },
       });
       saveTapState(TAPS_FILE, tapState);
@@ -400,7 +465,7 @@ async function intervalRead() {
   }
   if (!circle) { log('Interval read: no CIRCLE_URL set — nothing to post to.'); return; }
   const catalog = new Map((await circle.stays()).map((r) => [r.id, r]));
-  const r = await scannerFor({ armed: () => true, canSignIn: false }).aruba(catalog);
+  const r = await scannerFor({ armed: () => true, canSignIn: false, maxSearches: 1 }).aruba(catalog);
   log(`Interval read: ${r.ran ? `${r.rows} Aruba weeks read, ${r.posted} new on the board, ${r.refreshed} last-seen clocks moved${r.unplaced ? `, ${r.unplaced} at places not in the catalog` : ''}` : `nothing read — ${r.why}`}`);
 }
 
@@ -409,10 +474,18 @@ if (args.has('--interval-read')) {
 } else if (ONCE || DUMP) {
   await run();
 } else {
+  // RedWeek: two scheduled passes a day. A restart does not read it again — it reads only if the most recent
+  // scheduled time was not served (the last scan is in the state file), so restarting the service twenty
+  // times in an afternoon is no more RedWeek traffic than not restarting it.
+  const scheduleNext = () => {
+    const at = nextSlot(TIMES, Date.now());
+    log(`next RedWeek scan at ${arubaClock(at)} Aruba time (${TIMES.map((m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`).join(' and ')} every day)`);
+    setTimeout(async () => { await serial(run); scheduleNext(); }, Math.max(1000, at - Date.now()));
+  };
   const forever = async () => {
-    await serial(run);
-    log(`next pass in ${CFG.everyMin} minutes`);
-    setTimeout(forever, Math.max(1, CFG.everyMin) * 60_000);
+    if (due(TIMES, tapState.redweekScan, Date.now())) await serial(run);
+    else log(`RedWeek: the ${arubaClock(lastSlot(TIMES, Date.now()))} scan has been done (last scan ${tapState.redweekScan}) — not reading it again for a restart`);
+    scheduleNext();
   };
   if (circle && !DRY) {
     log(`taps: listening every ${tapEverySec}s for members opening a stay`);

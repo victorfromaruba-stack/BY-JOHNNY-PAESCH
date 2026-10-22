@@ -1,35 +1,35 @@
 // What the watcher does the moment a member opens a stay.
 //
-// Victor, 22 Oct 2026: "I want the watch to watch it the moment a member clicks on stays."
-// This is the nearest honest version of that, and the edges are on purpose:
+// Victor, 22 Oct 2026: "I want the watch to watch it the moment a member clicks on stays." This is the
+// nearest honest version of that, and the edges are on purpose:
 //
-//   RedWeek   is public, needs no login, and is read once for the resort the member is looking at
-//             — at most once per resort per 15 minutes, 20 times an hour in all. A resort read
-//             five minutes ago by the half-hourly pass or by another member's tap is not read
-//             again: that read IS the answer, and the stay says how old it is.
+//   RedWeek   is NOT read for a tap. Victor, the same day: "RedWeek can be scanned 2 times a day
+//             automatically" — at 06:00 and 18:00 Aruba time (schedule.mjs), every resort, the whole board
+//             compared with it, ten seconds between resorts, and a day's back-off the moment it does not
+//             answer (redweek.mjs). A tap is served from the last scan, and the journal and the Stays page
+//             say when that was ("RedWeek checked at 06:00") — nothing else.
 //   Interval  is touched by a tap in ONE way, and only when Victor has switched it on
 //             (WATCH_INTERVAL_SCAN): the scan in interval-scan.mjs, which his own words of 22 Oct
-//             2026 allow and whose guardrails are part of that permission — one scan per resort per
-//             30 minutes, ten an hour, three sign-ins a day, a full stop on any challenge. taps.mjs
+//             2026 allow and whose guardrails are part of that permission — one scan per resort per 30
+//             minutes, ten an hour, three sign-ins a day, a full stop on any challenge. taps.mjs
 //             does not import it: it is handed in as `scanInterval`, so this file still holds no
-//             Interval client and no browser. When the scan is off, stopped, capped or fails, what a
-//             tap does is the older thing: tell Victor, once per resort per 12 hours, that a member
-//             is looking at a place whose Interval weeks are more than a day old — so that he, a
-//             person, can open Interval and tap Grab. A scan that worked makes that unnecessary,
-//             and then no nudge is sent.
+//             Interval client and no browser. A tap carries the dates the member is looking for, and the scan
+//             searches for those. When the scan is off, stopped, capped or fails, what a tap does is the older
+//             thing: tell Victor, once per resort per 12 hours, that a member is looking at a place whose
+//             Interval weeks are more than a day old — so that he, a person, can open Interval and tap Grab. A
+//             scan that worked makes that unnecessary, and then no nudge is sent.
 //
 // The decisions are pure functions of a small state file, so they can be argued with in
 // taps.test.mjs without a network. No member's name is read, stored or sent anywhere here: the
-// database hands over a place and a time (take_stay_taps), and nothing else.
+// database hands over a place, a time and two dates (take_stay_taps), and nothing else.
 
 import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { ARUBA } from './redweek.mjs';
 import { resolveStay } from './judge.mjs';
+import { arubaClock } from './schedule.mjs';
 
 export const CAPS = Object.freeze({
-  resortGapMin: 15,        // one RedWeek read per resort per this many minutes, however many taps
-  perHour: 20,             // and this many tap-triggered reads in all
   intervalStaleHours: 24,  // Interval's last grab older than this is worth a nudge
   nudgeGapHours: 12,       // one nudge per resort per this many hours
   boardGapMin: 15,         // one full re-check of the whole board per this many minutes, however many Stays lists are opened
@@ -37,7 +37,7 @@ export const CAPS = Object.freeze({
 const MIN = 60e3, HOUR = 3600e3;
 
 // ---------------------------------------------------------------- memory across restarts
-export const emptyState = () => ({ sweeps: {}, tapSweeps: [], nudges: {}, held: [], board: null });
+export const emptyState = () => ({ sweeps: {}, nudges: {}, held: [], board: null, redweekScan: null });
 
 export function loadState(file) {
   try { return { ...emptyState(), ...JSON.parse(readFileSync(file, 'utf8')) }; }
@@ -58,25 +58,24 @@ export function slugFor(stay, catalog) {
   return null;
 }
 
-// ---------------------------------------------------------------- RedWeek: read it or not
-export function decideSweep(state, slug, now = Date.now(), caps = CAPS) {
-  const last = Date.parse(state.sweeps?.[slug] || '');
-  if (Number.isFinite(last) && now - last < caps.resortGapMin * MIN) {
-    const m = Math.floor((now - last) / MIN);
-    return { go: false, why: `already read ${m < 1 ? 'less than a minute' : `${m} min`} ago — that read is the answer` };
-  }
-  const recent = (state.tapSweeps || []).filter(t => now - Date.parse(t) < HOUR);
-  if (recent.length >= caps.perHour) {
-    return { go: false, why: `${recent.length} taps have already cost a read this hour (cap ${caps.perHour}) — served from the last read` };
-  }
-  return { go: true };
-}
-export function noteTapSweep(state, now = Date.now()) {
-  state.tapSweeps = [...(state.tapSweeps || []).filter(t => now - Date.parse(t) < HOUR), new Date(now).toISOString()];
-}
+// ---------------------------------------------------------------- RedWeek: when it was last read
+/** A resort was read (by the scan) just now. */
 export function noteSwept(state, slug, now = Date.now()) {
   (state.sweeps ||= {})[slug] = new Date(now).toISOString();
 }
+/** A scan of RedWeek was started now — answered or not. A restart asks `due()` (schedule.mjs) against this. */
+export function noteRedweekScan(state, now = Date.now()) { state.redweekScan = new Date(now).toISOString(); }
+/** When RedWeek was last read at any resort, in ms, or null if it never has been. */
+export function lastRedweekRead(state) {
+  const t = Math.max(0, ...Object.values(state.sweeps || {}).map(Date.parse).filter(Number.isFinite));
+  return t || null;
+}
+
+// ---------------------------------------------------------------- the dates a tap carries
+const minDay = (a, b) => (a && b ? (a < b ? a : b) : a || b || null);
+const maxDay = (a, b) => (a && b ? (a > b ? a : b) : a || b || null);
+/** The dates two taps for the same place want between them: the widest of both. A tap without dates adds none. */
+export const widen = (a, b) => ({ from: minDay(a?.from, b?.from), to: maxDay(a?.to, b?.to) });
 
 // ---------------------------------------------------------------- Interval: tell Victor, once
 export function ageWords(ms) {
@@ -184,17 +183,21 @@ export const noteBoard = (state, now = Date.now()) => { state.board = new Date(n
 
 // ---------------------------------------------------------------- one poll's worth of taps
 /**
- * Act on what members opened since the last poll. `deps` carries the world: sweepResort(slug),
- * intervalLastSeen(stayId), pusher, log, and optionally scanInterval(stay) (interval-scan.mjs) and, for
- * the Stays list, verifyBoard() and scanAruba(). A tap with no place is the list. Returns what was
- * decided per place, for the tests.
+ * Act on what members opened since the last poll. `deps` carries the world: intervalLastSeen(stayId), pusher,
+ * log, and optionally scanInterval(stay, window) (interval-scan.mjs) and, for the Stays list, verifyBoard()
+ * and scanAruba(window). A tap with no place is the list. Each tap may carry `from`/`to`: the dates the member
+ * was looking for. Returns what was decided per place, for the tests.
  */
 export async function handleTaps({ taps, catalog, state, deps, now = () => Date.now(), caps = CAPS }) {
-  const { sweepResort, intervalLastSeen, pusher, log, scanInterval, verifyBoard, scanAruba } = deps;
-  // Ten members opening the Surf Club in one minute are one place to look at, not ten. The list is a
-  // place of its own (`null`).
+  const { intervalLastSeen, pusher, log, scanInterval, verifyBoard, scanAruba } = deps;
+  // Ten members opening the Surf Club in one minute are one place to look at, not ten — and what they were
+  // looking for, between them, is the widest of their dates. The list is a place of its own (`null`).
   const first = new Map();
-  for (const t of taps) { const k = t.stay ?? null; if (!first.has(k) || t.tapped < first.get(k)) first.set(k, t.tapped); }
+  for (const t of taps) {
+    const k = t.stay ?? null, cur = first.get(k);
+    if (!cur) first.set(k, { tapped: t.tapped, ...widen(null, t) });
+    else { if (t.tapped < cur.tapped) cur.tapped = t.tapped; Object.assign(cur, widen(cur, t)); }
+  }
   const done = [];
 
   /** Interval, for a tap: the scan if it can go, and when it cannot (or did not complete) the Grab nudge. */
@@ -227,50 +230,42 @@ export async function handleTaps({ taps, catalog, state, deps, now = () => Date.
     }
   }
 
-  for (const [stayId, tapped] of first) {
+  /** What the journal says about RedWeek for a tap: that it was not read, and when it last was. */
+  const redweekLine = () => {
+    const at = lastRedweekRead(state);
+    return `RedWeek: not read for a tap — it is scanned twice a day; ${at ? `the last read was at ${arubaClock(at)} Aruba time, and that is the answer` : 'it has not been read yet'}`;
+  };
+
+  for (const [stayId, { tapped, from, to }] of first) {
     const lag = Math.max(0, Math.round((now() - Date.parse(tapped)) / 1000));
+    const window = from && to ? { from, to } : null;
+    const looking = window ? `looking for ${from} to ${to}` : 'no dates sent (an older phone)';
 
     if (stayId === null) {
       // THE STAYS LIST.
-      log(`tap  the Stays list — opened by a member at ${tapped}, ${lag}s ago`);
-      const row = { stay: null, board: null, scan: null, nudge: null };
+      log(`tap  the Stays list — opened by a member at ${tapped}, ${lag}s ago, ${looking}`);
+      const row = { stay: null, window, board: null, scan: null, nudge: null };
       row.board = decideBoard(state, now(), caps);
       if (row.board.go && verifyBoard) {
         try {
           const r = row.board.result = await verifyBoard();
           noteBoard(state, now());
           if (r?.skipped) log('  Board: not re-checking — a full check finished while this tap waited its turn');
-          else log(`  Board: re-checked — ${r?.verified ?? 0} week${r?.verified === 1 ? '' : 's'} verified, ${r?.repriced ?? 0} repriced, ${r?.retired ?? 0} retired`);
+          else log(`  Board: re-checked without RedWeek — ${r?.verified ?? 0} week${r?.verified === 1 ? '' : 's'} verified, ${r?.repriced ?? 0} repriced, ${r?.retired ?? 0} retired`);
         } catch (err) { row.board.error = err.message; log(`  Board: the re-check failed — ${err.message}`); }
       } else if (!row.board.go) log(`  Board: not re-checking — ${row.board.why}`);
-      await interval({ id: 'board', name: 'the Stays list' }, row, scanAruba, () => intervalLastSeen(null));
+      log(`  ${redweekLine()}`);
+      await interval({ id: 'board', name: 'the Stays list' }, row, scanAruba && (() => scanAruba(window)), () => intervalLastSeen(null));
       done.push(row);
       continue;
     }
 
     const stay = catalog.get(stayId);
     if (!stay) { log(`tap  a stay that is not in the catalog (${String(stayId).slice(0, 8)}) — nothing to do`); continue; }
-    log(`tap  ${stay.name} — opened by a member at ${tapped}, ${lag}s ago`);
-    const row = { stay: stay.name, sweep: null, scan: null, nudge: null };
-
-    const slug = slugFor(stay, catalog);
-    if (!slug) {
-      row.sweep = { go: false, why: 'RedWeek has no page we read for this place' };
-    } else {
-      row.sweep = decideSweep(state, slug, now(), caps);
-      if (row.sweep.go) {
-        noteTapSweep(state, now());
-        log(`  RedWeek: reading ${slug} now`);
-        try {
-          const r = row.sweep.result = await sweepResort(slug);
-          log(`  RedWeek: ${slug} read — ${r?.found?.length ?? 0} worth posting, ${r?.posted ?? 0} new on the board, ${r?.refreshed ?? 0} last-seen clocks moved`);
-        }
-        catch (err) { row.sweep.error = err.message; log(`  RedWeek: the read failed — ${err.message}`); }
-      }
-    }
-    if (!row.sweep.go) log(`  RedWeek: not reading — ${row.sweep.why}`);
-
-    await interval(stay, row, scanInterval && (() => scanInterval(stay)), () => intervalLastSeen(stayId));
+    log(`tap  ${stay.name} — opened by a member at ${tapped}, ${lag}s ago, ${looking}`);
+    const row = { stay: stay.name, window, scan: null, nudge: null };
+    log(`  ${redweekLine()}`);
+    await interval(stay, row, scanInterval && (() => scanInterval(stay, window)), () => intervalLastSeen(stayId));
     done.push(row);
   }
   return done;

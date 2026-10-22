@@ -172,6 +172,32 @@ test('a full re-check: clocks moved on every week still listed, the changed pric
   } finally { sb.close(); }
 });
 
+test('the board pass a tap asks for reads no RedWeek: nothing compared, no clock moved, nothing called gone — the seven-day rule still runs, outage-aware', async () => {
+  const sb = await startSupabase({ rows: surfRows() });
+  try {
+    const lines = [];
+    const out = await verify(circleFor(sb), { listings: [], okSlugs: [], log: (l) => lines.push(l) });
+    assert.equal(out.verified, 0, 'no live row was compared with its source');
+    assert.deepEqual(sb.S.patched, [], 'not one last-seen clock moved: nothing was seen');
+    assert.deepEqual(sb.S.rpc.filter(([f, a]) => f === 'retire_deals_gone' && /gone from RedWeek/.test(a.p_reason)), [], 'and no week was called rented or gone on the strength of a page nobody read');
+    assert.equal(sb.S.rpc.filter(([f]) => f === 'reprice_deal').length, 0);
+    assert.deepEqual(sb.S.rpc.filter(([f]) => f === 'retire_stale_deals')[0][1], { p_days: 7 }, 'the seven-day rule runs (in the database, where the outages are)');
+    assert.ok(lines.some((l) => /0 checked against their source/.test(l)), lines.join('\n'));
+  } finally { sb.close(); }
+});
+
+test('the count of weeks "not seen for 7 days" leaves out the days RedWeek was out, and says so', async () => {
+  const old = new Date(Date.now() - 10 * 864e5).toISOString();
+  const sb = await startSupabase({ rows: surfRows().map((r) => ({ ...r, seen_at: old, posted_at: old })) });
+  try {
+    const noOutage = [], withOutage = [];
+    await verify(circleFor(sb), { listings: [], okSlugs: [], log: (l) => noOutage.push(l), outages: [] });
+    await verify(circleFor(sb), { listings: [], okSlugs: [], log: (l) => withOutage.push(l), outages: [{ source: 'redweek', since: '2020-01-01T00:00:00Z', until: null }] });
+    assert.ok(noOutage.some((l) => /5 not seen for 7 days \(RedWeek's days out not counted\)/.test(l)), noOutage.join('\n'));
+    assert.ok(!withOutage.some((l) => /not seen for 7 days \(/.test(l)), 'RedWeek has been out since 2020: none of its rows is old: ' + withOutage.join('\n'));
+  } finally { sb.close(); }
+});
+
 test('a re-check of ONE resort (a tap on one stay) does not stamp the whole board as checked', async () => {
   const sb = await startSupabase({ rows: surfRows() });
   try {
@@ -232,11 +258,11 @@ test('opening Stays re-checks the whole board, once; ten phones in a minute are 
   assert.equal(rows.length, 1);
   assert.equal(w.calls.verify, 1);
   assert.deepEqual(rows[0].board.result, { verified: 41, repriced: 3, retired: 2 });
-  assert.ok(w.lines.some((l) => /Board: re-checked — 41 weeks verified, 3 repriced, 2 retired/.test(l)));
+  assert.ok(w.lines.some((l) => /Board: re-checked without RedWeek — 41 weeks verified, 3 repriced, 2 retired/.test(l)));
   assert.ok(w.lines.some((l) => /opened by a member at .*the Stays list|the Stays list — opened by a member/.test(l)));
 });
 
-test('at most one full re-check per 15 minutes, whoever taps; the half-hourly pass counts as one', async () => {
+test('at most one full re-check per 15 minutes, whoever taps; the scan\'s own re-check counts as one', async () => {
   const st = emptyState();
   assert.equal(CAPS.boardGapMin, 15);
   assert.equal(decideBoard(st, T0).go, true);
