@@ -2019,6 +2019,9 @@ export class Store {
    * that nulls the money columns, which is more than this club needs.
    */
   teased(d) { return !!d?.dropAt && d.dropAt > nowIso(); }
+  // The preview has no watcher to tell. SupabaseStore overrides both (see noteStayLook there).
+  noteStayLook() {}
+  async redweekCheckedAt() { return null; }
   /** Weeks waiting on a board that has not opened yet, soonest board first. */
   teasedDeals() { return this.liveDeals().filter(d => this.teased(d)).sort((a, b) => String(a.dropAt).localeCompare(String(b.dropAt))); }
   async postDeal({ stayId, roomTypeId = null, title = '', from, to, nights = null, pointsTotal = null, pointsPerNight = null,

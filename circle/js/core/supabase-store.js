@@ -190,11 +190,55 @@ export class SupabaseStore extends Store {
     // crew_messages is here for the same reason: a thread that only updates when you reload
     // is not a conversation. Row-level security still decides what comes back on the reload,
     // so listening for the event tells this browser nothing it could not already read.
+    //
+    // One change often arrives as many events: the watcher moves the last-seen clock on a couple
+    // of dozen weeks in one statement and Realtime sends a message for each row. Every message used
+    // to be a full reload of thirty tables on every phone that had the app open, so the burst is
+    // gathered and answered once.
+    let pending = null;
+    const reloadSoon = () => { clearTimeout(pending); pending = setTimeout(() => this.reload(), 1500); };
     ['contributions', 'redemptions', 'ledger', 'announcements', 'deals', 'watches', 'crew_messages', 'crew_members', 'moments', 'moment_reactions']
-      .forEach(t => this.channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => this.reload()));
+      .forEach(t => this.channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, reloadSoon));
     this.channel.subscribe();
   }
   notify(reason) { this.listeners.forEach(fn => fn(reason, this.state)); }
+
+  /**
+   * A member opened a stay. The watcher hears about it within a minute and re-reads RedWeek for
+   * that place (see watcher/taps.mjs).
+   *
+   * Fire and forget, on purpose. This runs while a page is being drawn, so it can never be awaited,
+   * never throw and never put anything in front of a member: the function not being installed
+   * yet, a phone with one bar, a place that is not an Aruba stay — each is simply no tap. It does
+   * not go through rpc(), which reloads every table after the call. And it is asked at most once
+   * per place per five minutes from this phone, because every reload redraws the open page and
+   * would otherwise tap again each time. The row carries a place and a time, never the member.
+   */
+  noteStayLook(stayId) {
+    if (!stayId) return;
+    const now = Date.now();
+    const seen = (this._looked ||= new Map());
+    if (now - (seen.get(stayId) || 0) < 5 * 60e3) return;
+    seen.set(stayId, now);
+    try { Promise.resolve(this.sb.rpc('record_stay_tap', { p_stay: stayId })).then(() => {}, () => {}); } catch { /* no tap */ }
+  }
+  /**
+   * When the watcher last read RedWeek's public page for this place, as an ISO time, or null if
+   * it never has — or if this database does not have the table yet. Read on its own rather than
+   * with the twenty-odd tables in reload(): a table that is missing is an outage there, and a
+   * missing line of small print is not one.
+   */
+  async redweekCheckedAt(stayId) {
+    const hit = (this._checked ||= new Map()).get(stayId);
+    if (hit && Date.now() - hit.at < 15e3) return hit.value;
+    let value = null;
+    try {
+      const { data, error } = await this.sb.from('redweek_checks').select('checked_at').eq('stay_id', stayId).maybeSingle();
+      if (!error && data?.checked_at) value = data.checked_at;
+    } catch { /* null */ }
+    this._checked.set(stayId, { at: Date.now(), value });
+    return value;
+  }
   async commit(reason) { this.notify(reason); }
 
   // ---------- auth ----------

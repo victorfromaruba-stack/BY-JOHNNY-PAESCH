@@ -119,3 +119,68 @@ test('god’s eye: an unreachable server gets a plain sentence', async () => {
   const store = newStore(invoking({ data: null, error: { message: 'Failed to send a request' } }));
   await assert.rejects(store.godsEyePass(), /could not hand out a pass/);
 });
+
+// A member opening a stay: tell the watcher, and never let that be seen.
+import { mock } from 'node:test';
+
+const tapClient = ({ rpc, checked = { data: null, error: null } } = {}) => ({
+  ...stubClient(),
+  rpc,
+  from(t) {
+    if (t !== 'redweek_checks') return stubClient().from(t);
+    return { select: () => ({ eq: () => ({ maybeSingle: async () => (checked instanceof Error ? Promise.reject(checked) : checked) }) }) };
+  },
+});
+
+test('a tap on a stay records one tap, and a redraw of the same page does not tap again', () => {
+  const calls = [];
+  const store = newStore(tapClient({ rpc: (fn, args) => { calls.push([fn, args]); return Promise.resolve({ data: null, error: null }); } }));
+  store.noteStayLook('stay-surf'); store.noteStayLook('stay-surf'); store.noteStayLook('stay-surf');
+  store.noteStayLook('stay-ocean');
+  assert.deepEqual(calls, [['record_stay_tap', { p_stay: 'stay-surf' }], ['record_stay_tap', { p_stay: 'stay-ocean' }]]);
+});
+
+test('a tap that cannot be recorded is invisible: not installed yet, offline, or throwing', async () => {
+  for (const rpc of [
+    () => Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'Could not find the function' } }),
+    () => Promise.reject(new Error('Failed to fetch')),
+    () => { throw new Error('boom'); },
+  ]) {
+    const store = newStore(tapClient({ rpc }));
+    assert.doesNotThrow(() => store.noteStayLook('stay-surf'));
+  }
+  await new Promise(r => setTimeout(r, 5));      // an unhandled rejection would fail the run here
+});
+
+test('a tap does not reload the store the way rpc() does', () => {
+  let reloads = 0;
+  const store = newStore(tapClient({ rpc: () => Promise.resolve({ data: null, error: null }) }));
+  store.reload = async () => { reloads++; };
+  store.noteStayLook('stay-surf');
+  assert.equal(reloads, 0);
+});
+
+test('the check time is the watcher’s timestamp, or null when there is none or no table', async () => {
+  const at = '2026-10-22T12:00:00+00:00';
+  assert.equal(await newStore(tapClient({ checked: { data: { checked_at: at }, error: null } })).redweekCheckedAt('s'), at);
+  assert.equal(await newStore(tapClient({ checked: { data: null, error: null } })).redweekCheckedAt('s'), null);
+  assert.equal(await newStore(tapClient({ checked: { data: null, error: { code: '42P01', message: 'relation does not exist' } } })).redweekCheckedAt('s'), null,
+    'the migration not being applied yet is no line, not an error');
+  assert.equal(await newStore(tapClient({ checked: new Error('offline') })).redweekCheckedAt('s'), null);
+});
+
+test('a burst of realtime events is one reload, not one per row', () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const handlers = [];
+    const channel = { on: (_t, _f, cb) => { handlers.push(cb); return channel; }, subscribe: () => channel };
+    const store = newStore({ ...stubClient(), channel: () => channel });
+    let reloads = 0;
+    store.reload = async () => { reloads++; };
+    store.subscribeRealtime();
+    for (let i = 0; i < 24; i++) handlers[3]();          // the watcher moves 24 clocks at once
+    assert.equal(reloads, 0, 'nothing reloads on the first event');
+    mock.timers.tick(1400); assert.equal(reloads, 0, 'still gathering');
+    mock.timers.tick(200);  assert.equal(reloads, 1, 'one reload answers the whole burst');
+  } finally { mock.timers.reset(); }
+});

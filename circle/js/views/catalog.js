@@ -1,5 +1,5 @@
 // Stays (the deals), cruises and trips, requesting one, and the life of a request.
-import { escapeHtml, fmtUsd, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, countdownTo, initials, nightsBetween, safeUrl } from '../core/util.js';
+import { escapeHtml, fmtUsd, fmtUsd2, fmtPoints, pointsUsd, fmtDay, fmtDayTime, fmtRelative, countdownTo, initials, nightsBetween, safeUrl } from '../core/util.js';
 import { VOCAB, tierName } from '../core/vocab.js';
 import { quoteStay, nightPoints, fromPoints, seatPoints, unitPoints, versusPublic, tierFor, REACH, reachOf, pointsPerMonth, round2, hotelOwedUsd, isCruise, unitWord } from '../core/money.js';
 import { effectiveTier } from '../core/standing.js';
@@ -516,6 +516,7 @@ export function stayDetail({ store, params, go, query = {} }) {
       <p class="lede" style="margin-top:14px">${escapeHtml(lede)}</p>
       <div class="row" style="margin-top:12px">${(stay.features || []).map(f => `<span class="tag">${escapeHtml(f)}</span>`).join('')}</div>
       <div class="panel" id="pricing" style="margin-top:22px"></div>
+      <p class="stamp" id="checked" hidden></p>
       <div id="open"></div>
       <div id="rooms"></div>
       <div id="where"></div>
@@ -563,6 +564,22 @@ export function stayDetail({ store, params, go, query = {} }) {
       ${stay.dealNote ? `<div class="panel flat" style="margin-top:16px"><p class="eyebrow">From Victor</p><p class="small" style="margin-top:8px">${escapeHtml(stay.dealNote)}</p></div>` : ''}
       <div class="act-bar"><button type="button" class="btn block" data-act="ask">${icon('send', { size: 17 })}<span>${isTrip ? `Ask for a ${unitWord(stay)}` : 'Ask for these dates'}</span><span aria-hidden="true">·</span><b class="num" id="ask-fig"></b></button></div>
     </div></section></div>`);
+  // Opening a place tells the watcher, which re-reads RedWeek for it within a minute; the line
+  // under the price says when that last happened. It says "checked" and when — never that anything
+  // is available. Nothing is drawn until the watcher has actually written a time, and the line is
+  // asked again every twenty seconds for ten minutes so a member who tapped sees it move.
+  if (!isTrip) {
+    store.noteStayLook?.(stay.id);
+    const line = wrap.querySelector('#checked');
+    let ticks = 0;
+    const tick = async () => {
+      const at = await store.redweekCheckedAt?.(stay.id);
+      if (at) { line.hidden = false; line.textContent = `Checked ${fmtRelative(at)} · RedWeek`; }
+      // A redraw replaces this page with a new one that runs its own clock; the old one stops.
+      if (++ticks < 30) setTimeout(() => { if (wrap.isConnected) tick(); }, 20e3);
+    };
+    tick();
+  }
   // The docked Ask: one button, the figure inside it, going where the pricing block points.
   // drawQuote() below rewrites `askPath` and #ask-fig every time the dates change.
   let askPath = `/book/${stay.id}`;
