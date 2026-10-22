@@ -389,14 +389,15 @@ async function world({ mode = 'ok', armed = true, quiet = false, seen = true } =
   const tapState = emptyState();
   const stopFile = join(dir, '.interval-stop.json'), stateFile = join(dir, '.interval-scan.json'), sessionFile = join(dir, '.interval-session.json');
   useIntervalStopFile(stopFile);
-  const scanner = makeIntervalScanner({
-    armed: () => armed, stateFile, now: () => clock.t, log,
+  const mk = (canSignIn = true) => makeIntervalScanner({
+    armed: () => armed, stateFile, now: () => clock.t, log, canSignIn,
     makeSession: () => new IntervalSession({ origin: iv.url, stateFile: sessionFile, browser: ENGINE, requireProxy: false, getProxy: () => null,
       getCreds: () => ({ user: 'stub-user', pass: 'stub-pass' }), onlyHosts: ['127.0.0.1'], waits: FAST }),
     post: ({ finds, catalog: c }) => judgeAndPost({ circle, found: finds, catalog: c, cfg: WORLD_CFG, log }),
     onStop: makeStopAnnouncer({ putCard: (k, c) => putCard(k, c, log), tell: (m) => tellOrHold(tapState, pusher, m, log) }),
     onGood: () => putCard('interval-watcher', null, log),
   });
+  const scanner = mk(true);
   const swept = [];
   const tap = (stay, afterMs = 0) => {
     clock.t += afterMs;
@@ -412,7 +413,7 @@ async function world({ mode = 'ok', armed = true, quiet = false, seen = true } =
   const nudges = () => ntfy.S.pushes.filter((p) => /A member is looking at/.test(p.title));
   const ivHits = (re) => iv.S.hits.filter((h) => re.test(h)).length;
   const close = () => { iv.close(); sb.close(); ntfy.close(); rmSync(dir, { recursive: true, force: true }); };
-  return { dir, iv, sb, ntfy, lines, clock, flag, tap, cards, stopPushes, nudges, ivHits, close, stopFile, stateFile, sessionFile, tapState, pusher, swept, circle };
+  return { dir, iv, sb, ntfy, lines, clock, flag, tap, mk, scanner, catalog, cards, stopPushes, nudges, ivHits, close, stopFile, stateFile, sessionFile, tapState, pusher, swept, circle };
 }
 
 test('ONE TAP -> ONE SCAN; a second tap inside 30 minutes is served from it; a third after 30 reuses the session', e2e, async () => {
@@ -668,6 +669,60 @@ test('the posting door is the board\'s own: a nonsense price from the page never
     assert.equal(w.sb.S.posts.length, 0);
     const cheap = { ...find, usdTotal: 71, usdNightly: 10.14 };
     assert.equal((await judgeAndPost({ circle: w.circle, found: [cheap], catalog, cfg: WORLD_CFG, log: () => {} })).posted, 0, 'and the $71 week stays out too');
+  } finally { w.close(); }
+});
+
+test('THE STAYS LIST: one Getaways search for Aruba, the weeks at places the Circle has are posted, the rest are named and not', e2e, async () => {
+  const w = await world();
+  try {
+    const r = await w.scanner.aruba(catalog);
+    assert.equal(r.ran, true);
+    assert.equal(r.covered, true);
+    assert.equal(w.iv.S.searches.length, 1, 'one search for the whole island');
+    assert.equal(w.iv.S.searches[0].searchType, 'CitySearch', '"Single Destination", as the form comes');
+    assert.equal(w.iv.S.searches[0].searchCriteria, 'Aruba, ANT');
+    assert.equal(r.rows, 15, 'the fifteen Aruba weeks on the page — not the twelve under "areas surrounding Aruba"');
+    // Radisson (RBK) 3 rows -> 2 weeks, Eagle (LC2) 2 -> 2 weeks; Caribbean Palm Village, the two Divi Villages and Divi Phoenix are not in this catalog.
+    assert.equal(w.sb.S.posts.length, 4);
+    assert.deepEqual([...new Set(w.sb.S.posts.map((p) => p.p_stay))].sort(), ['stay-eagle', 'stay-rbk']);
+    assert.ok(w.sb.S.posts.every((p) => p.p_source === 'interval' && /resortCode=(RBK|LC2)$/.test(p.p_source_url)));
+    assert.equal(r.unplaced, 10, 'ten weeks at places not in the catalog');
+    const said = w.lines.find((l) => /places not in the catalog/.test(l));
+    assert.match(said, /Caribbean Palm Village \(CPV\)/);
+    assert.match(said, /Divi Dutch Village Beach Resort \(TD4\)/);
+    assert.doesNotMatch(w.sb.S.posts.map((p) => p.p_title).join('|'), /Cancun|Fives/);
+    // Ten members opening the list is one read: the second is served from it.
+    w.clock.t += min(3);
+    const again = await w.scanner.aruba(catalog);
+    assert.deepEqual([again.ran, again.covered], [false, true]);
+    assert.match(again.why, /scanned 3 min ago — served from that scan/);
+    assert.equal(w.iv.S.searches.length, 1);
+  } finally { w.close(); }
+});
+
+test('a run that does not sign in reuses a saved session, and with none says so and goes nowhere near Interval', e2e, async () => {
+  const w = await world();
+  try {
+    const nosignin = w.mk(false);
+    const none = await nosignin.aruba(catalog);
+    assert.equal(none.noSession, true);
+    assert.match(none.why, /no usable saved Interval session, and this run does not sign in/);
+    assert.equal(w.iv.S.hits.length, 0, 'no request at all: not the login page, not the landing page');
+    assert.equal(existsSync(w.stopFile), false, 'having no session is not a stop');
+    // Somebody else signs in and saves a session (here: an ordinary scan does); the next run reuses it.
+    w.clock.t += min(31);
+    const [row] = await w.tap(RBK);
+    assert.equal(row.scan.covered, true);
+    assert.equal(w.ivHits(/POST \/web\/my\/auth\/login$/), 1);
+    w.clock.t += min(31);
+    const reuse = await nosignin.aruba(catalog);
+    assert.equal(reuse.covered, true, reuse.why);
+    assert.equal(w.ivHits(/POST \/web\/my\/auth\/login$/), 1, 'still one sign-in: the saved session was used');
+    // And an expired one stops it there, without signing in.
+    w.iv.S.sessions.clear(); w.clock.t += min(31);
+    const expired = await nosignin.aruba(catalog);
+    assert.equal(expired.noSession, true);
+    assert.equal(w.ivHits(/POST \/web\/my\/auth\/login$/), 1, 'no sign-in on an expired session either');
   } finally { w.close(); }
 });
 

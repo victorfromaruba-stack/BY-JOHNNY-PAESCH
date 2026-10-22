@@ -7,6 +7,7 @@ import { uid, nowIso, sum, monthKey, fmtMonth, nightsBetween, safeUrl, arubaDate
 import { DEFAULT_SETTINGS, splitContribution, tierFor, quoteStay, monthsToAfford, fromPoints, seatPoints, pointsPerMonth, hotelOwedUsd } from './money.js';
 import { VOCAB, initialsOf, refFor } from './vocab.js';
 import { standingFrom, rankFor, RANKS, effectiveTier } from './standing.js';
+import { isStale, retiredToday } from './freshness.js';
 import { sameName } from './names.js';
 import { shrinkImage, blobToDataUrl } from './image.js';
 
@@ -2035,7 +2036,10 @@ export class Store {
   /** Deals still worth looking at: not expired, not taken. */
   liveDeals() {
     const now = nowIso();
-    return this.deals().filter(d => d.status === 'live' && (!d.expiresAt || d.expiresAt > now));
+    // Not seen for seven days is not live (freshness.js). The watcher retires such a row in the database;
+    // this is the same test applied here, so a watcher that is down for a week cannot leave last week's
+    // prices on the front page.
+    return this.deals().filter(d => d.status === 'live' && (!d.expiresAt || d.expiresAt > now) && !isStale(d));
   }
   /**
    * THE BOARD. A week posted ahead of the hour its board opens: the place shows, the price does
@@ -2048,6 +2052,9 @@ export class Store {
   // The preview has no watcher to tell. SupabaseStore overrides both (see noteStayLook there).
   noteStayLook() {}
   async redweekCheckedAt() { return null; }
+  noteBoardLook() {}
+  /** `{ at, verified, repriced, retired, retiredToday }` for the line at the top of Stays, or null: the preview has no watcher. */
+  async boardStatus() { return null; }
   /** Weeks waiting on a board that has not opened yet, soonest board first. */
   teasedDeals() { return this.liveDeals().filter(d => this.teased(d)).sort((a, b) => String(a.dropAt).localeCompare(String(b.dropAt))); }
   async postDeal({ stayId, roomTypeId = null, title = '', from, to, nights = null, pointsTotal = null, pointsPerNight = null,

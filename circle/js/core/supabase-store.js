@@ -15,6 +15,7 @@ export function loadSupabaseJs() {
   });
 }
 
+import { retiredToday } from './freshness.js';
 import { Store, emptyState } from './store.js';
 import { DEFAULT_SETTINGS } from './money.js';
 
@@ -238,6 +239,34 @@ export class SupabaseStore extends Store {
     } catch { /* null */ }
     this._checked.set(stayId, { at: Date.now(), value });
     return value;
+  }
+  /**
+   * A member opened the Stays LIST. The watcher hears within its 30 seconds and re-checks every live
+   * week against where it lives (watcher/taps.mjs, index.mjs verify). Fire and forget, like
+   * noteStayLook: it runs while a page is drawn, so it never awaits, never throws and never shows a
+   * member anything. At most once a minute from this phone; the watcher keeps its own limit of one
+   * full check per 15 minutes, so a busy evening of taps is one read of RedWeek.
+   */
+  noteBoardLook() {
+    const now = Date.now();
+    if (now - (this._boardLooked || 0) < 60e3) return;
+    this._boardLooked = now;
+    try { Promise.resolve(this.sb.rpc('record_board_tap')).then(() => {}, () => {}); } catch { /* no tap */ }
+  }
+  /**
+   * What the line at the top of Stays says: when the watcher last re-checked the whole board and what
+   * it did, plus how many weeks have been taken down today (counted from the deals this phone already
+   * holds). Null until the watcher has written a check — or if this database does not have the table
+   * yet, which is no line rather than an error.
+   */
+  async boardStatus() {
+    let row = null;
+    try {
+      const { data, error } = await this.sb.from('board_checks').select('checked_at,verified,repriced,retired').eq('id', 1).maybeSingle();
+      if (!error && data?.checked_at) row = data;
+    } catch { /* null */ }
+    if (!row) return null;
+    return { at: row.checked_at, verified: row.verified, repriced: row.repriced, retired: row.retired, retiredToday: retiredToday(this.state.deals) };
   }
   async commit(reason) { this.notify(reason); }
 

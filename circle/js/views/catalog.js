@@ -10,7 +10,7 @@ import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/c
 import { shareText, appHash, boardForGroup } from '../core/share.js';
 import { icon } from '../ui/icons.js';
 import { routeSvg, islandSvg } from '../ui/art.js';
-import { dealList, byNight, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, dropWhen, SOURCES, shortRange, usdNight } from './deals.js';
+import { dealList, byNight, byBoard, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, dropWhen, SOURCES, shortRange, usdNight } from './deals.js';
 import { openWeeks, resortForStay, bedroomsOf } from './live.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -149,7 +149,8 @@ export function stays({ store, go, query = {} }) {
         <p class="eyebrow">The board · <span class="num" id="count">…</span></p>
         <h1>What is <em class="ac">open</em>.</h1>
         <p class="open-num"><b class="num" id="open-fig">…</b><span id="open-unit"></span></p>
-        <p class="dateline">Cheapest a night, first. <span id="asof">Looking at what owners have open…</span></p>
+        <p class="dateline">Interval first, then the owners’ weeks; each group cheapest a night first, and what was seen lately above what was not. <span id="asof">Looking at what owners have open…</span></p>
+        <p class="stamp" id="board-check" hidden></p>
         <button type="button" class="link-rule no-print" id="tell-board">Send this to the group</button>
         <div class="small muted" id="reach" hidden></div>
         <div class="small" id="no-interval" hidden></div>
@@ -213,7 +214,7 @@ export function stays({ store, go, query = {} }) {
   // `res` is VakayMood's answer once it has one; while it is still being asked the dateline
   // says so and the colophon stays hidden, because nothing about the market is known yet.
   const paint = (res) => {
-    const ranked = [...posted, ...drafts].sort(byNight);
+    const ranked = [...posted, ...drafts].sort(byBoard());
     const folioOf = new Map(ranked.map((d, i) => [d.id, i + 1]));
     const all = ranked;
     count.textContent = `${ranked.length} open`;
@@ -277,7 +278,7 @@ export function stays({ store, go, query = {} }) {
     }
     const rest = all.slice(1);
     if (rest.length) {
-      dealsSlot.appendChild(el(`<div class="running-head"><h2>The other <b class="num">${rest.length}</b></h2><p class="eyebrow">cheapest a night first</p></div>`));
+      dealsSlot.appendChild(el(`<div class="running-head"><h2>The other <b class="num">${rest.length}</b></h2><p class="eyebrow">Interval first · cheapest a night</p></div>`));
       dealList(dealsSlot, rest, { store, me, canEdit, first: FIRST - 1, key: 'stays', inPlace: false, noun: 'open', folioOf, group: true });
     } else if (!loading && !all.length) {
       dealsSlot.appendChild(el(`<div class="rule-block"><p class="small muted">Nothing open right now. Open a place below and put your dates in — Victor prices any nights.</p><a class="link-rule" href="#/watching">Set a watch and hear the moment something opens</a></div>`));
@@ -288,13 +289,36 @@ export function stays({ store, go, query = {} }) {
     paint(null);
     openWeeks(store).then(res => { drafts = res.deals.filter(d => !mineIds.has(d.id)); loading = false; paint(res); });
   };
+  // Opening Stays tells the watcher, which re-checks every live week against where it lives (RedWeek now;
+  // Interval only inside its scan caps) within about 30 seconds. The line at the top says when that last
+  // happened and what it did — "checked", never "available" — and while the member watches it is asked
+  // again every ten seconds for a minute; when a newer check appears the rows are drawn again, so a week
+  // that has gone is gone from the list in front of them. Nothing is drawn until the watcher has written one.
+  store.noteBoardLook?.();
+  {
+    const line = wrap.querySelector('#board-check');
+    let base, ticks = 0;
+    const tick = async () => {
+      const st = await store.boardStatus?.();
+      if (st?.at) {
+        const n = st.retiredToday;
+        line.hidden = false;
+        line.textContent = `Board checked ${fmtRelative(st.at)} · ${n} week${n === 1 ? '' : 's'} retired today`;
+      }
+      if (base === undefined) base = st?.at ?? null;
+      else if (st?.at && st.at !== base) { base = st.at; store.reload?.(); return; }
+      // A redraw replaces this page with a new one that runs its own clock; the old one stops.
+      if (++ticks < 7) setTimeout(() => { if (wrap.isConnected) tick(); }, 10e3);
+    };
+    tick();
+  }
   load();
   wireDealActions(wrap, store, { drafts: () => drafts });
   wrap.addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-open"]')) load(); });
   wrap.querySelector('#post')?.addEventListener('click', () => postDealSheet({ store }));
   wrap.querySelector('#paste')?.addEventListener('click', () => pasteListingSheet({ store }));
   wrap.querySelector('#tell-board')?.addEventListener('click', () => {
-    const ranked = [...posted, ...drafts].filter(d => !isTeased(d)).sort(byNight).slice(0, 5);
+    const ranked = [...posted, ...drafts].filter(d => !isTeased(d)).sort(byBoard()).slice(0, 5);
     if (!ranked.length) { toast('Nothing open to send yet.'); return; }
     const lines = ranked.map((d, i) => {
       const name = store.stay(d.stayId)?.name || d.title || 'A place';

@@ -9,6 +9,9 @@
 // Nothing here is new. It moved, and `CFG` and `DRY` became arguments.
 
 import { worthPosting, asDeal, resolveStay, capPerResortMonth, dedupeKey } from './judge.mjs';
+// Re-checking every live week against its source (verify.mjs decides; this acts).
+import { planVerify } from './verify.mjs';
+import { isStale } from '../js/core/freshness.js';
 
 /**
  * Move the last-seen clock on the weeks this pass found on the page again.
@@ -139,3 +142,57 @@ export async function judgeAndPost({ circle, found, catalog, cfg, log, dry = fal
   }
   return { found: good, posted, refreshed: clocks.moved };
 }
+
+// ---------------------------------------------------------------- re-checking the board
+const missingMigration = (e) => e?.code === 'PGRST202' || e?.status === 404;
+
+/**
+ * Compare every live week with what its source shows now, and act on the difference: move the last-seen
+ * clock on the ones still there, reprice the ones whose price changed, retire the ones that are rented,
+ * gone or not credible, and retire anything a watched source has not shown for seven days (Victor, 22 Oct
+ * 2026). `apply: false` (a --dry run) plans and says, and changes nothing. A resort that did not answer
+ * contributes nothing. If the database does not have the functions yet (20261022_board_freshness.sql) the
+ * re-check reports what it would do and does none of it.
+ */
+export async function verifyBoard({ circle, catalog, listings, okSlugs, full, apply, cfg, log, slugOf, warn = (_k, t) => log(t) }) {
+  const settings = await circle.settings();
+  const rows = await circle.liveRows();
+  const redweek = new Map(okSlugs.map((slug) => [slug, { ok: true, listings: listings.filter((l) => l.slug === slug) }]));
+  const plan = planVerify({
+    rows, redweek, settings, cfg, slugOf,
+    dealOf: (l, stayId) => { const f = { ...l, stayId }; worthPosting(f, catalog, cfg); return asDeal(f, cfg, settings); },
+  });
+  const c = plan.counts;
+  const aged = rows.filter((r) => isStale({ source: r.source, seenAt: r.seen_at, postedAt: r.posted_at })).length;
+  log(`board: ${rows.length} live weeks — ${c.verified} checked against their source (${plan.seen.length} still listed), ${c.repriced} repriced, ${plan.retire.length} to take down${aged ? `, ${aged} not seen for 7 days` : ''}`);
+  for (const x of plan.retire.slice(0, 12)) log(`  take down ${x.ref} — ${x.why}`);
+  for (const x of plan.reprice.slice(0, 12)) log(`  reprice ${x.ref}: ${x.was} -> ${x.points} points`);
+  if (!apply) { log('  dry run — nothing changed'); return { verified: c.verified, repriced: c.repriced, retired: plan.retire.length + aged, applied: false }; }
+
+  let repriced = 0, retired = 0, stale = 0, missing = false;
+  const clocks = await refreshSeen(circle, plan.seen);
+  if (clocks.asked) log(`  ${clocks.asked} week${clocks.asked === 1 ? '' : 's'} still listed — ${clocks.moved} last-seen clock${clocks.moved === 1 ? '' : 's'} moved${clocks.said ? ` (${clocks.said})` : ''}`);
+  for (const x of plan.reprice) {
+    try { repriced += Number(await circle.reprice(x)) || 0; }
+    catch (err) { if (missingMigration(err)) { missing = true; break; } log(`  could not reprice ${x.ref}: ${err.message}`); }
+  }
+  const byWhy = new Map();
+  for (const x of plan.retire) (byWhy.get(x.why) || byWhy.set(x.why, []).get(x.why)).push(x.ref);
+  for (const [why, refs] of byWhy) {
+    if (missing) break;
+    try { retired += Number(await circle.retireGone(refs, why)) || 0; }
+    catch (err) { if (missingMigration(err)) { missing = true; break; } log(`  could not take down ${refs.length} week${refs.length === 1 ? '' : 's'} (${why}): ${err.message}`); }
+  }
+  if (!missing) {
+    try { stale = Number(await circle.retireStale(7)) || 0; if (stale) log(`  ${stale} week${stale === 1 ? '' : 's'} not seen for 7 days taken down`); }
+    catch (err) { if (missingMigration(err)) missing = true; else log(`  could not take down the weeks not seen for 7 days: ${err.message}`); }
+  }
+  if (missing) {
+    warn('freshness', 'board: the database has no retire_deals_gone / retire_stale_deals / reprice_deal yet — paste supabase/migrations/20261022_board_freshness.sql into the SQL editor. Until then a re-check says what it would do and changes nothing.');
+    return { verified: c.verified, repriced: 0, retired: 0, applied: false };
+  }
+  const out = { verified: c.verified, repriced, retired: retired + stale, applied: true };
+  if (full) { try { await circle.markBoardChecked(out); } catch (err) { if (!missingMigration(err)) log(`  could not record the check (${err.message})`); } }
+  return out;
+}
+

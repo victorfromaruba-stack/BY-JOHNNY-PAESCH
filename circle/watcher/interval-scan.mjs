@@ -27,6 +27,7 @@ import { sameName } from './redweek.mjs';
 import { readsAsSignedIn } from './interval.mjs';
 import { parseGetaways } from './interval-getaways.mjs';
 import { ORIGIN } from './interval-session.mjs';
+import { resolveStay } from './judge.mjs';
 
 export const IV_CAPS = Object.freeze({
   resortGapMin: 30,      // one scan per resort per this many minutes, however many taps
@@ -183,6 +184,30 @@ export function toFinds(weeks, stay, now = Date.now()) {
   }));
 }
 
+export const ARUBA = 'ARUBA';
+
+/**
+ * Every week on an Aruba results page that belongs to a place the catalog has: Interval's code first
+ * (the exact name in INTERVAL_ARUBA), then the name on the page, the way the board places every other
+ * find. The rest — a place not in the catalog — is named, never posted: a week must belong to a stay.
+ */
+export function arubaFinds(html, catalog, now = Date.now()) {
+  const rows = [...catalog.values()];
+  const stayOf = (w) => {
+    const ours = INTERVAL_ARUBA[w.code];
+    const byCode = ours && rows.find((r) => sameName(r.name, ours));
+    if (byCode) return byCode;
+    const id = resolveStay({ resortName: w.resort }, catalog);
+    return id ? catalog.get(id) : null;
+  };
+  const weeks = parseGetaways(html), finds = [], unplaced = [];
+  for (const w of weeks) {
+    const stay = stayOf(w);
+    if (stay) finds.push(...toFinds([w], stay, now)); else unplaced.push(`${w.resort || w.code} (${w.code})`);
+  }
+  return { finds, rows: weeks.length, unplaced };
+}
+
 // ---------------------------------------------------------------- the push and the card when it stops
 /**
  * What happens ONCE, on the call that writes the flag: the interval-watcher card goes up, and one
@@ -210,17 +235,21 @@ class Soft extends Error {}          // something went wrong that is not a stop:
  *   covered  Interval has been read for this place within the window and it worked, so there is
  *            nothing for Victor to go and look at (taps.mjs then skips the Grab nudge)
  *
- * `makeSession()` is the browser (interval-session.mjs), `post({ stay, finds, catalog })` is the
+ * `makeSession()` is the browser (interval-session.mjs), `post({ finds, catalog })` is the
  * board's door (board.mjs), `onStop(why)` raises the card and the push. All three are injected so
  * the proof can run the whole path against stubs.
  */
 export function makeIntervalScanner({ armed = () => true, stateFile, makeSession, post, onStop, onGood = async () => {},
-                                      log = () => {}, now = Date.now, caps = IV_CAPS }) {
+                                      log = () => {}, now = Date.now, caps = IV_CAPS, canSignIn = true }) {
   let busy = false;
-  return async function scan(stay, catalog) {
-    if (!armed()) return { ran: false, covered: false, why: 'the Interval scan is switched off (WATCH_INTERVAL_SCAN is not on)' };
-    const code = codeFor(stay, catalog);
-    if (!code) return { ran: false, covered: false, why: 'no Interval resort code is on file for this place' };
+  /**
+   * One scan, whatever it searches for. `key` is what the caps count it under (a resort code, or ARUBA
+   * for the whole-island read); `search(session)` makes the one search; `finds(html)` turns the page
+   * into `{ finds, rows, unplaced }`. Everything between is the box: stopped?, capped?, session, sign-in
+   * cap, full stop.
+   */
+  async function run(key, { search, finds: gather, catalog }) {
+    const code = key;
     const held = intervalStopped();
     if (held) return { ran: false, covered: false, stopped: true, why: `stopped${held.at ? ` since ${held.at}` : ''} (${held.why}) — delete .interval-stop.json to let it` };
     if (busy) return { ran: false, covered: false, why: 'another scan is still running' };
@@ -249,6 +278,12 @@ export function makeIntervalScanner({ armed = () => true, stateFile, makeSession
         signedIn = !!v.signedIn;
         if (!signedIn) { session.forget(); log('  Interval: the saved session has expired'); }
       }
+      if (!signedIn && !canSignIn) {
+        // A run that is not a member's tap (the one-off whole-island read) never signs in: it uses the
+        // session somebody else saved, and when there is none it says so and stops there.
+        record({ ok: false, why: 'no usable saved session' });
+        return { ran: false, covered: false, noSession: true, why: 'there is no usable saved Interval session, and this run does not sign in' };
+      }
       if (!signedIn) {
         const sd = decideSignIn(state, t, caps);
         if (!sd.go) { record({ ok: false, why: sd.why }); return { ran: false, covered: false, why: `needs a sign-in, and ${sd.why}` }; }
@@ -274,22 +309,22 @@ export function makeIntervalScanner({ armed = () => true, stateFile, makeSession
         if (!lv.signedIn) throw new Soft('signed in, but the next page read as signed out');
       }
 
-      log(`  Interval: searching ${code}`);
-      const res = await session.search(code);
+      log(`  Interval: searching ${code === ARUBA ? 'Aruba' : code}`);
+      const res = await search(session);
       const v = classify(res);
       if (v.stop) throw new IntervalStop(v.stop);
       if (!v.signedIn) { session.forget(); throw new Soft('the session was signed out by the time the search ran'); }
       await session.save();
 
-      const weeks = weeksFor(res.html, code);
-      const finds = toFinds(weeks, stay, t);
+      const { finds, rows: weeks, unplaced = [] } = gather(res.html, t);
+      if (unplaced.length) log(`  Interval: ${unplaced.length} week${unplaced.length === 1 ? '' : 's'} at places not in the catalog — add them in the Desk to see them here: ${[...new Set(unplaced)].slice(0, 8).join('; ')}`);
       let out = { posted: 0, refreshed: 0 };
-      try { if (finds.length) out = await post({ stay, finds, catalog }) || out; }
-      catch (err) { throw new Soft(`Interval was read (${weeks.length} week${weeks.length === 1 ? '' : 's'}) but the board would not take them: ${err.message}`); }
+      try { if (finds.length) out = await post({ finds, catalog }) || out; }
+      catch (err) { throw new Soft(`Interval was read (${weeks} week${weeks === 1 ? '' : 's'}) but the board would not take them: ${err.message}`); }
       const wasUp = state.cardUp; state.cardUp = false;
-      record({ ok: true, rows: weeks.length, posted: out.posted || 0, refreshed: out.refreshed || 0 });
+      record({ ok: true, rows: weeks, posted: out.posted || 0, refreshed: out.refreshed || 0 });
       if (wasUp) await onGood();
-      return { ran: true, covered: true, rows: weeks.length, posted: out.posted || 0, refreshed: out.refreshed || 0 };
+      return { ran: true, covered: true, rows: weeks, posted: out.posted || 0, refreshed: out.refreshed || 0, unplaced: unplaced.length };
     } catch (err) {
       if (err instanceof IntervalStop) {
         writeStop(err.message);
@@ -306,5 +341,35 @@ export function makeIntervalScanner({ armed = () => true, stateFile, makeSession
       busy = false;
       await session?.close().catch(() => {});
     }
+  }
+
+  const off = { ran: false, covered: false, why: 'the Interval scan is switched off (WATCH_INTERVAL_SCAN is not on)' };
+
+  /** A member opened this place: scan its resort, by its code. */
+  const scan = async (stay, catalog) => {
+    if (!armed()) return off;
+    const code = codeFor(stay, catalog);
+    if (!code) return { ran: false, covered: false, why: 'no Interval resort code is on file for this place' };
+    return run(code, {
+      catalog,
+      search: (session) => session.search(code),
+      finds: (html, t) => { const weeks = weeksFor(html, code); return { finds: toFinds(weeks, stay, t), rows: weeks.length }; },
+    });
   };
+
+  /**
+   * A member opened the Stays LIST: one Getaways search for Aruba — the form as Interval offers it,
+   * "Single Destination: Aruba" — and every week on the first page at a place the catalog has goes to
+   * the board. It is one scan under the key ARUBA with the same caps (one per 30 minutes, ten an hour),
+   * so a list opened ten times is one read.
+   */
+  scan.aruba = async (catalog) => {
+    if (!armed()) return off;
+    return run(ARUBA, {
+      catalog,
+      search: (session) => session.search('Aruba', { city: true }),
+      finds: (html, t) => arubaFinds(html, catalog, t),
+    });
+  };
+  return scan;
 }

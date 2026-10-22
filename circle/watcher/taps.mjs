@@ -32,11 +32,12 @@ export const CAPS = Object.freeze({
   perHour: 20,             // and this many tap-triggered reads in all
   intervalStaleHours: 24,  // Interval's last grab older than this is worth a nudge
   nudgeGapHours: 12,       // one nudge per resort per this many hours
+  boardGapMin: 15,         // one full re-check of the whole board per this many minutes, however many Stays lists are opened
 });
 const MIN = 60e3, HOUR = 3600e3;
 
 // ---------------------------------------------------------------- memory across restarts
-export const emptyState = () => ({ sweeps: {}, tapSweeps: [], nudges: {}, held: [] });
+export const emptyState = () => ({ sweeps: {}, tapSweeps: [], nudges: {}, held: [], board: null });
 
 export function loadState(file) {
   try { return { ...emptyState(), ...JSON.parse(readFileSync(file, 'utf8')) }; }
@@ -164,22 +165,91 @@ export async function tellOrHold(state, pusher, msg, log, now = new Date()) {
   return r.ok;
 }
 
+// ---------------------------------------------------------------- the whole board, when the Stays list opens
+/**
+ * Victor, 22 Oct 2026: "The watcher needs to update the moment someone clicks Stays." Opening the list
+ * (not one place) is a tap on the whole board. It re-checks every live week against where it lives, but
+ * at most once per 15 minutes: a check that finished eight minutes ago — by a tap or by the half-hourly
+ * pass, which counts — IS the answer, and the list says "checked N min ago".
+ */
+export function decideBoard(state, now = Date.now(), caps = CAPS) {
+  const last = Date.parse(state.board || '');
+  if (Number.isFinite(last) && now - last < caps.boardGapMin * MIN) {
+    const m = Math.floor((now - last) / MIN);
+    return { go: false, why: `the whole board was checked ${m < 1 ? 'less than a minute' : `${m} min`} ago — that check is the answer` };
+  }
+  return { go: true };
+}
+export const noteBoard = (state, now = Date.now()) => { state.board = new Date(now).toISOString(); };
+
 // ---------------------------------------------------------------- one poll's worth of taps
 /**
  * Act on what members opened since the last poll. `deps` carries the world: sweepResort(slug),
- * intervalLastSeen(stayId), pusher, log, and optionally scanInterval(stay) (interval-scan.mjs).
- * Returns what was decided per place, for the tests.
+ * intervalLastSeen(stayId), pusher, log, and optionally scanInterval(stay) (interval-scan.mjs) and, for
+ * the Stays list, verifyBoard() and scanAruba(). A tap with no place is the list. Returns what was
+ * decided per place, for the tests.
  */
 export async function handleTaps({ taps, catalog, state, deps, now = () => Date.now(), caps = CAPS }) {
-  const { sweepResort, intervalLastSeen, pusher, log, scanInterval } = deps;
-  // Ten members opening the Surf Club in one minute are one place to look at, not ten.
+  const { sweepResort, intervalLastSeen, pusher, log, scanInterval, verifyBoard, scanAruba } = deps;
+  // Ten members opening the Surf Club in one minute are one place to look at, not ten. The list is a
+  // place of its own (`null`).
   const first = new Map();
-  for (const t of taps) if (!first.has(t.stay) || t.tapped < first.get(t.stay)) first.set(t.stay, t.tapped);
+  for (const t of taps) { const k = t.stay ?? null; if (!first.has(k) || t.tapped < first.get(k)) first.set(k, t.tapped); }
   const done = [];
+
+  /** Interval, for a tap: the scan if it can go, and when it cannot (or did not complete) the Grab nudge. */
+  async function interval(place, row, scan, lastOf) {
+    if (scan) {
+      try { row.scan = await scan(); }
+      catch (err) { row.scan = { ran: false, covered: false, why: err.message }; }
+      const sc = row.scan;
+      if (sc.ran && sc.covered) log(`  Interval: scanned — ${sc.rows} week${sc.rows === 1 ? '' : 's'} read, ${sc.posted} new on the board, ${sc.refreshed} last-seen clock${sc.refreshed === 1 ? '' : 's'} moved`);
+      else if (sc.covered) log(`  Interval: not scanning — ${sc.why}`);
+      else log(`  Interval: ${sc.ran ? 'the scan did not complete' : 'not scanning'} — ${sc.why}`);
+    }
+    if (row.scan?.covered) {
+      // Interval was just read. There is nothing for Victor to go and look at.
+      row.nudge = { push: false, why: 'Interval was just scanned' };
+      log(`  Interval: no nudge — ${row.nudge.why}`);
+      return;
+    }
+    let last = null;
+    try { last = await lastOf(); }
+    catch (err) { row.nudge = { push: false, why: err.message }; log(`  Interval: could not tell how old the last grab is — ${err.message}`); }
+    if (!row.nudge) {
+      row.nudge = decideNudge({ state, stay: place, last, now: now(), caps, quiet: pusher.quiet(new Date(now())) });
+      if (!row.nudge.push) log(`  Interval: no nudge — ${row.nudge.why}`);
+      else {
+        const r = await pusher.send(row.nudge.message);
+        if (r.ok) { (state.nudges ||= {})[place.id] = new Date(now()).toISOString(); log(`  Interval: nudged Victor — ${row.nudge.message.body}`); }
+        else { row.nudge = { push: false, why: `push failed: ${r.error}` }; log(`  Interval: the nudge did not go (${r.error})`); }
+      }
+    }
+  }
+
   for (const [stayId, tapped] of first) {
+    const lag = Math.max(0, Math.round((now() - Date.parse(tapped)) / 1000));
+
+    if (stayId === null) {
+      // THE STAYS LIST.
+      log(`tap  the Stays list — opened by a member at ${tapped}, ${lag}s ago`);
+      const row = { stay: null, board: null, scan: null, nudge: null };
+      row.board = decideBoard(state, now(), caps);
+      if (row.board.go && verifyBoard) {
+        try {
+          const r = row.board.result = await verifyBoard();
+          noteBoard(state, now());
+          if (r?.skipped) log('  Board: not re-checking — a full check finished while this tap waited its turn');
+          else log(`  Board: re-checked — ${r?.verified ?? 0} week${r?.verified === 1 ? '' : 's'} verified, ${r?.repriced ?? 0} repriced, ${r?.retired ?? 0} retired`);
+        } catch (err) { row.board.error = err.message; log(`  Board: the re-check failed — ${err.message}`); }
+      } else if (!row.board.go) log(`  Board: not re-checking — ${row.board.why}`);
+      await interval({ id: 'board', name: 'the Stays list' }, row, scanAruba, () => intervalLastSeen(null));
+      done.push(row);
+      continue;
+    }
+
     const stay = catalog.get(stayId);
     if (!stay) { log(`tap  a stay that is not in the catalog (${String(stayId).slice(0, 8)}) — nothing to do`); continue; }
-    const lag = Math.max(0, Math.round((now() - Date.parse(tapped)) / 1000));
     log(`tap  ${stay.name} — opened by a member at ${tapped}, ${lag}s ago`);
     const row = { stay: stay.name, sweep: null, scan: null, nudge: null };
 
@@ -200,36 +270,7 @@ export async function handleTaps({ taps, catalog, state, deps, now = () => Date.
     }
     if (!row.sweep.go) log(`  RedWeek: not reading — ${row.sweep.why}`);
 
-    // Interval, read for the member — if it is switched on, not stopped, not capped, and this place has a
-    // code on file. `covered` means a scan that worked is still current (this tap's or an earlier one's).
-    if (scanInterval) {
-      try { row.scan = await scanInterval(stay); }
-      catch (err) { row.scan = { ran: false, covered: false, why: err.message }; }
-      const sc = row.scan;
-      if (sc.ran && sc.covered) log(`  Interval: scanned — ${sc.rows} week${sc.rows === 1 ? '' : 's'} read, ${sc.posted} new on the board, ${sc.refreshed} last-seen clock${sc.refreshed === 1 ? '' : 's'} moved`);
-      else if (sc.covered) log(`  Interval: not scanning — ${sc.why}`);
-      else log(`  Interval: ${sc.ran ? 'the scan did not complete' : 'not scanning'} — ${sc.why}`);
-    }
-    if (row.scan?.covered) {
-      // Interval was just read for this place. There is nothing for Victor to go and look at.
-      row.nudge = { push: false, why: 'Interval was just scanned for this place' };
-      log(`  Interval: no nudge — ${row.nudge.why}`);
-      done.push(row);
-      continue;
-    }
-
-    let last = null;
-    try { last = await intervalLastSeen(stayId); }
-    catch (err) { row.nudge = { push: false, why: err.message }; log(`  Interval: could not tell how old the last grab is — ${err.message}`); }
-    if (!row.nudge) {
-      row.nudge = decideNudge({ state, stay, last, now: now(), caps, quiet: pusher.quiet(new Date(now())) });
-      if (!row.nudge.push) log(`  Interval: no nudge — ${row.nudge.why}`);
-      else {
-        const r = await pusher.send(row.nudge.message);
-        if (r.ok) { (state.nudges ||= {})[stay.id] = new Date(now()).toISOString(); log(`  Interval: nudged Victor — ${row.nudge.message.body}`); }
-        else { row.nudge = { push: false, why: `push failed: ${r.error}` }; log(`  Interval: the nudge did not go (${r.error})`); }
-      }
-    }
+    await interval(stay, row, scanInterval && (() => scanInterval(stay)), () => intervalLastSeen(stayId));
     done.push(row);
   }
   return done;

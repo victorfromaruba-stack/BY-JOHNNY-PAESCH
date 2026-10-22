@@ -83,6 +83,25 @@ export class Circle {
     return Array.isArray(rows) ? rows : [];
   }
 
+  /**
+   * Every live week a machine or a person re-reads (RedWeek, Interval, VakayMood), with what a re-check
+   * compares: its price, nights and age. Read as an ordinary member would; nothing here is private.
+   */
+  async liveRows() {
+    const res = await this.call('/rest/v1/deals?select=id,stay_id,source,source_ref,points_total,nights,from_date,to_date,title,seen_at,posted_at'
+      + '&status=eq.live&source=in.(redweek,interval,vakaymood)&limit=3000');
+    if (!res.ok) throw new Error(`Could not read the live weeks: ${res.status}`);
+    return res.json();
+  }
+  /** Take weeks down because their source no longer shows them. Returns how many moved. Needs 20261022_board_freshness.sql. */
+  async retireGone(refs, reason) { return this.rpc('retire_deals_gone', { p_refs: refs, p_reason: reason }); }
+  /** Take down every watched week not seen for `days` days. Returns how many moved. */
+  async retireStale(days = 7) { return this.rpc('retire_stale_deals', { p_days: days }); }
+  /** A week whose price moved: the new all-in points, with the title and note that carry the price. */
+  async reprice({ ref, points, title, note }) { return this.rpc('reprice_deal', { p_ref: ref, p_points: points, p_title: title || null, p_note: note || null }); }
+  /** The whole board was just re-checked; this is what the top of the Stays list prints. */
+  async markBoardChecked({ verified, repriced, retired }) { return this.rpc('mark_board_checked', { p_verified: verified, p_repriced: repriced, p_retired: retired }); }
+
   /** "RedWeek was read for this place just now" — what the stay page prints as Checked N min ago. */
   async markChecked(stayId) { return this.rpc('mark_redweek_checked', { p_stay: stayId }); }
 
@@ -91,8 +110,9 @@ export class Circle {
    * when the Circle has never held one. That is the only evidence there is of how fresh Interval
    * is here: nothing reads Interval on a timer.
    */
-  async intervalLastSeen(stayId) {
-    const res = await this.call(`/rest/v1/deals?select=seen_at,posted_at&source=eq.interval&stay_id=eq.${encodeURIComponent(stayId)}&order=seen_at.desc.nullslast&limit=1`);
+  async intervalLastSeen(stayId = null) {
+    // No stay means the whole board (a member opened the Stays list): the newest Interval week anywhere.
+    const res = await this.call(`/rest/v1/deals?select=seen_at,posted_at&source=eq.interval${stayId ? `&stay_id=eq.${encodeURIComponent(stayId)}` : ''}&order=seen_at.desc.nullslast&limit=1`);
     if (!res.ok) throw new Error(`Could not read Interval's last grab: ${res.status}`);
     const row = (await res.json())[0];
     return row ? { seenAt: row.seen_at || row.posted_at || null } : null;

@@ -182,11 +182,50 @@ Those diverge after a day, and only the first answers "is this still there?".
 
 One Grab re-syncs the page: a week already held has its clock moved (**Still there**); one taken
 down that the page carries again goes back up (**Back on**); one the board has that the page did not
-carry is listed separately with a button — **reported, never retired automatically**, because
-Interval paginates and absence from one page is not proof. A week the Circle has *booked* is never
-revived.
+carry is listed separately with a button — **a Grab still only reports it**, because Interval
+paginates and absence from one page is not proof. A week the Circle has *booked* is never revived.
 
-Past two days a card tells members in words. The Desk sees how long since anyone looked.
+### Not seen for 7 days is retired — changed 22 Oct 2026
+
+> **Victor's decision, 2026-10-22 14:16**, recorded in the gstack decision ledger (author victor), after
+> a screenshot of a Barceló 2BR "owner asking $9 a night", last seen 16 Oct, sitting at No. 1 on
+> Stays: a live deal row the watcher has not seen again for 7 days is retired automatically (status
+> `gone`, reason "not seen for 7 days"); the Stays page sorts by freshness and shows "seen N days ago"
+> plainly, never "newest" for an old row; the watcher's sweep re-verifies EVERY live RedWeek row, not
+> only the cheapest few it posts, so last-seen clocks are honest; Interval and VakayMood rows get the
+> same 7-day rule from their own last-seen; and Ian only recommends rows seen in the last 48 hours,
+> showing older ones as "last seen N days ago, tap to re-check". Written here as relayed by the
+> coordinator; the ledger entry has his own wording.
+> The same afternoon: *"The watcher needs to update the moment someone clicks Stays."* — and, looking
+> at the list: *"All I see is RedWeek. Interval should be on top since it's the cheapest."*
+
+This reverses the old line "reported, never retired automatically", for the watcher and the database:
+
+- **The rule** (`retire_stale_deals`, `supabase/migrations/20261022_board_freshness.sql`, called by the
+  watcher on every pass): RedWeek, Interval and VakayMood rows, `coalesce(seen_at, posted_at)` older than
+  7 days. A rate typed in by hand (`iberostar`, `hotel`, `member`...) is not on a clock: nothing could
+  see it again. The app applies the same test (`js/core/freshness.js`, `liveDeals()`), so a watcher that
+  is down cannot leave last week's prices on the front page.
+- **The re-check** (`watcher/verify.mjs`, `board.mjs verifyBoard`): every live RedWeek row is compared
+  with what RedWeek shows for its resort in the same read. Still listed: the clock moves, a changed
+  price is repriced (title and note with it). Rented: retired, "gone from RedWeek on 22 Oct". No longer
+  listed: retired the same way — **only** when the page listed something and the absences are fewer than
+  half the resort's rows at once, because a short or empty page is not proof (the old reason for "never
+  retired" was exactly that; this keeps it where it still applies). A resort that did not answer
+  verifies nothing. Any watched row whose price a night is under $40 or over $1,500 is retired as "price
+  not credible", whatever its age: a figure can be parsed correctly and still be impossible.
+- **The tap** (`record_board_tap`, opening the Stays LIST, not a place): one full re-check, at most once
+  per 15 minutes; later lists are served by it and the top of Stays says "Board checked N min ago".
+  Interval is read on that tap only inside the box at the top (one Aruba search, same caps), with the
+  Grab nudge as fallback.
+- **Interval weeks** reach the board through a Grab or the tap scan, and get the 7-day rule from their
+  own last-seen. A scan never retires one by absence: a week the 7 days takes down is one nobody saw
+  for a week, which is the honest meaning of it.
+
+Past two days a card tells members in words ("seen N days ago"). The Desk sees how long since anyone
+looked. Stays lists what was seen in the last 48 hours first, Interval above the rest, cheapest a
+night first within each; Ian recommends only those, and shows the rest as old with the tap that
+re-checks them.
 
 ## There is no automatic route, and stop looking for one
 
@@ -254,7 +293,10 @@ circle/watcher/                                   RedWeek on Victor's VPS. Inter
 circle/watcher/taps.mjs                           what a member opening a stay sets off (RedWeek read, Interval scan, Grab nudge)
 circle/watcher/interval-scan.mjs                  the tap scan: caps, sign-in cap, full stop, weeks -> finds
 circle/watcher/interval-session.mjs               its browser: iv-login.js's flow, saved session, nothing added
-circle/watcher/board.mjs                          judge + post_deal + last-seen clocks; RedWeek and the scan share it
+circle/watcher/board.mjs                          judge + post_deal + last-seen clocks + the re-check of the whole board; RedWeek and the scan share it
+circle/watcher/verify.mjs                         what a re-check decides: seen, repriced, rented, gone, not credible
+circle/js/core/freshness.js                       7 days, 48 hours, "seen N days ago", the Stays order — one file for the app, the watcher and Ian
+circle/supabase/migrations/20261022_board_freshness.sql   the board tap, board_checks, retire_deals_gone / retire_stale_deals / reprice_deal
 circle/supabase/migrations/20261022_stay_taps.sql  the taps table, redweek_checks, and the seen_at grant
 .claude/skills/interval-board/scripts/parser-check.mjs   the regression cases, runnable
 ```

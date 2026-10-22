@@ -260,6 +260,11 @@ test('the tap path reaches Interval only through the guarded scan, which is off 
   assert.ok(src.includes("sweepResort: (slug) => serial(() => pass(circle, { only: [slug] }))"), 'a RedWeek tap reaches the board only through pass(only)');
   // The one door: the scanner, armed only by an explicit switch whose default is off.
   assert.ok(src.includes("armed: () => flag('WATCH_INTERVAL_SCAN', false)"), 'the scan is armed by WATCH_INTERVAL_SCAN, default off');
+  // The one other door is a person's, not a member's: --interval-read, which refuses without --confirm and never signs in.
+  const read = src.slice(src.indexOf('async function intervalRead()'), src.indexOf("if (args.has('--interval-read'))"));
+  assert.ok(read.includes("!args.has('--confirm')") && read.includes('canSignIn: false'), 'the by-hand read needs --confirm and uses a saved session only');
+  assert.equal((src.match(/armed: \(\) => true/g) || []).length, 1, 'and it is the only scanner that is armed without the switch');
+  assert.ok(read.includes("armed: () => true"), 'that one is the by-hand read');
   assert.equal((src.match(/new IntervalSession\(/g) || []).length, 1, 'one place builds the Interval browser');
   assert.ok(/makeSession: \(\) => new IntervalSession\(/.test(src), 'and it is inside the scanner');
   assert.equal((src.match(/scanInterval\(/g) || []).length, 1, 'the scan is called from one place only: the tap handler’s deps');

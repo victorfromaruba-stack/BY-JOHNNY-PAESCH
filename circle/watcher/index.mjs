@@ -6,6 +6,7 @@
 //   node index.mjs             every WATCH_EVERY_MIN minutes, forever
 //   node index.mjs --dry       find and print, post nothing
 //   node index.mjs --dump      save what a signed-in Interval session sees, then stop
+//   node index.mjs --interval-read --confirm   one read of Aruba Getaways on a saved session (never signs in; see intervalRead)
 //
 // The timer sweeps RedWeek, which needs no login. Interval is signed into only on a run a
 // person started — --once or --dump — and never by the service. See "Interval by hand" below.
@@ -26,14 +27,14 @@ import { IntervalSession } from './interval-session.mjs';
 // Which catalog place a name belongs to. The rest of judge.mjs (what goes up, and what it looks like) runs in board.mjs.
 import { resolveStay } from './judge.mjs';
 // What happens to finds once they are found: judged, posted, last-seen clocks moved. Shared with the Interval scan.
-import { judgeAndPost } from './board.mjs';
+import { judgeAndPost, verifyBoard } from './board.mjs';
 // How many times in a row Interval said no. Pure, and on trial in pace.test.mjs. The `due`
 // gate it also exports is not read here any more: nothing signs in on a timer for it to hold
 // back. What is left is the count, which is what the next run by hand wants to be told.
 import { loadPace, savePace, refused as refusedPace, failed as failedPace, accepted as acceptedPace, cardFor } from './pace.mjs';
 // What a member opening a stay sets off: one public RedWeek read for that resort, and a nudge to
 // Victor's phone when Interval is stale there. Never an Interval sign-in. See taps.mjs.
-import { loadState as loadTapState, saveState as saveTapState, noteSwept, handleTaps, makePusher, flushHeld, tellOrHold } from './taps.mjs';
+import { loadState as loadTapState, saveState as saveTapState, noteSwept, noteBoard, decideBoard, slugFor, handleTaps, makePusher, flushHeld, tellOrHold } from './taps.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // Where the Interval pace lives between passes and across restarts. Git-ignored, like .env.
@@ -117,6 +118,7 @@ async function announceStop(err) {
     body: `${err.message}. The watcher has stopped reading RedWeek and will not try again. Delete .redweek-stop.json in circle/watcher to let it.` }, log);
 }
 
+
 /**
  * One look at the world. `only` is a list of RedWeek resorts: a member's tap asks for exactly one,
  * and a tap never goes near Interval, however Interval is configured.
@@ -132,20 +134,22 @@ async function passBody(circle, { only = null } = {}, ctx) {
 
   const slugs = only || (CFG.onlyOurStays ? Object.keys(ARUBA).filter(s => ARUBA[s]) : Object.keys(ARUBA));
   let wall = null;
+  let rwAll = [];           // everything RedWeek showed this pass, rented weeks included: the re-check of the board reads it
   const held = stopped();
   if (held) {
     log(`RedWeek: stopped${held.at ? ` since ${held.at}` : ''} (${held.why}) — not reading it. Delete ${STOP_FILE} to let it.`);
     redweekCard(held);
   } else {
     log(only ? `RedWeek: reading ${only.join(', ')} for a member` : 'RedWeek: sweeping');
-    const rw = await sweep(slugs, {
+    rwAll = await sweep(slugs, {
+      includeTaken: true,        // rented weeks are what take a row down; worthPosting never lets one up
       onResort: (slug, n, err) => {
         log(`  ${err ? 'x' : ' '} ${slug.padEnd(44)} ${err ? err.message : `${n} open`}`);
         if (err?.stop) wall = err;
         else if (!err) { ctx.ok.push(slug); noteSwept(tapState, slug); }
       },
     });
-    found.push(...rw);
+    found.push(...rwAll);
     if (wall) await announceStop(wall);
     else if (ctx.ok.length) redweekCard(null);
   }
@@ -293,7 +297,16 @@ async function passBody(circle, { only = null } = {}, ctx) {
   }
 
   // Judge, post, move the clocks: board.mjs, the same door a member's Interval scan goes through.
-  return judgeAndPost({ circle, found, catalog, cfg: CFG, log, dry: DRY });
+  const res = await judgeAndPost({ circle, found, catalog, cfg: CFG, log, dry: DRY });
+  // And then the other half of being honest about age: every live week already on the board, not only the
+  // ones that were just posted, is compared with what its source shows now (verify.mjs).
+  if (circle && catalog) {
+    try {
+      res.verify = await verifyBoard({ circle, catalog, listings: rwAll, okSlugs: ctx.ok, full: !only, apply: !DRY, cfg: CFG, log, slugOf: (stayId) => slugFor({ id: stayId }, catalog), warn: warnOnce });
+      if (!only && !DRY && ctx.ok.length) noteBoard(tapState);
+    } catch (err) { log(`board: could not re-check the live weeks (${err.message})`); }
+  }
+  return res;
 }
 
 // A dry run still signs in, because judging a find needs the catalog to judge it against.
@@ -327,15 +340,15 @@ async function run() {
 const tapEverySec = Math.min(120, Math.max(15, num('WATCH_TAP_POLL_SEC', 30)));
 // The Interval scan. Off unless WATCH_INTERVAL_SCAN is on — Victor's word, after the stay_taps migration is
 // applied. What it posts goes through the same board.mjs door as everything else, in the same lane.
-const scanInterval = makeIntervalScanner({
-  armed: () => flag('WATCH_INTERVAL_SCAN', false),
+const scannerFor = (opts) => makeIntervalScanner({
   stateFile: IV_STATE_FILE,
   makeSession: () => new IntervalSession({ stateFile: IV_SESSION_FILE }),
   post: ({ finds, catalog }) => serial(() => judgeAndPost({ circle, found: finds, catalog, cfg: CFG, log })),
   onStop: makeStopAnnouncer({ putCard, tell: (msg) => tellOrHold(tapState, pusher, msg, log) }),
   onGood: () => putCard('interval-watcher', null),
-  log,
+  log, ...opts,
 });
+const scanInterval = scannerFor({ armed: () => flag('WATCH_INTERVAL_SCAN', false) });
 
 async function pollTaps() {
   let next = tapEverySec * 1000;
@@ -351,6 +364,14 @@ async function pollTaps() {
           log, pusher,
           intervalLastSeen: (id) => circle.intervalLastSeen(id),
           scanInterval: (stay) => scanInterval(stay, catalog),
+          scanAruba: () => scanInterval.aruba(catalog),
+          // The Stays list: one full pass — RedWeek read, new weeks posted, every live week re-checked — unless a
+          // full check finished in the last 15 minutes, which is re-asked once this one has its turn in the lane.
+          verifyBoard: () => serial(async () => {
+            if (!decideBoard(tapState, Date.now()).go) return { verified: 0, repriced: 0, retired: 0, skipped: true };
+            const r = await pass(circle);
+            return r?.verify || { verified: 0, repriced: 0, retired: 0 };
+          }),
           sweepResort: (slug) => serial(() => pass(circle, { only: [slug] })),
         },
       });
@@ -365,7 +386,27 @@ async function pollTaps() {
   setTimeout(pollTaps, next);
 }
 
-if (ONCE || DUMP) {
+/**
+ * ONE read of Interval's Aruba Getaways, started by a person and NOT by a member's tap — which is outside
+ * the permission on file (interval-board skill, "The line": a member's tap only). It exists for the day
+ * Victor says in his own words to do it, and refuses without --confirm. It never signs in: it uses the
+ * session saved in .interval-session.json by whoever signed in, and when there is none, or it has expired,
+ * it says so and stops. Same caps, same full stop, same board door as a tap's scan.
+ */
+async function intervalRead() {
+  if (!args.has('--confirm')) {
+    log('Interval read: not run. This is a read of Interval that no member asked for, which the permission on file does not cover. Pass --confirm only when Victor has said to do it, in his own words.');
+    return;
+  }
+  if (!circle) { log('Interval read: no CIRCLE_URL set — nothing to post to.'); return; }
+  const catalog = new Map((await circle.stays()).map((r) => [r.id, r]));
+  const r = await scannerFor({ armed: () => true, canSignIn: false }).aruba(catalog);
+  log(`Interval read: ${r.ran ? `${r.rows} Aruba weeks read, ${r.posted} new on the board, ${r.refreshed} last-seen clocks moved${r.unplaced ? `, ${r.unplaced} at places not in the catalog` : ''}` : `nothing read — ${r.why}`}`);
+}
+
+if (args.has('--interval-read')) {
+  await intervalRead();
+} else if (ONCE || DUMP) {
   await run();
 } else {
   const forever = async () => {

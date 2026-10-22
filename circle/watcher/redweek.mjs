@@ -200,14 +200,16 @@ export async function rentals(slug, { includeTaken = false, timeoutMs = 30000 } 
 }
 
 /** Every resort we care about, one at a time with a pause. Politeness, not performance. */
-export async function sweep(slugs = Object.keys(ARUBA), { pauseMs = 2500, onResort = () => {} } = {}) {
+export async function sweep(slugs = Object.keys(ARUBA), { pauseMs = 2500, onResort = () => {}, includeTaken = false } = {}) {
   const found = [];
   let wait = pauseMs;
   for (const slug of slugs) {
     try {
-      const list = await rentals(slug);
+      const list = await rentals(slug, { includeTaken });
       found.push(...list);
-      onResort(slug, list.length, null);
+      // How many are OPEN; with includeTaken the list also carries the rented ones, which a re-check of
+      // the board needs in order to take their rows down.
+      onResort(slug, list.filter((x) => !x.taken).length, null);
       wait = pauseMs;                       // it answered; back to the ordinary pace
     } catch (err) {
       onResort(slug, 0, err);

@@ -304,6 +304,7 @@ Two suites, both stub-driven, no network and no credentials:
 node --test judge.test.mjs   # the posting rules: Interval always, RedWeek under the public rate, the cap, all-in points
 node --test pace.test.mjs    # how soon a refused Interval sign-in is tried again
 node --test taps.test.mjs    # a member opens a stay: caps, quiet hours, RedWeek's full stops, the Grab nudge
+node --test verify.test.mjs  # the re-check of the whole board, the 7-day rule's watcher half, the Stays-list tap
 node --test interval-scan.test.mjs  # the Interval scan on a tap: caps, sign-in cap, session reuse, every full stop — stand-ins only
 node session.test.mjs        # 48 assertions — the fetch client, cookie scoping, the host guard
 node browser.test.mjs        # the browser client end to end; reads .env for WATCH_BROWSER, runs with whichever engine is downloaded, says what to install when none is
@@ -385,6 +386,37 @@ real `ntfySend` against a stand-in ntfy. State is in `.taps-state.json`, `.inter
 `.interval-session.json` and `.interval-stop.json` (all git-ignored). Chromium: the box's Playwright
 expects `chromium-1228` in root's cache and it lives in openclaw's; `interval-session.mjs` finds it
 there (`PLAYWRIGHT_ALT_CACHE` to point elsewhere).
+
+## The Stays list is a tap on the whole board
+
+Victor, 22 Oct 2026: *"The watcher needs to update the moment someone clicks Stays."* Opening the Stays
+**list** (not one place) calls `record_board_tap()` — one waiting row at most, no member — and within the
+30-second poll the watcher does one full pass: RedWeek read for every catalog resort, new weeks posted,
+and **every live week on the board re-checked against what its source shows now** (`verify.mjs`,
+`board.mjs verifyBoard`):
+
+| the week is | the board does |
+|---|---|
+| still listed, same price | its last-seen clock moves |
+| still listed, price changed | repriced (`reprice_deal`), with the title that carries the asking price |
+| rented on the page | retired: "gone from RedWeek on 22 Oct" |
+| not on the page any more | retired the same way — only when the page listed something and the absences are under half the resort's rows; otherwise left, and the 7-day rule has it |
+| any watched week at under $40 or over $1,500 a night | retired: "price not credible" |
+| not seen for 7 days (RedWeek, Interval, VakayMood) | retired by `retire_stale_deals`: "not seen for 7 days" |
+
+A resort that did not answer teaches nothing. At most one full check per 15 minutes however many lists
+are opened (the half-hourly pass counts), and the sweep keeps its 2.5 s pacing and its stop rules. The
+top of Stays prints `Board checked N min ago · M weeks retired today` from `board_checks`, asks again every
+ten seconds for a minute after the tap, and redraws the rows when a newer check appears. Interval, on the
+same tap, is one Aruba search inside the scan's box (off unless `WATCH_INTERVAL_SCAN=on`), with the Grab
+nudge as fallback. `node index.mjs --once --dry` runs one pass and prints what a re-check would do, changing
+nothing. All of it needs `supabase/migrations/20261022_board_freshness.sql` (after `20261022_stay_taps.sql`);
+until it is applied a re-check says what it would do and does none of it.
+
+`node index.mjs --interval-read --confirm` is one read of Aruba Getaways on a session somebody else saved
+(it never signs in, and says so when there is none). It is a read no member asked for, which the permission
+on file does not cover: it refuses without `--confirm`, and `--confirm` is for the day Victor says to, in his
+own words.
 
 ## What it will and will not post
 

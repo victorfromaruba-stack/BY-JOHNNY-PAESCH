@@ -209,21 +209,23 @@ export class IntervalSession {
   }
 
   /**
-   * Type a resort's code into the Getaways search the way a person does — "Resort Name or Code" —
-   * and press Find Getaway. The dates are left as the form offers them. Throws `noForm` (not a stop)
+   * Type a resort's code into the Getaways search the way a person does — "Resort Name or Code" — or,
+   * with `city`, ask for the island ("Single Destination", Aruba, as the form's own default has it), and
+   * press Find Getaway. The dates are left as the form offers them. Throws `noForm` (not a stop)
    * when this page has no such form, and says which forms it does have.
    */
-  async search(code) {
+  async search(code, { city = false } = {}) {
     const page = this.page;
     const form = page.locator('form[name="SearchForm"]').first();
     if (!(await form.count())) {
       const forms = await page.evaluate(() => [...document.forms].map((f) => f.name || f.id || '(unnamed)')).catch(() => []);
       throw Object.assign(new Error(`the Getaways search form is not on ${new URL(page.url()).pathname}${new URL(page.url()).search} (forms there: ${forms.join(', ') || 'none'})`), { noForm: true });
     }
-    const radio = form.locator('input[name="searchType"][value="ResortSearch"]');
-    if (!(await radio.count())) throw Object.assign(new Error('the search form has no "Resort Name or Code" choice'), { noForm: true });
+    // "Single Destination" with Aruba in the box is how the form comes; "Resort Name or Code" is a person typing a code.
+    const radio = form.locator(`input[name="searchType"][value="${city ? 'CitySearch' : 'ResortSearch'}"]`);
+    if (!(await radio.count())) throw Object.assign(new Error(`the search form has no ${city ? '"Single Destination"' : '"Resort Name or Code"'} choice`), { noForm: true });
     await radio.check();
-    await form.locator('input[name="searchCriteria"]').fill(code);
+    await form.locator('input[name="searchCriteria"]').fill(city ? 'Aruba, ANT' : code);
     // Empty date boxes get a window; the ones the form pre-filled (it does) are not touched.
     const day = (ms) => { const d = new Date(ms - 4 * 3600e3); return `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}/${d.getUTCFullYear()}`; };
     for (const [name, ms] of [['fromDate', Date.now()], ['toDate', Date.now() + 180 * 864e5]]) {

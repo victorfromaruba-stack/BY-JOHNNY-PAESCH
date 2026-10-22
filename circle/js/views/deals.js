@@ -17,6 +17,7 @@ import { toast, sheet, confirmDialog, setBusy, avatar } from '../ui/components.j
 import { appHash, shareText, weekForGroup } from '../core/share.js';
 import { stayStrip, thumbFor, beachMark, photoFor, photoKind, photoCredit, thumbPhotoFor, areaPhotoFor } from './public.js';
 import { sameName, nameWithin } from '../core/names.js';
+import { seenWords, boardOrder } from '../core/freshness.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 
@@ -133,7 +134,9 @@ export function stampFor(deal, store) {
   if (deal.draft) return { text: `VakayMood · ${when}`, feed: true, seenAt: t, stale: staleDays(t) };
   const where = (SOURCES[deal.source] || SOURCES.other).label;
   const who = store.member?.(deal.postedBy)?.name.split(' ')[0];
-  return { text: [where, who, when && `seen ${when}`].filter(Boolean).join(' · '), feed: false, seenAt: t, stale: staleDays(t) };
+  // Said in words, not as a date to be worked out: "seen 3 days ago". The exact day and hour are the
+  // title of the mark for anyone who wants them.
+  return { text: [where, seenWords(deal) || (when && `seen ${when}`), who].filter(Boolean).join(' · '), title: when ? `Last seen ${when}` : '', feed: false, seenAt: t, stale: staleDays(t) };
 }
 
 /**
@@ -310,6 +313,14 @@ const REVEALED = new Set();
 // Cheapest a night first, then soonest. The same order the live section uses, so a member
 // reading down either list is reading the same thing.
 export const byNight = (a, b) => nightly(a) - nightly(b) || String(a.from).localeCompare(String(b.from));
+
+/**
+ * The order of the Stays list itself (Victor, 22 Oct 2026): weeks seen in the last 48 hours above
+ * the ones that were not; within each, Interval above everything else — it is the cheapest the
+ * Circle can get; within each of those, the cheapest a night first. Call it per sort, not once at
+ * load: "fresh" is measured against the moment the list is drawn.
+ */
+export const byBoard = () => boardOrder(nightly, Date.now());
 
 /**
  * Some deals as listing rows, the first few shown and the rest behind one button. `key` is what
