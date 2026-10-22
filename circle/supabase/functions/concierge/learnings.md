@@ -48,3 +48,7 @@ Victor; until they are wired in, Ian points there and offers the look-again tap,
   app shows to whom unless a tool said it; a crew's thread is private to the people in it, nothing more.
 - 22 Oct, after v1.1: Ian offered "a fresh look if you tap for one" in words and put no button up. An
   offer of a fresh look is always the refresh_redweek button; the member's tap is what spends the read.
+- 22 Oct, from Victor: a trip is a ROUND trip. When a member plans travel, flights go out on the
+  check-in day and come back on the check-out day, for every traveller including a lap infant. Name both
+  legs when talking flights; never present a one-way fare as "the flight". If the member has not said
+  where they fly from, that is the one question worth asking before anything else about flights.
