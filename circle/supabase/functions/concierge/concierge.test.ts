@@ -2,7 +2,7 @@
 // The rules Ian is held to, each with the case that would break it.
 
 import { assert, assertEquals } from 'jsr:@std/assert@1';
-import { bandNights, cheaperNextDoor, dealFacts, implausibleWhy, LOOKS_WRONG, monthsToAfford, ownerAsk, publicTotal, rateBandFor, seasonEdge } from './compare.ts';
+import { bandNights, cheaperNextDoor, dealFacts, FRESH_HOURS, implausibleWhy, LOOKS_WRONG, monthsToAfford, ownerAsk, publicTotal, rateBandFor, RETIRE_DAYS, seasonEdge, WATCHED_SOURCES } from './compare.ts';
 import { memberContext } from './redact.ts';
 import { runTool, TOOLS, type Data } from './tools.ts';
 import { costUsd, LASTING, PRICES, turn, worstCaseUsd } from './ian.ts';
@@ -309,7 +309,7 @@ Deno.test('the board shows twelve weeks, places forty', async () => {
   const many = Array.from({ length: 30 }, (_, i) => ({ id: `d${i}`, stay_id: 'surf', from_date: day(30 + i), to_date: day(37 + i), nights: 7, points_total: 100000 + i * 100, source: 'redweek', title: 'owner asking $120 a night', seen_at: new Date().toISOString() }));
   const b: any = await runTool('board', { stay_id: null, from: null, to: null }, ctxOf({ ...fakeData(), deals: async () => many as any }));
   assertEquals([b.weeks.length, b.shown, b.total_on_board, b.looks_wrong_on_board], [12, 12, 30, 0]);
-  const bad = { id: 'bad', stay_id: 'surf', from_date: day(30), to_date: day(37), nights: 7, points_total: 7100, source: 'redweek', title: 'owner asking $9 a night' };
+  const bad = { id: 'bad', stay_id: 'surf', from_date: day(30), to_date: day(37), nights: 7, points_total: 7100, source: 'redweek', title: 'owner asking $9 a night', seen_at: new Date().toISOString() };
   const w: any = await runTool('board', { stay_id: null, from: null, to: null }, ctxOf({ ...fakeData(), deals: async () => [...many, bad] as any }));
   assertEquals([w.weeks.length, w.looks_wrong_on_board, w.weeks.at(-1).price], [13, 1, LOOKS_WRONG], 'a misread past the twelfth is still seen, as one');
   const stays = Array.from({ length: 50 }, (_, i) => ({ id: `s${i}`, name: `Place ${i}`, kind: 'aruba' }));
@@ -445,4 +445,72 @@ Deno.test('the dry run is the exact payload: strict tools, cache on the prefix, 
   assert(!p.system[1].cache_control && p.system[1].text.includes('Ana') && !p.system[1].text.includes('Kock'));
   assert(p.system[1].text.includes('Surf Club (stay_id surf)'));
   assert(out.learnings_chars > 0, 'learnings.md is read');
+});
+
+// ---------------------------------------------------------------- 48 hours, and 7 days
+// Victor, 22 Oct 2026: a Barceló week "owner asking $9 a night", seen 16 Oct, sat at No. 1 on Stays. Ian only
+// recommends a week seen in the last 48 hours; an older one is shown as "last seen N days ago, tap to re-check";
+// and a watched row not seen for 7 days is retired by the database, so Ian never offers one.
+const HOURS = 36e5;
+const seenAgo = (h: number) => new Date(Date.now() - h * HOURS).toISOString();
+const oneWeek = (id: string, source: string, hoursAgo: number, usdNight: number, over: Record<string, unknown> = {}) => ({
+  id, stay_id: 'surf', from_date: day(30), to_date: day(37), nights: 7, points_total: Math.round(usdNight * 7 * 100 * 1.15), source,
+  title: source === 'redweek' ? `Surf Club · owner asking $${usdNight} a night on RedWeek` : 'Getaway', seen_at: seenAgo(hoursAgo), ...over,
+});
+
+Deno.test('Ian recommends only weeks seen in the last 48 hours; the rest come back as old, with the tap that re-checks them', async () => {
+  const deals = [
+    oneWeek('fresh-iv', 'interval', 5, 250), oneWeek('fresh-rw', 'redweek', 47, 180),
+    oneWeek('old-rw', 'redweek', 49, 120),           // cheaper, but 49 hours old
+    oneWeek('older-iv', 'interval', 4 * 24, 90),     // the cheapest, four days old
+    oneWeek('gone-rw', 'redweek', 8 * 24, 60),       // past 7 days: the database retires it; Ian never offers it
+  ];
+  const out: any = await runTool('board', { stay_id: null, from: null, to: null }, ctxOf(fakeData({ deals: async () => deals as any })));
+  assertEquals(out.weeks.map((w: any) => w.deal_id), ['fresh-iv', 'fresh-rw'], 'only what was seen in the last 48 hours is a recommendation');
+  assertEquals(out.seen_in_last_48_hours, 2);
+  assertEquals(out.older_weeks.map((w: any) => w.deal_id), ['older-iv', 'old-rw'], 'cheapest first among the older ones, the 8-day-old week not among them');
+  assertEquals(out.older_weeks[0].last_seen, 'last seen 4 days ago, tap to re-check');
+  assertEquals(out.older_weeks[1].last_seen, 'last seen 2 days ago, tap to re-check');
+  for (const w of out.older_weeks) { assertEquals(w.recommend, false); assertEquals(w.recheck_with, 'refresh_redweek'); }
+  assert(out.older_said.includes('NOT recommendations'));
+  assertEquals(out.total_on_board, 4, 'the 8-day-old row is not on the board any more');
+  assert(!JSON.stringify(out).includes('gone-rw'));
+  assertEquals(out.interval_weeks_matching, 1, 'an old Interval week does not count as Interval having something');
+  assert(!out.weeks.some((w: any) => w.last_seen.startsWith('last seen')));
+});
+
+Deno.test('nothing seen lately is said first, and the old weeks are listed as old — never led with', async () => {
+  const deals = [oneWeek('old-rw', 'redweek', 3 * 24, 120), oneWeek('old-iv', 'interval', 5 * 24, 90)];
+  const out: any = await runTool('board', { stay_id: null, from: null, to: null }, ctxOf(fakeData({ deals: async () => deals as any })));
+  assertEquals(out.weeks, []);
+  assert(out.said.startsWith('Nothing on the board for this was seen in the last 48 hours. 2 older weeks'));
+  assertEquals(out.older_weeks.length, 2);
+  assertEquals(out.interval_said, 'Interval has nothing on the board for this place and these dates right now.');
+  const rw: any = await runTool('redweek', { stay_id: null }, ctxOf(fakeData({ deals: async () => deals as any })));
+  assertEquals(rw.weeks, []);
+  assertEquals(rw.older_weeks.map((w: any) => w.deal_id), ['old-rw']);
+});
+
+Deno.test('a $9 week from 16 October is never a recommendation: not fresh, and a price nobody should be quoted', async () => {
+  const deals = [oneWeek('nine', 'redweek', 6 * 24 + 4, 9, { title: 'Barceló Aruba · owner asking $9 a night on RedWeek' })];
+  const out: any = await runTool('board', { stay_id: null, from: null, to: null }, ctxOf(fakeData({ deals: async () => deals as any })));
+  assertEquals(out.weeks, []);
+  assertEquals(out.older_weeks[0].per_night_usd_when_seen, null, 'a misread figure is not even printed beside the old week');
+});
+
+Deno.test('Ian\'s 48 hours and 7 days are the app\'s: the same verdict for every age, from js/core/freshness.js', async () => {
+  const f = await import('../../../js/core/freshness.js');
+  assertEquals([f.FRESH_HOURS, f.RETIRE_AFTER_DAYS], [FRESH_HOURS, RETIRE_DAYS]);
+  assertEquals([...f.WATCHED_SOURCES], WATCHED_SOURCES);
+  const now = Date.now();
+  for (const source of ['redweek', 'interval', 'vakaymood', 'iberostar']) {
+    for (const h of [0.5, 5, 47, 48, 49, 100, 167, 168, 169, 400]) {
+      const seen = new Date(now - h * HOURS).toISOString();
+      const deal = oneWeek('x', source, h, 200);
+      const facts = dealFacts(deal as any, surf, S, now);
+      const app = { source, seenAt: seen, postedAt: seen };
+      assertEquals(facts.fresh, f.isFresh(app, now), `${source} ${h}h fresh`);
+      assertEquals(facts.retired_by_age, f.isStale(app, now), `${source} ${h}h retired by age`);
+    }
+  }
 });

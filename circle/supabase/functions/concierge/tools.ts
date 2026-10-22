@@ -114,14 +114,22 @@ async function boardFacts(ctx: Ctx, { stay_id = null, from = null, to = null, so
   if (stay_id) { const id = await stayIdOf(ctx, stay_id); if (!id) return { error: `No single place matches "${stay_id}". Use places() for its id.` }; stay_id = id; }
   const [s, stays, deals] = await Promise.all([once(ctx, 's', () => ctx.data.settings()), once(ctx, 'stays', () => ctx.data.stays()), once(ctx, 'deals', () => ctx.data.deals())]);
   const byId = new Map(stays.map(x => [x.id, x]));
-  const rows = deals
+  const everything = deals
     .filter(d => !stay_id || d.stay_id === stay_id)
     .filter(d => !source || d.source === source)
     .filter(d => !isDay(from) || d.to_date > from)
     .filter(d => !isDay(to) || d.from_date < to)
     .map(d => dealFacts(d, byId.get(d.stay_id), s))
-    // A misread price is not the cheapest week: it goes last, flagged, never led with.
-    .sort((a, b) => Number(!!a.implausible) - Number(!!b.implausible) || a.per_night_usd - b.per_night_usd || a.from.localeCompare(b.from));
+    // Not seen for 7 days is retired by the database; a row the watcher has not caught up with yet is not offered.
+    .filter(f => !f.retired_by_age);
+  // Ian recommends only what was seen in the last 48 hours. The rest is shown as old, with the tap that re-checks it.
+  const older = everything.filter(f => !f.fresh).sort((a, b) => a.per_night_usd - b.per_night_usd || a.from.localeCompare(b.from));
+  const rows = everything
+    .filter(f => f.fresh)
+    // A misread price is not the cheapest week: it goes last, flagged, never led with. Then Interval above
+    // the rest, as the Stays list has it (Victor, 22 Oct), and the cheapest a night within each.
+    .sort((a, b) => Number(!!a.implausible) - Number(!!b.implausible) || Number(b.source === 'interval') - Number(a.source === 'interval')
+      || a.per_night_usd - b.per_night_usd || a.from.localeCompare(b.from));
   const next = cheaperNextDoor(rows.filter(f => !f.implausible));
   // Interval is the Circle's best source (Victor, 22 Oct). Whether it has anything here is a fact
   // Ian says first, either way.
@@ -140,11 +148,23 @@ async function boardFacts(ctx: Ctx, { stay_id = null, from = null, to = null, so
     seen_days_ago: f.seen_days_ago ?? 'never recorded',
     cheaper_next_door: next[f.deal_id] ?? null,
   }));
-  return { weeks: shown, total_on_board: rows.length, shown: shown.length, all_in_means: 'the room plus the Circle\'s 15%, what comes off a member\'s points',
+  // Older weeks: where and when, what they said, and how old — never as a recommendation.
+  const oldShown = older.slice(0, BOARD_ROWS).map(f => ({
+    deal_id: f.deal_id, stay_id: f.stay_id, place: f.place, source: f.source, from: f.from, to: f.to, nights: f.nights,
+    per_night_usd_when_seen: f.implausible ? null : f.per_night_usd, total_usd_all_in_when_seen: f.implausible ? null : f.total_usd_all_in,
+    last_seen: f.last_seen, listing: f.listing,
+    recommend: false, recheck_with: 'refresh_redweek',
+  }));
+  const fewer = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  return { weeks: shown, total_on_board: rows.length + older.length, shown: shown.length, all_in_means: 'the room plus the Circle\'s 15%, what comes off a member\'s points',
+    seen_in_last_48_hours: rows.length,
     interval_weeks_matching: interval,
     looks_wrong_on_board: wrong.length,
+    ...(older.length ? { older_weeks: oldShown, older_said: `${fewer(older.length, 'week')} here ${older.length === 1 ? 'was' : 'were'} last seen more than 48 hours ago. They are NOT recommendations. Say each one was "last seen N days ago, tap to re-check" and offer refresh_redweek for the place, which is the tap that re-checks it.` } : {}),
     ...(source === 'redweek' ? {} : { interval_said: interval ? `${interval} Interval Getaway${interval === 1 ? '' : 's'} on the board for this. Lead with Interval.` : 'Interval has nothing on the board for this place and these dates right now.' }),
-    ...(rows.length ? {} : { said: `Nothing on the board matches${source ? ` from ${source === 'interval' ? 'Interval' : 'RedWeek'}` : ''} right now.` }) };
+    ...(rows.length ? {} : { said: older.length
+      ? `Nothing on the board for this was seen in the last 48 hours. ${fewer(older.length, 'older week')} ${older.length === 1 ? 'is' : 'are'} listed under older_weeks, with when each was last seen.`
+      : `Nothing on the board matches${source ? ` from ${source === 'interval' ? 'Interval' : 'RedWeek'}` : ''} right now.` }) };
 }
 
 export async function runTool(name: string, input: any, ctx: Ctx): Promise<unknown> {

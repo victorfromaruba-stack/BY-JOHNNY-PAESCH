@@ -10,6 +10,13 @@
 // those changes, change this too.
 
 export const STALE_DAYS = 2;                 // deals.js STALE_AFTER: older than this, offer a fresh look
+// Victor, 22 Oct 2026, after a Barceló week "owner asking $9 a night" seen 16 Oct sat at No. 1 on Stays:
+// Ian recommends only a week seen in the last 48 hours, and shows an older one as "last seen N days ago, tap
+// to re-check". A watched row not seen for 7 days is retired by the database (retire_stale_deals) and Ian
+// never offers one that has not been caught up with yet. Mirrors js/core/freshness.js; a test holds the two.
+export const FRESH_HOURS = 48;
+export const RETIRE_DAYS = 7;
+export const WATCHED_SOURCES = ['redweek', 'interval', 'vakaymood'];
 export const FEE_TRAP = 0.10;                // fees more than 10% on top of the ask are worth saying
 export const NEXT_DOOR_DAYS = 7;             // "a cheaper week next door": check-in within a week
 // watcher/judge.mjs implausiblyCheap: under $40 a night is a misread listing, not a bargain. On 17 Oct
@@ -49,6 +56,7 @@ export type Deal = {
 };
 
 const DAY = 864e5;
+const HOUR = 36e5;
 const day = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`);
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const r0 = (n: number) => Math.round(n);
@@ -76,6 +84,19 @@ export function bandNights(from: string, to: string) {
   const out = { low: 0, high: 0, peak: 0 };
   for (let t = +day(from); t < +day(to); t += DAY) out[rateBandFor(iso(new Date(t)))]++;
   return out;
+}
+
+/** "last seen 3 days ago, tap to re-check" for a week that is not fresh; "seen 5 hours ago" for one that is. Plain words, never a verdict. */
+export function lastSeenWords(seenMs: number | null, now = Date.now()): string {
+  if (seenMs == null) return 'no record of when this was last seen, tap to re-check';
+  const ms = Math.max(0, now - seenMs);
+  if (ms <= FRESH_HOURS * HOUR) {
+    if (ms < HOUR) return `seen ${Math.max(1, Math.round(ms / 60e3))} min ago`;
+    const h = Math.round(ms / HOUR);
+    return `seen ${h} hour${h === 1 ? '' : 's'} ago`;
+  }
+  const n = Math.floor(ms / DAY);
+  return `last seen ${n} day${n === 1 ? '' : 's'} ago, tap to re-check`;
 }
 
 // ---------------------------------------------------------------- one row on the board
@@ -114,7 +135,9 @@ export function dealFacts(d: Deal, stay: Stay | undefined, s: Settings, now = Da
   const fee = ask && ownerTotal ? ownerTotal - ask * d.nights : null;
   const pub = publicTotal(stay, d.from_date, d.to_date);
   const seen = d.seen_at || d.posted_at;
-  const age = seen ? Math.floor((now - Date.parse(seen)) / DAY) : null;
+  const seenMs = seen && Number.isFinite(Date.parse(seen)) ? Date.parse(seen) : null;
+  const age = seenMs != null ? Math.floor((now - seenMs) / DAY) : null;
+  const fresh = seenMs != null && now - seenMs <= FRESH_HOURS * HOUR;
   const bands = bandNights(d.from_date, d.to_date);
   return {
     deal_id: d.id, stay_id: d.stay_id, place: stay?.name ?? null, source: d.source,
@@ -133,6 +156,11 @@ export function dealFacts(d: Deal, stay: Stay | undefined, s: Settings, now = Da
     implausible: implausibleWhy(ask ?? perNightPts / ppd, stay),
     seen_days_ago: age,
     stale: age != null && age >= STALE_DAYS,
+    // Seen in the last 48 hours: the only kind of week Ian recommends.
+    fresh,
+    last_seen: lastSeenWords(seenMs, now),
+    // The database retires these (not seen for 7 days); until the watcher has, Ian does not offer them.
+    retired_by_age: WATCHED_SOURCES.includes(d.source) && seenMs != null && now - seenMs > RETIRE_DAYS * DAY,
     peak_nights: bands.peak,
     listing: d.source_url || null,
     note: d.note || null,
