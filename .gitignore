@@ -1,6 +1,8 @@
 circle/watcher/.env
 circle/watcher/dump/
 circle/watcher/.interval-pace.json
+circle/watcher/.redweek-stop.json
+circle/watcher/.taps-state.json
 
 # The viewing room: a scratch React project for looking at third-party component libraries,
 # built on demand by .claude/skills/borrowed-effects/scripts/make-lab.sh. The Circle itself is

@@ -16,7 +16,7 @@ import { writeFileSync, mkdirSync, statSync, chownSync, existsSync } from 'node:
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sweep, ARUBA } from './redweek.mjs';
+import { sweep, ARUBA, useStopFile, stopped } from './redweek.mjs';
 import { Interval } from './interval.mjs';
 import { Circle } from './circle.mjs';
 import { loadEnv } from './dotenv.mjs';
@@ -26,10 +26,17 @@ import { worthPosting, asDeal, resolveStay, capPerResortMonth, dedupeKey } from 
 // gate it also exports is not read here any more: nothing signs in on a timer for it to hold
 // back. What is left is the count, which is what the next run by hand wants to be told.
 import { loadPace, savePace, refused as refusedPace, failed as failedPace, accepted as acceptedPace, cardFor } from './pace.mjs';
+// What a member opening a stay sets off: one public RedWeek read for that resort, and a nudge to
+// Victor's phone when Interval is stale there. Never an Interval sign-in. See taps.mjs.
+import { loadState as loadTapState, saveState as saveTapState, noteSwept, handleTaps, makePusher, flushHeld, tellOrHold } from './taps.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // Where the Interval pace lives between passes and across restarts. Git-ignored, like .env.
 const PACE_FILE = join(HERE, '.interval-pace.json');
+// RedWeek's "no". While this file exists nothing reads RedWeek; only Victor deletes it.
+const STOP_FILE = join(HERE, '.redweek-stop.json');
+// When each resort was last read, which taps have cost a read this hour, who was nudged and when.
+const TAPS_FILE = join(HERE, '.taps-state.json');
 const args = new Set(process.argv.slice(2));
 const ONCE = args.has('--once'), DRY = args.has('--dry'), DUMP = args.has('--dump');
 
@@ -69,15 +76,16 @@ const log = (...a) => console.log(new Date().toISOString().slice(0, 19).replace(
 // handed back to the directory's owner. A card that cannot be put up is said in the log and
 // never stops the pass: alerting must not break the thing it alerts about.
 const ALERTS = process.env.ALERTS_MODULE || '/home/openclaw/premanifest-bot/alerts.js';
-function intervalCard(state) {
+function putCard(key, card) {
   try {
     const alerts = createRequire(import.meta.url)(ALERTS);
-    const card = cardFor(state);
-    if (card) alerts.raise('interval-watcher', card.title, card.detail, { since: card.since });
-    else alerts.clear('interval-watcher');
+    if (card) alerts.raise(key, card.title, card.detail, { since: card.since });
+    else alerts.clear(key);
     if (existsSync(alerts.FILE)) { const d = statSync(dirname(alerts.FILE)); chownSync(alerts.FILE, d.uid, d.gid); }
   } catch (err) { log(`  could not reach the alerts module (${err.message}) — no card either way`); }
 }
+const intervalCard = (state) => putCard('interval-watcher', cardFor(state));
+const redweekCard = (held) => putCard('redweek-watcher', held && { title: 'RedWeek told the watcher to stop', detail: `${held.why}. Nothing reads RedWeek until circle/watcher/.redweek-stop.json is deleted.`, since: held.at || undefined });
 
 /**
  * Move the last-seen clock on the weeks this pass found on the page again.
@@ -131,15 +139,67 @@ async function refreshSeen(circle, refs) {
   return { asked: refs.length, moved, said };
 }
 
-async function pass(circle) {
+const tapState = loadTapState(TAPS_FILE);
+const pusher = makePusher();
+useStopFile(STOP_FILE);
+
+// Tell the stay page that RedWeek was read: one row per place, which it prints as "Checked 4 min
+// ago". Only for resorts that answered; a read that failed is not a check. Whatever happens to the
+// rest of the pass, the read itself happened, so this runs on every way out of it.
+const warned = new Map();
+const warnOnce = (key, text) => { if (Date.now() - (warned.get(key) || 0) > 36e5) { warned.set(key, Date.now()); log(text); } };
+async function stampChecked(circle, ctx) {
+  try {
+    if (!DRY && circle && ctx.catalog && ctx.ok.length) {
+      for (const slug of ctx.ok) {
+        const id = resolveStay({ ourName: ARUBA[slug] }, ctx.catalog);
+        if (!id) continue;
+        try { await circle.markChecked(id); }
+        catch (err) { warnOnce('checks', `  could not record that ${slug} was read (${err.message}) — the stay page will not say "Checked" until supabase/migrations/20261022_stay_taps.sql is applied`); break; }
+      }
+    }
+  } finally { try { saveTapState(TAPS_FILE, tapState); } catch (err) { log(`  could not save ${TAPS_FILE} (${err.message})`); } }
+}
+
+async function announceStop(err) {
+  log(`RedWeek: STOPPED — ${err.message}. Nothing will read RedWeek again until ${STOP_FILE} is deleted.`);
+  redweekCard(stopped());
+  await tellOrHold(tapState, pusher, { title: 'RedWeek told the watcher to stop', priority: 4,
+    body: `${err.message}. The watcher has stopped reading RedWeek and will not try again. Delete .redweek-stop.json in circle/watcher to let it.` }, log);
+}
+
+/**
+ * One look at the world. `only` is a list of RedWeek resorts: a member's tap asks for exactly one,
+ * and a tap never goes near Interval, however Interval is configured.
+ */
+async function pass(circle, opts = {}) {
+  const ctx = { ok: [], catalog: null };
+  try { return await passBody(circle, opts, ctx); }
+  finally { await stampChecked(circle, ctx); }
+}
+
+async function passBody(circle, { only = null } = {}, ctx) {
   const found = [];
 
-  log('RedWeek: sweeping');
-  const slugs = CFG.onlyOurStays ? Object.keys(ARUBA).filter(s => ARUBA[s]) : Object.keys(ARUBA);
-  const rw = await sweep(slugs, {
-    onResort: (slug, n, err) => log(`  ${err ? 'x' : ' '} ${slug.padEnd(44)} ${err ? err.message : `${n} open`}`),
-  });
-  found.push(...rw);
+  const slugs = only || (CFG.onlyOurStays ? Object.keys(ARUBA).filter(s => ARUBA[s]) : Object.keys(ARUBA));
+  let wall = null;
+  const held = stopped();
+  if (held) {
+    log(`RedWeek: stopped${held.at ? ` since ${held.at}` : ''} (${held.why}) — not reading it. Delete ${STOP_FILE} to let it.`);
+    redweekCard(held);
+  } else {
+    log(only ? `RedWeek: reading ${only.join(', ')} for a member` : 'RedWeek: sweeping');
+    const rw = await sweep(slugs, {
+      onResort: (slug, n, err) => {
+        log(`  ${err ? 'x' : ' '} ${slug.padEnd(44)} ${err ? err.message : `${n} open`}`);
+        if (err?.stop) wall = err;
+        else if (!err) { ctx.ok.push(slug); noteSwept(tapState, slug); }
+      },
+    });
+    found.push(...rw);
+    if (wall) await announceStop(wall);
+    else if (ctx.ok.length) redweekCard(null);
+  }
 
   // INTERVAL, BY HAND AND ONLY BY HAND.
   //
@@ -168,7 +228,9 @@ async function pass(circle) {
   const pace = loadPace(PACE_FILE);
   const byHand = ONCE || DUMP;
   const refusalsSaid = (n) => `${n} time${n === 1 ? '' : 's'} in a row`;
-  if (!wantsInterval) {
+  if (only) {
+    // A member's tap. Not a word about Interval here, and no way into the sign-in below.
+  } else if (!wantsInterval) {
     log('Interval: off (WATCH_INTERVAL is not set) — RedWeek only');
   } else if (!process.env.INTERVAL_USER) {
     log('Interval: no INTERVAL_USER set, skipping');
@@ -273,6 +335,7 @@ async function pass(circle) {
     try {
       const rows = await circle.stays();
       catalog = new Map(rows.map(r => [r.id, r]));
+      ctx.catalog = catalog;
       log(`catalog: ${catalog.size} places to price against`);
     } catch (err) { log(`could not read the catalog (${err.message})`); }
   }
@@ -344,7 +407,7 @@ async function pass(circle) {
     // there is no way to tell whether those rows have stopped being live or whether nothing
     // grants this account the write — `deals` carries a read policy and, as supabase/schema.sql
     // stands, no write policy that would let the watcher move seen_at.
-    log(`  ${weeks(clocks.asked)} seen again — 0 clocks moved. Either those rows are no longer live, or nothing in supabase/schema.sql lets this account write deals.seen_at; the board will keep showing them at their first sighting until it does.`);
+    log(`  ${weeks(clocks.asked)} seen again — 0 clocks moved. Either those rows are no longer live, or nothing has granted this account the write — supabase/migrations/20261022_stay_taps.sql does, and has to be pasted into the SQL editor once; until then the board shows them at their first sighting.`);
   }
   return { found: good, posted, refreshed: clocks.moved };
 }
@@ -356,6 +419,12 @@ const circle = DUMP || !process.env.CIRCLE_URL ? null : new Circle({
   username: process.env.CIRCLE_USER, password: process.env.CIRCLE_PASS,
 });
 
+// Everything that reads the board or posts to it goes through one lane. The half-hourly pass and
+// a member's tap would otherwise both read what is already on the board, both find a week missing
+// and both post it — the overlap the comment below was written about, arriving by another door.
+let lane = Promise.resolve();
+const serial = (fn) => (lane = lane.then(fn, fn));
+
 async function run() {
   try { await pass(circle); }
   catch (err) { log('pass failed:', err.message); }
@@ -365,13 +434,51 @@ async function run() {
 // RedWeek not answering, a hung socket — would then overlap itself, and two passes reading the
 // board at the same time would both find a week missing and both post it. The next pass is
 // scheduled when this one is done, so there is only ever one.
+//
+// Members opening stays. Every WATCH_TAP_POLL_SEC (30) the watcher asks the database for the taps
+// that arrived since it last asked — a place and a time, nothing about who — and acts on each
+// place once. Not Realtime: that is a websocket client this box does not have, for a gap of
+// thirty seconds nobody would feel. If the function is not installed yet (the migration has not
+// been pasted into the SQL editor) it says so once an hour and asks again every ten minutes.
+const tapEverySec = Math.min(120, Math.max(15, num('WATCH_TAP_POLL_SEC', 30)));
+async function pollTaps() {
+  let next = tapEverySec * 1000;
+  try {
+    if (await flushHeld(tapState, pusher, log)) saveTapState(TAPS_FILE, tapState);
+    const taps = await circle.takeTaps();
+    if (taps.length) {
+      const rows = await circle.stays();
+      const catalog = new Map(rows.map(r => [r.id, r]));
+      await handleTaps({
+        taps, catalog, state: tapState,
+        deps: {
+          log, pusher,
+          intervalLastSeen: (id) => circle.intervalLastSeen(id),
+          sweepResort: (slug) => serial(() => pass(circle, { only: [slug] })),
+        },
+      });
+      saveTapState(TAPS_FILE, tapState);
+    }
+  } catch (err) {
+    if (err.code === 'PGRST202' || err.status === 404) {
+      warnOnce('taps', 'taps: the database has no take_stay_taps yet — paste supabase/migrations/20261022_stay_taps.sql into the SQL editor. Asking again in ten minutes.');
+      next = 10 * 60_000;
+    } else warnOnce('taps-err', `taps: could not collect them (${err.message})`);
+  }
+  setTimeout(pollTaps, next);
+}
+
 if (ONCE || DUMP) {
   await run();
 } else {
   const forever = async () => {
-    await run();
+    await serial(run);
     log(`next pass in ${CFG.everyMin} minutes`);
     setTimeout(forever, Math.max(1, CFG.everyMin) * 60_000);
   };
+  if (circle && !DRY) {
+    log(`taps: listening every ${tapEverySec}s for members opening a stay`);
+    setTimeout(pollTaps, tapEverySec * 1000);
+  }
   await forever();
 }

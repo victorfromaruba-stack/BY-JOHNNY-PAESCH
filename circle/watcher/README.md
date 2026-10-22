@@ -296,6 +296,7 @@ Two suites, both stub-driven, no network and no credentials:
 ```sh
 node --test judge.test.mjs   # the posting rules: Interval always, RedWeek under the public rate, the cap, all-in points
 node --test pace.test.mjs    # how soon a refused Interval sign-in is tried again
+node --test taps.test.mjs    # a member opens a stay: caps, quiet hours, RedWeek's full stops, no Interval
 node session.test.mjs        # 48 assertions — the fetch client, cookie scoping, the host guard
 node browser.test.mjs        # the browser client end to end; reads .env for WATCH_BROWSER, runs with whichever engine is downloaded, says what to install when none is
 ```
@@ -313,6 +314,43 @@ only moves when Continue is pressed, and one that never moves at all — which m
 as not-cleared rather than hanging a pass that runs unattended for months.
 
 What no stub can prove is the Radware challenge itself, which only the real site issues.
+
+## A member opens a stay
+
+Victor, 22 Oct 2026: *"I want the watch to watch it the moment a member clicks on stays."* This is
+the nearest honest version of that. It is not a login on a tap, and the difference is the point.
+
+1. **The tap is recorded.** Opening a place in the app calls `record_stay_tap` — a place and a
+   time, **no member**, one waiting row per place (`supabase/migrations/20261022_stay_taps.sql`).
+2. **Within about thirty seconds** the watcher collects the waiting taps (`take_stay_taps`, robot
+   only; it polls every `WATCH_TAP_POLL_SEC`, 30 by default) and, for each place:
+   - **RedWeek** — reads that resort's public page, through the same `rentals()` the half-hourly
+     pass uses and the same posting rules. At most once per resort per 15 minutes (the half-hourly
+     pass counts as a read), and 20 tap-triggered reads an hour; a tap inside the window is served
+     from the last read, and the stay says how old that is. A 403, a challenge page or a
+     `robots.txt` that disallows the page is a **full stop**: `.redweek-stop.json` is written, nothing
+     reads RedWeek again until Victor deletes it, a card goes on the dashboard and one push to his
+     phone says so (held until 07:00 Aruba if it happens in the night).
+   - **Interval** — **never touched.** If the Circle's newest Interval week at that place is more
+     than 24 hours old, one push to Victor's phone: *"A member is looking at <place>. Interval last
+     grabbed <age> ago. Sign in at vip.intervalworld.com and tap Grab."* At most once per resort per
+     12 hours, never between 23:00 and 07:00 Aruba (alertPush's own rule, read from alertPush.js),
+     no member or guest named. A place the Circle has never held an Interval week at gets no push:
+     nothing says it is on Interval at all.
+3. **The member sees it.** The stay page prints `Checked 4 min ago · RedWeek` from `redweek_checks`,
+   which the watcher writes after every read (tap or timer) and the page asks again every twenty
+   seconds. It says when RedWeek was read. It never says anything is available.
+
+Taps and the half-hourly pass share one lane, so a tap cannot read the board at the same moment as
+a pass and post the same week twice. If the migration has not been applied the watcher says so once
+an hour and asks again every ten minutes; nothing else is affected.
+
+The same migration fixes the `42501` the log showed on 22 Oct ("last-seen clocks were NOT moved"):
+`grant update (seen_at) on deals`, one column, with a policy that lets a robot through and nobody else.
+
+`taps.test.mjs` holds all of it — the caps, the quiet hours, the full stops — with the network
+made unreachable first, so a test cannot reach RedWeek, Interval or ntfy.sh. State is in
+`.taps-state.json` (git-ignored).
 
 ## What it will and will not post
 

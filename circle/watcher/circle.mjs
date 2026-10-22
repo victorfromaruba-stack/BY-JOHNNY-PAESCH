@@ -69,8 +69,33 @@ export class Circle {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(args),
     });
     const out = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(out?.message || `${fn} failed with ${res.status}`);
+    if (!res.ok) throw Object.assign(new Error(out?.message || `${fn} failed with ${res.status}`), { status: res.status, code: out?.code });
     return out;
+  }
+
+  /**
+   * Members who opened a stay since the last call: [{ stay, tapped }]. A place and a time, never
+   * a member (take_stay_taps in supabase/migrations/20261022_stay_taps.sql). Collecting marks
+   * them taken, so each tap comes back once.
+   */
+  async takeTaps() {
+    const rows = await this.rpc('take_stay_taps', {});
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  /** "RedWeek was read for this place just now" — what the stay page prints as Checked N min ago. */
+  async markChecked(stayId) { return this.rpc('mark_redweek_checked', { p_stay: stayId }); }
+
+  /**
+   * The newest time any Interval week at this place was seen on a page a person grabbed, or null
+   * when the Circle has never held one. That is the only evidence there is of how fresh Interval
+   * is here: nothing reads Interval on a timer.
+   */
+  async intervalLastSeen(stayId) {
+    const res = await this.call(`/rest/v1/deals?select=seen_at,posted_at&source=eq.interval&stay_id=eq.${encodeURIComponent(stayId)}&order=seen_at.desc.nullslast&limit=1`);
+    if (!res.ok) throw new Error(`Could not read Interval's last grab: ${res.status}`);
+    const row = (await res.json())[0];
+    return row ? { seenAt: row.seen_at || row.posted_at || null } : null;
   }
 
   /**

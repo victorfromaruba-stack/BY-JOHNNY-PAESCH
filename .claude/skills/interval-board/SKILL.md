@@ -185,6 +185,12 @@ What actually exists, and is the whole system:
   still there, and flag what has gone. This is not a fallback. It is the mechanism.
 - **The reminder** — `circle/tools/check-interval.ics`, a subscribed calendar that nudges him four
   times a day with the link. Automation of the person, since the site cannot be automated.
+- **The tap nudge** (22 Oct 2026, `circle/watcher/taps.mjs`) — when a member opens a place, the watcher
+  reads that resort's public RedWeek page (once per resort per 15 min) and, if the newest Interval week
+  the Circle holds there is over a day old, pushes Victor's phone once per resort per 12 h: *a member is
+  looking at X, Interval last grabbed N ago, sign in and tap Grab.* Interval itself is never touched on
+  a tap — the push is how a person gets asked to look. Victor asked on 22 Oct for the watch to "watch it
+  the moment a member clicks on stays"; this is the version that stays inside the line above.
 - **The mail pipe** — still live and still worth having: confirmations post the weeks the Circle
   holds, and cancellations take them down by themselves. That half needs no alerts.
 - **VakayMood** — the one source with a public documented API (60 req/min, no login). Poll it
@@ -213,5 +219,7 @@ circle/js/data/listing-paste.js                   the browser twin of the parser
 circle/js/views/deals.js                          stampFor() — the last-seen mark on a row
 circle/js/views/officer.js                        the Desk's Grab panel and freshness line
 circle/watcher/                                   RedWeek on Victor's VPS. Interval stays manual.
+circle/watcher/taps.mjs                           what a member opening a stay sets off (RedWeek read, Grab nudge)
+circle/supabase/migrations/20261022_stay_taps.sql  the taps table, redweek_checks, and the seen_at grant
 .claude/skills/interval-board/scripts/parser-check.mjs   the regression cases, runnable
 ```

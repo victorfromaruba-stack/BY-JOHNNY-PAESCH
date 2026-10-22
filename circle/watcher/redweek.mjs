@@ -4,6 +4,8 @@
 // check-out, nights, bedrooms, sleeps, view, price, price per night — so this reads structured
 // values rather than guessing at text. One request per resort, and it identifies itself.
 
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+
 const BASE = 'https://www.redweek.com';
 // A crawler saying who it is, and how to be told to stop, is the polite convention and makes a
 // block less likely. Whose address that is, though, is not this file's to decide: set
@@ -98,16 +100,101 @@ export function parseRentals(html, { slug, ourName = null } = {}) {
   return out;
 }
 
+// ---- When RedWeek says no, that is the end of it -------------------------------------------
+//
+// A 403, a challenge page, or a robots.txt that disallows the page is not a hiccup to retry: it
+// is the site telling a program to leave. The interval-board skill's line is that none of those
+// is a puzzle, so none of them is treated as one. The first one writes a stop file, and from then
+// on nothing in the watcher — the half-hourly pass or a member's tap — asks RedWeek anything until
+// Victor deletes that file. A 429 is different (slow down, not go away) and keeps its own handling.
+
+/** Thrown when RedWeek has told us to stop. `stop` is how callers tell it from an ordinary failure. */
+export class RedWeekStop extends Error { constructor(why) { super(why); this.stop = true; } }
+
+let STOP_FILE = null;
+/** Where the stop is remembered across restarts. Unset (the tests) it lives for the process only. */
+export const useStopFile = (path) => { STOP_FILE = path; memory = null; };
+let memory = null;
+/** The stop in force, `{ at, why }`, or null. A file that exists but cannot be read still counts. */
+export function stopped() {
+  if (memory) return memory;
+  if (!STOP_FILE || !existsSync(STOP_FILE)) return null;
+  try { return JSON.parse(readFileSync(STOP_FILE, 'utf8')); } catch { return { at: null, why: 'the stop file is there' }; }
+}
+function stop(why) {
+  memory = { at: new Date().toISOString(), why };
+  if (STOP_FILE) { try { writeFileSync(STOP_FILE, JSON.stringify(memory, null, 1), { mode: 0o600 }); } catch { /* memory still holds it */ } }
+  throw new RedWeekStop(why);
+}
+
+// What a bot wall looks like when it arrives with a 200. Only believed on a page with no listings
+// at all, because a real resort page never shows one of these and a resort with nothing open does
+// not need to be mistaken for a wall.
+const WALL = /captcha|cf-challenge|challenge-platform|just a moment|access denied|unusual traffic|are you a (?:robot|human)|px-captcha|verify you are human/i;
+
+/**
+ * May a program that identifies as `ua` read `path`, by this robots.txt? Longest matching rule
+ * wins and Allow beats Disallow on a tie (RFC 9309). The group naming us wins over `*`.
+ */
+export function robotsAllows(txt, path, ua = UA) {
+  const me = String(ua).split(/[\/\s]/)[0].toLowerCase();
+  const groups = [];
+  let cur = null, lastWasAgent = false;
+  for (const raw of String(txt || '').split(/\r?\n/)) {
+    const line = raw.replace(/#.*/, '').trim();
+    const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/);
+    if (!m) continue;
+    const k = m[1].toLowerCase(), v = m[2].trim();
+    if (k === 'user-agent') {
+      if (!lastWasAgent) { cur = { agents: [], rules: [] }; groups.push(cur); }
+      cur.agents.push(v.toLowerCase()); lastWasAgent = true;
+    } else if ((k === 'allow' || k === 'disallow') && cur) {
+      cur.rules.push({ allow: k === 'allow', path: v }); lastWasAgent = false;
+    } else lastWasAgent = false;
+  }
+  const mine = groups.filter(g => g.agents.includes(me));
+  const rules = (mine.length ? mine : groups.filter(g => g.agents.includes('*'))).flatMap(g => g.rules);
+  let best = null;
+  for (const r of rules) {
+    if (!r.path) continue;                                  // "Disallow:" with nothing means allow all
+    const re = new RegExp('^' + r.path.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\\\$$/, '$'));
+    if (!re.test(path)) continue;
+    if (!best || r.path.length > best.path.length || (r.path.length === best.path.length && r.allow)) best = r;
+  }
+  return !best || best.allow;
+}
+
+let robots = { at: 0, txt: '' };
+async function checkRobots(path, timeoutMs) {
+  if (Date.now() - robots.at > 864e5) {
+    const res = await fetch(`${BASE}/robots.txt`, { signal: AbortSignal.timeout(timeoutMs), headers: { 'user-agent': UA, accept: 'text/plain' } });
+    if (res.status === 403) stop('RedWeek refused robots.txt with a 403');
+    // A missing robots.txt (4xx) allows everything; a broken one (5xx) is not an answer, so wait.
+    if (res.status >= 500) throw new Error(`RedWeek robots.txt returned ${res.status}`);
+    robots = { at: Date.now(), txt: res.ok ? await res.text() : '' };
+  }
+  if (!robotsAllows(robots.txt, path)) stop(`RedWeek's robots.txt disallows ${path}`);
+}
+/** For the tests: forget the robots.txt that was read. */
+export const _forgetRobots = () => { robots = { at: 0, txt: '' }; };
+
 /** One resort's live rentals. Returns only what is still bookable. */
 export async function rentals(slug, { includeTaken = false, timeoutMs = 30000 } = {}) {
-  const url = `${BASE}/resort/${slug}/timeshare-rentals`;
+  const held = stopped();
+  if (held) throw new RedWeekStop(`RedWeek stopped us${held.at ? ` on ${held.at}` : ''}: ${held.why}`);
+  const path = `/resort/${slug}/timeshare-rentals`;
+  const url = BASE + path;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
+    await checkRobots(path, timeoutMs);
     const res = await fetch(url, { signal: ctrl.signal, headers: { 'user-agent': UA, accept: 'text/html' } });
     if (res.status === 429) throw new Error('RedWeek is rate-limiting us — slow down.');
+    if (res.status === 403) stop(`RedWeek answered 403 for ${slug}`);
     if (!res.ok) throw new Error(`RedWeek returned ${res.status} for ${slug}`);
-    const all = parseRentals(await res.text(), { slug, ourName: ARUBA[slug] ?? null });
+    const html = await res.text();
+    const all = parseRentals(html, { slug, ourName: ARUBA[slug] ?? null });
+    if (!all.length && WALL.test(html)) stop(`RedWeek served a challenge page for ${slug}`);
     return includeTaken ? all : all.filter(x => !x.taken);
   } finally { clearTimeout(timer); }
 }
@@ -124,6 +211,8 @@ export async function sweep(slugs = Object.keys(ARUBA), { pauseMs = 2500, onReso
       wait = pauseMs;                       // it answered; back to the ordinary pace
     } catch (err) {
       onResort(slug, 0, err);
+      // Told to go away: the other five resorts are the same site and get the same answer.
+      if (err.stop) break;
       // Being told to slow down and then carrying on at the same rate is how a watcher gets
       // itself blocked. Each refusal doubles the wait, up to two minutes.
       if (/rate-limit|429/i.test(err.message)) wait = Math.min(wait * 2, 120_000);
