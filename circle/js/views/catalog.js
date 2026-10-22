@@ -10,6 +10,7 @@ import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/c
 import { shareText, appHash, boardForGroup } from '../core/share.js';
 import { icon } from '../ui/icons.js';
 import { routeSvg, islandSvg } from '../ui/art.js';
+import { isStale } from '../core/freshness.js';
 import { dealList, byNight, byBoard, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, dropWhen, SOURCES, shortRange, usdNight } from './deals.js';
 import { openWeeks, resortForStay, bedroomsOf } from './live.js';
 
@@ -287,7 +288,9 @@ export function stays({ store, go, query = {} }) {
   const load = () => {
     loading = true;
     paint(null);
-    openWeeks(store).then(res => { drafts = res.deals.filter(d => !mineIds.has(d.id)); loading = false; paint(res); });
+    // An owner's week from the Circle's own copy of VakayMood that is more than seven days old is not shown, the
+    // same rule the database applies to a posted week: where the live feed answers every row is minutes old.
+    openWeeks(store).then(res => { drafts = res.deals.filter(d => !mineIds.has(d.id) && !isStale(d)); loading = false; paint(res); });
   };
   // Opening Stays tells the watcher, which re-checks every live week against where it lives (RedWeek now;
   // Interval only inside its scan caps) within about 30 seconds. The line at the top says when that last
