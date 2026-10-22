@@ -83,6 +83,7 @@ export const TOOLS = [
       stay_id: E('Place id or name'), from: E(DATE), to: E(DATE), crew_id: E('Crew id'), member_id: E('Member id'), deal_id: E('Board week id'), redemption_id: E('Booking id') }) },
 ].map(t => ({ ...t, strict: true }));
 
+const FIGURE = /\$\s?\d|\busd\s?\d|\d\s*k?\s*(points|pts|dollars|usd)\b/i;
 const isDay = (x: unknown): x is string => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x) && !Number.isNaN(Date.parse(x));
 const today = () => new Date(Date.now() - 4 * 36e5).toISOString().slice(0, 10);     // Aruba, UTC-4, no DST
 const first = (n?: string) => String(n || '').trim().split(/\s+/)[0];
@@ -266,11 +267,14 @@ async function propose(a: any, ctx: Ctx) {
     // The guard Victor kept: a crew Ian suggests names a place and the dates, even when a room exists.
     if (!stays.some(x => x.id === card.stay_id) || !dates()) return { error: 'A crew needs a place (stay_id from places) and future dates, from before to.' };
     if (card.redemption_id) {
+      // Only their own approved room there; anything else starts the crew from the plan instead.
       const [me, red] = await Promise.all([once(ctx, 'me', () => d.me()), once(ctx, 'red', () => d.redemptions())]);
       const r = red.find(x => x.id === card.redemption_id);
-      if (!r || r.member_id !== me.id || r.stay_id !== card.stay_id) card.redemption_id = null;
+      if (!r || r.member_id !== me.id || r.stay_id !== card.stay_id || !['held', 'confirmed', 'completed'].includes(r.status)) card.redemption_id = null;
     }
-    card.name = nm; card.about = card.about ? String(card.about).slice(0, 120) : null;
+    // A card never carries a price: the number guard does not read card text, so no figure goes on one.
+    if (FIGURE.test(nm)) return { error: 'A crew name carries no prices or points.' };
+    card.name = nm; card.about = card.about && !FIGURE.test(card.about) ? String(card.about).slice(0, 120) : null;
   } else if (card.action === 'invite') {
     const [me, cm, members] = await Promise.all([once(ctx, 'me', () => d.me()), d.crewMembers(), once(ctx, 'members', () => d.members())]);
     if (!cm.some(m => m.crew_id === card.crew_id && m.member_id === me.id && m.role === 'lead')) return { error: 'Only the crew\'s lead can add people, and this member does not lead that crew.' };

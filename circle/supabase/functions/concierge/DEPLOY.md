@@ -15,7 +15,12 @@ The access token is the `openclaw` secret in the web app's locked box. Pass it o
    `secrets set` takes it as a plain argument, so use the Management API instead:
    `POST /v1/projects/cdkopyphjvfxjqhasrae/secrets` with `[{"name":"ANTHROPIC_API_KEY","value":…}]`.
    Until the key is set, the app says "Ian is not switched on yet."
-4. **Dashboard card.** Add this to root's crontab:
+4. **Log key.** Only the function may log what a turn cost (`log_concierge_turn` checks an HMAC).
+   Make one random 64-hex key and put the same value in two places, without printing it: the
+   `concierge_key` row (`insert into concierge_key(id, secret) values (1, '<key>') on conflict (id)
+   do update set secret = excluded.secret`) and the function secret `CONCIERGE_LOG_KEY`. If either
+   is missing, Ian answers "not switched on yet" and nothing is spent.
+5. **Dashboard card.** Add this to root's crontab:
    `*/10 * * * * cd /root/circle/circle/watcher && /usr/bin/node concierge-card.mjs >> /var/log/circle-ian-card.log 2>&1`
 
 Settings live in the `settings` row:

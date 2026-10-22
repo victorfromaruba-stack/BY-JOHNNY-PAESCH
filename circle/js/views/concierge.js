@@ -148,12 +148,15 @@ export function concierge({ store, go, query = {} }) {
     }
   });
 
+  /** A "Thanks" that did not reach the Circle is taken back, so the taps come back too. */
+  const unsaid = (l) => (err) => { l.fb = null; save(store, lines); draw(); toast(err?.message || 'That did not reach the Circle. Try again.', { kind: 'bad' }); };
+
   thread.addEventListener('click', async (e) => {
     const fbBtn = e.target.closest('[data-fb]');
     if (fbBtn) {
       const l = lines[fbBtn.dataset.i];
       if (fbBtn.dataset.fb === '-1') { l.asking = true; save(store, lines); draw(); thread.querySelector(`[data-why="${fbBtn.dataset.i}"] input`)?.focus(); }
-      else { l.fb = 1; save(store, lines); draw(); store.conciergeFeedback(l.turnId, 1).catch(() => {}); }
+      else { l.fb = 1; save(store, lines); draw(); store.conciergeFeedback(l.turnId, 1).catch(unsaid(l)); }
       return;
     }
     const box = e.target.closest('[data-card]');
@@ -186,7 +189,7 @@ export function concierge({ store, go, query = {} }) {
     const l = lines[f.dataset.why];
     const note = f.querySelector('[name=why]').value.trim();
     l.fb = -1; l.asking = false; save(store, lines); draw();
-    store.conciergeFeedback(l.turnId, -1, note).catch(() => {});
+    store.conciergeFeedback(l.turnId, -1, note).catch(unsaid(l));
   });
 
   return wrap;

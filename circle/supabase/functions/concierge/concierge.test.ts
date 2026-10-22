@@ -12,6 +12,14 @@ const surf = { id: 'surf', name: 'Surf Club', rate_low_usd: 135, rate_high_usd: 
 const day = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
 
 // ---------------------------------------------------------------- compare
+Deno.test('the calendar is money.js\'s calendar, every day of 2026 to 2029', async () => {
+  const money = await import('../../../js/core/money.js');
+  for (let t = Date.UTC(2026, 0, 1, 12); t < Date.UTC(2030, 0, 1); t += 864e5) {
+    const iso = new Date(t).toISOString().slice(0, 10);
+    assertEquals(rateBandFor(iso), money.rateBandFor(`${iso}T12:00:00`), iso);
+  }
+});
+
 Deno.test('the calendar agrees with money.js: Christmas and Carnival are peak, spring is high', () => {
   assertEquals(rateBandFor('2026-12-24'), 'peak');
   assertEquals(rateBandFor('2027-01-03'), 'peak');
@@ -175,7 +183,9 @@ Deno.test('propose: a crew needs a place and future dates; invites only from a l
   const c = ctxOf();
   assert((await runTool('propose', { action: 'create_crew', name: 'Four', stay_id: 'surf', from: null, to: null }, c) as any).error);
   assert((await runTool('propose', { action: 'create_crew', name: 'Four', stay_id: 'surf', from: '2020-01-01', to: '2020-01-08' }, c) as any).error, 'past dates');
-  assert((await runTool('propose', { action: 'create_crew', name: 'Four', stay_id: 'surf', from: day(30), to: day(37), redemption_id: 'priv' }, c) as any).shown);
+  assert((await runTool('propose', { action: 'create_crew', name: 'Four for $999', stay_id: 'surf', from: day(30), to: day(37) }, c) as any).error, 'no figure on a card');
+  assert((await runTool('propose', { action: 'create_crew', name: 'Four', about: 'a $1,400 week', stay_id: 'surf', from: day(30), to: day(37), redemption_id: 'priv' }, c) as any).shown);
+  assertEquals(c.cards[0].about, null, 'a figure in the about line is dropped');
   assertEquals(c.cards[0].redemption_id, null, 'somebody else\'s booking is dropped from the card');
   assert((await runTool('propose', { action: 'invite', crew_id: 'c1', member_id: 'bot' }, c) as any).error, 'no robots');
   assert((await runTool('propose', { action: 'invite', crew_id: 'c1', member_id: 'm2' }, c) as any).shown);
@@ -196,8 +206,9 @@ Deno.test('remember keeps 20 notes of 200 characters, forgets on empty', async (
 });
 
 // ---------------------------------------------------------------- the number guard
-Deno.test('claimed figures: dollars, thousands, points', () => {
+Deno.test('claimed figures: dollars, thousands, points, and the ways around them', () => {
   assertEquals(claimedFigures('From $1,162 all in, or $3k, about 12,500 points (800 pts a night).'), [1162, 3000, 12500, 800]);
+  assertEquals(claimedFigures('USD 3,500, or 3500 dollars, or 12k points.').sort(), [12000, 3500, 3500].sort());
   const ok = figuresIn('{"total_usd_all_in":1162,"per_night_usd":166}');
   assertEquals(stripStray('It is $1,162 in all. That saves $400. The ask is $166 a night.', ok), 'It is $1,162 in all. The ask is $166 a night.');
 });
@@ -222,7 +233,7 @@ Deno.test('a figure no tool gave is sent back once, then cut', async () => {
     { stop_reason: 'end_turn', content: [{ type: 'text', text: 'The Getaway is $805 all in. It saves $999 still.' }], usage: { input_tokens: 50, output_tokens: 20 } },
   ];
   const seen: any[] = [];
-  const out: any = await turn({ lines: [{ role: 'user', text: 'cheapest?' }], data: fakeData(), model: 'claude-haiku-5-5',
+  const out: any = await turn({ lines: [{ role: 'user', text: 'cheapest?' }, { role: 'assistant', text: 'Earlier I said $999.' }, { role: 'user', text: 'and now?' }], data: fakeData(), model: 'claude-haiku-5-5',
     callModel: async (p) => { seen.push(structuredClone(p)); return replies[seen.length - 1]; } });
   assertEquals(out.reply, 'The Getaway is $805 all in.');
   assertEquals(seen.length, 3);

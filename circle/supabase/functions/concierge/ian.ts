@@ -35,11 +35,14 @@ export function figuresIn(text: string, into = new Set<number>()) {
 
 /** A line that says how the member travels. Haiku skipped remember twice live; this says it out loud. */
 export const LASTING = /\b(usually|always|every (year|time)|we are|we're|there are \d|(two|three|four|five|six|\d) of us|my (wife|husband|partner|kids|family)|budget|prefer|don't like|do not like|hate|love|kitchen)\b/i;
-/** The money and points figures in an answer: "$1,162", "$3k", "12,500 points", "800 pts". */
+/** The money and points figures in an answer: "$1,162", "$3k", "USD 3,500", "3500 dollars", "12k points", "800 pts".
+ *  ponytail: one allow-list for the whole turn, so "$7" passes when a week has 7 nights; per-field
+ *  allow-lists (money figures only from money fields) if that ever bites. */
 export function claimedFigures(reply: string) {
   const out: number[] = [];
-  for (const m of reply.matchAll(/\$\s?(\d[\d,]*(?:\.\d+)?)(\s?[kK]\b)?/g)) out.push(Math.round(toNum(m[1]) * (m[2] ? 1000 : 1)));
-  for (const m of reply.matchAll(/(\d[\d,]*(?:\.\d+)?)\s*(?:points|pts|point)\b/gi)) out.push(Math.round(toNum(m[1])));
+  const n = (x: string, k?: string) => Math.round(toNum(x) * (k ? 1000 : 1));
+  for (const m of reply.matchAll(/(?:\$|\busd\s?)\s?(\d[\d,]*(?:\.\d+)?)(\s?[kK]\b)?/gi)) out.push(n(m[1], m[2]));
+  for (const m of reply.matchAll(/(\d[\d,]*(?:\.\d+)?)(\s?[kK])?\s*(?:points|pts|point|dollars|usd)\b/gi)) out.push(n(m[1], m[2]));
   return out;
 }
 export const strayFigures = (reply: string, allowed: Set<number>) => claimedFigures(reply).filter(n => !allowed.has(n));
@@ -112,8 +115,9 @@ export async function turn({ lines, stayId = null, data, model, callModel, dryRu
   const usage: Usage = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, calls: 0 };
   const tools: ToolCall[] = [];
   const allowed = figuresIn(context);
-  // The member's own words, and Ian's earlier answers: those figures passed this guard when said.
-  for (const l of lines) figuresIn(l.text, allowed);
+  // The member's own words. Not Ian's earlier answers: those come back from the phone, and anything
+  // the phone sends could say anything. Ian looks a figure up again rather than repeat it.
+  for (const l of lines) if (l.role === 'user') figuresIn(l.text, allowed);
   const call = async () => {
     const res = await callModel(payload);
     usage.calls++;

@@ -8,7 +8,8 @@
 --   3. concierge_turns   every turn Ian takes: tokens, cost, each tool call, the answer, and the
 --                        member's "Helped" / "Not it". Read by the Desk, written only by functions.
 --   4. concierge_allow   the gate in front of every turn: the club ceiling (a hard stop), 40 turns
---                        a member a day, and one at a time.
+--                        a member a day, and one at a time. Only the function can log what a turn
+--                        cost (a signed call, concierge_key).
 --   5. feedback          a member marks one of their own answers.
 --   6. concierge_memory  what Ian has noted about one member, readable and writable by that
 --                        member alone (Ian writes it with the member's own token).
@@ -62,7 +63,8 @@ begin
     if r.status not in ('held','confirmed','completed') then
       raise exception 'That room is not approved yet — it is %. Once the Desk quotes it and you accept, you can start the circle around it.', r.status;
     end if;
-    st := r.stay_id; pf := r.check_in; pt := r.check_out;
+    -- st, pf and pt stay null: every member can read crews, and a booking that is not shared is
+    -- private, so its place and dates are not copied onto the crew row.
   else
     if p_stay is null or p_from is null or p_to is null then
       raise exception 'A crew starts from a room the Desk has approved, or from a plan: a place and the dates';
@@ -170,11 +172,26 @@ end $$;
 revoke all on function concierge_allow() from public, anon;
 grant execute on function concierge_allow() to authenticated;
 
-create or replace function log_concierge_turn(p_id uuid, p_model text, p_input int, p_cached int, p_cache_write int,
+-- The function proves it is the function. log_concierge_turn runs on the member's own token (no
+-- service key anywhere), so without this a member could open a turn with concierge_allow() and log
+-- it at $5 themselves, which rests Ian for the whole club. The proof is an HMAC of the turn id with a
+-- key only the function (secret CONCIERGE_LOG_KEY) and this table hold, set once out of band
+-- (DEPLOY.md) and never written in this file. No row, no logging: the gate fails closed.
+create table if not exists concierge_key (id int primary key default 1 check (id = 1), secret text not null);
+alter table concierge_key enable row level security;
+revoke all on concierge_key from anon, authenticated;
+
+drop function if exists log_concierge_turn(uuid, text, int, int, int, int, numeric, text, text, jsonb, boolean, text);
+create or replace function log_concierge_turn(p_id uuid, p_sig text, p_model text, p_input int, p_cached int, p_cache_write int,
   p_output int, p_cost numeric, p_prompt text, p_reply text, p_tools jsonb, p_ok boolean, p_error text default null)
 returns void language plpgsql security definer set search_path = public as $$
+declare k text;
 begin
   if current_member_id() is null then raise exception 'Not a member'; end if;
+  select secret into k from concierge_key where id = 1;
+  if k is null or p_sig is distinct from encode(extensions.hmac(p_id::text, k, 'sha256'), 'hex') then
+    raise exception 'Only the concierge logs a turn';
+  end if;
   update concierge_turns set
     model = coalesce(p_model, model),
     input_tokens = greatest(coalesce(p_input, 0), 0), cached_tokens = greatest(coalesce(p_cached, 0), 0),
@@ -185,8 +202,8 @@ begin
   where id = p_id and member_id = current_member_id() and ok is null;
   if not found then raise exception 'No open turn to log'; end if;
 end $$;
-revoke all on function log_concierge_turn(uuid, text, int, int, int, int, numeric, text, text, jsonb, boolean, text) from public, anon;
-grant execute on function log_concierge_turn(uuid, text, int, int, int, int, numeric, text, text, jsonb, boolean, text) to authenticated;
+revoke all on function log_concierge_turn(uuid, text, text, int, int, int, int, numeric, text, text, jsonb, boolean, text) from public, anon;
+grant execute on function log_concierge_turn(uuid, text, text, int, int, int, int, numeric, text, text, jsonb, boolean, text) to authenticated;
 
 -- For the dashboard card on the VPS (the watcher's robot account) and the Desk: today's spend.
 -- Resting is a fact about now: raise the ceiling and Ian is awake again, the same minute.
