@@ -1212,6 +1212,18 @@ p.stamp { white-space: normal; }
 .board-page #lead .cover-shot:active { opacity: .86; }
 .lead-story:empty { display: none; }
 .lead-story:not(:empty) { margin-top: var(--s-4); }
+/* The dates this member is looking for, on Stays: a ruled block under the masthead, not a panel — an eyebrow
+   that says the dates in words, the two dates side by side, and the quick chips as the one segmented track the
+   Desk already uses. Tap targets are 44px; a pressed chip dims, because a phone has no hover. */
+.looking { margin-top: var(--s-4); padding-bottom: var(--s-4); border-bottom: 1px solid var(--hairline); }
+.looking .eyebrow .num { margin-left: var(--s-2); color: var(--ink); letter-spacing: .02em; text-transform: none; }
+.looking-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); margin-top: var(--s-2); }
+.looking .field { margin-bottom: 0; min-width: 0; }
+/* A date box has an intrinsic width of its own (about 182px on a phone) that two of them cannot share a 358px column with. */
+.looking .field input { min-width: 0; padding-inline: var(--s-3); }
+.looking .segmented { margin-top: var(--s-2); }
+.looking .segmented > button { padding: 0 var(--s-2); }
+.looking .segmented > button:active { background: var(--well); color: var(--ink); }
 @media (prefers-reduced-motion: reduce) {
   .board-page .masthead { animation: none; }
   .board-page #lead .cover-shot:active { opacity: 1; }

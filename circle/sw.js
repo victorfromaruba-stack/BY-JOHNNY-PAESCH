@@ -11,9 +11,9 @@ const VERSION = 'hunto-dev';
 // `find circle/js -name '*.js'`; add a new module here when you add one.
 const APP_SHELL = [
   './', './index.html', './css/app.css', './css/tokens.css', './config.js', './manifest.webmanifest',
-  './js/app.js', './js/core/image.js', './js/core/money.js', './js/core/names.js', './js/core/passwords.js',
+  './js/app.js', './js/core/freshness.js', './js/core/image.js', './js/core/money.js', './js/core/names.js', './js/core/passwords.js',
   './js/core/router.js', './js/core/share.js', './js/core/standing.js', './js/core/store.js',
-  './js/core/supabase-store.js', './js/core/util.js', './js/core/vocab.js', './js/data/listing-paste.js',
+  './js/core/supabase-store.js', './js/core/util.js', './js/core/vocab.js', './js/core/window.js', './js/data/listing-paste.js',
   './js/data/places.js', './js/data/seed.js', './js/data/stays.js', './js/data/vakaymood.js',
   './js/ui/art.js', './js/ui/charts.js', './js/ui/components.js', './js/ui/icons.js', './js/ui/install.js',
   './js/ui/pieces.js', './js/ui/qr.js', './js/ui/qrcode.js', './js/ui/theme.js', './js/ui/wallet.js',

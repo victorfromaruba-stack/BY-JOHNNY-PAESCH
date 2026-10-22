@@ -10,7 +10,8 @@ import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/c
 import { shareText, appHash, boardForGroup } from '../core/share.js';
 import { icon } from '../ui/icons.js';
 import { routeSvg, islandSvg } from '../ui/art.js';
-import { isStale } from '../core/freshness.js';
+import { isStale, atWords, sinceWords } from '../core/freshness.js';
+import { CHIPS, chipWindow, chipFor, clampWindow, dayOf, loadWindow, saveWindow, overlaps, windowWords } from '../core/window.js';
 import { dealList, byNight, byBoard, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, dropWhen, SOURCES, shortRange, usdNight } from './deals.js';
 import { openWeeks, resortForStay, bedroomsOf } from './live.js';
 
@@ -158,6 +159,14 @@ export function stays({ store, go, query = {} }) {
         ${canEdit ? `<div class="row no-print"><button class="btn sm" id="paste">${icon('copy', { size: 16 })}Paste a listing</button>
           <button class="btn ghost sm" id="post">${icon('plus', { size: 16 })}By hand</button></div>` : ''}
       </header>
+      <div class="looking no-print" id="looking" role="group" aria-label="Looking for">
+        <p class="eyebrow">Looking for <span class="num" id="look-words"></span></p>
+        <div class="looking-row">
+          <label class="field"><span>From</span><input type="date" id="look-from" aria-label="From"></label>
+          <label class="field"><span>To</span><input type="date" id="look-to" aria-label="To"></label>
+        </div>
+        <div class="segmented" role="group" aria-label="Quick dates">${CHIPS.map(c => `<button type="button" data-chip="${c.id}" aria-pressed="false">${c.label}</button>`).join('')}</div>
+      </div>
       <div id="cover" class="lead-story"></div>
       <div id="board"></div>
       <div id="mine"></div>
@@ -199,6 +208,12 @@ export function stays({ store, go, query = {} }) {
   // Club studios — but that put a dearer week above a cheaper one, and Victor asked for the
   // opposite in plain words: "always lowest price first". The folio number and the price now
   // always agree, which is the point of a board.
+  // The dates this member is looking for (Victor, 22 Oct 2026: "I'd like to see a month or two in advance"):
+  // remembered on this phone, today to two months out until they say otherwise. The list below shows the
+  // weeks that overlap them; the watcher is told the same dates when the list opens and when they change.
+  const today = dayOf();
+  let win = loadWindow(undefined, today);
+  let lastRes = null;
   const FIRST = 9;
   const coverSlot = wrap.querySelector('#cover'), dealsSlot = wrap.querySelector('#deals'), soonSlot = wrap.querySelector('#soon');
   const count = wrap.querySelector('#count'), asof = wrap.querySelector('#asof');
@@ -215,7 +230,10 @@ export function stays({ store, go, query = {} }) {
   // `res` is VakayMood's answer once it has one; while it is still being asked the dateline
   // says so and the colophon stays hidden, because nothing about the market is known yet.
   const paint = (res) => {
-    const ranked = [...posted, ...drafts].sort(byBoard());
+    const everything = [...posted, ...drafts];
+    // Only the weeks that overlap the dates being looked for; Interval first and cheapest a night within that,
+    // exactly as before. What the board is MADE of (the colophon, the no-Interval note) still speaks of all of it.
+    const ranked = everything.filter(d => overlaps(d, win)).sort(byBoard());
     const folioOf = new Map(ranked.map((d, i) => [d.id, i + 1]));
     const all = ranked;
     count.textContent = `${ranked.length} open`;
@@ -236,7 +254,7 @@ export function stays({ store, go, query = {} }) {
     reach.hidden = !note2;
     reach.innerHTML = note2 ? `<p>${note2}</p>${retryLine()}` : '';
     // The colophon: every stamp its own nowrap span, the line free to break between them.
-    const stamps = res ? [...colophonOf(res), ...madeOf(ranked)] : [];
+    const stamps = res ? [...colophonOf(res), ...madeOf(everything)] : [];
     colophon.hidden = !stamps.length;
     colophon.innerHTML = stamps.map(t => `<span class="stamp">${t}</span>`).join(' · ');
     // Interval's Getaways are the cheapest weeks the Circle can get, and a person puts every one
@@ -244,7 +262,7 @@ export function stays({ store, go, query = {} }) {
     // line used to say "Interval will not let the watcher sign in", which framed the Circle's own
     // rule as a technical blocker and read as an invitation to beat it. The three ways in are the
     // useful half of the sentence and they survive the cut.
-    const noInterval = !ranked.some(d => !d.draft && d.source === 'interval');
+    const noInterval = !everything.some(d => !d.draft && d.source === 'interval');
     const note = wrap.querySelector('#no-interval');
     if (note) {
       note.hidden = !(noInterval && canEdit && !loading);
@@ -282,7 +300,7 @@ export function stays({ store, go, query = {} }) {
       dealsSlot.appendChild(el(`<div class="running-head"><h2>The other <b class="num">${rest.length}</b></h2><p class="eyebrow">Interval first · cheapest a night</p></div>`));
       dealList(dealsSlot, rest, { store, me, canEdit, first: FIRST - 1, key: 'stays', inPlace: false, noun: 'open', folioOf, group: true });
     } else if (!loading && !all.length) {
-      dealsSlot.appendChild(el(`<div class="rule-block"><p class="small muted">Nothing open right now. Open a place below and put your dates in — Victor prices any nights.</p><a class="link-rule" href="#/watching">Set a watch and hear the moment something opens</a></div>`));
+      dealsSlot.appendChild(el(`<div class="rule-block"><p class="small muted">${everything.length ? `Nothing on the board for <span class="num">${escapeHtml(windowWords(win, today))}</span>. Widen the dates above, or open` : 'Nothing open right now. Open'} a place below and put your dates in — Victor prices any nights.</p><a class="link-rule" href="#/watching">Set a watch and hear the moment something opens</a></div>`));
     }
   };
   const load = () => {
@@ -290,23 +308,28 @@ export function stays({ store, go, query = {} }) {
     paint(null);
     // An owner's week from the Circle's own copy of VakayMood that is more than seven days old is not shown, the
     // same rule the database applies to a posted week: where the live feed answers every row is minutes old.
-    openWeeks(store).then(res => { drafts = res.deals.filter(d => !mineIds.has(d.id) && !isStale(d)); loading = false; paint(res); });
+    openWeeks(store).then(res => { drafts = res.deals.filter(d => !mineIds.has(d.id) && !isStale(d)); loading = false; lastRes = res; paint(res); });
   };
-  // Opening Stays tells the watcher, which re-checks every live week against where it lives (RedWeek now;
-  // Interval only inside its scan caps) within about 30 seconds. The line at the top says when that last
-  // happened and what it did — "checked", never "available" — and while the member watches it is asked
-  // again every ten seconds for a minute; when a newer check appears the rows are drawn again, so a week
-  // that has gone is gone from the list in front of them. Nothing is drawn until the watcher has written one.
-  store.noteBoardLook?.();
+  // Opening Stays tells the watcher, with the dates being looked for. It re-checks the board and, inside its
+  // caps, scans Interval for those dates; RedWeek is read twice a day and is not read for a tap. The line at the
+  // top says what is true: when RedWeek was last read ("RedWeek checked at 06:00") or that it is not reachable
+  // and the weeks are shown as last seen; and when the board was last re-checked. "Checked", never "available".
+  // While the member watches it is asked again every ten seconds for a minute; when a newer check appears the
+  // rows are drawn again, so a week that has gone is gone from the list in front of them.
+  store.noteBoardLook?.({ from: win.from, to: win.to });
   {
     const line = wrap.querySelector('#board-check');
     let base, ticks = 0;
     const tick = async () => {
       const st = await store.boardStatus?.();
-      if (st?.at) {
+      if (st) {
         const n = st.retiredToday;
-        line.hidden = false;
-        line.textContent = `Board checked ${fmtRelative(st.at)} · ${n} week${n === 1 ? '' : 's'} retired today`;
+        const bits = [];
+        if (st.outage) bits.push(`RedWeek not reachable since ${sinceWords(st.outage.since)}; weeks shown as last seen`);
+        else if (st.redweekAt) bits.push(`RedWeek checked ${atWords(st.redweekAt)}`);
+        if (st.at) bits.push(`Board checked ${fmtRelative(st.at)}`, `${n} week${n === 1 ? '' : 's'} retired today`);
+        line.hidden = !bits.length;
+        line.textContent = bits.join(' · ');
       }
       if (base === undefined) base = st?.at ?? null;
       else if (st?.at && st.at !== base) { base = st.at; store.reload?.(); return; }
@@ -315,13 +338,44 @@ export function stays({ store, go, query = {} }) {
     };
     tick();
   }
+  // The dates control. Chips are the quick way; the two date boxes are the exact one. Whatever is chosen is
+  // kept on this phone, the list is redrawn at once, and the watcher is told the new dates once the member has
+  // stopped changing them for a moment.
+  {
+    const from = wrap.querySelector('#look-from'), to = wrap.querySelector('#look-to');
+    const words = wrap.querySelector('#look-words'), chips = [...wrap.querySelectorAll('[data-chip]')];
+    let tapTimer = null;
+    const draw = () => {
+      from.value = win.from; to.value = win.to; from.min = to.min = today;
+      words.textContent = windowWords(win, today);
+      for (const b of chips) b.setAttribute('aria-pressed', String(b.dataset.chip === win.chip));
+    };
+    const set = (next) => {
+      win = next; saveWindow(win); draw(); paint(lastRes);
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(() => store.noteBoardLook?.({ from: win.from, to: win.to }), 700);
+    };
+    for (const b of chips) b.addEventListener('click', () => set({ ...chipWindow(b.dataset.chip, today), chip: b.dataset.chip }));
+    const typed = (which) => () => {
+      let f = from.value, e = to.value;
+      if (!f || !e) { draw(); return; }                     // a half-typed date is put back, not believed
+      if (which === 'from' && f > e) e = f;                   // moving the start past the end takes the end along
+      if (which === 'to' && e < f) f = e;
+      const w = clampWindow({ from: f, to: e }, today);
+      if (!w) { draw(); return; }
+      set({ ...w, chip: chipFor(w, today) });
+    };
+    from.addEventListener('change', typed('from'));
+    to.addEventListener('change', typed('to'));
+    draw();
+  }
   load();
   wireDealActions(wrap, store, { drafts: () => drafts });
   wrap.addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-open"]')) load(); });
   wrap.querySelector('#post')?.addEventListener('click', () => postDealSheet({ store }));
   wrap.querySelector('#paste')?.addEventListener('click', () => pasteListingSheet({ store }));
   wrap.querySelector('#tell-board')?.addEventListener('click', () => {
-    const ranked = [...posted, ...drafts].filter(d => !isTeased(d)).sort(byBoard()).slice(0, 5);
+    const ranked = [...posted, ...drafts].filter(d => !isTeased(d) && overlaps(d, win)).sort(byBoard()).slice(0, 5);
     if (!ranked.length) { toast('Nothing open to send yet.'); return; }
     const lines = ranked.map((d, i) => {
       const name = store.stay(d.stayId)?.name || d.title || 'A place';
@@ -592,21 +646,15 @@ export function stayDetail({ store, params, go, query = {} }) {
       <p class="no-print" style="margin-top:var(--s-5)"><a class="link-rule" href="#/concierge?stay=${encodeURIComponent(stay.id)}">Ask Ian about this place</a></p>
       <div class="act-bar"><button type="button" class="btn block" data-act="ask">${icon('send', { size: 17 })}<span>${isTrip ? `Ask for a ${unitWord(stay)}` : 'Ask for these dates'}</span><span aria-hidden="true">·</span><b class="num" id="ask-fig"></b></button></div>
     </div></section></div>`);
-  // Opening a place tells the watcher, which re-reads RedWeek for it within a minute; the line
-  // under the price says when that last happened. It says "checked" and when — never that anything
-  // is available. Nothing is drawn until the watcher has actually written a time, and the line is
-  // asked again every twenty seconds for ten minutes so a member who tapped sees it move.
+  // Opening a place tells the watcher, with the dates this phone is looking for: it scans Interval for them if it
+  // is allowed to. RedWeek is read twice a day, not for a tap, so the line under the price says when it last
+  // was ("RedWeek checked at 06:00") — never that anything is available. Nothing is drawn until the watcher has
+  // written a time.
   if (!isTrip) {
-    store.noteStayLook?.(stay.id);
+    const looking = loadWindow(undefined, dayOf());
+    store.noteStayLook?.(stay.id, { from: looking.from, to: looking.to });
     const line = wrap.querySelector('#checked');
-    let ticks = 0;
-    const tick = async () => {
-      const at = await store.redweekCheckedAt?.(stay.id);
-      if (at) { line.hidden = false; line.textContent = `Checked ${fmtRelative(at)} · RedWeek`; }
-      // A redraw replaces this page with a new one that runs its own clock; the old one stops.
-      if (++ticks < 30) setTimeout(() => { if (wrap.isConnected) tick(); }, 20e3);
-    };
-    tick();
+    Promise.resolve(store.redweekCheckedAt?.(stay.id)).then((at) => { if (at && wrap.isConnected) { line.hidden = false; line.textContent = `RedWeek checked ${atWords(at)}`; } });
   }
   // The docked Ask: one button, the figure inside it, going where the pricing block points.
   // drawQuote() below rewrites `askPath` and #ask-fig every time the dates change.
