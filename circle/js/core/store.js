@@ -2280,6 +2280,13 @@ export class Store {
   async concierge() { throw new Error('Ian answers from the real Circle, not the preview.'); }
   async conciergeFeedback() { /* nothing to keep in the preview */ }
   async conciergeTurns() { return { today: null, turns: [] }; }
+  /** The member's trip plan with Ian (private to them). On the server it is their concierge_memory row. */
+  async plan() { return this.state.tripPlans?.[this.me?.id] ?? null; }
+  async savePlan(plan) {
+    if (!this.me) throw new Error('Sign in first');
+    (this.state.tripPlans ||= {})[this.me.id] = plan;
+    await this.commit('tripPlans');
+  }
 
   // ---------- settings ----------
   async updateSettings(patch, actorId) { Object.assign(this.state.settings, patch); this.log(actorId, 'settings.update', 'settings', 'settings', patch); await this.commit('settings'); }

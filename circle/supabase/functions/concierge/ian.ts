@@ -4,13 +4,17 @@
 // number guard can be run by a test, or by hand against the live board, with no server.
 
 import { systemBlocks, LEARNINGS } from './prompt.ts';
-import { runTool, TOOLS, type Card, type Data } from './tools.ts';
-import { collect, emptyFigures, strays, stripStray } from './guard.ts';
+import { once, planOf, runTool, TOOLS, type Card, type Ctx, type Data } from './tools.ts';
+import { brokenPromises, collect, emptyFigures, strays, stripPromises, stripStray } from './guard.ts';
+import { legs, missing } from './plan.ts';
+import { FACTS_MD, PLACES_ON_FILE } from './knowledge.ts';
 
 export const MODELS = ['claude-haiku-5-5', 'claude-sonnet-5-5'] as const;
 /**
  * USD per million tokens: base input, 5-minute cache write, cache read, output. From Anthropic's
- * pricing page, https://platform.claude.com/docs/en/about-claude/pricing, read 22 Oct 2026.
+ * pricing page, https://platform.claude.com/docs/en/about-claude/pricing, read 22 Oct 2026 and again
+ * for Ian v2: Sonnet 5.5's cache read is $0.10 ("5% of the standard input price ... $0.10 USD on
+ * Claude Sonnet 5.5"; the $0.20 a note quoted is Opus 5.5's).
  * Every cost Ian logs, and the ceiling it counts toward, is these times the API's own usage counts.
  * ponytail: Haiku's >100k-token tier is ignored; WORST below keeps a turn's calls well under it.
  */
@@ -63,9 +67,26 @@ async function sha(x: unknown) {
 /** The tool list with the cache breakpoint on its last entry. */
 const toolsCached = () => TOOLS.map((t, i) => (i === TOOLS.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t));
 
+/** The trip plan in words: what is there, what is missing (in the order to ask), and both flight legs. */
+async function planLines(ctx: Ctx) {
+  const p = await planOf(ctx);
+  const filled = Object.entries(p).filter(([, v]) => v != null);
+  if (!filled.length) return 'Their trip plan is empty. When they plan a trip, keep what they tell you with the plan tool.';
+  const [stays, deals] = await Promise.all([once(ctx, 'stays', () => ctx.data.stays()), p.deal_id ? once(ctx, 'deals', () => ctx.data.deals()) : Promise.resolve([])]);
+  const week = p.deal_id ? (deals as any[]).find(d => d.id === p.deal_id) : null;
+  const l = legs(p, week);
+  const show = { ...p, place: stays.find(s => s.id === p.stay_id)?.name ?? null, chosen_week: week ? { deal_id: week.id, from: week.from_date, to: week.to_date } : (p.deal_id ? 'no longer on the board' : null) };
+  return [
+    `Their trip plan, theirs to change (fill only blanks, never overwrite): ${JSON.stringify(Object.fromEntries(Object.entries(show).filter(([, v]) => v != null)))}.`,
+    `Still missing, in this order: ${missing(p).join('; ') || 'nothing'}.`,
+    l ? `Flights, if they want them: out ${l.out}${l.origin ? ` from ${l.origin}` : ''} to AUA, back ${l.back}, for every traveller including lap infants (the flights tool gives the airline links).` : '',
+  ].filter(Boolean).join('\n');
+}
+
 /** What Ian is told about this member, after the cached prefix. */
-async function contextBlock(data: Data, stayId: string | null, first: boolean, lasting: boolean) {
-  const [me, memory, stays] = await Promise.all([data.me(), data.memory(), stayId ? data.stays() : Promise.resolve([])]);
+async function contextBlock(ctx: Ctx, stayId: string | null, first: boolean, lasting: boolean) {
+  const data = ctx.data;
+  const [me, memory, stays, plan] = await Promise.all([data.me(), data.memory(), stayId ? once(ctx, 'stays', () => data.stays()) : Promise.resolve([]), planLines(ctx)]);
   const stay = stayId ? stays.find(s => s.id === stayId) : null;
   const today = new Date(Date.now() - 4 * 36e5).toISOString().slice(0, 10);
   return [
@@ -75,7 +96,8 @@ async function contextBlock(data: Data, stayId: string | null, first: boolean, l
     stay ? `They opened you from the page of ${stay.name} (stay_id ${stay.id}).` : '',
     // Asked for in the prompt and skipped by Haiku on the first live run; said here, it happens.
     first ? 'This is their first message to you: begin your answer with one short line saying you are Ian, the Circle\'s concierge.' : '',
-    lasting ? 'Their last message says something lasting about how they travel: call remember for it first, and say in one line what you noted.' : '',
+    lasting ? 'Their last message says something lasting about how they travel: call remember (or the plan tool, for this trip) first, and say in one line what you noted.' : '',
+    plan,
   ].filter(Boolean).join('\n');
 }
 
@@ -83,7 +105,7 @@ export async function turn({ lines, stayId = null, data, model, callModel, dryRu
   lines: Line[]; stayId?: string | null; data: Data; model: string; callModel?: CallModel; dryRun?: boolean;
 }) {
   const ctx = { data, cards: [] as Card[], cache: new Map<string, Promise<unknown>>() };
-  const context = await contextBlock(data, stayId, lines.filter(l => l.role === 'user').length === 1, LASTING.test(lines.at(-1)?.text || ''));
+  const context = await contextBlock(ctx, stayId, lines.filter(l => l.role === 'user').length === 1, LASTING.test(lines.at(-1)?.text || ''));
   const messages: any[] = lines.map(l => ({ role: l.role, content: l.text }));
   const payload: Record<string, unknown> = {
     model, max_tokens: LIMITS.maxTokens,
@@ -95,7 +117,8 @@ export async function turn({ lines, stayId = null, data, model, callModel, dryRu
     ...(model.startsWith('claude-haiku') ? { thinking: { type: 'disabled' } } : {}),
     messages,
   };
-  if (dryRun) return { payload, learnings_chars: LEARNINGS.length };
+  // What the deploy carried, said in the dry run: an empty learnings.md, facts.md or places.js would otherwise go unnoticed.
+  if (dryRun) return { payload, learnings_chars: LEARNINGS.length, facts_chars: FACTS_MD.length, places_on_file: PLACES_ON_FILE };
   if (!callModel) throw new Error('No model to call.');
 
   const usage: Usage = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, calls: 0 };
@@ -140,13 +163,27 @@ export async function turn({ lines, stayId = null, data, model, callModel, dryRu
     }
     reply = textOf(res);
     const stray = strays(reply, figs);
-    if (!stray.length) break;
-    if (guarded) { reply = stripStray(reply, figs); tools.push({ name: '(number guard)', input: { stripped: stray }, result_sha: '', ms: 0 }); break; }
-    // Once: say which figures came from nowhere and let it answer again.
+    const done = { cards: ctx.cards, tools };
+    const broken = brokenPromises(reply, done);
+    if (!stray.length && !broken.length) break;
+    if (guarded) {
+      reply = stripPromises(stripStray(reply, figs), done);
+      if (stray.length) tools.push({ name: '(number guard)', input: { stripped: stray }, result_sha: '', ms: 0 });
+      if (broken.length) tools.push({ name: '(promise guard)', input: { stripped: broken }, result_sha: '', ms: 0 });
+      break;
+    }
+    // Once: say what came from nowhere and let it answer again, as if for the first time. The first
+    // nightly replay found Haiku opening its rewrite with the correction ("What I can say: ...") when
+    // the check read like a conversation, which pushed the introduction and Interval out of the lead.
     guarded = true;
-    tools.push({ name: '(number guard)', input: { reprompted: stray }, result_sha: '', ms: 0 });
+    if (stray.length) tools.push({ name: '(number guard)', input: { reprompted: stray }, result_sha: '', ms: 0 });
+    if (broken.length) tools.push({ name: '(promise guard)', input: { reprompted: broken }, result_sha: '', ms: 0 });
+    const why = [
+      stray.length ? `${stray.join(', ')}: no tool gave ${stray.length === 1 ? 'that figure' : 'those figures'} for what you attached ${stray.length === 1 ? 'it' : 'them'} to (a points figure is not dollars; a week's price belongs to that week)` : '',
+      broken.length ? `"${broken.join('", "')}": nothing on their screen does that (only a watch card lets you say you will tell them; only remember or the plan tool lets you say noted; never say booked, available, confirmed, sold out or guaranteed)` : '',
+    ].filter(Boolean).join('; ');
     messages.push({ role: 'assistant', content: res.content });
-    messages.push({ role: 'user', content: `Check: ${stray.join(', ')} ${stray.length === 1 ? 'is' : 'are'} not what any tool gave for what you attached ${stray.length === 1 ? 'it' : 'them'} to (a points figure is not dollars; a week's price belongs to that week). Write your whole answer again without ${stray.length === 1 ? 'it' : 'them'}, saying you do not know where it matters. Keep everything else that answers the question.` });
+    messages.push({ role: 'user', content: `[System check, not from the member] ${why}. Write the whole answer again, from its first line, for the member, leaving those out. Do not mention this check or what you removed; keep your opening line and everything else that answers the question.` });
   }
   } catch (e) {
     // What was spent before the failure is still spent: it goes in the log and counts to the ceiling.

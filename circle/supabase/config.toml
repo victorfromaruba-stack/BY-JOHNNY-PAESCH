@@ -3,4 +3,4 @@
 project_id = "cdkopyphjvfxjqhasrae"
 
 [functions.concierge]
-static_files = ["./functions/concierge/learnings.md"]
+static_files = ["./functions/concierge/learnings.md", "./functions/concierge/facts.md"]

@@ -55,7 +55,7 @@ export function claims(text: string): Claim[] {
 const SKIP = new Set(['remembered', 'noted', 'forgot', 'error', 'say', 'said_before', 'deal_id', 'stay_id', 'booking_id', 'id',
   'crew_id', 'member_id', 'from', 'to', 'plan_from', 'plan_to', 'trip_dates', 'redweek_last_read', 'checked_at', 'seen_at']);
 const kindOfKey = (k: string): Kind | null =>
-  /usd|price|fee|ask|public|cost/.test(k) ? 'usd' : /points|pts/.test(k) ? 'pts' : /pct|percent/.test(k) ? 'pct' : null;
+  /pct|percent/.test(k) ? 'pct' : /usd|price|fee|ask|public|cost|fare/.test(k) ? 'usd' : /points|pts/.test(k) ? 'pts' : null;
 
 /** Take the figures out of one tool result, typed by the field they sit in, and kept with their week. */
 export function collect(v: unknown, into: Figures, kind: Kind | null = null, week: Week | null = null): void {
@@ -120,3 +120,25 @@ export const strays = (reply: string, f: Figures) => [...new Set(sentences(reply
 /** Last resort: drop every sentence or line that still carries one. */
 export const stripStray = (reply: string, f: Figures) =>
   sentences(reply).filter(s => !straysIn(s, f).length).join(' ').replace(/\s+\n/g, '\n').trim();
+
+// ---------------------------------------------------------------- the promise guard
+// Ian may not promise what nothing does. "I'll let you know" needs the watch card that will; "noted"
+// needs the remember or plan tool that noted it; "booked" is never Ian's to say. The banned words
+// ("available", "confirmed", "sold out", "guaranteed") are held here too, in code, not only in the prompt.
+// Same handling as a stray figure: sent back once, then the sentence is cut.
+export const PROMISES: { rx: RegExp; needs: 'watch' | 'note' | 'never' }[] = [
+  { rx: /\bI(?:'ll| will| am going to| shall)\s+(?:let you know|e-?mail you|message you|text you|notify you|ping you|alert you|tell you (?:when|if|as soon)|get back to you|keep (?:an eye|watching|checking|looking)|watch (?:for|out)|check (?:back|again|every|daily|each)|remind you)/i, needs: 'watch' },
+  { rx: /\b(?:noted|I(?:'ve| have) (?:noted|saved|written (?:that|it) down|added (?:that|it) to your (?:plan|trip|notes))|I(?:'ll| will) remember)\b/i, needs: 'note' },
+  { rx: /\b(?:I|we)(?:'ve| have)? (?:booked|reserved|held|secured) (?:it|that|this|the|your|you)\b|\byou(?:'re| are) (?:now )?(?:booked|all set|confirmed)\b|\b(?:is|are|has been|have been) (?:now )?booked for you\b/i, needs: 'never' },
+  { rx: /\b(?:available|confirmed|sold out|guaranteed)\b/i, needs: 'never' },
+];
+type Done = { cards: { action: string }[]; tools: { name: string }[] };
+/** Each sentence that promises what this turn's cards and tools do not do, as written. */
+export function brokenPromises(reply: string, done: Done) {
+  const has = { watch: done.cards.some(c => c.action === 'watch'), note: done.tools.some(t => t.name === 'remember' || t.name === 'plan') };
+  return [...new Set(sentences(reply).flatMap(s => PROMISES
+    .filter(p => p.rx.test(s) && (p.needs === 'never' || !has[p.needs]))
+    .map(p => (s.match(p.rx) || [''])[0].trim())))];
+}
+export const stripPromises = (reply: string, done: Done) =>
+  sentences(reply).filter(s => !brokenPromises(s, done).length).join(' ').replace(/\s+\n/g, '\n').trim();

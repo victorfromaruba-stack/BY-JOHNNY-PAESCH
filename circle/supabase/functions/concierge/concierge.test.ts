@@ -8,6 +8,9 @@ import { runTool, TOOLS, type Data } from './tools.ts';
 import { costUsd, LASTING, PRICES, turn, worstCaseUsd } from './ian.ts';
 import { claims, collect, emptyFigures, strays, stripStray, toNum } from './guard.ts';
 import { hmac, linesFrom, makeHandler } from './handler.ts';
+import { asPlan, emptyPlan, legs, missing, planFrom } from './plan.ts';
+import { factsFor, placeFacts, sections } from './knowledge.ts';
+import { brokenPromises, stripPromises } from './guard.ts';
 
 const S = { pointsPerDollar: 100, serviceRate: 0.15, tiers: [{ monthlyUsd: 100, bonusRate: 0 }, { monthlyUsd: 200, bonusRate: 0.06 }] };
 const surf = { id: 'surf', name: 'Surf Club', rate_low_usd: 135, rate_high_usd: 300, rate_peak_usd: 580, retail_usd: 450, min_nights: 2, peak_min_nights: 7 };
@@ -107,6 +110,7 @@ Deno.test('the member Ian is told about carries no email, phone, username, card,
 // ---------------------------------------------------------------- tools
 function fakeData(over: Partial<Data> = {}): Data {
   let notes: Record<string, string> = {};
+  let tripPlan: any = null;
   return {
     settings: async () => ({ ...S, model: 'claude-haiku-5-5', dailyUsd: 5 }),
     me: async () => ({ id: 'm1', name: 'Ana Kock', monthly_usd: 100 }),
@@ -128,6 +132,8 @@ function fakeData(over: Partial<Data> = {}): Data {
     redweekChecks: async () => null,
     memory: async () => notes,
     saveMemory: async (n) => { notes = n; },
+    plan: async () => tripPlan,
+    savePlan: async (p) => { tripPlan = p; },
     ...over,
   };
 }
@@ -513,4 +519,178 @@ Deno.test('Ian\'s 48 hours and 7 days are the app\'s: the same verdict for every
       assertEquals(facts.retired_by_age, f.isStale(app, now), `${source} ${h}h retired by age`);
     }
   }
+});
+
+// ---------------------------------------------------------------- Ian v2, slice 1: the trip plan
+const planCtx = (deals: any[] = []) => ({ resolveStay: async (x: string) => (/surf/i.test(x) ? 'surf' : /ocean/i.test(x) ? 'oc' : null), deals });
+
+Deno.test('the plan: a blank is filled, a value is never overwritten, a change is only proposed', async () => {
+  const r1 = await planFrom(emptyPlan(), { place: 'Surf Club', from: day(30), to: day(37), adults: '3', infants: '1', origin: 'lim' }, planCtx());
+  assertEquals(r1.refused, []);
+  assertEquals([r1.plan.stay_id, r1.plan.adults, r1.plan.infants, r1.plan.origin], ['surf', 3, 1, 'LIM']);
+  assertEquals(r1.change, null);
+  const r2 = await planFrom(r1.plan, { from: day(37), to: day(44), adults: '3' }, planCtx());
+  assertEquals([r2.plan.from, r2.plan.to], [day(30), day(37)], 'the dates they gave stand');
+  assertEquals(r2.change, { from: day(37), to: day(44) }, 'the new ones only as a proposal');
+  assertEquals(r2.filled, []);
+});
+
+Deno.test('the plan refuses what cannot be true', async () => {
+  const bad = async (input: Record<string, string>, cur = emptyPlan(), deals: any[] = []) => (await planFrom(cur, input, planCtx(deals))).refused.join(' | ');
+  assert((await bad({ origin: 'LIMA' })).includes('three-letter'));
+  assert((await bad({ origin: 'AUA' })).includes('three-letter'));
+  assert((await bad({ from: day(9), to: day(3) })).includes('backwards'));
+  assert((await bad({ from: day(-5), to: day(2) })).includes('passed'));
+  assert((await bad({ adults: '1', infants: '2' })).includes('more lap infants than adults'));
+  assert((await bad({ place: 'Surf Club', deal_id: 'x1' }, emptyPlan(), [{ id: 'x1', stay_id: 'oc', from_date: day(30), to_date: day(37) }])).includes('another place'));
+  assert((await bad({ todo: 'a boat trip for $120' })).includes('cannot carry a price'));
+  assert((await bad({ place: 'Hyatt' })).includes('no single place'));
+  assert((await bad({ from: day(30), to: day(60) })).includes('at most 28 nights'));
+});
+
+Deno.test('choosing a week brings its place and dates, and a week on other dates waits for the member', async () => {
+  const deals = [{ id: 'w1', stay_id: 'surf', from_date: day(30), to_date: day(37) }];
+  const r = await planFrom(emptyPlan(), { deal_id: 'w1' }, planCtx(deals));
+  assertEquals([r.plan.deal_id, r.plan.stay_id, r.plan.from, r.plan.to], ['w1', 'surf', day(30), day(37)]);
+  const dated = { ...emptyPlan(), stay_id: 'surf', from: day(20), to: day(27) };
+  const r2 = await planFrom(dated, { deal_id: 'w1' }, planCtx(deals));
+  assertEquals(r2.plan.deal_id, null, 'not filled ahead of its dates');
+  assertEquals(r2.change, { from: day(30), to: day(37), deal_id: 'w1' });
+});
+
+Deno.test('what is missing comes in order, and the flights are the week\'s own dates for everyone', () => {
+  const p = { ...emptyPlan(), stay_id: 'surf', from: day(30), to: day(37) };
+  assertEquals(missing(p)[0], 'who is travelling (adults, children, lap infants)');
+  assertEquals(missing({ ...p, adults: 2 })[0], 'where they fly from');
+  assertEquals(missing({ ...p, adults: 2, origin: 'LIM' })[0], 'which week on the board');
+  assertEquals(legs({ ...p, adults: 3, infants: 1, origin: 'LIM' }, { from_date: day(32), to_date: day(39) }), { out: day(32), back: day(39), origin: 'LIM', adults: 3, children: 0, infants: 1 });
+  assertEquals(asPlan({ adults: '3', origin: 7, junk: 1 }).adults, null, 'a stored plan is cleaned, not trusted');
+});
+
+Deno.test('the plan tool writes blanks, turns a change into a card, and refuses with reasons', async () => {
+  const c = ctxOf();
+  const w: any = await runTool('plan', { place: 'Surf Club', from: day(30), to: day(37), adults: '3', infants: '1', origin: 'LIM', children: '', deal_id: '', transfer: '', todo: '', open: '' }, c);
+  assertEquals(w.written.sort(), ['adults', 'from', 'infants', 'origin', 'stay_id', 'to']);
+  assertEquals(w.still_missing[0], 'which week on the board');
+  const again: any = await runTool('plan', { from: day(44), to: day(51) }, c);
+  assertEquals(again.written, []);
+  assertEquals(c.cards.map((x: any) => [x.action, x.plan]), [['plan_change', { from: day(44), to: day(51) }]]);
+  assertEquals((await c.data.plan!() as any).from, day(30), 'nothing was overwritten');
+  assert(((await runTool('plan', { origin: 'Lima' }, ctxOf())) as any).error.includes('three-letter'));
+});
+
+Deno.test("the plan rides in Ian's context with what is missing and both legs", async () => {
+  const data = fakeData();
+  await data.savePlan!({ ...emptyPlan(), stay_id: 'surf', from: day(30), to: day(37), adults: 3, infants: 1, origin: 'LIM' } as any);
+  const out: any = await turn({ lines: [{ role: 'user', text: 'help me plan this' }], data, model: 'claude-haiku-5-5', dryRun: true });
+  const t = out.payload.system[1].text;
+  assert(t.includes('"origin":"LIM"') && t.includes('"place":"Surf Club"'));
+  assert(t.includes('Still missing, in this order: which week on the board'));
+  assert(t.includes(`out ${day(30)} from LIM to AUA, back ${day(37)}, for every traveller including lap infants`));
+  assert(out.places_on_file === 14 && out.facts_chars > 0, 'the dry run says what the deploy carried');
+});
+
+// ---------------------------------------------------------------- slice 2: actions the member confirms
+Deno.test('a watch card needs a place and future dates; an ask carries who and a note with no price', async () => {
+  const c = ctxOf();
+  assert((await runTool('propose', { action: 'watch', stay_id: 'Surf Club', from: '', to: '' }, c) as any).error);
+  assert((await runTool('propose', { action: 'watch', stay_id: 'Surf Club', from: day(30), to: day(37), guests: '4' }, c) as any).shown);
+  assertEquals([c.cards[0].action, c.cards[0].nights, c.cards[0].guests], ['watch', 7, 4]);
+  const note = '3 adults and a lap infant; please check an Interval package with flights from LIM, out and back on these dates';
+  assert((await runTool('propose', { action: 'ask_dates', stay_id: 'surf', from: day(30), to: day(37), guests: '4', note }, c) as any).shown);
+  assertEquals([c.cards[1].guests, c.cards[1].note], [4, note]);
+  assert((await runTool('propose', { action: 'ask_dates', stay_id: 'surf', from: day(30), to: day(37), note: 'around $900 if possible' }, ctxOf()) as any).error.includes('no prices'));
+  assert((await runTool('propose', { action: 'ask_dates', stay_id: 'surf', from: day(30), to: day(37), note: 'x'.repeat(601) }, ctxOf()) as any).error);
+  assert((await runTool('propose', { action: 'watch', stay_id: 'surf', from: day(30), to: day(37), guests: '0' }, ctxOf()) as any).error);
+});
+
+Deno.test('the promise guard: a promise needs the card or tool that keeps it; "booked" and the banned words never pass', () => {
+  const none = { cards: [], tools: [] };
+  assertEquals(brokenPromises("I'll let you know when a cheaper week turns up.", none), ["I'll let you know"]);
+  assertEquals(brokenPromises("I'll let you know when a cheaper week turns up.", { cards: [{ action: 'watch' }], tools: [] }), []);
+  assertEquals(brokenPromises('Noted: four of you, from Lima.', none), ['Noted']);
+  assertEquals(brokenPromises('Noted: four of you, from Lima.', { cards: [], tools: [{ name: 'plan' }] }), []);
+  assertEquals(brokenPromises("I've booked the Surf Club week for you.", { cards: [{ action: 'watch' }], tools: [{ name: 'plan' }] }), ["I've booked the"]);
+  assertEquals(brokenPromises('That week is still available.', none), ['available']);
+  assertEquals(brokenPromises('Victor confirms every price before he books.', none), [], '"confirms" is not "confirmed"');
+  assertEquals(stripPromises("Here is the week. I'll email you if it drops.", none), 'Here is the week.');
+});
+
+Deno.test('a promise with nothing behind it is sent back once, without a meta-line, then cut', async () => {
+  const replies = [
+    { stop_reason: 'end_turn', content: [{ type: 'text', text: "I'm Ian, the Circle's concierge. I'll keep an eye on the Surf Club for you." }], usage: {} },
+    { stop_reason: 'end_turn', content: [{ type: 'text', text: "I'm Ian, the Circle's concierge. I will keep checking every day." }], usage: {} },
+  ];
+  const seen: any[] = [];
+  const out: any = await turn({ lines: [{ role: 'user', text: 'watch it' }], data: fakeData(), model: 'claude-haiku-5-5', callModel: async (p) => { seen.push(structuredClone(p)); return replies[seen.length - 1]; } });
+  assertEquals(out.reply, "I'm Ian, the Circle's concierge.");
+  const ask = String(seen[1].messages.at(-1).content);
+  assert(ask.startsWith('[System check, not from the member]') && ask.includes('Do not mention this check') && ask.includes('keep your opening line'));
+  assertEquals(out.tools.map((t: any) => t.name), ['(promise guard)', '(promise guard)']);
+});
+
+// ---------------------------------------------------------------- slice 3: what Ian knows
+Deno.test("facts: the right section with its source; nothing on file said as such", () => {
+  const taxi: any = factsFor('taxi from the airport');
+  assertEquals(taxi.found[0].topic, 'Getting from the airport to the hotels (taxi)');
+  assert(taxi.found[0].facts.includes('Oranjestad $26') && taxi.found[0].listing.startsWith('https://www.aruba.com/'));
+  assertEquals((factsFor('kids club ghost') as any).found, []);
+  assertEquals((factsFor('kids club ghost') as any).said, 'Nothing on file about that. Say it is not on file; never guess.');
+  assert((factsFor('Can I take my points out?') as any).found[0].facts.includes('$25 exit fee'));
+  for (const s of sections()) assert(/^.+\. Checked \d{1,2} \w+ \d{4}\.$/.test(s.source), `${s.title}: every section names its source and date`);
+});
+
+Deno.test("facts.md's rules are the app's rules: a new rules version without a facts.md change fails", async () => {
+  const money = await import('../../../js/core/money.js');
+  const md = Deno.readTextFileSync(new URL('./facts.md', import.meta.url));
+  assertEquals(md.match(/Rules version: ([\d.]+)/)?.[1], money.DEFAULT_SETTINGS.rulesVersion);
+});
+
+Deno.test("places carries what a place publishes, with the page it was read from as its only link", async () => {
+  const one: any = await runTool('places', { filter: 'surf' }, ctxOf({ ...fakeData(), stays: async () => [{ ...surf, name: "Marriott's Aruba Surf Club" }] as any }));
+  const p = one.places[0].published;
+  const sp = (x: string) => x.replace(/\s/gu, ' ');      // places.js writes "4:00 pm" with a narrow no-break space
+  assertEquals([sp(p.check_in), sp(p.check_out), p.children_welcome], ['4:00 pm', '10:00 am', true]);
+  assert(p.source[0].listing.startsWith('https://vakaymood.com/'));
+  const f = emptyFigures(); collect(one, f);
+  assertEquals([...f.links], [p.source[0].listing]);
+  const none: any = await runTool('places', { filter: 'surf' }, ctxOf());
+  assert(String(none.places[0].published).includes('not on file'), 'a place with no published facts says so');
+  assertEquals(placeFacts('Nowhere Inn'), null);
+});
+
+// ---------------------------------------------------------------- slice 4a: flights both ways
+Deno.test('flights follow one option\'s own dates, every traveller, airline-direct links only', async () => {
+  const data = fakeData();
+  await data.savePlan!({ ...emptyPlan(), stay_id: 'surf', from: day(30), to: day(37), adults: 3, infants: 1, origin: 'LIM' } as any);
+  const byWeek: any = await runTool('flights', { option: 'iv' }, ctxOf(data));
+  assertEquals([byWeek.legs.out.date, byWeek.legs.back.date], [day(32), day(39)], "the Getaway's own dates, not the plan's");
+  assertEquals(byWeek.airlines.map((a: any) => a.airline), ['LATAM', 'Avianca', 'Copa']);
+  assert(byWeek.airlines.every((a: any) => a.listing.includes(day(32)) && a.listing.includes(day(39))));
+  const byPlan: any = await runTool('flights', { option: 'plan' }, ctxOf(data));
+  assertEquals([byPlan.legs.out.date, byPlan.legs.back.date, byPlan.travellers.lap_infants], [day(30), day(37), 1]);
+  assert((await runTool('flights', { option: 'nope' }, ctxOf(data)) as any).error);
+  const f = emptyFigures(); collect(byWeek, f);
+  assertEquals(f.links.size, 3, 'the phone links these, and nothing else');
+  assert(![...f.links].some(u => /google|kayak|skyscanner|expedia/.test(u)));
+});
+
+// ---------------------------------------------------------------- the first nightly replay's failures
+Deno.test("a fee comes with its own percentage and sentence; a saving with its per-night figure", async () => {
+  const f = dealFacts({ id: 'd1', stay_id: 'surf', from_date: '2026-10-03', to_date: '2026-10-10', nights: 7, points_total: 161000, source: 'redweek', title: 'owner asking $166 a night', seen_at: new Date().toISOString() }, surf, S);
+  assertEquals([f.fee_pct, f.under_public_per_night_usd], [20, -27]);
+  assertEquals(f.fee_said, "fees add $238 on top of the owner's ask of $1,162 for the nights, 20%: more than the 10% worth pointing out");
+  const g = emptyFigures(); collect(f, g);
+  assertEquals(strays('Fees add $238, 20% on top of the ask: more than the 10% worth pointing out. That is $27 a night over the public rate.', g), []);
+});
+
+Deno.test('a fresh-look button comes with how old the newest read there is', async () => {
+  const out: any = await runTool('refresh_redweek', { stay_id: 'surf' }, ctxOf());
+  assert(/^seen \d+ (min|hours?) ago$/.test(out.newest_read_here), out.newest_read_here);
+  assert(out.say.includes('newest read here was seen'));
+});
+
+Deno.test("the shared copies are the app's own modules, byte for byte (run shared/sync.ts after changing one)", async () => {
+  const { SHARED, render } = await import('./shared/sync.ts');
+  for (const [src, dst] of SHARED) assertEquals(await Deno.readTextFile(new URL(`./shared/${dst}`, import.meta.url)), await render(src), `${dst} has drifted from circle/${src}`);
 });

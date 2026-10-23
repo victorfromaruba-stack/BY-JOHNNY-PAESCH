@@ -4,13 +4,15 @@ Live on project `cdkopyphjvfxjqhasrae` since 22 Oct 2026. Run from `circle/`.
 The access token is the `openclaw` secret in the web app's locked box. Pass it only as
 `SUPABASE_ACCESS_TOKEN` for the one command that needs it.
 
-1. **SQL.** `supabase/migrations/20261023_concierge.sql`, then `20261024_ian_fixes.sql`. Both are safe to run twice.
+1. **SQL.** `supabase/migrations/20261023_concierge.sql`, then `20261024_ian_fixes.sql`, then `20261025_trip_plan.sql`. All are safe to run twice.
    Apply the second and deploy the function back to back: the gate's signature changes, so the old function
    and the new gate (or the reverse) answer "not switched on" until both are in.
    Paste it into the SQL editor, or POST it as `{"query": …}` to
    `https://api.supabase.com/v1/projects/cdkopyphjvfxjqhasrae/database/query`.
 2. **Function.** `supabase functions deploy concierge --project-ref cdkopyphjvfxjqhasrae --use-api`.
-   `supabase/config.toml` lists `learnings.md` as a static file. Without that line Ian runs with no
+   `supabase/config.toml` lists `learnings.md` and `facts.md` as static files. `shared/` holds copies of the
+   app's places.js, stays.js, names.js and airline-links.js: after changing one of those, run
+   `deno run --allow-read --allow-write supabase/functions/concierge/shared/sync.ts` (a test fails until you do). Without that line Ian runs with no
    house knowledge, and the dry run (`{dryRun: true}`) reports `learnings_chars: 0`.
    **Redeploy after any change to `learnings.md` or `prompt.ts`.**
 3. **Key.** `ANTHROPIC_API_KEY` (the WhatsApp bot's `anthropic:default` key). The CLI's

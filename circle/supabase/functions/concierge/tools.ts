@@ -9,9 +9,11 @@
 // Results are trimmed to ROWS rows and every null is said in words, so "no public rate on file"
 // reaches the model as a sentence rather than as a gap it might fill.
 
-import { cheaperNextDoor, dealFacts, LOOKS_WRONG, monthsToAfford, seasonEdge, type Deal, type Settings, type Stay } from './compare.ts';
+import { cheaperNextDoor, dealFacts, lastSeenWords, LOOKS_WRONG, monthsToAfford, seasonEdge, type Deal, type Settings, type Stay } from './compare.ts';
 import { memberContext, personOf } from './redact.ts';
 import { flights } from './flights/index.ts';
+import { asPlan, legs, missing, planFrom, type Plan } from './plan.ts';
+import { factsFor, placeFacts } from './knowledge.ts';
 
 export const ROWS = 40;
 // The board's rows are verbose; past a dozen, Haiku started reading one row's date into another
@@ -37,13 +39,19 @@ export type Data = {
   redweekChecks(): Promise<{ stay_id: string; checked_at: string }[] | null>;
   memory(): Promise<Record<string, string>>;
   saveMemory(notes: Record<string, string>): Promise<void>;
+  // The trip plan, on the same own-row as the notes. Optional so a fixture without it still runs.
+  plan?(): Promise<unknown>;
+  savePlan?(plan: Plan | null): Promise<void>;
 };
 
 export type Card = {
-  action: 'create_crew' | 'invite' | 'ask_dates' | 'refresh';
+  action: 'create_crew' | 'invite' | 'ask_dates' | 'refresh' | 'watch' | 'plan_change';
   name: string | null; about: string | null; stay_id: string | null; from: string | null; to: string | null;
   crew_id: string | null; member_id: string | null; deal_id: string | null; redemption_id: string | null;
+  guests?: number | null; nights?: number | null; note?: string | null; plan?: Partial<Plan> | null;
 };
+export const blankCard = (action: Card['action'], over: Partial<Card> = {}): Card => ({ action, name: null, about: null, stay_id: null, from: null, to: null,
+  crew_id: null, member_id: null, deal_id: null, redemption_id: null, guests: null, nights: null, note: null, plan: null, ...over });
 
 const S = (description: string) => ({ type: ['string', 'null'], description });
 // Strict mode allows at most 16 nullable parameters across all tools, so the rarely-used ones are
@@ -61,7 +69,7 @@ export const TOOLS = [
     input_schema: obj({ stay_id: S('A place id or name, or null') }) },
   { name: 'getaways', description: 'Only the Interval Getaways on the board. A Getaway is sold by the week; per night is the week divided by its nights, never bookable nightly.',
     input_schema: obj({ stay_id: S('A place id or name, or null') }) },
-  { name: 'places', description: 'The Circle\'s places: rates per night all in by part of the year, public rate, minimum nights, all-inclusive, and room types when the filter names one to three places.',
+  { name: 'places', description: 'The Circle\'s places: rates per night all in by part of the year, public rate, minimum nights, all-inclusive; and when the filter names one to three places, their room types and the facts each place publishes (address, check-in and check-out, children, on-site, units) with the page they were read from.',
     input_schema: obj({ filter: S('Words to match a place name or area, or null for all') }) },
   { name: 'quote', description: 'The Circle\'s indicative all-in price for any dates at a place, the same number the Ask screen prints, with the minimum stay, how many nights fall at the peak rate, whether the member can cover it, and months to save the gap. Victor confirms every price before he books.',
     input_schema: obj({ stay_id: { type: 'string', description: 'A place id, or the place\'s name as the board prints it' }, from: { type: 'string', description: DATE }, to: { type: 'string', description: DATE }, guests: { type: 'integer', description: 'How many people' } }) },
@@ -73,13 +81,20 @@ export const TOOLS = [
     input_schema: obj({}) },
   { name: 'refresh_redweek', description: 'Offer the member a fresh look at a place: puts a button on their screen. When they tap it the watcher re-reads RedWeek\'s public page and checks Interval within its own limits, the same as opening the place in the app. Nothing is read until they tap.',
     input_schema: obj({ stay_id: { type: 'string', description: 'A place id or name' } }) },
-  { name: 'flights', description: 'Air fares. Not connected yet. Interval is where the Circle finds flights, cars, cruises and packages, through Victor.',
-    input_schema: obj({ from: E('Airport code'), to: E('Airport code'), date: E(DATE), pax: { type: 'integer', description: 'Passengers' } }) },
+  { name: 'flights', description: 'Flights both ways for one option: out on its check-in day, back on its check-out day, every traveller including lap infants, from where the plan says they fly from. Returns the airline-direct links with those dates filled in (never Google Flights or a search site). Fares are not read here: the airline\'s own page shows them.',
+    input_schema: obj({ option: { type: 'string', description: 'A board week\'s deal_id, or "plan" for the trip plan\'s chosen week or dates' } }) },
   { name: 'remember', description: 'Keep one thing about this member for next time: usual dates, who they travel with, budget, places they like or dislike, kitchen or not. An empty value forgets the key. Tell the member what you noted.',
     input_schema: obj({ key: { type: 'string', description: 'short_snake_case, e.g. usual_month' }, value: { type: 'string', description: 'At most 200 characters; empty to forget' } }) },
-  { name: 'propose', description: 'Put a card in front of the member for them to tap. Nothing happens until they do. create_crew needs name, stay_id, from and to (a crew can start from a plan; redemption_id only if it is their approved booking there). invite needs crew_id (one they lead) and member_id. ask_dates needs stay_id, from and to, and deal_id when it is a week on the board.',
-    input_schema: obj({ action: { type: 'string', enum: ['create_crew', 'invite', 'ask_dates'] }, name: E('Crew name'), about: E('One line about the crew'),
-      stay_id: E('Place id or name'), from: E(DATE), to: E(DATE), crew_id: E('Crew id'), member_id: E('Member id'), deal_id: E('Board week id'), redemption_id: E('Booking id') }) },
+  { name: 'propose', description: 'Put a card in front of the member for them to tap. Nothing happens until they do. create_crew needs name, stay_id, from and to (a crew can start from a plan; redemption_id only if it is their approved booking there). invite needs crew_id (one they lead) and member_id. ask_dates (asks Victor) needs stay_id, from and to, deal_id when it is a week on the board, guests, and a note naming what they want (e.g. an Interval package with flights out and back from their airport). watch (tells them when a better week turns up) needs stay_id, from, to, and guests.',
+    input_schema: obj({ action: { type: 'string', enum: ['create_crew', 'invite', 'ask_dates', 'watch'] }, name: E('Crew name'), about: E('One line about the crew'),
+      stay_id: E('Place id or name'), from: E(DATE), to: E(DATE), crew_id: E('Crew id'), member_id: E('Member id'), deal_id: E('Board week id'), redemption_id: E('Booking id'),
+      guests: E('How many people, a whole number'), note: E('For ask_dates: what to ask Victor, at most 600 characters, no prices') }) },
+  { name: 'plan', description: 'Write the member\'s trip plan. Fill only what they told you, and only blanks: a field already filled is never overwritten; a different value becomes a card they confirm. Empty means unchanged. Every field is text.',
+    input_schema: obj({ place: E('Place id or name'), from: E(DATE + ' check-in'), to: E(DATE + ' check-out'), adults: E('Adults'), children: E('Children 2 and over'),
+      infants: E('Lap infants under 2'), origin: E('Three-letter code of the airport they fly from, e.g. LIM'), deal_id: E('The chosen week on the board'),
+      transfer: E('Getting from the airport'), todo: E('Things to do'), open: E('Open questions') }) },
+  { name: 'facts', description: 'What the Circle has on file, each with its source: getting from the airport (taxi fares), money and currency, entering Aruba (passport, ED card), Interval (Getaways, packages, flights through Victor) and the Circle\'s own rules (points, fees, quotes, cancelling, leaving). Returns "not on file" when it has nothing.',
+    input_schema: obj({ topic: { type: 'string', description: 'A few words, e.g. "taxi from the airport"' } }) },
 ].map(t => ({ ...t, strict: true }));
 
 const FIGURE = /\$\s?\d|\busd\s?\d|\d\s*k?\s*(points|pts|dollars|usd)\b/i;
@@ -104,8 +119,10 @@ export async function stayIdOf(ctx: Ctx, idOrName: unknown): Promise<string | nu
   const hit = w.length ? stays.filter(x => w.every(t => norm(x.name).includes(t))) : [];
   return hit.length === 1 ? hit[0].id : null;
 }
+/** The member's trip plan for this turn, cleaned; blank when the fixture or the row has none. */
+export const planOf = (ctx: Ctx) => once(ctx, 'plan', async () => asPlan(ctx.data.plan ? await ctx.data.plan().catch(() => null) : null));
 /** One read per turn per table, however many tools ask for it. */
-const once = <T>(ctx: Ctx, k: string, f: () => Promise<T>) => {
+export const once = <T>(ctx: Ctx, k: string, f: () => Promise<T>) => {
   if (!ctx.cache.has(k)) ctx.cache.set(k, f());
   return ctx.cache.get(k) as Promise<T>;
 };
@@ -199,6 +216,7 @@ export async function runTool(name: string, input: any, ctx: Ctx): Promise<unkno
           all_inclusive: !!x.all_inclusive, taxes_included: !!x.taxes_included, one_of_the_four_we_use: !!x.house,
           from_victor: x.deal_note || null,
           rooms: hit.length <= 3 ? rooms.filter(r => r.stay_id === x.id).map(r => ({ name: r.name, sleeps: r.sleeps, bedrooms: r.bedrooms, kitchen: r.kitchen, view: r.view ?? null, sqft: r.sqft ?? null })) : undefined,
+          published: hit.length <= 3 ? (placeFacts(String(x.name)) ?? 'The Circle holds no published facts for this place: not on file.') : undefined,
         })),
         reviews: 'The Circle keeps no reviews. Say nothing about reviews.',
       };
@@ -255,10 +273,39 @@ export async function runTool(name: string, input: any, ctx: Ctx): Promise<unkno
       const sid = await stayIdOf(ctx, input?.stay_id);
       if (!sid) return { error: `No single place matches "${input?.stay_id}".` };
       if (ctx.cards.some(c => c.action === 'refresh' && c.stay_id === sid)) return { shown: true };
-      ctx.cards.push({ action: 'refresh', name: null, about: null, stay_id: sid, from: null, to: null, crew_id: null, member_id: null, deal_id: null, redemption_id: null });
-      return { shown: true, say: 'A "look again" button is on their screen. Nothing is read until they tap it; then ask again in a minute.' };
+      ctx.cards.push(blankCard('refresh', { stay_id: sid }));
+      // Say how old the place's reads are, with the button: the nightly replay found Ian giving only the button.
+      const deals = await once(ctx, 'deals', () => d.deals());
+      const seen = deals.filter(x => x.stay_id === sid).map(x => Date.parse(String(x.seen_at || x.posted_at || ''))).filter(Number.isFinite);
+      const last = seen.length ? lastSeenWords(Math.max(...seen)) : 'nothing on the board here';
+      return { shown: true, newest_read_here: last, say: `Say the newest read here was ${last.replace(/, tap to re-check$/, '')}, and that a "Look again" button is on their screen. Nothing is read until they tap it; then ask again in a minute.` };
     }
-    case 'flights': return flights(input);
+    case 'flights': {
+      // Flights follow one option's own dates, never free dates: a week can never be paired with another's flights.
+      const opt = String(input?.option || '').trim();
+      const [p, deals] = await Promise.all([planOf(ctx), once(ctx, 'deals', () => d.deals())]);
+      const week = opt && opt !== 'plan' ? deals.find(x => x.id === opt) : (p.deal_id ? deals.find(x => x.id === p.deal_id) : null);
+      if (opt && opt !== 'plan' && !week) return { error: 'No such week on the board. Pass a deal_id from board, or "plan".' };
+      const l = legs(p, week ?? null);
+      if (!l) return { said: 'No dates yet: the flights follow the chosen week, or the plan\'s dates. Ask for the dates first.' };
+      return flights(l);
+    }
+    case 'facts': return factsFor(String(input?.topic || ''));
+    case 'plan': {
+      if (!d.plan || !d.savePlan) return { error: 'The trip plan is not switched on here.' };
+      const current = await planOf(ctx);
+      const deals = await once(ctx, 'deals', () => d.deals());
+      const r = await planFrom(current, input || {}, { resolveStay: (x) => stayIdOf(ctx, x), deals });
+      if (r.refused.length) return { error: `Not written: ${r.refused.join('; ')}.` };
+      if (r.filled.length) { await d.savePlan(r.plan); ctx.cache.set('plan', Promise.resolve(r.plan)); }
+      if (r.change && ctx.cards.length < 3) ctx.cards.push(blankCard('plan_change', { plan: r.change }));
+      return {
+        written: r.filled,
+        ...(r.change ? { not_written: Object.keys(r.change), proposed: 'A card asks them to confirm the change; nothing changes until they tap it.' } : {}),
+        still_missing: missing(r.plan),
+        say: 'In one short line say what you wrote into their plan, then ask for the first thing still missing.',
+      };
+    }
     case 'remember': {
       const key = String(input?.key || '').toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
       const value = String(input?.value || '').trim().slice(0, MEMORY_CHARS);
@@ -282,8 +329,11 @@ export async function runTool(name: string, input: any, ctx: Ctx): Promise<unkno
 async function propose(a: any, ctx: Ctx) {
   const d = ctx.data;
   const v = (x: unknown) => (typeof x === 'string' && x.trim() ? x.trim() : null);
-  const card: Card = { action: a?.action, name: v(a?.name), about: v(a?.about), stay_id: v(a?.stay_id), from: v(a?.from), to: v(a?.to),
-    crew_id: v(a?.crew_id), member_id: v(a?.member_id), deal_id: v(a?.deal_id), redemption_id: v(a?.redemption_id) };
+  const card: Card = blankCard(a?.action, { name: v(a?.name), about: v(a?.about), stay_id: v(a?.stay_id), from: v(a?.from), to: v(a?.to),
+    crew_id: v(a?.crew_id), member_id: v(a?.member_id), deal_id: v(a?.deal_id), redemption_id: v(a?.redemption_id) });
+  const guests = v(a?.guests) ? Number(v(a?.guests)) : null;
+  if (guests != null && (!Number.isInteger(guests) || guests < 1 || guests > 12)) return { error: 'guests is a whole number from 1 to 12.' };
+  card.guests = guests;
   const stays = await once(ctx, 'stays', () => d.stays());
   if (card.stay_id) card.stay_id = await stayIdOf(ctx, card.stay_id);
   const dates = () => isDay(card.from) && isDay(card.to) && card.to! > card.from! && card.from! >= today();
@@ -312,7 +362,16 @@ async function propose(a: any, ctx: Ctx) {
       const deals = await once(ctx, 'deals', () => d.deals());
       if (!deals.some(x => x.id === card.deal_id && x.stay_id === card.stay_id)) card.deal_id = null;
     }
-  } else return { error: 'action is create_crew, invite or ask_dates.' };
+    // The note goes to Victor in the member's request: their words, no figure (a card never carries a price).
+    const note = v(a?.note);
+    if (note && note.length > 600) return { error: 'The note is at most 600 characters.' };
+    if (note && FIGURE.test(note)) return { error: 'The note carries no prices or points: Victor prices it.' };
+    card.note = note;
+  } else if (card.action === 'watch') {
+    if (!stays.some(x => x.id === card.stay_id) || !dates()) return { error: 'A watch needs a place and future dates, from before to.' };
+    card.nights = Math.round((Date.parse(card.to!) - Date.parse(card.from!)) / 864e5);
+    card.guests ??= 2;
+  } else return { error: 'action is create_crew, invite, ask_dates or watch.' };
   if (ctx.cards.length >= 3) return { error: 'Three cards is enough for one answer.' };
   ctx.cards.push(card);
   return { shown: true, say: 'The card is on their screen with a button. Do not repeat its details as figures.' };
@@ -350,5 +409,7 @@ export function dataFor(sb: any, member: { id: string; name: string; monthly_usd
     redweekChecks: () => rows(sb.from('redweek_checks').select('stay_id, checked_at')).catch(() => null),
     memory: async () => (await rows(sb.from('concierge_memory').select('notes').eq('member_id', member.id).maybeSingle()))?.notes || {},
     saveMemory: async (notes) => { await rows(sb.from('concierge_memory').upsert({ member_id: member.id, notes, updated_at: now() })); },
+    plan: async () => (await rows(sb.from('concierge_memory').select('plan').eq('member_id', member.id).maybeSingle()))?.plan ?? null,
+    savePlan: async (plan) => { await rows(sb.from('concierge_memory').upsert({ member_id: member.id, plan, updated_at: now() })); },
   };
 }

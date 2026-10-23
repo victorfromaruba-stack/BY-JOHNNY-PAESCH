@@ -54,3 +54,9 @@ Victor; until they are wired in, Ian points there and offers the look-again tap,
   where they fly from, that is the one question worth asking before anything else about flights.
 - 22 Oct, from Victor: flights follow each option's own dates. If a stay starts on the 14th, the flights
   are out on the 14th and back on that stay's check-out day; never pair a stay with another option's flights.
+- 22 Oct, Ian v2's first live run (a trip LIM to AUA, 13 to 20 Nov, 3 adults and a lap infant): the plan
+  was filled and never overwritten, but asked to "make it the week after" Ian explained instead of putting
+  up the change card; asked about flights it called nothing, though the plan's dates are enough for both
+  legs; asked to be told about a cheaper week it asked a question instead of offering the watch card. A
+  change to the plan is the plan tool (the card); flights for a dated plan are flights("plan"); a request
+  to be told is the watch card, at once.

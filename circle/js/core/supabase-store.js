@@ -395,6 +395,16 @@ export class SupabaseStore extends Store {
     }
     return data;
   }
+  /** Your trip plan with Ian: your own concierge_memory row, which nobody else can read. */
+  async plan() {
+    const { data, error } = await this.sb.from('concierge_memory').select('plan').eq('member_id', this.me.id).maybeSingle();
+    if (error) throw new Error(error.message);
+    return data?.plan ?? null;
+  }
+  async savePlan(plan) {
+    const { error } = await this.sb.from('concierge_memory').upsert({ member_id: this.me.id, plan, updated_at: new Date().toISOString() });
+    if (error) throw new Error(/row-level security/i.test(error.message) ? 'Only you can change your trip' : /plan_check/.test(error.message) ? 'That is more than a trip plan holds' : error.message);
+  }
   /** "Helped" (1) or "Not it" (-1) on one of your own answers. No reload: nothing on screen depends on it. */
   async conciergeFeedback(turnId, score, note = '') {
     const { error } = await this.sb.rpc('feedback_concierge_turn', { p_turn: turnId, p_score: score, p_note: note || null });

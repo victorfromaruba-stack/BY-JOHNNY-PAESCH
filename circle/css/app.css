@@ -976,6 +976,8 @@ button.badge-card { cursor: pointer; font: inherit; color: inherit; }
    works. Folded away by default so it costs one line instead of six, but still one tap from the
    thing it explains rather than buried on another page. */
 .fineprint { margin-top: 8px; }
+/* Ask Ian's trip panel: a date field keeps its own width otherwise and pokes out of its half at 390px. */
+.trip input, .trip select { min-width: 0; width: 100%; }
 .fineprint > summary { display: inline-flex; align-items: center; gap: 6px; min-height: 44px;
   cursor: pointer; font-size: var(--t-fine); color: var(--ink-2); list-style: none; }
 .fineprint > summary::-webkit-details-marker { display: none; }

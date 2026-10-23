@@ -8,7 +8,7 @@ import { pgcrypto } from 'npm:@electric-sql/pglite@0.5.11/contrib/pgcrypto';
 import { hmac } from './handler.ts';
 import { worstCaseUsd } from './ian.ts';
 
-const MIGRATIONS = ['20261023_concierge.sql', '20261024_ian_fixes.sql']
+const MIGRATIONS = ['20261023_concierge.sql', '20261024_ian_fixes.sql', '20261025_trip_plan.sql']
   .map(f => Deno.readTextFileSync(new URL(`../../migrations/${f}`, import.meta.url)));
 
 const BASE = `
@@ -195,4 +195,15 @@ Deno.test('what you hold, for yourself only', async () => {
   assert((await T.as('ana', `select available_points($1)`, [T.M.ana])).err);
   assertEquals((await T.as('ana', `select my_available_points() n`)).rows[0].n, 4242);
   assert((await T.as('anon', `select my_available_points()`)).err);
+});
+
+Deno.test("the trip plan: on the member's own row, nobody else's, and small", async () => {
+  const plan = { stay_id: T.stay, from: day(30), to: day(37), adults: 3, infants: 1, origin: 'LIM' };
+  assertEquals((await T.as('luis', `insert into concierge_memory(member_id, plan) values ($1, $2) on conflict (member_id) do update set plan = excluded.plan`, [T.M.luis, JSON.stringify(plan)])).err, '');
+  assertEquals((await T.as('luis', `select plan from concierge_memory where member_id = $1`, [T.M.luis])).rows[0].plan.origin, 'LIM');
+  assertEquals((await T.as('ana', `select plan from concierge_memory where member_id = $1`, [T.M.luis])).rows.length, 0, "another member reads nothing of it");
+  assertEquals((await T.as('ana', `update concierge_memory set plan = '{}' where member_id = $1 returning 1`, [T.M.luis])).rows.length, 0, 'nor changes it');
+  assert((await T.as('ana', `insert into concierge_memory(member_id, plan) values ($1, '{}')`, [T.M.luis])).err, 'nor writes one for them');
+  assert((await T.as('luis', `update concierge_memory set plan = $1 where member_id = $2`, [JSON.stringify({ open: 'x'.repeat(5000) }), T.M.luis])).err, 'over 4 KB is refused');
+  assert((await T.as('luis', `update concierge_memory set plan = '[1,2]' where member_id = $1`, [T.M.luis])).err, 'a plan is an object');
 });

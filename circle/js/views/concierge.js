@@ -15,6 +15,7 @@ import { escapeHtml, safeUrl } from '../core/util.js';
 import { toast, confirmDialog, setBusy } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
 import { dealRow, askHrefFor, shortRange } from './deals.js';
+import { tripPanel, changeWords } from './trip.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
 const KEEP = 30;                       // lines kept in the tab
@@ -41,7 +42,11 @@ function words(text, links = []) {
 }
 
 /** What a card says and does, from the store alone. Null when the store does not know the ids. */
-function cardModel(c, store) {
+function cardModel(c, store, plan = {}) {
+  if (c.action === 'plan_change') {
+    if (!c.plan || !Object.keys(c.plan).length) return null;
+    return { head: changeWords(c.plan, plan, store), sub: 'Ian keeps what you told him and asks before changing it.', button: 'Change it' };
+  }
   const stay = c.stay_id ? store.stay(c.stay_id) : null;
   const dates = c.from && c.to ? shortRange(c.from, c.to) : '';
   if (c.action === 'create_crew') {
@@ -58,11 +63,17 @@ function cardModel(c, store) {
     if (!stay) return null;
     return { head: `Look again at ${stay.name}`, sub: 'The watcher re-reads RedWeek, and Interval within its limits. Ask Ian again in a minute.', button: 'Look again' };
   }
+  if (c.action === 'watch') {
+    if (!stay) return null;
+    return { head: `Watch for a better week at ${stay.name}`, sub: `${dates} · ${c.nights} nights · ${c.guests} ${c.guests === 1 ? 'guest' : 'guests'}`, button: 'Watch for it' };
+  }
   if (c.action === 'ask_dates') {
     if (!stay) return null;
     const deal = c.deal_id ? store.liveDeals().find(d => d.id === c.deal_id) : null;
-    return { head: deal ? 'This week on the board' : `Ask Victor for ${stay.name}`, sub: deal ? '' : dates, deal, button: 'Ask for these dates',
-      href: deal ? askHrefFor(deal) : `#/book/${encodeURIComponent(stay.id)}?from=${encodeURIComponent(c.from)}&to=${encodeURIComponent(c.to)}` };
+    // Who is travelling and the member's note ride to the ask form, which reads both; they still press send.
+    const extra = `${c.guests ? `&guests=${encodeURIComponent(c.guests)}` : ''}${c.note ? `&note=${encodeURIComponent(c.note)}` : ''}`;
+    return { head: deal ? 'Ask Victor for this week' : `Ask Victor for ${stay.name}`, sub: [deal ? '' : dates, c.guests ? `${c.guests} ${c.guests === 1 ? 'guest' : 'guests'}` : '', c.note || ''].filter(Boolean).join(' · '), deal, button: 'Ask for these dates',
+      href: (deal ? askHrefFor(deal) : `#/book/${encodeURIComponent(stay.id)}?from=${encodeURIComponent(c.from)}&to=${encodeURIComponent(c.to)}`) + extra };
   }
   return null;
 }
@@ -77,6 +88,7 @@ export function concierge({ store, go, query = {} }) {
       <h1>${stay ? `Ask Ian about ${escapeHtml(stay.name)}` : 'Ask Ian'}</h1>
       <p class="lede" style="margin-top:var(--s-2)">The Circle’s concierge. Ian reads the board and the places as you see them,
         and says where a figure comes from. Victor still books every room himself.</p>
+      <div id="trip-slot"></div>
       <div class="thread" id="thread"></div>
       <div class="act-bar">
         <form id="say" class="say-row">
@@ -88,13 +100,15 @@ export function concierge({ store, go, query = {} }) {
       </div>
     </div></section></div>`);
   const thread = wrap.querySelector('#thread');
+  const trip = tripPanel({ store });
+  wrap.querySelector('#trip-slot').replaceWith(trip);
 
   const bubble = (l, i) => {
     if (l.role === 'user') return `<div class="msg mine"><span class="bubble"><span class="what">${escapeHtml(l.text)}</span></span></div>`;
     if (l.role === 'note') return `<p class="small muted" style="text-align:center">${escapeHtml(l.text)}</p>`;
     const said = l.text ? `<div class="msg"><span class="bubble"><b class="who">Ian</b><span class="what">${words(l.text, l.links)}</span></span></div>` : '';
     const cards = (l.cards || []).map((c, j) => {
-      const m = cardModel(c, store);
+      const m = cardModel(c, store, trip.current());
       if (!m || c.state === 'no') return '';
       return `<div class="msg" data-line="${i}" data-card="${j}"><div class="bubble bubble-card" style="width:min(100%, 46ch)">
           <b class="who">Ian suggests</b>
@@ -168,6 +182,7 @@ export function concierge({ store, go, query = {} }) {
       lines.push({ role: 'note', text: err.message });
     } finally {
       busy = false; setBusy(send, false); save(store, lines); draw(); toAnswer();
+      trip.reload();                        // Ian may have filled a blank in the plan
     }
   });
 
@@ -187,8 +202,10 @@ export function concierge({ store, go, query = {} }) {
     const c = lines[box.dataset.line].cards[box.dataset.card];
     if (e.target.closest('[data-no]')) { c.state = 'no'; save(store, lines); draw(); return; }
     const b = e.target.closest('[data-go]'); if (!b) return;
-    const m = cardModel(c, store); if (!m) return;
+    const m = cardModel(c, store, trip.current()); if (!m) return;
     if (c.action === 'ask_dates') { location.hash = m.href; return; }
+    // A change to the trip is the member's to make: this tap is it.
+    if (c.action === 'plan_change') { await trip.apply(c.plan); c.state = 'done'; save(store, lines); draw(); toast('Your trip is updated.', { kind: 'good' }); return; }
     // The member's own tap is what spends the watcher's read, never Ian's suggestion of one.
     if (c.action === 'refresh') { store.noteStayLook?.(c.stay_id); c.state = 'done'; save(store, lines); draw(); toast('Asked. Ask Ian again in a minute.', { kind: 'good' }); return; }
     const yes = await confirmDialog({ title: m.head, message: m.sub || 'Nothing is booked and no points move.', confirmText: m.button });
@@ -200,6 +217,12 @@ export function concierge({ store, go, query = {} }) {
         c.state = 'done'; save(store, lines);
         toast(`${made.name} it is.`, { kind: 'good' });
         go(`/crews/${made.id}`);
+        return;
+      }
+      if (c.action === 'watch') {
+        await store.addWatch({ memberId: store.me?.id, stayId: c.stay_id, from: c.from, to: c.to, nights: c.nights, guests: c.guests, flexDays: 3 });
+        c.state = 'done'; save(store, lines); draw();
+        toast('Watching. A week that fits shows on Stays and under What you are watching.', { kind: 'good' });
         return;
       }
       await store.addToCrew(c.crew_id, c.member_id);

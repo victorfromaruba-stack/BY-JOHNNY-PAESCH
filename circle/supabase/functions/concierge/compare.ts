@@ -150,9 +150,16 @@ export function dealFacts(d: Deal, stay: Stay | undefined, s: Settings, now = Da
     // The title rounds the ask to the dollar, so a few dollars over a week is rounding, not a fee.
     fee_usd: fee != null && fee >= d.nights ? r0(fee) : null,
     fee_trap: !!(ask && fee != null && fee > ask * d.nights * FEE_TRAP),
+    // The figures the sentence about a fee needs, so Ian never works one out (the first nightly replay:
+    // nine of fourteen failures were a fee percentage or a per-night saving Ian computed itself).
+    fee_pct: ask && fee != null && fee >= d.nights ? r0((fee / (ask * d.nights)) * 100) : null,
+    fee_said: ask && fee != null && fee > ask * d.nights * FEE_TRAP
+      ? `fees add $${r0(fee).toLocaleString('en-US')} on top of the owner's ask of $${r0(ask * d.nights).toLocaleString('en-US')} for the nights, ${r0((fee / (ask * d.nights)) * 100)}%: more than the ${r0(FEE_TRAP * 100)}% worth pointing out`
+      : null,
     public_total_usd: pub,
     // Positive: the Circle's all-in is under the public rate by this much. Negative: it is over.
     under_public_usd: pub != null ? r0(pub - totalUsd) : null,
+    under_public_per_night_usd: pub != null && d.nights ? r0((pub - totalUsd) / d.nights) : null,
     implausible: implausibleWhy(ask ?? perNightPts / ppd, stay),
     seen_days_ago: age,
     stale: age != null && age >= STALE_DAYS,
