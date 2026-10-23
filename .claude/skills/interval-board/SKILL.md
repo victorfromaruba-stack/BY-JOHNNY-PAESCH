@@ -331,6 +331,7 @@ circle/js/core/freshness.js                       7 days (less the days a source
 circle/js/core/window.js                          the dates a member is looking for: chips, clamp, overlap, remembered per device
 circle/watcher/schedule.mjs                       the two daily RedWeek times (Aruba), and whether the latest was served
 circle/watcher/redweek.mjs                        the reader, its stop file, its one-day back-off and probe, its 10 s pacing
+circle/watcher/vps/fetch.mjs + rules.mjs            RedWeek's pages fetched on the VPS (05:50/17:50 Aruba) and pulled by the primary (WATCH_REDWEEK_SOURCE=vps); same user agent, same stop rules
 circle/supabase/migrations/20261022_board_freshness.sql   the board tap, board_checks, retire_deals_gone / retire_stale_deals / reprice_deal
 circle/supabase/migrations/20261022_stay_taps.sql  the taps table, redweek_checks, and the seen_at grant
 circle/supabase/migrations/20261022_tap_window.sql the dates a tap carries (record_* and take_stay_taps)

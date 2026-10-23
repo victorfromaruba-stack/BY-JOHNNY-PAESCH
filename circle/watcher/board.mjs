@@ -39,21 +39,26 @@ import { isStale } from '../js/core/freshness.js';
  * rows away and PostgREST answers with nothing changed. Counting the rows the database returns
  * is the difference between a log line that is true and one that merely reads well.
  */
-export async function refreshSeen(circle, refs) {
+export async function refreshSeen(circle, refs, seenAt = () => undefined) {
   if (!refs.length) return { asked: 0, moved: 0, said: '' };
   const now = new Date().toISOString();
   let moved = 0, said = '';
+  // `seenAt(ref)` is when the source's page was actually read, where that is not now: a RedWeek page the VPS
+  // fetched at 05:50 and this box read at 06:00 was seen at 05:50. Weeks with the same time go in one request.
+  const byTime = new Map();
+  for (const r of refs) { const t = seenAt(r) || now; (byTime.get(t) || byTime.set(t, []).get(t)).push(r); }
   // In batches: a pass can see a hundred weeks again, and a URL is not the place to put a
   // hundred references at once.
-  for (let i = 0; i < refs.length; i += 50) {
-    const batch = refs.slice(i, i + 50);
+  const batches = [];
+  for (const [at, list] of byTime) for (let i = 0; i < list.length; i += 50) batches.push({ at, batch: list.slice(i, i + 50) });
+  for (const { at, batch } of batches) {
     // JSON.stringify quotes each reference the way PostgREST wants them inside in.(…), so a
     // reference carrying a comma cannot become two.
     const list = encodeURIComponent(batch.map(r => JSON.stringify(String(r))).join(','));
     const res = await circle.call(`/rest/v1/deals?status=eq.live&source_ref=in.(${list})&select=source_ref`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', prefer: 'return=representation' },
-      body: JSON.stringify({ seen_at: now }),
+      body: JSON.stringify({ seen_at: at }),
     });
     if (!res.ok) {
       said = `the Circle answered ${res.status}: ${String(await res.text().catch(() => '')).slice(0, 160)}`;
@@ -107,6 +112,7 @@ export async function judgeAndPost({ circle, found, catalog, cfg, log, dry = fal
   // news — it is the whole difference between "posted on Monday" and "still there this
   // morning" — so it is no longer thrown away with the `continue`.
   const seenAgain = new Set();
+  const seenAtOf = new Map();            // sourceRef -> when its page was read, for a source that is read somewhere else (RedWeek via the VPS)
   for (const f of good) {
     const deal = asDeal(f, cfg, settings);
     if (!deal) { log(`  could not price ${f.source} ${f.from} at ${f.resortName || f.ourName || '?'} — skipped`); continue; }
@@ -115,7 +121,7 @@ export async function judgeAndPost({ circle, found, catalog, cfg, log, dry = fal
       // week standing on somebody else's page — an owner lists on RedWeek and on VakayMood
       // alike — and the row on the board belongs to that other page, which this pass never
       // read. Moving its clock would be the app saying it had seen something it had not.
-      if (deal.sourceRef && already.refs.has(deal.sourceRef)) seenAgain.add(deal.sourceRef);
+      if (deal.sourceRef && already.refs.has(deal.sourceRef)) { seenAgain.add(deal.sourceRef); if (f.seenAt) seenAtOf.set(deal.sourceRef, f.seenAt); }
       continue;
     }
     try {
@@ -127,7 +133,7 @@ export async function judgeAndPost({ circle, found, catalog, cfg, log, dry = fal
   }
   log(`${posted} new on the board`);
 
-  const clocks = await refreshSeen(circle, [...seenAgain]);
+  const clocks = await refreshSeen(circle, [...seenAgain], (ref) => seenAtOf.get(ref));
   const weeks = (n) => `${n} week${n === 1 ? '' : 's'}`;
   if (clocks.said) {
     log(`  ${weeks(clocks.asked)} were on the page again — their last-seen clocks were NOT moved: ${clocks.said}`);
@@ -170,12 +176,15 @@ export async function verifyBoard({ circle, catalog, listings, okSlugs, full, ap
   if (!apply) { log('  dry run — nothing changed'); return { verified: c.verified, repriced: c.repriced, retired: plan.retire.length + aged, applied: false }; }
 
   let repriced = 0, retired = 0, stale = 0, missing = false;
-  const clocks = await refreshSeen(circle, plan.seen);
-  if (clocks.asked) log(`  ${clocks.asked} week${clocks.asked === 1 ? '' : 's'} still listed — ${clocks.moved} last-seen clock${clocks.moved === 1 ? '' : 's'} moved${clocks.said ? ` (${clocks.said})` : ''}`);
   for (const x of plan.reprice) {
     try { repriced += Number(await circle.reprice(x)) || 0; }
     catch (err) { if (missingMigration(err)) { missing = true; break; } log(`  could not reprice ${x.ref}: ${err.message}`); }
   }
+  // The clocks go after the repricing, not before: reprice_deal stamps seen_at = now(), and a page read earlier
+  // (RedWeek via the VPS) was seen when that copy was made, not now. A listing without a time of its own is now.
+  const seenAtOf = new Map(listings.filter((l) => l.seenAt).map((l) => [`redweek:${l.externalId}`, l.seenAt]));
+  const clocks = await refreshSeen(circle, plan.seen, (ref) => seenAtOf.get(ref));
+  if (clocks.asked) log(`  ${clocks.asked} week${clocks.asked === 1 ? '' : 's'} still listed — ${clocks.moved} last-seen clock${clocks.moved === 1 ? '' : 's'} moved${clocks.said ? ` (${clocks.said})` : ''}`);
   const byWhy = new Map();
   for (const x of plan.retire) (byWhy.get(x.why) || byWhy.set(x.why, []).get(x.why)).push(x.ref);
   for (const [why, refs] of byWhy) {

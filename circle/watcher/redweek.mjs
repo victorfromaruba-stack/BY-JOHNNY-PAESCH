@@ -4,40 +4,15 @@
 // check-out, nights, bedrooms, sleeps, view, price, price per night — so this reads structured
 // values rather than guessing at text. One request per resort, and it identifies itself.
 
-import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, unlinkSync, readdirSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { join, basename } from 'node:path';
 
-const BASE = 'https://www.redweek.com';
-// A crawler saying who it is, and how to be told to stop, is the polite convention and makes a
-// block less likely. Whose address that is, though, is not this file's to decide: set
-// WATCH_CONTACT in .env and it goes in, leave it out and nothing personal is sent or published.
-const UA = process.env.WATCH_UA
-  || `InnerHotelCircleWatcher/1.0 (private travel club${process.env.WATCH_CONTACT ? `; contact ${process.env.WATCH_CONTACT}` : ''})`;
-
-/**
- * Every Aruba resort RedWeek lists, read off their own search page, mapped to the name our
- * catalog uses. Names, not ids: on the live backend every stay has a fresh uuid, so a bundled
- * id like stay_surfclub matches nothing there.
- */
-export const ARUBA = Object.freeze({
-  'P4872-marriotts-aruba-surf-club': "Marriott's Aruba Surf Club",
-  'P148-marriotts-aruba-ocean-club': "Marriott's Aruba Ocean Club",
-  'P6494-renaissance-wind-creek-aruba-ocean': 'Renaissance Wind Creek Aruba Resort',
-  'P134-barcelo-aruba': 'Barceló Aruba',
-  'P146-eagle-aruba-resort': 'Eagle Aruba Resort',
-  'P6631-amsterdam-manor-beach-resort': 'Amsterdam Manor Beach Resort',
-  'P137-divi-aruba-phoenix-beach-resort': null,
-  'P144-divi-dutch-village-beach-resort': null,
-  'P5400-divi-village-golf-and-beach-resort': null,
-  'P139-caribbean-palm-village': null,
-  'P140-casa-del-mar-beach-resort': null,
-  'P141-costa-linda-beach-resort': null,
-  'P145-la-cabana-beach-resort': null,
-  'P147-la-quinta-beach-resort': null,
-  'P149-paradise-beach-villas': null,
-  'P151-playa-linda-beach-resort': null,
-  'P135-aruba-beach-club': null,
-  'P4734-the-mill-resort-suites': null,
-});
+// The address, the user agent, the list of resorts, the challenge test and robots.txt reading are shared with
+// the VPS's fetcher (vps/fetch.mjs): one copy, so a direct read and the VPS's read can never ask differently.
+import { BASE, UA, ARUBA, WALL, robotsAllows, pauseMs, isTimeout, rentalsPath } from './vps/rules.mjs';
+export { BASE, UA, ARUBA, WALL, robotsAllows, pauseMs, isTimeout };
 
 // Apostrophes, accents and "&" differ between sites and our data. One normaliser for the whole
 // app, so the watcher and the website agree on which resort a name means.
@@ -138,13 +113,6 @@ function stop(why) {
 // out, another day. A person can end it early by deleting the file.
 
 export const BACKOFF_MS = 24 * 3600e3;
-const TIMEOUT_CODES = new Set(['UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT', 'ETIMEDOUT', 'ESOCKETTIMEDOUT']);
-/** A request that never got an answer: our own clock ran out, or undici's connect/headers/body timer did. */
-export function isTimeout(err) {
-  const c = err?.cause || err;
-  return err?.name === 'AbortError' || err?.name === 'TimeoutError' || TIMEOUT_CODES.has(c?.code) || TIMEOUT_CODES.has(err?.code);
-}
-
 /** Thrown while RedWeek is backed off. `stop` makes sweep() end the pass; `backoff` tells callers it is not a block. */
 export class RedWeekBackoff extends Error { constructor(why, until) { super(why); this.stop = true; this.backoff = true; this.until = until; } }
 
@@ -178,43 +146,6 @@ export function clearBackoff() {
   if (BACKOFF_FILE) { try { unlinkSync(BACKOFF_FILE); } catch { /* already gone */ } }
 }
 
-// What a bot wall looks like when it arrives with a 200. Only believed on a page with no listings
-// at all, because a real resort page never shows one of these and a resort with nothing open does
-// not need to be mistaken for a wall.
-const WALL = /captcha|cf-challenge|challenge-platform|just a moment|access denied|unusual traffic|are you a (?:robot|human)|px-captcha|verify you are human/i;
-
-/**
- * May a program that identifies as `ua` read `path`, by this robots.txt? Longest matching rule
- * wins and Allow beats Disallow on a tie (RFC 9309). The group naming us wins over `*`.
- */
-export function robotsAllows(txt, path, ua = UA) {
-  const me = String(ua).split(/[\/\s]/)[0].toLowerCase();
-  const groups = [];
-  let cur = null, lastWasAgent = false;
-  for (const raw of String(txt || '').split(/\r?\n/)) {
-    const line = raw.replace(/#.*/, '').trim();
-    const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/);
-    if (!m) continue;
-    const k = m[1].toLowerCase(), v = m[2].trim();
-    if (k === 'user-agent') {
-      if (!lastWasAgent) { cur = { agents: [], rules: [] }; groups.push(cur); }
-      cur.agents.push(v.toLowerCase()); lastWasAgent = true;
-    } else if ((k === 'allow' || k === 'disallow') && cur) {
-      cur.rules.push({ allow: k === 'allow', path: v }); lastWasAgent = false;
-    } else lastWasAgent = false;
-  }
-  const mine = groups.filter(g => g.agents.includes(me));
-  const rules = (mine.length ? mine : groups.filter(g => g.agents.includes('*'))).flatMap(g => g.rules);
-  let best = null;
-  for (const r of rules) {
-    if (!r.path) continue;                                  // "Disallow:" with nothing means allow all
-    const re = new RegExp('^' + r.path.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\\\$$/, '$'));
-    if (!re.test(path)) continue;
-    if (!best || r.path.length > best.path.length || (r.path.length === best.path.length && r.allow)) best = r;
-  }
-  return !best || best.allow;
-}
-
 let robots = { at: 0, txt: '' };
 async function checkRobots(path, timeoutMs) {
   if (Date.now() - robots.at > 864e5) {
@@ -237,7 +168,7 @@ export async function rentals(slug, { includeTaken = false, timeoutMs = 30000 } 
   const bo = backoff();
   if (bo && !bo.expired) throw new RedWeekBackoff(`RedWeek did not answer on ${bo.at || 'an earlier pass'} (${bo.why}) — backed off until ${bo.until}`, bo.until);
   if (bo) robots = { at: 0, txt: '' };
-  const path = `/resort/${slug}/timeshare-rentals`;
+  const path = rentalsPath(slug);
   const url = BASE + path;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -258,18 +189,127 @@ export async function rentals(slug, { includeTaken = false, timeoutMs = 30000 } 
   } finally { clearTimeout(timer); }
 }
 
+// ---- Source: the VPS ------------------------------------------------------------------------
+//
+// RedWeek stopped answering this server's address on 22 Oct 2026 and answers Victor's VPS (board #3). So the
+// VPS asks (vps/fetch.mjs, 05:50 and 17:50 Aruba) and leaves the raw pages in /srv/redweek/out; here they are
+// pulled over the tailnet with a read-only key and read by the SAME parseRentals, judged and posted by the same
+// code as a direct read, with each week's seen_at the time the VPS fetched its page. Nothing of the Circle's
+// leaves this box: the VPS holds no credential and does no parsing.
+//
+// Rules, in the order they apply:
+//   - the stop file holds, whichever way the pages come (RedWeek's no is not a route problem);
+//   - a run the VPS stopped on a 403 / challenge / robots.txt is RedWeek's no, via the VPS: it writes the stop file here too;
+//   - a run it stopped on a timeout or a 429 is RedWeek not answering: nothing is read, and not directly either;
+//   - a missing pull, no run, or a run older than two hours: nothing is read. Only then, and only when the
+//     back-off of the direct path is not holding, does a direct read happen (sweepVps returns null, and sweep goes on);
+//   - an old copy is never presented as a new one: seen_at is the page's own fetchedAt, never the time of the pull.
+
+export const VPS_MAX_AGE_MS = 2 * 3600e3;
+/** The VPS's copy is missing, too old, or says RedWeek is not answering. `held`: a direct read is not the answer to it either. */
+export class VpsMissing extends Error {
+  constructor(why, { held = false, until = null } = {}) { super(why); this.stop = true; this.vps = true; this.held = held; this.until = until; }
+}
+const RUN = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z$/;
+const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
+const arubaStamp = (iso) => { const d = new Date(Date.parse(iso) - 4 * 3600e3).toISOString(); return `${d.slice(8, 10)}/${d.slice(5, 7)} ${d.slice(11, 16)}`; };
+
 /**
- * The pause between two resorts, in ms: WATCH_REDWEEK_PAUSE_SEC, 10 s when it is not set. It was 2.5 s while
- * the watcher read RedWeek every half hour; it reads twice a day now, and slowly (Victor, 22 Oct 2026).
+ * Pull the VPS's out/ directory into `dir`: rsync over ssh, as user `redweek` with a key that can only read it
+ * (the VPS forces `rrsync -ro /srv/redweek/out`, from this address only). The host key is pinned in `knownHosts`.
  */
-export function pauseMs() {
-  const raw = process.env.WATCH_REDWEEK_PAUSE_SEC;
-  const s = raw === undefined || raw === '' ? NaN : Number(raw);
-  return Number.isFinite(s) && s >= 0 ? s * 1000 : 10000;
+export function pullFromVps({ dir, host, user = 'redweek', key, knownHosts, timeoutMs = 120000, exec = execFile }) {
+  const ssh = `ssh -i ${key} -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${knownHosts} -o ConnectTimeout=15`;
+  return new Promise((resolve, reject) => {
+    exec('rsync', ['-rt', '--delete', '--exclude=.tmp-*', '-e', ssh, `${user}@${host}:/`, `${dir}/`], { timeout: timeoutMs }, (err, _out, stderr) => {
+      if (err) reject(new VpsMissing(`could not pull from the VPS: ${String(stderr || err.message).trim().split('\n')[0].slice(0, 200)}`));
+      else resolve();
+    });
+  });
 }
 
-/** Every resort we care about, one at a time with a pause. Politeness, not performance. */
-export async function sweep(slugs = Object.keys(ARUBA), { pauseMs: pause = pauseMs(), onResort = () => {}, includeTaken = false } = {}) {
+/**
+ * The newest run in `dir` (already pulled), read for `slugs`: `{ name, runAt, results }`, one result per slug —
+ * `{ slug, html, fetchedAt }` or `{ slug, err }`. Throws RedWeekStop when the VPS was told to stop, VpsMissing when
+ * there is nothing to go on. A page whose size or sha256 does not match the manifest is not read.
+ */
+export function readVpsRun(dir, slugs, { now = Date.now(), maxAgeMs = VPS_MAX_AGE_MS } = {}) {
+  let names = [];
+  try { names = readdirSync(dir).filter((d) => RUN.test(d)).sort(); } catch { /* no directory yet */ }
+  const name = names.pop();
+  if (!name) throw new VpsMissing('no run has come from the VPS yet');
+  let man;
+  try { man = JSON.parse(readFileSync(join(dir, name, 'manifest.json'), 'utf8')); }
+  catch { throw new VpsMissing(`the newest run from the VPS (${name}) has no readable manifest`); }
+  const mark = man.stop;
+  if (mark?.kind === 'stop') stop(`RedWeek told the VPS to stop (${mark.why})`);
+  if (mark) throw new VpsMissing(`RedWeek did not answer the VPS: ${mark.why}`, { held: true });
+  const age = now - Date.parse(man.runAt);
+  if (!(age <= maxAgeMs)) throw new VpsMissing(`the newest run from the VPS is from ${man.runAt || 'an unknown time'}, over ${maxAgeMs / 3600e3} hours old`);
+  if (age < -10 * 60e3) throw new VpsMissing(`the newest run from the VPS is dated ${man.runAt}, in the future: the clocks disagree`);
+
+  const pages = new Map((man.pages || []).map((p) => [p.slug, p]));
+  const results = slugs.map((slug) => {
+    const p = pages.get(slug);
+    if (!p) return { slug, err: new Error(`the VPS run has no page for ${slug}`) };
+    if (p.status !== 200 || !p.file) return { slug, err: new Error(`RedWeek returned ${p.status || 'nothing'} for ${slug} on the VPS`) };
+    let buf;
+    try { buf = readFileSync(join(dir, name, basename(p.file))); } catch { return { slug, err: new Error(`the VPS page for ${slug} did not arrive`) }; }
+    if (buf.length !== p.bytes || sha256(buf) !== p.sha256) return { slug, err: new Error(`the VPS page for ${slug} does not match its checksum`) };
+    const at = Date.parse(p.fetchedAt);
+    if (!Number.isFinite(at) || at > now + 10 * 60e3) return { slug, err: new Error(`the VPS page for ${slug} carries no usable time`) };
+    return { slug, html: buf.toString('utf8'), fetchedAt: new Date(at).toISOString() };
+  });
+  return { name, runAt: man.runAt, results };
+}
+
+/**
+ * sweep()'s VPS branch. Returns the weeks found, `[]` when it reported why nothing was read (through onResort, as a
+ * direct read would), or null when the VPS copy is missing and nothing forbids RedWeek being read directly.
+ */
+export async function sweepVps(slugs, { dir, pull = null, now = Date.now(), maxAgeMs, onResort = () => {}, includeTaken = false, log = () => {} } = {}) {
+  let run;
+  try {
+    const held = stopped();
+    if (held) throw new RedWeekStop(`RedWeek stopped us${held.at ? ` on ${held.at}` : ''}: ${held.why}`);
+    if (pull) await pull();
+    run = readVpsRun(dir, slugs, { now, maxAgeMs });
+  } catch (err) {
+    if (!err.stop) throw err;
+    if (err.vps) {
+      const bo = backoff(now);
+      const until = err.until || (bo && !bo.expired ? bo.until : null);
+      if (err.held || until) { err.held = true; err.until = until; onResort(slugs[0], 0, err); return []; }
+      log(`RedWeek: ${err.message} — the back-off does not hold, so reading it directly instead`);
+      return null;
+    }
+    onResort(slugs[0], 0, err);                              // RedWeek's no, or the stop file: the pass ends here
+    return [];
+  }
+  const found = [];
+  for (const r of run.results) {
+    if (r.err) { onResort(r.slug, 0, r.err); continue; }
+    const all = parseRentals(r.html, { slug: r.slug, ourName: ARUBA[r.slug] ?? null });
+    if (!all.length && WALL.test(r.html)) {
+      try { stop(`RedWeek served a challenge page for ${r.slug} (read via the VPS)`); } catch (err) { onResort(r.slug, 0, err); break; }
+    }
+    const rows = all.map((l) => ({ ...l, seenAt: r.fetchedAt, via: 'vps', seenNote: `Read off RedWeek's own page via the VPS at ${arubaStamp(r.fetchedAt)} Aruba time` }));
+    const list = includeTaken ? rows : rows.filter((x) => !x.taken);
+    found.push(...list);
+    onResort(r.slug, rows.filter((x) => !x.taken).length, null, { fetchedAt: r.fetchedAt, via: 'vps' });
+  }
+  return found;
+}
+
+/**
+ * Every resort we care about, one at a time with a pause. Politeness, not performance.
+ * `source: 'vps'` reads the pages the VPS fetched (`vps: { dir, pull }`) instead of asking RedWeek from here.
+ */
+export async function sweep(slugs = Object.keys(ARUBA), { source = 'direct', vps = {}, pauseMs: pause = pauseMs(), onResort = () => {}, includeTaken = false, log = () => {} } = {}) {
+  if (source === 'vps') {
+    const got = await sweepVps(slugs, { ...vps, onResort, includeTaken, log });
+    if (got) return got;
+  }
   const found = [];
   let wait = pause;
   for (const slug of slugs) {

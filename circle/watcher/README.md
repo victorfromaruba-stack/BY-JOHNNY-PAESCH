@@ -353,6 +353,63 @@ answering this server's address (every request timed out), *"Wait"*, not the pro
   `supabase/migrations/20261022_source_outage.sql`). No row's own "seen" time is altered. The top of Stays says
   *"RedWeek not reachable since 14:20; weeks shown as last seen"* until it answers again.
 
+## RedWeek from the VPS
+
+Since 22 Oct 2026 RedWeek no longer answers this server's address (above) and does answer Victor's VPS (Hetzner,
+on the tailnet at `100.122.79.25`). Board #3 decided that the VPS **fetches** and the primary **pulls**:
+`WATCH_REDWEEK_SOURCE=vps` in `.env`. The VPS holds no credential of the Circle's and does no parsing; this box
+reads the raw pages with the same `parseRentals`, judges and posts as before, so nothing but public HTML crosses.
+
+```
+VPS  cron 05:50 and 17:50 Aruba  ->  /srv/redweek/fetch.mjs  ->  /srv/redweek/out/<UTC stamp>/{manifest.json, <slug>.html}
+primary  06:00 and 18:00 scan    ->  rsync (read-only key)    ->  .vps-redweek/  ->  parseRentals  ->  judge, post, re-check the board
+```
+
+- **What the VPS asks** (`vps/fetch.mjs`, sharing `vps/rules.mjs` with `redweek.mjs`, so the two cannot differ): the same
+  user agent (`WATCH_UA` / `WATCH_CONTACT`, set on neither box today, so none), the same resorts (`OUR_SLUGS`, the six
+  with a catalog name), `robots.txt` first and obeyed, GET only, one page per resort, 10 s between resorts. A run is
+  a directory `out/2026-10-23T09-50-03Z/` (UTC) that appears whole (written aside, then renamed), with a
+  `manifest.json`: `runAt`, `finishedAt`, `robots`, `pages[]` of `{ slug, file, url, fetchedAt, status, bytes, sha256 }`,
+  `stop` and `complete`. Seven days are kept.
+- **A stop is a stop.** A 403, a challenge page or a `robots.txt` that disallows ends the run, writes `stop.kind: "stop"` in
+  the manifest and `/srv/redweek/state/halt.json`; nothing on the VPS asks RedWeek again until a person deletes that file.
+  A 429, a timeout or a broken `robots.txt` ends the run with `kind: "backoff"` and waits a day (the next run after that is
+  one `robots.txt` probe). While halted, each cron run still writes a manifest saying so, with no request.
+- **What the primary does** (`redweek.mjs`, `sweep(..., { source: 'vps' })`; `index.mjs` pulls first): the newest run decides.
+  Stop marker `stop`: the primary writes its own `.redweek-stop.json` too (RedWeek's no, via the VPS), card and push as
+  for any 403. Marker `backoff`: nothing read, and no direct read either. No run, a failed pull, an unreadable manifest, or
+  a run older than **2 hours**: nothing read, the scan says why, and *only then*, and only if this box's own back-off is not
+  holding, does it read RedWeek itself, as before. A page whose size or sha256 differs from the manifest is not read; a
+  resort with no good page verifies nothing, as for a resort that did not answer.
+- **Honest ages.** A week's `seen_at` is its page's own `fetchedAt`, never the time of the pull (the clocks are written after the
+  repricing, because `reprice_deal` stamps `now()`). `redweek_checks` gets the same time and `via = 'vps'`
+  (`supabase/migrations/20261026_redweek_via.sql`, paste once; until then the watcher says so once an hour and the
+  line reads "RedWeek checked at 06:00" without the source). With it, Stays reads **"RedWeek checked at 05:51 (via VPS)"**, and a
+  week the watcher posts carries "Read off RedWeek's own page via the VPS at 23/10 05:51 Aruba time" in its note.
+- **Taps still read no RedWeek**, from either place.
+
+**Setting it up / what is on the VPS** (all done 22 Oct 2026; the other users there are not this build's to touch):
+
+| where | what |
+|---|---|
+| VPS user `redweek` | no sudo, locked password, own group; `/srv/redweek/{fetch.mjs,rules.mjs}` are root's (read-only to it); `out/` and `state/` are its own |
+| `/home/redweek/.ssh/authorized_keys` (root-owned) | `command="rrsync -ro /srv/redweek/out",restrict,from="100.117.202.92" ssh-ed25519 … primary-root -> redweek@vps` |
+| `/etc/ssh/sshd_config.d/70-redweek.conf` | `AllowUsers redweek` (accumulates beside `99-studio.conf` and `60-aruba.conf`, which are untouched) |
+| `crontab -u redweek -l` | `50 9,21 * * * flock -n /srv/redweek/state/.lock /usr/bin/node /srv/redweek/fetch.mjs >> /srv/redweek/state/fetch.log 2>&1` |
+| primary `/root/.ssh/vps_redweek` (+ `.pub`) | the pull key, 0600, no passphrase (the service runs unattended) |
+| primary `/root/.ssh/vps_redweek_known_hosts` | the VPS's ed25519 host key, pinned (`StrictHostKeyChecking=yes`) |
+
+The cron is in **UTC on purpose**: this cron (Ubuntu 22.04, `3.0pl1-137`) has no `CRON_TZ` — the string is not in the binary,
+so `CRON_TZ=America/Aruba` would be ignored without a word and the jobs would fire at 01:50 and 13:50 Aruba. Aruba is UTC-4 all
+year, so 09:50 and 21:50 UTC *are* 05:50 and 17:50 there. Redeploy after editing `vps/`: `scp vps/fetch.mjs vps/rules.mjs` to the
+VPS as root, then `install -o root -g root -m 755 /tmp/fetch.mjs /srv/redweek/` (rules.mjs 644).
+
+By hand: on the VPS `su -s /bin/bash redweek -c 'flock -n /srv/redweek/state/.lock node /srv/redweek/fetch.mjs'` (one run, ~70 s, a real
+visit to RedWeek); on the primary `node index.mjs --redweek [--dry]` pulls, reads, judges, posts and re-checks the board and **never
+signs in to Interval** (`--once` does, while `WATCH_INTERVAL=on`, even with `--dry`). To undo: delete `WATCH_REDWEEK_SOURCE` from `.env`
+and restart; the direct reader is untouched and still stops on a 403 or a timeout as before. To lift a stop that came through
+the VPS, delete **both** `.redweek-stop.json` here and `/srv/redweek/state/halt.json` there.
+
 ## A member opens a stay
 
 Victor, 22 Oct 2026: *"I want the watch to watch it the moment a member clicks on stays."* This is

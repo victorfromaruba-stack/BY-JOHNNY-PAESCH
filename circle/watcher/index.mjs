@@ -5,12 +5,14 @@
 //   node index.mjs --once      one pass, then stop  (start here)
 //   node index.mjs             every WATCH_EVERY_MIN minutes, forever
 //   node index.mjs --dry       find and print, post nothing
+//   node index.mjs --redweek   one RedWeek pass (read, judge, post, re-check the board) and stop; never touches Interval. With --dry, posts nothing
 //   node index.mjs --dump      save what a signed-in Interval session sees, then stop
 //   node index.mjs --interval-read --confirm   one read of Aruba Getaways on a saved session (never signs in; see intervalRead)
 //
 // RedWeek needs no login and is read by two scheduled passes a day, at 06:00 and 18:00 Aruba time
 // (WATCH_REDWEEK_TIMES): every resort, ten seconds apart, the whole board compared with it. A timeout
-// stops the pass and backs RedWeek off for a day. Interval is signed into only on a run a person
+// stops the pass and backs RedWeek off for a day. With WATCH_REDWEEK_SOURCE=vps the pages are fetched by Victor's
+// VPS ten minutes earlier and pulled from it (vps/fetch.mjs, README "RedWeek from the VPS"); this box asks RedWeek nothing. Interval is signed into only on a run a person
 // started — --once or --dump — and never by the service; a member's tap can scan it, inside the caps
 // (interval-scan.mjs). See "Interval by hand" below.
 //
@@ -19,7 +21,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sweep, ARUBA, useStopFile, stopped, backoff, useBackoffFile } from './redweek.mjs';
+import { sweep, ARUBA, useStopFile, stopped, backoff, useBackoffFile, pullFromVps } from './redweek.mjs';
 // The two daily times RedWeek is read at, and whether the last of them has been served.
 import { parseTimes, due, lastSlot, nextSlot, arubaClock } from './schedule.mjs';
 import { Interval } from './interval.mjs';
@@ -58,10 +60,22 @@ const IV_STOP_FILE = join(HERE, '.interval-stop.json');
 const IV_STATE_FILE = join(HERE, '.interval-scan.json');
 const IV_SESSION_FILE = join(HERE, '.interval-session.json');
 const args = new Set(process.argv.slice(2));
-const ONCE = args.has('--once'), DRY = args.has('--dry'), DUMP = args.has('--dump');
+const ONCE = args.has('--once'), DRY = args.has('--dry'), DUMP = args.has('--dump'), REDWEEK = args.has('--redweek');
 
 // .env, beside this file. Shared with the tests (dotenv.mjs) so they run with the same choices.
 loadEnv(join(HERE, '.env'));
+
+// Where RedWeek is read from. 'vps': Victor's VPS fetches the pages twice a day and this box pulls them over the
+// tailnet with a read-only key (redweek.mjs, "Source: the VPS"). 'direct' (the default): this box asks RedWeek itself.
+const SOURCE = /^vps$/i.test(process.env.WATCH_REDWEEK_SOURCE || '') ? 'vps' : 'direct';
+const VPS_DIR = process.env.WATCH_VPS_DIR || join(HERE, '.vps-redweek');
+const VPS = {
+  dir: VPS_DIR,
+  pull: () => pullFromVps({
+    dir: VPS_DIR, host: process.env.WATCH_VPS_HOST || '100.122.79.25', user: process.env.WATCH_VPS_USER || 'redweek',
+    key: process.env.WATCH_VPS_KEY || '/root/.ssh/vps_redweek', knownHosts: process.env.WATCH_VPS_KNOWN_HOSTS || '/root/.ssh/vps_redweek_known_hosts',
+  }),
+};
 
 // A number the file actually set, even when it set it to zero. `Number(x) || d` would read
 // WATCH_BEAT_BY_PCT=0 as "unset" and quietly put the default of 15% back.
@@ -119,10 +133,12 @@ async function stampChecked(circle, ctx) {
       for (const slug of ctx.ok) {
         const id = resolveStay({ ourName: ARUBA[slug] }, ctx.catalog);
         if (!id) continue;
-        try { await circle.markChecked(id); }
+        const info = ctx.info.get(slug);
+        try { await circle.markChecked(id, info ? { at: info.fetchedAt, via: info.via } : undefined); }
         catch (err) { warnOnce('checks', `  could not record that ${slug} was read (${err.message}) — the stay page will not say "Checked" until supabase/migrations/20261022_stay_taps.sql is applied`); break; }
       }
     }
+    if (circle?.noVia) warnOnce('via', 'the database does not take the time and source of a RedWeek check yet — paste supabase/migrations/20261026_redweek_via.sql into the SQL editor. Until then the Stays line reads "RedWeek checked at <the time the watcher recorded it>" without "(via VPS)".');
   } finally { try { saveTapState(TAPS_FILE, tapState); } catch (err) { log(`  could not save ${TAPS_FILE} (${err.message})`); } }
 }
 
@@ -130,7 +146,7 @@ async function announceStop(err) {
   log(`RedWeek: STOPPED — ${err.message}. Nothing will read RedWeek again until ${STOP_FILE} is deleted.`);
   redweekCard(stopped());
   await tellOrHold(tapState, pusher, { title: 'RedWeek told the watcher to stop', priority: 4,
-    body: `${err.message}. The watcher has stopped reading RedWeek and will not try again. Delete .redweek-stop.json in circle/watcher to let it.` }, log);
+    body: `${err.message}. The watcher has stopped reading RedWeek and will not try again. Delete .redweek-stop.json in circle/watcher to let it${SOURCE === 'vps' ? ' (and /srv/redweek/state/halt.json on the VPS)' : ''}.` }, log);
 }
 
 
@@ -141,6 +157,9 @@ async function announceStop(err) {
 function redweekHold() {
   const s = stopped();
   if (s) return { kind: 'stop', why: `stopped${s.at ? ` since ${s.at}` : ''} (${s.why}); delete ${STOP_FILE} to let it` };
+  // The back-off is about this box's own requests. Reading the VPS's copy makes none, so it does not hold that;
+  // sweep() weighs it itself when the copy is missing and a direct read would be the fallback.
+  if (SOURCE === 'vps') return null;
   const b = backoff();
   if (b && !b.expired) return { kind: 'backoff', why: `did not answer${b.at ? ` on ${b.at}` : ''} (${b.why}); backed off until ${b.until}`, until: b.until };
   return null;
@@ -169,7 +188,7 @@ async function reportRedweek(circle, down, why) {
  * chain below out of reach: a member's tap never enters it.
  */
 async function pass(circle, opts = {}) {
-  const ctx = { ok: [], catalog: null };
+  const ctx = { ok: [], info: new Map(), catalog: null };       // info: slug -> { fetchedAt, via } for a page read off a copy
   try { return await passBody(circle, opts, ctx); }
   finally { await stampChecked(circle, ctx); }
 }
@@ -178,7 +197,7 @@ async function passBody(circle, { redweek = true, fromTap = false } = {}, ctx) {
   const found = [];
 
   const slugs = CFG.onlyOurStays ? Object.keys(ARUBA).filter(s => ARUBA[s]) : Object.keys(ARUBA);
-  let wall = null, silent = null;
+  let wall = null, silent = null, gone = null;
   let rwAll = [];           // everything RedWeek showed this pass, rented weeks included: the re-check of the board reads it
   if (redweek) {
     const hold = redweekHold();
@@ -188,24 +207,27 @@ async function passBody(circle, { redweek = true, fromTap = false } = {}, ctx) {
       if (hold.kind === 'stop') redweekCard(stopped());
       await reportRedweek(circle, true, hold.kind === 'stop' ? 'RedWeek told the watcher to stop' : 'RedWeek did not answer');
     } else {
-      if (backoff()) log('RedWeek: the back-off has run out — one probe request decides whether to resume');
-      log('RedWeek: scanning');
+      if (SOURCE !== 'vps' && backoff()) log('RedWeek: the back-off has run out — one probe request decides whether to resume');
+      log(SOURCE === 'vps' ? "RedWeek: pulling the VPS's copy of the pages" : 'RedWeek: scanning');
       noteRedweekScan(tapState);
       rwAll = await sweep(slugs, {
         includeTaken: true,        // rented weeks are what take a row down; worthPosting never lets one up
-        onResort: (slug, n, err) => {
-          log(`  ${err ? 'x' : ' '} ${slug.padEnd(44)} ${err ? err.message : `${n} open`}`);
-          if (err?.backoff) silent = err;
+        source: SOURCE, vps: VPS, log,
+        onResort: (slug, n, err, info) => {
+          log(`  ${err ? 'x' : ' '} ${slug.padEnd(44)} ${err ? err.message : `${n} open${info ? ` (fetched ${info.fetchedAt.slice(11, 16)}Z via ${info.via.toUpperCase()})` : ''}`}`);
+          if (err?.vps) gone = err;
+          else if (err?.backoff) silent = err;
           else if (err?.stop) wall = err;
-          else if (!err) { ctx.ok.push(slug); noteSwept(tapState, slug); }
+          else if (!err) { ctx.ok.push(slug); if (info) ctx.info.set(slug, info); noteSwept(tapState, slug, info ? Date.parse(info.fetchedAt) : Date.now()); }
         },
       });
       found.push(...rwAll);
       if (wall) await announceStop(wall);
+      else if (gone) log(`RedWeek: nothing read this pass — ${gone.message}${gone.until ? `; this box is backed off until ${gone.until}, so it does not read RedWeek directly either` : ''}. The board's RedWeek weeks stay as last seen.`);
       else if (silent) log(`RedWeek: did not answer — the rest of this pass is skipped, and nothing asks it again until ${silent.until}`);
       else if (ctx.ok.length) redweekCard(null);
       if (ctx.ok.length) await reportRedweek(circle, false);
-      else if (wall || silent) await reportRedweek(circle, true, wall ? 'RedWeek told the watcher to stop' : 'RedWeek did not answer');
+      else if (wall || silent || gone) await reportRedweek(circle, true, wall ? 'RedWeek told the watcher to stop' : gone ? gone.message.slice(0, 160) : 'RedWeek did not answer');
     }
   }
 
@@ -234,7 +256,7 @@ async function passBody(circle, { redweek = true, fromTap = false } = {}, ctx) {
   // told on the way in. Its wait is not consulted, because nothing is waiting to try.
   const wantsInterval = /^(1|on|true|yes)$/i.test(process.env.WATCH_INTERVAL || '');
   const pace = loadPace(PACE_FILE);
-  const byHand = ONCE || DUMP;
+  const byHand = (ONCE || DUMP) && !REDWEEK;           // --redweek is a run by hand that never signs in to Interval
   const refusalsSaid = (n) => `${n} time${n === 1 ? '' : 's'} in a row`;
   if (fromTap) {
     // A member's tap. Not a word about Interval here, and no way into the sign-in below.
@@ -471,7 +493,7 @@ async function intervalRead() {
 
 if (args.has('--interval-read')) {
   await intervalRead();
-} else if (ONCE || DUMP) {
+} else if (ONCE || DUMP || REDWEEK) {
   await run();
 } else {
   // RedWeek: two scheduled passes a day. A restart does not read it again — it reads only if the most recent

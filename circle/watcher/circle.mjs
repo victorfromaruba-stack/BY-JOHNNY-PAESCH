@@ -116,8 +116,20 @@ export class Circle {
   /** The whole board was just re-checked; this is what the top of the Stays list prints. */
   async markBoardChecked({ verified, repriced, retired }) { return this.rpc('mark_board_checked', { p_verified: verified, p_repriced: repriced, p_retired: retired }); }
 
-  /** "RedWeek was read for this place just now" — what the stay page prints as Checked N min ago. */
-  async markChecked(stayId) { return this.rpc('mark_redweek_checked', { p_stay: stayId }); }
+  /**
+   * "RedWeek was read for this place" — what the stay page prints as "RedWeek checked at 06:00". `at` is when the
+   * page was actually read when that was not now, `via` where from ('vps': the VPS fetched it). The database learns
+   * those two from 20261023_redweek_via.sql; before it is applied the call is the old one and says now, plainly.
+   */
+  async markChecked(stayId, { at = null, via = null } = {}) {
+    if (!at && !via) return this.rpc('mark_redweek_checked', { p_stay: stayId });
+    try { return await this.rpc('mark_redweek_checked', { p_stay: stayId, p_at: at, p_via: via }); }
+    catch (err) {
+      if (err.code !== 'PGRST202' && err.status !== 404) throw err;
+      this.noVia = true;                                    // index.mjs says so, once
+      return this.rpc('mark_redweek_checked', { p_stay: stayId });
+    }
+  }
 
   /**
    * The newest time any Interval week at this place was seen on a page a person grabbed, or null
