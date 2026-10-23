@@ -1,0 +1,10 @@
+// Trimmed copies of the shapes the three feeds really use (read 23 Oct 2026), plus Aruba items the live feeds did not happen to carry.
+export const ATOM = `<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Travelzoo - Feed</title>
+<entry><id>https://www.travelzoo.com/direct/vacations/caribbean/-719-up-Punta-Cana-3292335/</id><title type="html">$719 &amp; up -- Punta Cana: 4-night all-inclusive stay w/air</title>
+<summary type="html">At Ocean El Faro, a free room upgrade.</summary><published>2026-10-23T07:01:00-07:00</published><link href="https://www.travelzoo.com/direct/vacations/caribbean/-719-up-Punta-Cana-3292335/" /></entry>
+<entry><id>https://www.travelzoo.com/aruba-surf-1</id><title type="html">Aruba: Marriott's Aruba Surf Club studio, Nov 14-21, $2,000 total</title>
+<summary type="html">Hotel only, a week on Palm Beach. Taxes extra.</summary><published>2026-10-23T07:01:00-07:00</published><link href="https://www.travelzoo.com/aruba-surf-1" /></entry></feed>`;
+export const RSS = `<?xml version="1.0"?><rss version="2.0"><channel><title>HolidayPirates</title>
+<item><title>Group getaway 🥂 Cheshire</title><link>https://www.holidaypirates.com/hotels/nantwich</link><guid isPermaLink="true">https://www.holidaypirates.com/hotels/nantwich</guid><pubDate>Fri, 23 Oct 2026 14:39:09 +0100</pubDate><description>Pricing 👉 £199 per night / 6 = £34 per person</description></item></channel></rss>`;
+export const REDDIT = `<feed xmlns="http://www.w3.org/2005/Atom"><entry><author><name>/u/x</name></author><content type="html">&lt;p&gt;Anyone want a cheap week?&lt;/p&gt;</content><id>t3_abc</id><link href="https://www.reddit.com/r/Aruba/comments/abc/cheap_week/"/><updated>2026-10-23T14:00:00+00:00</updated><published>2026-10-23T14:00:00+00:00</published><title>Cheap timeshare week deal for Aruba</title></entry></feed>`;
+export const CHALLENGE = '<!DOCTYPE html><html><head><title>Just a moment...</title></head><body>Checking your browser</body></html>';

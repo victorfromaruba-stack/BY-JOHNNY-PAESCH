@@ -546,3 +546,12 @@ id, not the price, so a listing that drops a dollar is still the same week — a
 against **every** deal on the board, not only the live ones. A deal you take down stays down.
 The same stay, dates and unit from a *different* source is also treated as the same week, so a
 VakayMood week the Desk put up by hand is not doubled by its RedWeek twin.
+
+## The deal scout (23 Oct 2026)
+
+`scout.mjs --collect` (07:15 and 19:15 Aruba), `--digest` (08:00), `--score` (Mondays 06:30). Reads Travelzoo, HolidayPirates,
+Secret Flying, Reddit RSS (tips only) and VakayMood's API; judges against the catalog's public rate (great >= 25% under, good >= 15%,
+tip = nothing to compare with); great/good go through `post_deal`, tips to #deals as "Deal scout". A 403, 429, challenge or timeout stops that
+source for 24 h. Mail is shadow-only (`SCOUT_SHADOW`, default on): `sendMail` refuses any address but Victor's. Port 587 + STARTTLS, because
+this server's 465 times out. `20261027_scout_retire.sql` gives scout rows the 7-day retirement; paste it once. Scores for the scholar and
+the coach: `premanifest-bot/reports/scout/scores-<week>.json`.

@@ -15,3 +15,4 @@ circle/watcher/.interval-stop.json
 circle/watcher/.interval-scan.json
 circle/watcher/.interval-session.json
 circle/watcher/.vps-redweek/
+circle/watcher/.scout-state.json

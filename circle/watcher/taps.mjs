@@ -192,6 +192,8 @@ export async function handleTaps({ taps, catalog, state, deps, now = () => Date.
   const { intervalLastSeen, pusher, log, scanInterval, verifyBoard, scanAruba } = deps;
   // Ten members opening the Surf Club in one minute are one place to look at, not ten — and what they were
   // looking for, between them, is the widest of their dates. The list is a place of its own (`null`).
+  // A fortnight of which stays were opened, for the deal scout's weekly per-source score (scout.mjs). A stay and a time, no member.
+  state.tapLog = [...(state.tapLog || []), ...taps.filter((t) => t.stay).map((t) => ({ stay: t.stay, at: t.tapped }))].filter((x) => Date.parse(x.at) > now() - 14 * 864e5);
   const first = new Map();
   for (const t of taps) {
     const k = t.stay ?? null, cur = first.get(k);
