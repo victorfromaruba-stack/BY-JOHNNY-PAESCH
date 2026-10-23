@@ -53,7 +53,7 @@ export const V2_CHECKS: Record<string, (t: Turn, c: { now: number; dates: Set<st
   // slice 3
   fact_from_tool: (t) => t.tools.some((x) => x.name === 'places' || x.name === 'facts'),
   says_four_pm: (t) => /\b4(?::00)?\s*(?:pm|p\.m\.)/i.test(t.reply.replace(/\s/gu, ' ')),
-  says_unknown: (t) => /not (?:on file|published|listed)|(?:don't|do not) (?:know|have)|no record|nothing on file/i.test(t.reply),
+  says_unknown: (t) => /not (?:on file|published|listed)|(?:don't|do not|doesn't|does not) (?:know|have|mention|say|list)|(?:can't|cannot|can not) (?:say|tell|confirm)|no (?:record|mention)|nothing on file/i.test(t.reply),
   taxi_fare: (t) => /\$\s?4[01]\b/.test(t.reply),
 };
 export const V2_GLOBAL = ['no_empty_promise', 'airline_direct'];

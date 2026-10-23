@@ -17,6 +17,9 @@ Deno.test('the v2 checks pass what they should and fail what they should', () =>
   assert(V2_CHECKS.no_empty_promise(turn({ reply: "I'll let you know when it drops.", cards: [{ action: 'watch' }] }), ctx));
   assert(!V2_CHECKS.airline_direct(turn({ reply: 'See https://www.google.com/travel/flights' }), ctx));
   assert(V2_CHECKS.says_four_pm(turn({ reply: 'Check-in is at 4:00 pm.' }), ctx));
+  // k-unknown, the first replay with v2 (22 Oct): a right answer the first pattern failed.
+  assert(V2_CHECKS.says_unknown(turn({ reply: "The published facts do not mention a kids' club or supervised children's program, so I can't say whether one exists." }), ctx));
+  assert(!V2_CHECKS.says_unknown(turn({ reply: "Yes, there is a kids' club open daily." }), ctx));
   assert(V2_CHECKS.taxi_fare(turn({ reply: 'About $41 to the high-rise north.' }), ctx));
 });
 
