@@ -2,7 +2,7 @@
 //
 // Why: the unit tests stub the model, so they cannot say whether a change to learnings.md or
 // prompt.ts made Ian better or worse, and every lesson in learnings.md so far was found by hand.
-// This replays about 30 questions (the five proof questions, one per lesson, and real member
+// This replays about 40 questions (the five proof questions, one per lesson, and real member
 // questions from concierge_turns) through turn() on claude-haiku-5-5, three trials each, against a
 // frozen board whose dates move with the run day, so the 48-hour rule gives the same verdict every
 // night. No grader model: each check below is a regex or a look at the tools Ian called.
@@ -15,6 +15,8 @@
 //
 // Needs ANTHROPIC_API_KEY. Spends at most --cap dollars: refuses up front when the estimate is
 // over it (exit 3, {skipped}), and stops mid-run before a turn that would cross it (complete:false).
+
+import { applySeed, copyV2Files, V2_CASES, V2_CHECKS, V2_GLOBAL } from './replay-v2-cases.ts';
 
 export type Case = { id: string; kind: 'proof' | 'lesson' | 'member'; text: string; expect: string[] };
 type Turn = { reply: string; cards: { action: string }[]; tools: { name: string; input: any }[]; cost: number; error: string | null };
@@ -103,14 +105,27 @@ export function datesIn(reply: string, now: number): string[] {
   return out;
 }
 
-const ORIGIN_ASK = /where (are|will|would) you (be )?fly|fly(ing)? (out )?from\?|which (city|airport)|where .{0,20}from\?/i;
+// "where you'd fly from." without a question mark is still the question (the first live run missed it).
+const ORIGIN_ASK = /where (are|will|would|do) you (be )?fly|where you(?:'d|'ll| would| will)? (?:be )?fly(?:ing)?(?: out)? from|fly(ing)? (out )?from\?|which (city|airport)|what (city|airport)|where .{0,20}from\?/i;
+/** Where the first RedWeek week is put in front of the member: a RedWeek mention in a sentence with a figure. */
+const firstRedweekWeek = (reply: string) => {
+  let at = 0;
+  for (const sentence of reply.split(/(?<=[.!?])\s+|\n/)) {
+    const start = reply.indexOf(sentence, at); at = start + sentence.length;
+    const m = sentence.search(/redweek|owner week/i);
+    if (m >= 0 && /\d/.test(sentence)) return start + m;
+  }
+  return -1;
+};
 export const CHECKS: Record<string, (t: Turn, c: { now: number; dates: Set<string>; question: string }) => boolean> = {
   // Global: run on every answer.
   no_stripped_figure: (t) => !t.tools.some((x) => x.name === '(number guard)' && x.input?.stripped),
   no_banned_words: (t) => !/\b(available|confirmed|sold out|guaranteed)\b/i.test(t.reply),
   no_contact: (t) => !/[\w.+-]+@[\w-]+\.[\w.]+/.test(t.reply) && !/\+\d[\d\s().-]{7,}\d/.test(t.reply),
+  // Only a comparison is held to it: an answer that puts a RedWeek week (with a figure) in front of the
+  // member. "I can also check RedWeek owner weeks" on a quote is not one (the first replay failed it).
   interval_first: (t) => {
-    const rw = t.reply.search(/redweek|owner week/i);
+    const rw = firstRedweekWeek(t.reply);
     if (rw < 0) return true;
     const iv = t.reply.search(/interval|getaway/i);
     return iv >= 0 && iv < rw;
@@ -128,8 +143,16 @@ export const CHECKS: Record<string, (t: Turn, c: { now: number; dates: Set<strin
   not_desk_ian: (t) => /\bnot\b[^.]{0,60}\b(him|person|human|desk)\b|\bsoftware\b|\bdifferent\b/i.test(t.reply),
   no_misread_quote: (t) => !/\$\s?(9|71)\b/.test(t.reply)
     && (!/barcel/i.test(t.reply) || /looks? wrong|misread|not quot|odd|error|mistake/i.test(t.reply)),
+  // Ian v2's own (replay-v2-cases.ts): the plan, the cards that act, what Ian knows, flights both ways.
+  ...V2_CHECKS,
 };
-export const GLOBAL = ['answered', 'no_stripped_figure', 'no_banned_words', 'no_contact', 'interval_first', 'stale_said'];
+export const GLOBAL = ['answered', 'no_stripped_figure', 'no_banned_words', 'no_contact', 'interval_first', 'stale_said', ...V2_GLOBAL];
+
+/** Every case a night runs: the fixed ones, Ian v2's, then members' real questions up to forty in all. */
+export const MAX_CASES = 40;
+export const allCases = (real: { id: string; text: string }[], now: number) =>
+  [...FIXED, ...V2_CASES, ...real.slice(0, Math.max(0, MAX_CASES - FIXED.length - V2_CASES.length)).map(memberCase)]
+    .map((c) => ({ ...c, text: fill(c.text, now) }));
 
 /** Which checks failed for one answer. */
 export function judge(t: Turn, kase: Case, now: number, dates: Set<string>): string[] {
@@ -158,7 +181,7 @@ async function main() {
   const now = Date.now();
   const learnings = await Deno.readTextFile(arg('learnings')!);
   const real: { id: string; text: string }[] = arg('cases') ? JSON.parse(await Deno.readTextFile(arg('cases')!).catch(() => '[]')) : [];
-  const cases = [...FIXED, ...real.slice(0, 30 - FIXED.length).map(memberCase)].map((c) => ({ ...c, text: fill(c.text, now) }));
+  const cases = allCases(real, now);
   const base = { date: new Date(now - 4 * 36e5).toISOString().slice(0, 10), model, trials, candidateSha: await sha(learnings), learningsChars: learnings.length };
   const write = (o: unknown) => Deno.writeTextFile(out, JSON.stringify(o, null, 1));
 
@@ -180,6 +203,7 @@ async function main() {
     }
   };
   await copy(here, tmp);
+  await copyV2Files(here, tmp);                                   // facts.md: the facts tool's data
   await Deno.writeTextFile(`${tmp}/learnings.md`, learnings);
   const ian = await import(`file://${tmp}/ian.ts`);
   const callModel = ian.anthropic(key);
@@ -191,6 +215,7 @@ async function main() {
     for (let i = 0; i < trials; i++) {
       if (spent + (turns ? spent / turns : perTurn) > cap) { complete = false; break; }
       const { data, dates } = fixture(now);
+      applySeed(data, kase, now);                                     // a v2 case's trip plan, if it has one
       const t = await ian.turn({ lines: [{ role: 'user', text: kase.text }], data, model, callModel }) as Turn;
       spent += t.cost || 0; turns++;
       const failed = judge(t, kase, now, dates);

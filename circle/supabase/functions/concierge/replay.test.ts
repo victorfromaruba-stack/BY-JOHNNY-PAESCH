@@ -1,7 +1,8 @@
 // The replay's checks, on canned answers: each one passes the right answer and fails the wrong one.
 // (The replay itself calls the real model; these keep its judgement honest without spending a cent.)
 import { assert, assertEquals } from 'jsr:@std/assert@1';
-import { CHECKS, datesIn, FIXED, fill, fixture, judge, memberCase } from './replay.ts';
+import { allCases, CHECKS, datesIn, FIXED, fill, fixture, GLOBAL, judge, MAX_CASES, memberCase } from './replay.ts';
+import { V2_CASES } from './replay-v2-cases.ts';
 
 const now = Date.UTC(2026, 9, 22, 12);
 const t = (reply: string, extra: Partial<{ cards: any[]; tools: any[]; error: string | null }> = {}) =>
@@ -54,11 +55,35 @@ Deno.test('banned words, contact details, and the $9 misread are failures', () =
 Deno.test('a case fails on any global check, and only on the ones it names', () => {
   const k = { id: 'x', kind: 'lesson' as const, text: '', expect: ['refresh_card'] };
   assertEquals(judge(t('Tap to look again.', { cards: [{ action: 'refresh' }] }), k, now, ctx.dates), []);
-  assertEquals(judge(t('It is available.'), k, now, ctx.dates), ['no_banned_words', 'refresh_card']);
+  // "available" is a banned word to both the replay and Ian's promise guard (Ian v2), so both say so.
+  assertEquals(judge(t('It is available.'), k, now, ctx.dates), ['no_banned_words', 'no_empty_promise', 'refresh_card']);
   assertEquals(memberCase({ id: 'm', text: 'Can you find flights from Bogota?' }).expect, ['both_legs']);
 });
 
 Deno.test('the cases fill from the run day, and there are about thirty with the members\' questions', () => {
   assert(!FIXED.some((c) => /\{[MD]\d+\}/.test(fill(c.text, now))));
   assert(FIXED.length >= 14 && FIXED.length <= 16);
+});
+
+Deno.test("an answer that is not a comparison is not held to Interval-first (the replay's own bug, 22 Oct)", () => {
+  // p3-quote-cover, run 1: a quote, then an offer to look at RedWeek. No RedWeek week was put in front of anyone.
+  assert(CHECKS.interval_first(t('Seven nights come to 108,675 points, $1,087 all in. I can also check RedWeek owner weeks for this place if you want a cheaper option.'), ctx));
+  assert(!CHECKS.interval_first(t('RedWeek has a week at $230 a night. Interval has none.'), ctx), 'a RedWeek week with a figure before Interval still fails');
+});
+
+Deno.test("\"where you'd fly from.\" is the one question worth asking (the replay's own bug, 22 Oct)", () => {
+  // l-flights-origin, run 2: a right answer the old pattern failed for want of a question mark.
+  assert(CHECKS.both_legs(t("To start, I need to know where you'd fly from. Once you tell me the airport, I'll pull up the cheapest week first."), ctx));
+  assert(CHECKS.both_legs(t('Which airport are you flying from?'), ctx));
+  assert(!CHECKS.both_legs(t('Flights are something I can look at.'), ctx));
+});
+
+Deno.test("a night runs Ian v2's cases and checks, up to forty cases in all", () => {
+  const real = Array.from({ length: 30 }, (_, i) => ({ id: `m${i}`, text: 'Any flights from Bogota?' }));
+  const cases = allCases(real, now);
+  assertEquals(cases.length, MAX_CASES);
+  for (const v of V2_CASES) assert(cases.some((c) => c.id === v.id), v.id);
+  assert(GLOBAL.includes('no_empty_promise') && GLOBAL.includes('airline_direct'));
+  assert(CHECKS.plan_written && CHECKS.watch_card && CHECKS.says_unknown, 'the v2 checks are in the table judge() reads');
+  assert(!cases.some((c) => /\{[MD]\d+\}/.test(c.text)));
 });
