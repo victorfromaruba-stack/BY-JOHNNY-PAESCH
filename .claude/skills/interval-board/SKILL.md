@@ -26,7 +26,7 @@ This skill is how weeks get on, how the reader is fixed when a site changes, and
 > - sign in on `https://vip.intervalworld.com/web/my/auth/loginPage` as `Tagless`, the way the
 >   17 Oct fixture was obtained (`iv-login.js` / `iv-map.js`, proxy from the locked box); add no new
 >   evasion beyond what that flow already does;
-> - reuse the session (saved storage state, 0600, gitignored); at most **3 sign-ins per day**;
+> - reuse the session (saved storage state, 0600, gitignored); **no daily sign-in cap** (Victor, 22 Oct 21:30: "sign in more than 3 times a day, don't have a limit"), but never two sign-ins within 30 minutes;
 > - **1 scan per resort per 30 minutes, 10 per hour** overall; later taps inside the window are
 >   served from the last scan;
 > - **full stop** on any captcha, challenge, lock, "unusual activity" page, 403, or 2 refused

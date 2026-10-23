@@ -7,7 +7,7 @@
 //
 //   - sign in on the VIP host as the account in the locked box, the way the 17 Oct fixture was
 //     obtained (iv-login.js / iv-map.js); add no new evasion                 -> interval-session.mjs
-//   - reuse the saved session; at most 3 sign-ins a day                      -> decideSignIn()
+//   - reuse the saved session; no daily cap since 22 Oct, never two within 30 min -> decideSignIn()
 //   - 1 scan per resort per 30 minutes, 10 an hour overall; a tap inside the
 //     window is served from the last scan                                     -> decideScan()
 //   - FULL STOP on a captcha, a challenge, a lock, an "unusual activity" page, a 403, or two refused
@@ -39,7 +39,8 @@ import { resolveStay } from './judge.mjs';
 export const IV_CAPS = Object.freeze({
   resortGapMin: 30,      // one scan per resort per this many minutes, however many taps
   perHour: 10,           // and this many scans an hour in all
-  signInsPerDay: 3,      // sign-ins in any rolling 24 hours — attempts, whether or not they worked
+  signInsPerDay: Infinity, // no daily cap (Victor, 22 Oct 21:30: "sign in more than 3 times a day, don't have a limit");
+                           // the 30-minute gap and the stop on a challenge or two refusals still stand
   signInGapMin: 30,      // and never two within this long, so two resorts tapped at once are not two attempts
   refusalsToStop: 2,     // refused sign-ins in a row before the stop
 });

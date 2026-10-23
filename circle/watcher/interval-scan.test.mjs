@@ -91,23 +91,19 @@ test('ten scans an hour in all, then every tap is served from what there is', ()
   assert.equal(decideScan(st, 'R99', T0 + hour(1) + min(1)).go, true, 'an hour later the count has drained');
 });
 
-test('three sign-ins in any rolling 24 hours, and never two within 30 minutes', () => {
+test('no daily sign-in cap (Victor, 22 Oct), but never two within 30 minutes', () => {
   const st = emptyIvState();
   assert.equal(decideSignIn(st, T0).go, true);
   noteSignIn(st, T0);
   const gap = decideSignIn(st, T0 + min(10));
   assert.equal(gap.go, false);
   assert.match(gap.why, /signed in 10 min ago — not again for 30 min/);
-  noteSignIn(st, T0 + min(31)); noteSignIn(st, T0 + min(62));
-  const cap = decideSignIn(st, T0 + hour(5));
-  assert.equal(cap.go, false);
-  assert.match(cap.why, /3 sign-ins in the last 24 hours \(cap 3\)/);
-  assert.equal(decideSignIn(st, T0 + hour(24) + min(1)).go, true, 'the first has aged out of the window');
-  assert.equal(decideSignIn(st, T0 + hour(23)).go, false, 'a calendar midnight does not reset it: it is a rolling day');
+  for (let i = 1; i <= 9; i++) noteSignIn(st, T0 + min(31 * i));
+  assert.equal(decideSignIn(st, T0 + min(31 * 10)).go, true, 'ten sign-ins in five hours, and an eleventh may still go');
 });
 
 test('the caps are the ones Victor wrote down', () => {
-  assert.deepEqual({ ...IV_CAPS }, { resortGapMin: 30, perHour: 10, signInsPerDay: 3, signInGapMin: 30, refusalsToStop: 2 });
+  assert.deepEqual({ ...IV_CAPS }, { resortGapMin: 30, perHour: 10, signInsPerDay: Infinity, signInGapMin: 30, refusalsToStop: 2 });
 });
 
 test('state is private, survives a restart, and an unreadable file FAILS CLOSED rather than counting from zero', () => {
@@ -616,7 +612,7 @@ test('TWO REFUSED SIGN-INS IN A ROW stop it; one refusal is only a refusal, and 
   } finally { w.close(); }
 });
 
-test('THE SIGN-IN CAP: three sign-ins in a day, and the fourth is refused before it reaches Interval', e2e, async () => {
+test('NO DAILY CAP: a fourth sign-in in a day goes through like the first three', e2e, async () => {
   const w = await world();
   try {
     const results4 = [];
@@ -625,14 +621,9 @@ test('THE SIGN-IN CAP: three sign-ins in a day, and the fourth is refused before
       const [row] = await w.tap(RBK, i === 0 ? 0 : min(31));
       results4.push(row.scan);
     }
-    assert.deepEqual(results4.slice(0, 3).map((r) => r.covered), [true, true, true], 'three sign-ins, three scans');
-    assert.equal(w.ivHits(/POST \/web\/my\/auth\/login$/), 3);
-    assert.equal(results4[3].ran, false);
-    assert.match(results4[3].why, /needs a sign-in, and 3 sign-ins in the last 24 hours \(cap 3\)/);
-    assert.equal(w.ivHits(/POST \/web\/my\/auth\/login$/), 3, 'the fourth never posted a password');
-    assert.equal(w.ivHits(/GET \/web\/my\/auth\/loginPage/), 3, 'and never opened the login page');
-    assert.equal(existsSync(w.stopFile), false, 'a cap is not a stop');
-    assert.equal(w.nudges().length, 1, 'the capped tap falls back to the Grab nudge');
+    assert.deepEqual(results4.map((r) => r.covered), [true, true, true, true], 'four sign-ins, four scans');
+    assert.equal(w.ivHits(/POST \/web\/my\/auth\/login$/), 4);
+    assert.equal(existsSync(w.stopFile), false);
   } finally { w.close(); }
 });
 
