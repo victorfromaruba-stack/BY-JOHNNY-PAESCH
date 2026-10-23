@@ -160,13 +160,15 @@ test('a tap does not reload the store the way rpc() does', () => {
   assert.equal(reloads, 0);
 });
 
-test('the check time is the watcher’s timestamp, or null when there is none or no table', async () => {
+test('the check is the watcher’s timestamp and where it was read from, or null when there is none or no table', async () => {
   const at = '2026-10-22T12:00:00+00:00';
-  assert.equal(await newStore(tapClient({ checked: { data: { checked_at: at }, error: null } })).redweekCheckedAt('s'), at);
-  assert.equal(await newStore(tapClient({ checked: { data: null, error: null } })).redweekCheckedAt('s'), null);
-  assert.equal(await newStore(tapClient({ checked: { data: null, error: { code: '42P01', message: 'relation does not exist' } } })).redweekCheckedAt('s'), null,
+  assert.deepEqual(await newStore(tapClient({ checked: { data: { checked_at: at }, error: null } })).redweekCheck('s'), { at, via: null },
+    'a database without the via column (the migration not applied yet) still gives its time');
+  assert.deepEqual(await newStore(tapClient({ checked: { data: { checked_at: at, via: 'vps' }, error: null } })).redweekCheck('s'), { at, via: 'vps' });
+  assert.equal(await newStore(tapClient({ checked: { data: null, error: null } })).redweekCheck('s'), null);
+  assert.equal(await newStore(tapClient({ checked: { data: null, error: { code: '42P01', message: 'relation does not exist' } } })).redweekCheck('s'), null,
     'the migration not being applied yet is no line, not an error');
-  assert.equal(await newStore(tapClient({ checked: new Error('offline') })).redweekCheckedAt('s'), null);
+  assert.equal(await newStore(tapClient({ checked: new Error('offline') })).redweekCheck('s'), null);
 });
 
 test('a burst of realtime events is one reload, not one per row', () => {
@@ -248,11 +250,15 @@ test('the Stays line: when RedWeek was last read, whether it is out right now si
   store.state.deals = [];
   const st = await store.boardStatus();
   assert.equal(st.redweekAt, read);
+  assert.equal(st.redweekVia, null);
   assert.deepEqual(st.outage, { source: 'redweek', since });
   assert.equal(st.at, '2026-10-22T18:00:00+00:00');
   // No outage: the line is "checked at", nothing about reachability.
   const calm = await newStore(tableClient({ redweek_checks: { rows: { data: [{ checked_at: read }], error: null } }, source_outages: { one: { data: null, error: null } } })).boardStatus();
   assert.deepEqual([calm.redweekAt, calm.outage, calm.at], [read, null, null], 'RedWeek alone is enough to say something');
+  // Read by the VPS: the line says where from.
+  const vps = await newStore(tableClient({ redweek_checks: { rows: { data: [{ checked_at: read, via: 'vps' }], error: null } }, source_outages: { one: { data: null, error: null } } })).boardStatus();
+  assert.deepEqual([vps.redweekAt, vps.redweekVia], [read, 'vps']);
   // Nothing at all, or none of the tables: no line, not an error.
   assert.equal(await newStore(tableClient({})).boardStatus(), null);
   assert.equal(await newStore(tableClient({ redweek_checks: { rows: { data: null, error: { code: '42P01' } } }, source_outages: { one: new Error('offline') } })).boardStatus(), null);

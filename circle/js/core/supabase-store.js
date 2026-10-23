@@ -230,18 +230,20 @@ export class SupabaseStore extends Store {
     try { Promise.resolve(this.sb.rpc('record_stay_tap', args)).then(() => {}, () => {}); } catch { /* no tap */ }
   }
   /**
-   * When the watcher last read RedWeek's public page for this place, as an ISO time, or null if
-   * it never has — or if this database does not have the table yet. Read on its own rather than
+   * When the watcher last read RedWeek's public page for this place, `{ at, via }` — `at` an ISO time, `via` 'vps' when
+   * Victor's VPS fetched it and null otherwise — or null if it never has, or if this database does not have the table yet. Read on its own rather than
    * with the twenty-odd tables in reload(): a table that is missing is an outage there, and a
    * missing line of small print is not one.
    */
-  async redweekCheckedAt(stayId) {
+  async redweekCheck(stayId) {
     const hit = (this._checked ||= new Map()).get(stayId);
     if (hit && Date.now() - hit.at < 15e3) return hit.value;
     let value = null;
     try {
-      const { data, error } = await this.sb.from('redweek_checks').select('checked_at').eq('stay_id', stayId).maybeSingle();
-      if (!error && data?.checked_at) value = data.checked_at;
+      // `*`, not the column names: `via` arrives with 20261026_redweek_via.sql, and asking for a column that is not
+      // there yet would fail the whole read and take the line away.
+      const { data, error } = await this.sb.from('redweek_checks').select('*').eq('stay_id', stayId).maybeSingle();
+      if (!error && data?.checked_at) value = { at: data.checked_at, via: data.via ?? null };
     } catch { /* null */ }
     this._checked.set(stayId, { at: Date.now(), value });
     return value;
@@ -264,19 +266,19 @@ export class SupabaseStore extends Store {
   /**
    * What the line at the top of Stays says: when the watcher last re-checked the board and what it did, plus
    * how many weeks have been taken down today (counted from the deals this phone already holds); when RedWeek
-   * was last read (`redweekAt`, the newest check of any place); and whether RedWeek is out right now
+   * was last read (`redweekAt`, the newest check of any place, and `redweekVia` where that one was read from); and whether RedWeek is out right now
    * (`outage`, with the time it was last known to answer). Null until the watcher has written any of them — or
    * if this database does not have the tables yet, which is no line rather than an error.
    */
   async boardStatus() {
-    let row = null, redweekAt = null, outage = null;
+    let row = null, redweekAt = null, redweekVia = null, outage = null;
     try {
       const { data, error } = await this.sb.from('board_checks').select('checked_at,verified,repriced,retired').eq('id', 1).maybeSingle();
       if (!error && data?.checked_at) row = data;
     } catch { /* null */ }
     try {
-      const { data, error } = await this.sb.from('redweek_checks').select('checked_at').order('checked_at', { ascending: false }).limit(1);
-      if (!error && data?.[0]?.checked_at) redweekAt = data[0].checked_at;
+      const { data, error } = await this.sb.from('redweek_checks').select('*').order('checked_at', { ascending: false }).limit(1);
+      if (!error && data?.[0]?.checked_at) { redweekAt = data[0].checked_at; redweekVia = data[0].via ?? null; }
     } catch { /* null */ }
     try {
       const { data, error } = await this.sb.from('source_outages').select('since').eq('source', 'redweek').is('until', null).maybeSingle();
@@ -284,7 +286,7 @@ export class SupabaseStore extends Store {
     } catch { /* null */ }
     if (!row && !redweekAt && !outage) return null;
     return { at: row?.checked_at ?? null, verified: row?.verified ?? 0, repriced: row?.repriced ?? 0, retired: row?.retired ?? 0,
-      retiredToday: retiredToday(this.state.deals), redweekAt, outage };
+      retiredToday: retiredToday(this.state.deals), redweekAt, redweekVia, outage };
   }
   /**
    * The outages the seven-day clock does not count (freshness.js). Read on its own, never with the tables in

@@ -10,7 +10,7 @@ import { toast, sheet, confirmDialog, setBusy, chip, statusLabel } from '../ui/c
 import { shareText, appHash, boardForGroup } from '../core/share.js';
 import { icon } from '../ui/icons.js';
 import { routeSvg, islandSvg } from '../ui/art.js';
-import { isStale, atWords, sinceWords } from '../core/freshness.js';
+import { isStale, sinceWords, redweekWords } from '../core/freshness.js';
 import { CHIPS, chipWindow, chipFor, clampWindow, dayOf, loadWindow, saveWindow, overlaps, windowWords } from '../core/window.js';
 import { dealList, byNight, byBoard, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, dropWhen, SOURCES, shortRange, usdNight } from './deals.js';
 import { openWeeks, resortForStay, bedroomsOf } from './live.js';
@@ -326,7 +326,7 @@ export function stays({ store, go, query = {} }) {
         const n = st.retiredToday;
         const bits = [];
         if (st.outage) bits.push(`RedWeek not reachable since ${sinceWords(st.outage.since)}; weeks shown as last seen`);
-        else if (st.redweekAt) bits.push(`RedWeek checked ${atWords(st.redweekAt)}`);
+        else if (st.redweekAt) bits.push(redweekWords(st.redweekAt, st.redweekVia));
         if (st.at) bits.push(`Board checked ${fmtRelative(st.at)}`, `${n} week${n === 1 ? '' : 's'} retired today`);
         line.hidden = !bits.length;
         line.textContent = bits.join(' · ');
@@ -654,7 +654,7 @@ export function stayDetail({ store, params, go, query = {} }) {
     const looking = loadWindow(undefined, dayOf());
     store.noteStayLook?.(stay.id, { from: looking.from, to: looking.to });
     const line = wrap.querySelector('#checked');
-    Promise.resolve(store.redweekCheckedAt?.(stay.id)).then((at) => { if (at && wrap.isConnected) { line.hidden = false; line.textContent = `RedWeek checked ${atWords(at)}`; } });
+    Promise.resolve(store.redweekCheck?.(stay.id)).then((c) => { const words = c && redweekWords(c.at, c.via); if (words && wrap.isConnected) { line.hidden = false; line.textContent = words; } });
   }
   // The docked Ask: one button, the figure inside it, going where the pricing block points.
   // drawQuote() below rewrites `askPath` and #ask-fig every time the dates change.

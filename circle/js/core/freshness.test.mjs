@@ -8,7 +8,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { isStale, isFresh, seenWords, ageDays, boardOrder, retiredToday, seenMs, RETIRE_AFTER_DAYS, FRESH_HOURS, WATCHED_SOURCES, setOutages, outages, pausedMs, atWords, sinceWords } from './freshness.js';
+import { isStale, isFresh, seenWords, ageDays, boardOrder, retiredToday, seenMs, RETIRE_AFTER_DAYS, FRESH_HOURS, WATCHED_SOURCES, setOutages, outages, pausedMs, atWords, sinceWords, redweekWords } from './freshness.js';
 import { Store, emptyState } from './store.js';
 import { SupabaseStore } from './supabase-store.js';
 
@@ -130,7 +130,7 @@ test('the line at the top of Stays: when the board was last re-checked, from the
     : stubClient().from(t)) });
   const store = new SupabaseStore({ client: withRow({ data: { checked_at: at, verified: 41, repriced: 3, retired: 2 }, error: null }) });
   store.state.deals = [{ status: 'gone', retiredAt: new Date().toISOString() }];
-  assert.deepEqual(await store.boardStatus(), { at, verified: 41, repriced: 3, retired: 2, retiredToday: 1, redweekAt: null, outage: null });
+  assert.deepEqual(await store.boardStatus(), { at, verified: 41, repriced: 3, retired: 2, retiredToday: 1, redweekAt: null, redweekVia: null, outage: null });
   assert.equal(await new SupabaseStore({ client: withRow({ data: null, error: null }) }).boardStatus(), null);
   assert.equal(await new SupabaseStore({ client: withRow({ data: null, error: { code: '42P01', message: 'relation does not exist' } }) }).boardStatus(), null, 'the migration not being applied is no line, not an error');
   assert.equal(await new SupabaseStore({ client: withRow(new Error('offline')) }).boardStatus(), null);
@@ -222,6 +222,32 @@ test('"RedWeek checked at 06:00" and "not reachable since 14:20": a time in word
   assert.equal(sinceWords(at(18, 14, 20), now), '18 Oct 14:20');
   assert.equal(atWords('nonsense', now), '');
   assert.equal(sinceWords(null, now), '');
+});
+
+test('"RedWeek checked at 05:51 (via VPS)": the time the page was read, and where from, only when it is the VPS', () => {
+  const now = new Date(2026, 9, 23, 7, 0).getTime();
+  const at = new Date(2026, 9, 23, 5, 51).toISOString();
+  assert.equal(redweekWords(at, 'vps', now), 'RedWeek checked at 05:51 (via VPS)');
+  assert.equal(redweekWords(at, null, now), 'RedWeek checked at 05:51', 'a direct read says nothing about a VPS');
+  assert.equal(redweekWords(at, undefined, now), 'RedWeek checked at 05:51');
+  assert.equal(redweekWords(at, 'something else', now), 'RedWeek checked at 05:51', 'only a word the app knows is repeated');
+  assert.equal(redweekWords(new Date(2026, 9, 22, 17, 51).toISOString(), 'vps', now), 'RedWeek checked yesterday at 17:51 (via VPS)');
+  assert.equal(redweekWords('nonsense', 'vps', now), '', 'no time, no line');
+  assert.doesNotMatch(redweekWords(at, 'vps', now), /available|confirmed|sold out/i);
+});
+
+test('the via migration: a new column, one function (the old argument list dropped), never a time in the future, never an older reading over a newer', () => {
+  const sql = readFileSync(new URL('../../supabase/migrations/20261026_redweek_via.sql', import.meta.url), 'utf8');
+  assert.match(sql, /alter table redweek_checks add column if not exists via text/);
+  assert.match(sql, /drop function if exists mark_redweek_checked\(uuid\);/);
+  assert.match(sql, /mark_redweek_checked\(p_stay uuid, p_at timestamptz default null, p_via text default null\)/);
+  assert.match(sql, /current_is_bot\(\)/);
+  assert.match(sql, /least\(coalesce\(p_at, now\(\)\), now\(\)\)/);
+  assert.match(sql, /where excluded\.checked_at >= redweek_checks\.checked_at/);
+  assert.match(sql, /revoke all on function mark_redweek_checked\(uuid, timestamptz, text\) from public, anon;/);
+  assert.match(sql, /grant execute on function mark_redweek_checked\(uuid, timestamptz, text\) to authenticated;/);
+  const schema = readFileSync(new URL('../../supabase/schema.sql', import.meta.url), 'utf8');
+  assert.ok(schema.includes(sql.trim()), 'schema.sql carries the same text, as for every migration before it');
 });
 
 test('the migrations say what was decided: dates carried by a tap, widened not dropped; an outage pauses the clock, in the database too', () => {

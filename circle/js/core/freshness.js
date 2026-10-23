@@ -111,6 +111,14 @@ export function atWords(iso, now = Date.now()) {
   const day = dayWord(d, now);
   return `${day ? `${day} ` : ''}at ${clock(d)}`;
 }
+/**
+ * "RedWeek checked at 06:00", and "RedWeek checked at 05:51 (via VPS)" when Victor's VPS fetched the page (the
+ * watcher records `via` from 20261026_redweek_via.sql). A time and where from, never a verdict. Empty when there is no time.
+ */
+export function redweekWords(iso, via = null, now = Date.now()) {
+  const t = atWords(iso, now);
+  return t ? `RedWeek checked ${t}${via === 'vps' ? ' (via VPS)' : ''}` : '';
+}
 /** "14:20", "yesterday 14:20", "21 Oct 14:20" — for "RedWeek not reachable since …". */
 export function sinceWords(iso, now = Date.now()) {
   const d = new Date(iso || NaN);
