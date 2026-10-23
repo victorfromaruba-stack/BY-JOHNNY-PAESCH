@@ -121,9 +121,10 @@ export function worthPosting(f, catalog, cfg) {
   if (implausiblyCheap(f, cfg)) return false;
   if (implausiblyDear(f, cfg)) return false;
   const stay = catalog?.get(f.stayId);
-  const ours = ourPrice(stay, f.from, f.nights || 1);
+  const ours = f.retailLocked ? f.ourPrice : ourPrice(stay, f.from, f.nights || 1);
   if (ours != null) { f.ourPrice = ours; f.saves = f.usdTotal > 0 ? Math.round(ours - f.usdTotal) : null; }
-  const retail = retailPrice(stay, f.nights || 1);
+  // retailLocked: the finder already priced the public rate like for like (the deal scout, scout-judge.mjs); do not replace it with the flat headline-room figure.
+  const retail = f.retailLocked ? f.retailPrice : retailPrice(stay, f.nights || 1);
   if (retail != null) f.retailPrice = retail;
   // Interval: always, as long as it can be priced one way or the other. A Getaway whose price
   // the parser missed still goes up, at our own rate, with a note saying so.

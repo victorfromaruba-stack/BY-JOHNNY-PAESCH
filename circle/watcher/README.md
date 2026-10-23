@@ -555,3 +555,4 @@ tip = nothing to compare with); great/good go through `post_deal`, tips to #deal
 source for 24 h. Mail is shadow-only (`SCOUT_SHADOW`, default on): `sendMail` refuses any address but Victor's. Port 587 + STARTTLS, because
 this server's 465 times out. `20261027_scout_retire.sql` gives scout rows the 7-day retirement; paste it once. Scores for the scholar and
 the coach: `premanifest-bot/reports/scout/scores-<week>.json`.
+Baseline (fixed 23 Oct): public rate is like for like, per night, `retail x (band rate / rate_high) x room factor` for the cheapest catalog room with the same bedroom count (none: tip), and a deal is great/good only if it is also no dearer than the Circle's own price for that room. `scout.mjs --rejudge` re-checks every scout row on the board and retires the ones that fail ("re-judged: not under the public rate").

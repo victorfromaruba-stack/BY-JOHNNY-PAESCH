@@ -2,7 +2,7 @@
 export const ATOM = `<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Travelzoo - Feed</title>
 <entry><id>https://www.travelzoo.com/direct/vacations/caribbean/-719-up-Punta-Cana-3292335/</id><title type="html">$719 &amp; up -- Punta Cana: 4-night all-inclusive stay w/air</title>
 <summary type="html">At Ocean El Faro, a free room upgrade.</summary><published>2026-10-23T07:01:00-07:00</published><link href="https://www.travelzoo.com/direct/vacations/caribbean/-719-up-Punta-Cana-3292335/" /></entry>
-<entry><id>https://www.travelzoo.com/aruba-surf-1</id><title type="html">Aruba: Marriott's Aruba Surf Club studio, Nov 14-21, $2,000 total</title>
+<entry><id>https://www.travelzoo.com/aruba-surf-1</id><title type="html">Aruba: Marriott's Aruba Surf Club studio, Nov 14-21, $800 total</title>
 <summary type="html">Hotel only, a week on Palm Beach. Taxes extra.</summary><published>2026-10-23T07:01:00-07:00</published><link href="https://www.travelzoo.com/aruba-surf-1" /></entry></feed>`;
 export const RSS = `<?xml version="1.0"?><rss version="2.0"><channel><title>HolidayPirates</title>
 <item><title>Group getaway 🥂 Cheshire</title><link>https://www.holidaypirates.com/hotels/nantwich</link><guid isPermaLink="true">https://www.holidaypirates.com/hotels/nantwich</guid><pubDate>Fri, 23 Oct 2026 14:39:09 +0100</pubDate><description>Pricing 👉 £199 per night / 6 = £34 per person</description></item></channel></rss>`;

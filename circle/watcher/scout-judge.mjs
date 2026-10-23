@@ -8,7 +8,8 @@
 //
 // A baseline is only ever the catalog's own public rate for a resort the item NAMES. Never invented.
 
-import { resolveStay, implausiblyCheap, implausiblyDear, retailPrice } from './judge.mjs';
+import { resolveStay, implausiblyCheap, implausiblyDear } from './judge.mjs';
+import { rateBandFor } from '../js/core/money.js';
 
 export const GREAT = 0.25, GOOD = 0.15;
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
@@ -31,6 +32,47 @@ export function statedDates(t, now = Date.now()) {
   const to = iso(m2 < m1 ? +from.slice(0, 4) + 1 : +from.slice(0, 4), m2, d2);
   const n = diffDays(from, to);
   return n >= 1 && n <= 21 && from >= today ? { from, to, nights: n } : null;
+}
+
+
+/** Bedrooms a unit description states: "Studio" 0, "2 Bedroom" 2, anything else unknown (null). */
+export function bedroomsOf(text) {
+  const t = String(text || '');
+  if (/\bstudio\b/i.test(t)) return 0;
+  const m = t.match(/\b(\d)[- ]?(?:bed(?:room)?s?|br)\b/i) || t.match(/\b(one|two|three)[- ]bedroom/i);
+  return m ? ({ one: 1, two: 2, three: 3 }[String(m[1]).toLowerCase()] ?? +m[1]) : null;
+}
+
+/**
+ * The like-for-like baseline for a room of `bedrooms` at `stay` over these nights, or null when the catalog has no room of that size.
+ *
+ * stays.retail_usd is a DEAR-season figure for the property's headline room, and rate_low/high/peak are the Circle's own rates
+ * for that same room; room_types.rate_factor scales to other rooms. So, night by night (as quote_points does):
+ *   public = retail x (band rate / rate_high) x factor     ours = band rate x factor
+ * The factor is the CHEAPEST catalog room with that many bedrooms, so "under the public rate" holds whichever view the owner's unit has.
+ * Never a flat retail x nights (that is what made 64 weeks "68% under").
+ */
+export function baselineFor(stay, rooms, bedrooms, from, nights) {
+  const high = Number(stay?.rate_high_usd), retail = Number(stay?.retail_usd);
+  if (!(high > 0) || !(retail > 0) || bedrooms == null || !(nights > 0)) return null;
+  const factors = (rooms || []).filter((r) => r.bedrooms === bedrooms && Number(r.rate_factor) > 0).map((r) => Number(r.rate_factor));
+  if (!factors.length) return null;
+  const f = Math.min(...factors), start = Date.parse(`${from}T12:00:00Z`);
+  let pub = 0, ours = 0;
+  for (let i = 0; i < nights; i++) {
+    const band = rateBandFor(`${new Date(start + i * 864e5).toISOString().slice(0, 10)}T12:00:00Z`);
+    const rate = Number(stay[`rate_${band}_usd`]);
+    if (!(rate > 0)) return null;
+    pub += retail * (rate / high) * f; ours += rate * f;
+  }
+  return { public: Math.round(pub * 100) / 100, ours: Math.round(ours * 100) / 100, factor: f };
+}
+
+/** great/good only if under the like-for-like public rate AND no dearer than the Circle's own price for the same room. */
+function classify(total, base) {
+  const pct = 1 - total / base.public;
+  if (total > base.ours) return { cls: 'drop', pct, why: `${Math.round(pct * 100)}% under public but dearer than the Circle's own $${Math.round(base.ours)}` };
+  return { cls: pct >= GREAT ? 'great' : pct >= GOOD ? 'good' : 'drop', pct, why: `${Math.round(pct * 100)}% under public` };
 }
 
 /** The first USD figure and what it is a price OF. Other currencies are read but never compared. */
@@ -80,16 +122,17 @@ export function judgeItem(item, { catalog, cfg = {}, now = Date.now(), source = 
   const comparable = stayId && dates && !AIR.test(t) && !price.perPerson && (price.perNight || /\btotal\b|for \d+ nights?/i.test(t));
   if (!comparable) return { cls: 'tip', why: !stayId ? 'no catalog resort named' : AIR.test(t) ? 'package with flights' : price.perPerson ? 'per person' : !dates ? 'no dates stated' : 'total or per-night not stated', ...base };
   const total = price.perNight ? Math.round(price.amount * dates.nights * 100) / 100 : price.amount;
-  const retail = retailPrice(catalog.get(stayId), dates.nights);
-  if (retail == null) return { cls: 'tip', why: 'resort has no public rate on file', ...base };
-  const pct = 1 - total / retail;
-  const cls = pct >= GREAT ? 'great' : pct >= GOOD ? 'good' : 'drop';
+  const br = bedroomsOf(t);
+  const bl = baselineFor(catalog.get(stayId), cfg.rooms?.get(stayId), br, dates.from, dates.nights);
+  if (!bl) return { cls: 'tip', why: br == null ? 'room size not stated' : 'no comparable room in the catalog', ...base };
+  const { cls, pct, why } = classify(total, bl);
+  const retail = bl.public;
   const find = {
     source: 'other', externalId: `${source}:${Buffer.from(String(item.id)).toString('base64url').slice(-24)}`, stayId,
     resortName: catalog.get(stayId).name, unit: `${source} offer`, from: dates.from, to: dates.to, nights: dates.nights,
-    usdTotal: total, usdNightly: Math.round(total / dates.nights * 100) / 100, url: item.link, retailPrice: retail,
+    usdTotal: total, usdNightly: Math.round(total / dates.nights * 100) / 100, url: item.link, retailPrice: retail, retailLocked: true,
   };
-  return { cls, why: cls === 'drop' ? `only ${Math.round(pct * 100)}% under public` : `${Math.round(pct * 100)}% under public`, pct, find, ...base };
+  return { cls, why, pct, find: { ...find, ourPrice: bl.ours }, ...base };
 }
 
 /** A VakayMood listing (toDeal's shape) against the catalog: great, good, or not worth a post. */
@@ -102,12 +145,12 @@ export function judgeListing(l, { catalog, cfg = {}, now = Date.now() }) {
   if (nights !== diffDays(l.from, l.to)) return { cls: 'reject', why: 'nights do not match the dates' };
   const probe = { nights, usdTotal: l.usdTotal, usdNightly: l.usdTotal / nights };
   if (implausiblyCheap(probe, cfg) || implausiblyDear(probe, cfg)) return { cls: 'reject', why: `$${Math.round(probe.usdNightly)} a night cannot be true` };
-  const retail = retailPrice(catalog.get(stayId), nights);
-  if (retail == null) return { cls: 'tip', why: 'resort has no public rate on file' };
-  const pct = 1 - l.usdTotal / retail;
-  const cls = pct >= GREAT ? 'great' : pct >= GOOD ? 'good' : 'drop';
-  return { cls, pct, why: `${Math.round(pct * 100)}% under public`, find: {
+  const br = l.bedrooms ?? bedroomsOf(l.unitType);
+  const bl = baselineFor(catalog.get(stayId), cfg.rooms?.get(stayId), br, l.from, nights);
+  if (!bl) return { cls: 'tip', why: br == null ? 'room size not stated' : 'no comparable room in the catalog' };
+  const { cls, pct, why } = classify(l.usdTotal, bl);
+  return { cls, pct, why, find: {
     source: 'vakaymood', externalId: l.externalId, stayId, resortName: catalog.get(stayId).name, unit: l.unitType, sleeps: l.sleeps,
-    from: l.from, to: l.to, nights, usdTotal: l.usdTotal, usdNightly: Math.round(l.usdTotal / nights * 100) / 100, url: l.bookingUrl, retailPrice: retail,
-    fees: l.usdFees || 0 } };
+    from: l.from, to: l.to, nights, usdTotal: l.usdTotal, usdNightly: Math.round(l.usdTotal / nights * 100) / 100, url: l.bookingUrl,
+    retailPrice: bl.public, retailLocked: true, ourPrice: bl.ours, fees: l.usdFees || 0 } };
 }

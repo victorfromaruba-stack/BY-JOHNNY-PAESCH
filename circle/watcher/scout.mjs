@@ -133,7 +133,8 @@ async function collectVakay({ state, catalog, cfg, now, log, fresh, vakay }) {
       if (state.items[key]) { state.items[key].last = now; continue; }
       const j = judgeListing(l, { catalog, cfg, now });
       c.new++; c[j.cls]++;
-      if (j.cls === 'drop') { bump(state, 'vakaymood', 'seen', 1, now); bump(state, 'vakaymood', 'drop', 1, now); continue; }
+      // A VakayMood listing with no comparable room is not a tip: there is nothing to say about it. Counted, not kept.
+      if (j.cls === 'drop' || j.cls === 'tip') { bump(state, 'vakaymood', 'seen', 1, now); bump(state, 'vakaymood', 'drop', 1, now); continue; }
       fresh.push(note(state, 'vakaymood', key, j, { title: `${l.resortName} ${l.from}`, slug: l.slug, url: l.bookingUrl, nights: l.nights, price: l.usdTotal }, now));
       if (j.cls === 'reject') log(`  rejected vakaymood ${l.externalId}: ${j.why}`);
     }
@@ -205,6 +206,26 @@ async function mail({ list, compose, flag, state, cfg, log, dry, send = sendMail
 export const instants = (items) => items.filter((i) => i.cls === 'great' && i.onBoard && !i.mailedInstant && !i.goneAt && i.find.from >= arubaToday()).slice(0, MAX_INSTANT);
 export const forDigest = (state, now = Date.now()) => Object.values(state.items).filter((i) => (i.cls === 'great' || i.cls === 'good') && i.onBoard && !i.mailedDigest && !i.mailedInstant && !i.goneAt && i.find.from >= arubaToday(now) && now - i.last < 2 * DAY).sort((a, b) => b.pct - a.pct).slice(0, 10);
 
+/**
+ * Re-judge every scout row on the board with the current rules; retire those that no longer qualify (robot RPC retire_deals_gone).
+ * Only rows the scout itself posted (state.items with a ref), never a Desk or RedWeek row.
+ */
+export async function rejudge({ state, catalog, cfg, circle, log, dry, now = Date.now() }) {
+  const mine = Object.values(state.items).filter((i) => i.onBoard && i.ref && (i.cls === 'great' || i.cls === 'good') && !i.goneAt);
+  const drop = [];
+  for (const i of mine) {
+    const f = i.find;
+    const j = judgeListing({ externalId: f.externalId, resortName: f.resortName, unitType: f.unit, sleeps: f.sleeps, from: f.from, to: f.to, nights: f.nights, usdTotal: f.usdTotal, bookingUrl: f.url, usdFees: f.fees }, { catalog, cfg, now });
+    if (j.cls === 'great' || j.cls === 'good') { i.cls = j.cls; i.pct = j.pct; i.find = { ...f, ...j.find, source: f.source, externalId: f.externalId }; continue; }
+    drop.push(i); log(`  retire ${f.resortName} ${f.unit || ''} ${f.from}: ${j.why}`);
+  }
+  if (drop.length && !dry) {
+    await circle.retireGone(drop.map((i) => i.ref), 're-judged: not under the public rate');
+    for (const i of drop) { i.goneAt = now; i.cls = 'rejudged'; }
+  }
+  return { before: mine.length, keep: mine.length - drop.length, retired: drop.length };
+}
+
 // ------------------------------------------------------------------ learn (data only)
 export function scores(state, week, { liveStatus = {}, taps = [] } = {}) {
   const out = {};
@@ -233,6 +254,10 @@ async function main() {
   const state = loadState(STATE), now = Date.now();
   const circle = new Circle({ url: process.env.CIRCLE_URL, key: process.env.CIRCLE_KEY, username: process.env.CIRCLE_USER, password: process.env.CIRCLE_PASS });
   const catalog = new Map((await circle.stays()).map((r) => [r.id, r]));
+  // Rooms by stay, for like-for-like baselines (scout-judge.mjs baselineFor).
+  const rr = await circle.call('/rest/v1/room_types?select=stay_id,bedrooms,rate_factor&active=eq.true&limit=1000');
+  if (!rr.ok) throw new Error(`Could not read the room types: ${rr.status}`);
+  cfg.rooms = new Map(); for (const r of await rr.json()) (cfg.rooms.get(r.stay_id) || cfg.rooms.set(r.stay_id, []).get(r.stay_id)).push(r);
   log(`scout: ${has('--digest') ? 'digest' : has('--score') ? 'score' : 'collect'}${DRY ? ' (dry run)' : ''}, shadow mail ${cfg.shadow ? 'on' : 'OFF'}, ${catalog.size} places in the catalog`);
 
   try {
@@ -242,6 +267,10 @@ async function main() {
     if (!has('--no-tips')) sendTips({ state, fresh, log, dry: DRY });
     await mail({ list: instants(Object.values(state.items)), compose: (l) => l.map((i) => ({ ...instantMail(i), items: [i] })), flag: 'mailedInstant', state, cfg, log, dry: DRY });
     if (!DRY) { try { const n = await circle.retireStale(7); if (n) log(`retired ${n} stale weeks`); } catch (e) { log(`retire_stale_deals: ${e.message}`); } }
+  }
+  if (has('--rejudge')) {
+    const r = await rejudge({ state, catalog, cfg, circle, log, dry: DRY, now });
+    log(`rejudge: ${r.before} scout rows on the board, ${r.keep} still great/good, ${r.retired} ${DRY ? 'would be ' : ''}retired`);
   }
   if (has('--digest')) {
     const list = forDigest(state, now);
