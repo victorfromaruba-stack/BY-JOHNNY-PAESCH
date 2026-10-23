@@ -663,11 +663,12 @@ export class SupabaseStore extends Store {
   async upsertRoomType(data) { return this.rpc('upsert_room_type', { p_patch: data }); }
   async removeRoomType(id) { return this.rpc('upsert_room_type', { p_patch: { id, active: false } }); }
 
-  async addWatch({ stayId = null, roomTypeId = null, kind = 'aruba', from, to, nights = 3, flexDays = 3, guests = 2, maxPoints = null, note = '' }) {
+  async addWatch({ stayId = null, roomTypeId = null, kind = 'aruba', from, to, nights = 3, flexDays = 3, guests = 2, maxPoints = null, note = '', emailMe = true }) {
     const w = await this.rpc('add_watch', { p_stay: stayId, p_from: from, p_to: to, p_nights: nights,
-      p_room_type: roomTypeId, p_kind: kind, p_flex: flexDays, p_guests: guests, p_max_points: maxPoints, p_note: note });
+      p_room_type: roomTypeId, p_kind: kind, p_flex: flexDays, p_guests: guests, p_max_points: maxPoints, p_note: note, p_email: emailMe !== false });
     return w ? { ...w, from: w.fromDate, to: w.toDate } : w;
   }
+  async setWatch(id, _actorId, { emailMe = null, paused = null } = {}) { return this.rpc('set_watch', { p_id: id, p_email: emailMe, p_paused: paused }); }
   async removeWatch(id) { return this.rpc('remove_watch', { p_id: id }); }
   async markWatchesSeen() { return this.rpc('mark_watches_seen', {}); }
 

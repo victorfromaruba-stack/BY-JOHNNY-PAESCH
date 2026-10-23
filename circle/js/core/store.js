@@ -1977,23 +1977,30 @@ export class Store {
   watchesFor(memberId) { return this.watches().filter(w => w.memberId === memberId); }
   watch(id) { return (this.state.watches || []).find(w => w.id === id) || null; }
 
-  async addWatch({ memberId, stayId = null, roomTypeId = null, kind = 'aruba', from, to, nights = 3, flexDays = 3, guests = 2, maxPoints = null, note = '' }) {
+  async addWatch({ memberId, stayId = null, roomTypeId = null, kind = 'aruba', from, to, nights = 3, flexDays = 3, guests = 2, maxPoints = null, note = '', emailMe = true }) {
     if (!this.member(memberId)) throw new Error('No such member');
     if (!from || !to) throw new Error('Say roughly when you would go');
     if (from > to) throw new Error('Those dates are the wrong way round');
-    if (dropAt && String(dropAt).slice(0, 10) > from) throw new Error('That board opens after the week starts');
     if (!(nights > 0)) throw new Error('How many nights?');
     if (stayId && !this.stay(stayId)) throw new Error('That place is no longer on the list');
     const dup = this.watchesFor(memberId).find(w => w.stayId === stayId && w.roomTypeId === roomTypeId && w.from === from && w.to === to);
     if (dup) throw new Error('You are already watching for exactly that');
     const w = { id: uid('wch'), memberId, stayId, roomTypeId, kind, from, to, nights: Math.round(nights),
       flexDays: Math.max(0, Math.round(flexDays)), guests: Math.round(guests) || 1,
-      maxPoints: maxPoints ? Math.round(maxPoints) : null, note: note.trim(), active: true,
+      maxPoints: maxPoints ? Math.round(maxPoints) : null, note: note.trim(), active: true, emailMe: emailMe !== false, paused: false,
       createdAt: nowIso(), lastSeenAt: null };
     (this.state.watches ||= []).push(w);
     this.log(memberId, 'watch.add', 'watch', w.id, { stayId, from, to, nights });
     await this.commit('watches');
     return w;
+  }
+  /** The member's own switches on a watch: e-mail on or off, paused or not. */
+  async setWatch(id, actorId, { emailMe, paused } = {}) {
+    const w = this.watch(id); if (!w || w.active === false) throw new Error('No such watch');
+    if (w.memberId !== actorId) throw new Error('That is not your watch');
+    if (emailMe !== undefined) w.emailMe = !!emailMe;
+    if (paused !== undefined) w.paused = !!paused;
+    this.log(actorId, 'watch.set', 'watch', id, { emailMe: w.emailMe, paused: w.paused }); await this.commit('watches'); return w;
   }
   async removeWatch(id, actorId) {
     const w = this.watch(id); if (!w) throw new Error('No such watch');

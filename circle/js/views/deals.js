@@ -633,8 +633,14 @@ export function watching({ store, go }) {
               ${escapeHtml(fmtDay(w.from))} and ${escapeHtml(fmtDay(w.to))}${w.flexDays ? `, give or take ${w.flexDays} days` : ''}
               ${w.maxPoints ? ` · up to ${escapeHtml(fmtPoints(w.maxPoints))}` : ''}</p>
             ${w.note ? `<p class="small muted" style="margin-top:8px">“${escapeHtml(w.note)}”</p>` : ''}
+            <p class="small muted" style="margin-top:8px">${w.paused ? 'Paused. Nothing is looked for until you resume.' : `${w.guests} ${w.guests === 1 ? 'guest' : 'guests'} · ${w.emailMe === false ? 'No e-mails' : 'E-mailed morning and evening when something fits'}`}</p>
           </div>
-          <button class="btn ghost sm" data-act="stop">${icon('x', { size: 15 })}Stop</button>
+        </div>
+        <div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap">
+          <button class="btn ghost sm" data-act="mail">${icon('bell', { size: 15 })}${w.emailMe === false ? 'E-mail me' : 'Stop e-mails'}</button>
+          <button class="btn ghost sm" data-act="pause">${icon('clock', { size: 15 })}${w.paused ? 'Resume' : 'Pause'}</button>
+          <button class="btn ghost sm" data-act="edit">${icon('edit', { size: 15 })}Edit</button>
+          <button class="btn ghost sm" data-act="stop">${icon('x', { size: 15 })}Delete</button>
         </div>
         ${hits.length ? `<div class="notice good" style="margin-top:12px"><b>${icon('checkCircle', { size: 16 })} ${hits.length} on the board right now</b>
            <p style="margin-top:8px"><a class="btn sm" href="#/stays">Look at ${hits.length === 1 ? 'it' : 'them'}</a></p></div>`
@@ -644,10 +650,22 @@ export function watching({ store, go }) {
 
   wrap.addEventListener('click', async (e) => {
     if (e.target.closest('#add')) { await addWatchSheet({ store }); go('/watching'); return; }
+    const act = e.target.closest('[data-act]');
+    const wid = act?.closest('[data-watch]')?.dataset.watch;
+    if (act && wid && ['mail', 'pause', 'edit'].includes(act.dataset.act)) {
+      const w = store.watch(wid);
+      try {
+        if (act.dataset.act === 'mail') await store.setWatch(wid, store.me.id, { emailMe: w.emailMe === false });
+        if (act.dataset.act === 'pause') await store.setWatch(wid, store.me.id, { paused: !w.paused });
+        if (act.dataset.act === 'edit') await addWatchSheet({ store, prefill: { title: 'Change this watch', replaces: wid, stayId: w.stayId, from: w.from, to: w.to, nights: w.nights, flexDays: w.flexDays, guests: w.guests, note: w.note, emailMe: w.emailMe !== false } });
+        go('/watching');
+      } catch (err) { toast(err.message, { kind: 'bad' }); }
+      return;
+    }
     const stop = e.target.closest('[data-act="stop"]');
     if (stop) {
       const id = stop.closest('[data-watch]').dataset.watch;
-      try { await store.removeWatch(id, store.me.id); toast('Stopped watching.'); go('/watching'); }
+      try { await store.removeWatch(id, store.me.id); toast('Deleted.'); go('/watching'); }
       catch (err) { toast(err.message, { kind: 'bad' }); }
     }
   });
@@ -663,7 +681,7 @@ export async function addWatchSheet({ store, prefill = {} }) {
   const inMonths = (n) => { const d = new Date(today); d.setMonth(d.getMonth() + n); return iso(d); };
 
   const out = await sheet({
-    title: 'Tell me when it appears',
+    title: prefill.title || 'Tell me when it appears',
     render: (body, close) => {
       body.innerHTML = `
         <p class="sheet-text">Say what you would take. Victor and Ian see what the Circle is waiting for, which is how they know what to go and look for.</p>
@@ -676,14 +694,18 @@ export async function addWatchSheet({ store, prefill = {} }) {
         </div>
         <div class="trio">
           <label class="field"><span>Nights</span><input type="number" name="nights" min="1" max="30" value="${prefill.nights || 3}" inputmode="numeric"></label>
-          <label class="field"><span>Flexible by</span><input type="number" name="flexDays" min="0" max="30" value="3" inputmode="numeric"></label>
-          <label class="field"><span>Guests</span><input type="number" name="guests" min="1" max="12" value="2" inputmode="numeric"></label>
+          <label class="field"><span>Flexible by</span><input type="number" name="flexDays" min="0" max="30" value="${prefill.flexDays ?? 3}" inputmode="numeric"></label>
+          <label class="field"><span>Guests</span><input type="number" name="guests" min="1" max="12" value="${prefill.guests || 2}" inputmode="numeric"></label>
         </div>
         <div class="pair">
           <label class="field"><span>Spend up to US$</span><input type="number" name="maxUsd" step="10" min="0" inputmode="decimal" placeholder="optional"></label>
           <label class="field"><span>In points</span><input type="number" name="maxPoints" step="500" min="0" inputmode="numeric" placeholder="optional"></label>
         </div>
-        <label class="field"><span>Anything else</span><input name="note" placeholder="Ground floor if there is a choice."></label>
+        <label class="field"><span>Anything else</span><input name="note" value="${escapeHtml(prefill.note || '')}" placeholder="Ground floor if there is a choice."></label>
+        <label class="ask-row ask-switch">
+          <span><b>E-mail me matching deals (morning and evening)</b><span class="small muted">Only deals that fit these dates and your guests, a few a day at most. One tap in every e-mail stops them.</span></span>
+          <input type="checkbox" name="emailMe" role="switch" class="switch" aria-label="E-mail me matching deals"${prefill.emailMe === false ? '' : ' checked'}>
+        </label>
         <div id="afford" class="notice"></div>
         <div class="sheet-actions"><button class="btn block" data-ok>${icon('bell', { size: 16 })}Watch for it</button></div>`;
 
@@ -721,12 +743,14 @@ export async function addWatchSheet({ store, prefill = {} }) {
         nights: Number(v('nights').value) || 1, flexDays: Number(v('flexDays').value) || 0,
         guests: Number(v('guests').value) || 1,
         maxPoints: Number(v('maxPoints').value) || null, note: v('note').value,
+        emailMe: v('emailMe').checked,
       }));
     },
   });
   if (!out) return null;
   try {
     const w = await store.addWatch({ ...out, memberId: store.me.id });
+    if (prefill.replaces) await store.removeWatch(prefill.replaces, store.me.id);
     const hits = store.liveDeals().map(d => store.dealMatchesWatch(d, w)).filter(Boolean).length;
     toast(hits ? `Watching. ${hits} on the board already — go and look.` : 'Watching. You will hear the moment one appears.', { kind: 'good', timeout: 6000 });
     return w;

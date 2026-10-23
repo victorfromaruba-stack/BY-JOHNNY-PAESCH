@@ -12,7 +12,7 @@ import { icon } from '../ui/icons.js';
 import { routeSvg, islandSvg } from '../ui/art.js';
 import { isStale, sinceWords, redweekWords } from '../core/freshness.js';
 import { CHIPS, chipWindow, chipFor, clampWindow, dayOf, loadWindow, saveWindow, overlaps, windowWords } from '../core/window.js';
-import { dealList, byNight, byBoard, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, dropWhen, SOURCES, shortRange, usdNight } from './deals.js';
+import { addWatchSheet, dealList, byNight, byBoard, wireDealActions, postDealSheet, pasteListingSheet, daysUntil, dealCover, nightly, dropWhen, SOURCES, shortRange, usdNight } from './deals.js';
 import { openWeeks, resortForStay, bedroomsOf } from './live.js';
 
 const el = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; };
@@ -166,6 +166,7 @@ export function stays({ store, go, query = {} }) {
           <label class="field"><span>To</span><input type="date" id="look-to" aria-label="To"></label>
         </div>
         <div class="segmented" role="group" aria-label="Quick dates">${CHIPS.map(c => `<button type="button" data-chip="${c.id}" aria-pressed="false">${c.label}</button>`).join('')}</div>
+        <div class="row"><button type="button" class="btn ghost sm" id="watch-dates">${icon('bell', { size: 16 })}Watch these dates</button></div>
       </div>
       <div id="cover" class="lead-story"></div>
       <div id="board"></div>
@@ -372,6 +373,7 @@ export function stays({ store, go, query = {} }) {
   load();
   wireDealActions(wrap, store, { drafts: () => drafts });
   wrap.addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-open"]')) load(); });
+  wrap.querySelector('#watch-dates')?.addEventListener('click', () => addWatchSheet({ store, prefill: { title: 'Watch these dates', from: win.from, to: win.to, nights: Math.min(30, Math.max(1, nightsBetween(win.from, win.to) || 3)) } }));
   wrap.querySelector('#post')?.addEventListener('click', () => postDealSheet({ store }));
   wrap.querySelector('#paste')?.addEventListener('click', () => pasteListingSheet({ store }));
   wrap.querySelector('#tell-board')?.addEventListener('click', () => {

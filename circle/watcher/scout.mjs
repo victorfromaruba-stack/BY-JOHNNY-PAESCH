@@ -20,6 +20,7 @@ import { judgeItem, judgeListing, arubaToday } from './scout-judge.mjs';
 import { digestMail, instantMail, sendMail, VICTOR } from './scout-mail.mjs';
 import { pushSupers, supersOf } from './scout-super.mjs';
 import { makePusher } from './taps.mjs';
+import { runWatchMail, memberMailMode } from './watch-mail.mjs';
 import { availability, RESORTS } from '../js/data/vakaymood.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -185,11 +186,12 @@ export function sendTips({ state, fresh, log, dry, run = (args) => execFileSync(
   log(`tips: ${tips.length} ${dry ? 'would go' : 'sent'} to #deals (${fresh.filter((i) => i.cls === 'tip').length} tip-only found, cap ${MAX_TIPS})`);
 }
 
-export function appPassword() {
-  const v = execFileSync('sudo', ['-u', 'openclaw', 'node', '-e', "process.stdout.write(require('/home/openclaw/premanifest-bot/webapp/doors.js').secretRead('circle')||'')"], { encoding: 'utf8' });
-  if (!v) throw new Error("the locked box has no 'circle' secret");
+export function boxSecret(name) {
+  const v = execFileSync('sudo', ['-u', 'openclaw', 'node', '-e', `process.stdout.write(require('/home/openclaw/premanifest-bot/webapp/doors.js').secretRead(${JSON.stringify(name)})||'')`], { encoding: 'utf8' });
+  if (!v) throw new Error(`the locked box has no '${name}' secret`);
   return v.replace(/\s+/g, '');
 }
+export const appPassword = () => boxSecret('circle');
 
 /** Mail `list` (state items) with `compose`; mark them with `flag`. Shadow mode sends Victor only. */
 async function mail({ list, compose, flag, state, cfg, log, dry, send = sendMail }) {
@@ -260,7 +262,7 @@ async function main() {
   const rr = await circle.call('/rest/v1/room_types?select=stay_id,bedrooms,rate_factor&active=eq.true&limit=1000');
   if (!rr.ok) throw new Error(`Could not read the room types: ${rr.status}`);
   cfg.rooms = new Map(); for (const r of await rr.json()) (cfg.rooms.get(r.stay_id) || cfg.rooms.set(r.stay_id, []).get(r.stay_id)).push(r);
-  log(`scout: ${has('--digest') ? 'digest' : has('--score') ? 'score' : 'collect'}${DRY ? ' (dry run)' : ''}, shadow mail ${cfg.shadow ? 'on' : 'OFF'}, ${catalog.size} places in the catalog`);
+  log(`scout: ${has('--digest') ? 'digest' : has('--score') ? 'score' : has('--watch-mail') ? 'watch mail' : has('--rejudge') ? 'rejudge' : 'collect'}${DRY ? ' (dry run)' : ''}, shadow mail ${cfg.shadow ? 'on' : 'OFF'}, ${catalog.size} places in the catalog`);
 
   try {
   if (has('--collect')) {
@@ -275,6 +277,16 @@ async function main() {
   if (has('--rejudge')) {
     const r = await rejudge({ state, catalog, cfg, circle, log, dry: DRY, now });
     log(`rejudge: ${r.before} scout rows on the board, ${r.keep} still great/good, ${r.retired} ${DRY ? 'would be ' : ''}retired`);
+  }
+  if (has('--watch-mail')) {
+    const mode = memberMailMode(process.env.SCOUT_MEMBER_MAIL);
+    const targets = await circle.rpc('watch_mail_targets', {}), sent = await circle.rpc('watch_mail_sent', {});
+    log(`watch mail (${mode}): ${targets.length} watches ask for e-mail`);
+    const items = Object.values(state.items);
+    const planned = await runWatchMail({ targets, items, sent, state, mode, key: DRY ? 'dry' : boxSecret('watchmailkey'),
+      pass: DRY ? null : appPassword(), logSent: (id, keys) => circle.rpc('log_watch_mail', { p_member: id, p_keys: keys }),
+      send: DRY ? async (m) => log(`  would send "${m.subject}" to ${m.to === VICTOR ? 'Victor' : 'a member'}`) : sendMail, log });
+    log(`watch mail: ${planned.length} member mail${planned.length === 1 ? '' : 's'} ${DRY ? 'would go' : 'sent'}`);
   }
   if (has('--digest')) {
     await pushSupers({ items: [], pusher: makePusher(), file: join(HERE, '.scout-super.json'), log, dry: DRY });   // only lets a night's held pushes go

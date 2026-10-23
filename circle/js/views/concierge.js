@@ -114,6 +114,7 @@ export function concierge({ store, go, query = {} }) {
           <b class="who">Ian suggests</b>
           <span class="what"><b>${escapeHtml(m.head)}</b>${m.sub ? `<br><span class="small muted">${escapeHtml(m.sub)}</span>` : ''}</span>
           ${m.deal ? '<ul class="listing" data-deal-slot style="margin:var(--s-2) 0 0;padding:0"></ul>' : ''}
+          ${c.action === 'watch' && c.state !== 'done' ? `<label class="ask-row ask-switch" style="margin-top:var(--s-2)"><span><b>E-mail me matching deals (morning and evening)</b></span><input type="checkbox" data-email role="switch" class="switch" aria-label="E-mail me matching deals" checked></label>` : ''}
           ${c.state === 'done'
             ? `<p class="small muted" style="margin-top:var(--s-2)">${icon('check', { size: 14 })} Done.</p>`
             : `<div class="row" style="margin-top:var(--s-3);gap:var(--s-4)">
@@ -220,7 +221,7 @@ export function concierge({ store, go, query = {} }) {
         return;
       }
       if (c.action === 'watch') {
-        await store.addWatch({ memberId: store.me?.id, stayId: c.stay_id, from: c.from, to: c.to, nights: c.nights, guests: c.guests, flexDays: 3 });
+        await store.addWatch({ memberId: store.me?.id, stayId: c.stay_id, from: c.from, to: c.to, nights: c.nights, guests: c.guests, flexDays: 3, emailMe: box.querySelector('[data-email]')?.checked !== false });
         c.state = 'done'; save(store, lines); draw();
         toast('Watching. A week that fits shows on Stays and under What you are watching.', { kind: 'good' });
         return;
