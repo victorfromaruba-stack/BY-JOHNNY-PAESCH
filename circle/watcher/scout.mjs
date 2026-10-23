@@ -18,6 +18,8 @@ import { judgeAndPost } from './board.mjs';
 import { parseFeed } from './scout-feeds.mjs';
 import { judgeItem, judgeListing, arubaToday } from './scout-judge.mjs';
 import { digestMail, instantMail, sendMail, VICTOR } from './scout-mail.mjs';
+import { pushSupers, supersOf } from './scout-super.mjs';
+import { makePusher } from './taps.mjs';
 import { availability, RESORTS } from '../js/data/vakaymood.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -78,7 +80,7 @@ export function note(state, name, key, j, extra, now) {
   const old = state.items[key];
   if (old) { old.last = now; return old; }
   bump(state, name, 'seen', 1, now); bump(state, name, j.cls, 1, now);
-  return (state.items[key] = { src: name, first: now, last: now, cls: j.cls, why: j.why, pct: j.pct, find: j.find, ...extra });
+  return (state.items[key] = { src: name, first: now, last: now, cls: j.cls, why: j.why, pct: j.pct, super: !!j.super, find: j.find, ...extra });
 }
 
 // ------------------------------------------------------------------ the pass
@@ -203,7 +205,7 @@ async function mail({ list, compose, flag, state, cfg, log, dry, send = sendMail
   }
   return sent;
 }
-export const instants = (items) => items.filter((i) => i.cls === 'great' && i.onBoard && !i.mailedInstant && !i.goneAt && i.find.from >= arubaToday()).slice(0, MAX_INSTANT);
+export const instants = (items) => items.filter((i) => i.cls === 'great' && i.onBoard && !i.mailedInstant && !i.goneAt && i.find.from >= arubaToday()).sort((a, b) => b.pct - a.pct).slice(0, MAX_INSTANT);
 export const forDigest = (state, now = Date.now()) => Object.values(state.items).filter((i) => (i.cls === 'great' || i.cls === 'good') && i.onBoard && !i.mailedDigest && !i.mailedInstant && !i.goneAt && i.find.from >= arubaToday(now) && now - i.last < 2 * DAY).sort((a, b) => b.pct - a.pct).slice(0, 10);
 
 /**
@@ -216,7 +218,7 @@ export async function rejudge({ state, catalog, cfg, circle, log, dry, now = Dat
   for (const i of mine) {
     const f = i.find;
     const j = judgeListing({ externalId: f.externalId, resortName: f.resortName, unitType: f.unit, sleeps: f.sleeps, from: f.from, to: f.to, nights: f.nights, usdTotal: f.usdTotal, bookingUrl: f.url, usdFees: f.fees }, { catalog, cfg, now });
-    if (j.cls === 'great' || j.cls === 'good') { i.cls = j.cls; i.pct = j.pct; i.find = { ...f, ...j.find, source: f.source, externalId: f.externalId }; continue; }
+    if (j.cls === 'great' || j.cls === 'good') { i.cls = j.cls; i.pct = j.pct; i.super = !!j.super; i.find = { ...f, ...j.find, source: f.source, externalId: f.externalId }; continue; }
     drop.push(i); log(`  retire ${f.resortName} ${f.unit || ''} ${f.from}: ${j.why}`);
   }
   if (drop.length && !dry) {
@@ -265,6 +267,8 @@ async function main() {
     const fresh = await collect({ state, catalog, cfg, now, log, only });
     await post({ circle, catalog, cfg, state, fresh, log, dry: DRY });
     if (!has('--no-tips')) sendTips({ state, fresh, log, dry: DRY });
+    const p = await pushSupers({ items: supersOf(Object.values(state.items)), pusher: makePusher(), file: join(HERE, '.scout-super.json'), log, dry: DRY });
+    log(`super: ${p.sent} pushed, ${p.held} held for the night, ${p.skipped} skipped (already sent or over the day's cap)`);
     await mail({ list: instants(Object.values(state.items)), compose: (l) => l.map((i) => ({ ...instantMail(i), items: [i] })), flag: 'mailedInstant', state, cfg, log, dry: DRY });
     if (!DRY) { try { const n = await circle.retireStale(7); if (n) log(`retired ${n} stale weeks`); } catch (e) { log(`retire_stale_deals: ${e.message}`); } }
   }
@@ -273,6 +277,7 @@ async function main() {
     log(`rejudge: ${r.before} scout rows on the board, ${r.keep} still great/good, ${r.retired} ${DRY ? 'would be ' : ''}retired`);
   }
   if (has('--digest')) {
+    await pushSupers({ items: [], pusher: makePusher(), file: join(HERE, '.scout-super.json'), log, dry: DRY });   // only lets a night's held pushes go
     const list = forDigest(state, now);
     log(`digest: ${list.length} great/good deals not yet in a digest`);
     if (list.length) await mail({ list, compose: (l) => [{ ...digestMail(l, now), items: l }], flag: 'mailedDigest', state, cfg, log, dry: DRY });

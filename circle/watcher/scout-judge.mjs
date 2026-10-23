@@ -11,7 +11,7 @@
 import { resolveStay, implausiblyCheap, implausiblyDear } from './judge.mjs';
 import { rateBandFor } from '../js/core/money.js';
 
-export const GREAT = 0.25, GOOD = 0.15;
+export const GREAT = 0.25, GOOD = 0.15, SUPER = 0.40;   // super = a great one that is also 40% under: the only tier that pushes his phone
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const M = '(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?';
 export const arubaToday = (now = Date.now()) => new Date(now - 4 * 3600e3).toISOString().slice(0, 10);
@@ -71,8 +71,8 @@ export function baselineFor(stay, rooms, bedrooms, from, nights) {
 /** great/good only if under the like-for-like public rate AND no dearer than the Circle's own price for the same room. */
 function classify(total, base) {
   const pct = 1 - total / base.public;
-  if (total > base.ours) return { cls: 'drop', pct, why: `${Math.round(pct * 100)}% under public but dearer than the Circle's own $${Math.round(base.ours)}` };
-  return { cls: pct >= GREAT ? 'great' : pct >= GOOD ? 'good' : 'drop', pct, why: `${Math.round(pct * 100)}% under public` };
+  if (total > base.ours) return { cls: 'drop', pct, super: false, why: `${Math.round(pct * 100)}% under public but dearer than the Circle's own $${Math.round(base.ours)}` };
+  return { cls: pct >= GREAT ? 'great' : pct >= GOOD ? 'good' : 'drop', pct, super: pct >= SUPER, why: `${Math.round(pct * 100)}% under public` };
 }
 
 /** The first USD figure and what it is a price OF. Other currencies are read but never compared. */
@@ -125,14 +125,14 @@ export function judgeItem(item, { catalog, cfg = {}, now = Date.now(), source = 
   const br = bedroomsOf(t);
   const bl = baselineFor(catalog.get(stayId), cfg.rooms?.get(stayId), br, dates.from, dates.nights);
   if (!bl) return { cls: 'tip', why: br == null ? 'room size not stated' : 'no comparable room in the catalog', ...base };
-  const { cls, pct, why } = classify(total, bl);
+  const { cls, pct, why, super: isSuper } = classify(total, bl);
   const retail = bl.public;
   const find = {
     source: 'other', externalId: `${source}:${Buffer.from(String(item.id)).toString('base64url').slice(-24)}`, stayId,
     resortName: catalog.get(stayId).name, unit: `${source} offer`, from: dates.from, to: dates.to, nights: dates.nights,
     usdTotal: total, usdNightly: Math.round(total / dates.nights * 100) / 100, url: item.link, retailPrice: retail, retailLocked: true,
   };
-  return { cls, why, pct, find: { ...find, ourPrice: bl.ours }, ...base };
+  return { cls, why, pct, super: isSuper, find: { ...find, ourPrice: bl.ours }, ...base };
 }
 
 /** A VakayMood listing (toDeal's shape) against the catalog: great, good, or not worth a post. */
@@ -148,8 +148,8 @@ export function judgeListing(l, { catalog, cfg = {}, now = Date.now() }) {
   const br = l.bedrooms ?? bedroomsOf(l.unitType);
   const bl = baselineFor(catalog.get(stayId), cfg.rooms?.get(stayId), br, l.from, nights);
   if (!bl) return { cls: 'tip', why: br == null ? 'room size not stated' : 'no comparable room in the catalog' };
-  const { cls, pct, why } = classify(l.usdTotal, bl);
-  return { cls, pct, why, find: {
+  const { cls, pct, why, super: isSuper } = classify(l.usdTotal, bl);
+  return { cls, pct, why, super: isSuper, find: {
     source: 'vakaymood', externalId: l.externalId, stayId, resortName: catalog.get(stayId).name, unit: l.unitType, sleeps: l.sleeps,
     from: l.from, to: l.to, nights, usdTotal: l.usdTotal, usdNightly: Math.round(l.usdTotal / nights * 100) / 100, url: l.bookingUrl,
     retailPrice: bl.public, retailLocked: true, ourPrice: bl.ours, fees: l.usdFees || 0 } };

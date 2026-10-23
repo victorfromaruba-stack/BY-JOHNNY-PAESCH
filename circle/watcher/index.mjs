@@ -35,6 +35,8 @@ import { IntervalSession } from './interval-session.mjs';
 import { resolveStay, inHorizon } from './judge.mjs';
 // What happens to finds once they are found: judged, posted, last-seen clocks moved. Shared with the Interval scan.
 import { judgeAndPost, verifyBoard } from './board.mjs';
+// The top tier of the deal scout: a member-tap Interval row can push Victor's phone too (scout-super.mjs).
+import { intervalSupers, pushSupers } from './scout-super.mjs';
 // How many times in a row Interval said no. Pure, and on trial in pace.test.mjs. The `due`
 // gate it also exports is not read here any more: nothing signs in on a timer for it to hold
 // back. What is left is the count, which is what the next run by hand wants to be told.
@@ -429,7 +431,15 @@ const tapEverySec = Math.min(120, Math.max(15, num('WATCH_TAP_POLL_SEC', 30)));
 const scannerFor = (opts) => makeIntervalScanner({
   stateFile: IV_STATE_FILE,
   makeSession: () => new IntervalSession({ stateFile: IV_SESSION_FILE }),
-  post: ({ finds, catalog }) => serial(() => judgeAndPost({ circle, found: finds, catalog, cfg: CFG, log })),
+  post: ({ finds, catalog }) => serial(async () => {
+    const res = await judgeAndPost({ circle, found: finds, catalog, cfg: CFG, log });
+    try {   // a super Interval row (only when the row states its room size) taps Victor's phone, once, inside the day's cap
+      const rr = await circle.call('/rest/v1/room_types?select=stay_id,bedrooms,rate_factor&active=eq.true&limit=1000');
+      const rooms = new Map(); if (rr.ok) for (const r of await rr.json()) (rooms.get(r.stay_id) || rooms.set(r.stay_id, []).get(r.stay_id)).push(r);
+      await pushSupers({ items: intervalSupers(finds, catalog, rooms), pusher, file: join(HERE, '.scout-super.json'), log });
+    } catch (err) { log(`super-deal check after the Interval scan failed: ${err.message}`); }
+    return res;
+  }),
   onStop: makeStopAnnouncer({ putCard, tell: (msg) => tellOrHold(tapState, pusher, msg, log) }),
   onGood: () => putCard('interval-watcher', null),
   log, ...opts,
