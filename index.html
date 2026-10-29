@@ -572,9 +572,9 @@ try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches){
       </a>
     </div>
     <div class="hero-stats">
-      <div><b data-count="14">14</b><span>Resorts covered</span></div>
+      <div><b>14</b><span>Resorts covered</span></div>
       <div><b>ƒ0</b><span>To list your week</span></div>
-      <div><b data-count="4">4</b><span>Languages spoken</span></div>
+      <div><b>4</b><span>Languages spoken</span></div>
       <div><b>1</b><span>Name on every file</span></div>
     </div>
   </div>
@@ -973,16 +973,6 @@ const EP = {
     this.contact();
     this.render();
     this.intent();
-    if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
-      document.querySelectorAll('[data-count]').forEach(el => {
-        const n = +el.dataset.count; let t0 = null;
-        const step = ts => { if(!t0) t0 = ts;
-          const p = Math.min(1, (ts - t0)/1300);
-          el.textContent = Math.round(n * (1 - Math.pow(1 - p, 3)));
-          if(p < 1) requestAnimationFrame(step); };
-        setTimeout(() => requestAnimationFrame(step), 900);
-      });
-    }
     if(!matchMedia('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window){
       const io = new IntersectionObserver(es => es.forEach(e => {
         if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
